@@ -138,6 +138,7 @@ export interface EngineData {
   }>;
   geoAreasInRegion(region: string, builderId: string): Promise<Array<{ name: string; distanceKm: number }>>;
   resolveGeo(text: string): Promise<{ lat: number; lng: number } | null>;
+  projectCoords(builderId: string): Promise<ReadonlyArray<{ projectId: string; lat: number; lng: number }>>;
   faqLookup(projectId: string, questionKey: string): Promise<{ question: string; answer: string } | null>;
   getProfile(builderId: string, buyerPhone: string): Promise<Record<string, unknown>>;
 }

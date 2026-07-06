@@ -87,6 +87,8 @@ export interface NdSearchMatch {
   starting_price_display: string;
   match_score?: number;
   match_reasons?: string[];
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface NdPricingQuote {

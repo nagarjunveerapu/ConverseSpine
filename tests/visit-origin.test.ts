@@ -1,20 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { initState } from '../src/engine/state.js';
 import { decide } from '../src/engine/phases/visit.js';
-import { resolveOriginGeo, nearestProjectName, buildProjectGeoMap } from '../src/engine/project-geo.js';
+import { nearestProjectName, buildProjectGeoMap, TEST_PROJECT_GEO } from '../src/engine/project-geo.js';
 
 describe('visit origin intelligence', () => {
   const now = new Date('2026-07-06T10:00:00+05:30');
+  const yelahanka = { lat: 13.1007, lng: 77.5963 };
 
-  it('geocodes Yelahanka and ranks nearest project', () => {
-    const yelahanka = resolveOriginGeo('Yelahanka');
-    expect(yelahanka).not.toBeNull();
+  it('ranks nearest project from catalog coords', () => {
     const stops = [
       { projectId: 'cornerstone', projectName: 'Brigade Cornerstone' },
       { projectId: 'eldorado', projectName: 'Brigade Eldorado' },
     ];
-    const geo = buildProjectGeoMap(['cornerstone', 'eldorado']);
-    const nearer = nearestProjectName(yelahanka!, stops, geo);
+    const geo = buildProjectGeoMap(['cornerstone', 'eldorado'], TEST_PROJECT_GEO);
+    const nearer = nearestProjectName(yelahanka, stops, geo);
     expect(nearer).toMatch(/Brigade (Cornerstone|Eldorado)/);
   });
 
@@ -38,7 +37,8 @@ describe('visit origin intelligence', () => {
       {
         text: 'Thursday',
         now,
-        originGeo: { lat: 13.1007, lng: 77.5963 },
+        originGeo: yelahanka,
+        projectGeoCatalog: TEST_PROJECT_GEO,
       },
     );
     expect(goal.kind).toBe('visit_ask');

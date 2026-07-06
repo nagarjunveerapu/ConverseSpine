@@ -18,7 +18,7 @@ import {
 import { matchesFromLastOffered } from './matches-from-offered.js';
 import { resolveFocusedSwitchGoal } from './project_switch.js';
 import { driveLeg, haversineDriveMinutes } from './trip-logistics.js';
-import { projectGeo, resolveOriginGeo } from './project-geo.js';
+import { catalogFromProjectCoords, projectGeo } from './project-geo.js';
 import {
   applyExtracted,
   applyVisitBooked,
@@ -370,14 +370,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let visitCtx: visit.VisitCtx | null = null;
   if (state.phase === 'visit') {
     let visitState = state.visit;
+    const coordRows = await deps.data.projectCoords(state.builderId).catch(() => []);
+    const projectGeoCatalog = catalogFromProjectCoords(coordRows);
+
     const originCandidate =
       visitState?.lastAsk === 'origin' && !visitState.originText
         ? trimmedText
         : visitState?.originText;
     if (originCandidate && visitState?.originLat == null) {
-      const geo =
-        (await deps.data.resolveGeo(originCandidate).catch(() => null)) ??
-        resolveOriginGeo(originCandidate);
+      const geo = await deps.data.resolveGeo(originCandidate).catch(() => null);
       if (geo) {
         visitState = {
           ...(visitState ?? {}),
@@ -400,6 +401,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         visitState?.originLat != null && visitState?.originLng != null
           ? { lat: visitState.originLat, lng: visitState.originLng }
           : null,
+      projectGeoCatalog,
     };
     if (nd) {
       const booked = await deps.data.siteVisitsItinerary(nd).catch(() => []);
@@ -408,8 +410,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       let driveFromPriorMin: number | null = null;
       let driveSource: visit.VisitCtx['driveSource'] = 'none';
       if (lastBooked && activeId) {
-        const fromGeo = projectGeo(lastBooked.projectId);
-        const toGeo = projectGeo(activeId);
+        const fromGeo = projectGeo(lastBooked.projectId, projectGeoCatalog);
+        const toGeo = projectGeo(activeId, projectGeoCatalog);
         if (fromGeo && toGeo) {
           const apiKey = deps.maps?.apiKey;
           if (apiKey) {

@@ -79,6 +79,7 @@ export interface VisitCtx {
   driveFromPriorMin?: number | null;
   driveSource?: 'distance_matrix' | 'haversine' | 'none';
   originGeo?: { lat: number; lng: number } | null;
+  projectGeoCatalog?: import('../project-geo.js').ProjectGeoCatalog;
 }
 
 export function exitVisitPhase(s: ConversationState): ConversationState {
@@ -370,17 +371,19 @@ function step(input: {
   }
 
   if (stopCount >= 2 && prior.originText && !prior.tripOrdered) {
-    const anchor = resolveOriginGeoCached(prior.originText, input.ctx.originGeo ?? {
-      lat: prior.originLat,
-      lng: prior.originLng,
-    });
+    const cachedOrigin =
+      input.ctx.originGeo ??
+      (prior.originLat != null && prior.originLng != null
+        ? { lat: prior.originLat, lng: prior.originLng }
+        : null);
+    const anchor = resolveOriginGeoCached(prior.originText, cachedOrigin);
     if (anchor) {
       const toStop = (id: string, name: string): TripStop => {
-        const g = projectGeo(id);
+        const g = projectGeo(id, input.ctx.projectGeoCatalog);
         return { project_id: id, name, lat: g?.lat ?? null, lng: g?.lng ?? null };
       };
       const stops: TripStop[] = [toStop(projectId, projectName), ...queued.map((q) => toStop(q.projectId, q.projectName))];
-      const geo = buildProjectGeoMap(stops.map((s) => s.project_id));
+      const geo = buildProjectGeoMap(stops.map((s) => s.project_id), input.ctx.projectGeoCatalog);
       const nearer = nearestProjectName(
         anchor,
         stops.map((s) => ({ projectId: s.project_id, projectName: s.name })),
