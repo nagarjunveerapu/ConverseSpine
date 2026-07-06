@@ -35,7 +35,8 @@ export function isVisitFollowUpQuestion(text: string): boolean {
 }
 
 /** Leave visit scheduling when the buyer asks something else (compare, more options, etc.). */
-export function shouldExitVisitForIntent(ex: Extracted): boolean {
+export function shouldExitVisitForIntent(ex: Extracted, text?: string): boolean {
+  if (text && isVisitFollowUpQuestion(text)) return false;
   if (ex.transition === 'want_visit') return false;
   if (ex.askTopic === 'compare') return true;
   if ((ex.compareProjectIds?.length ?? 0) >= 2) return true;
@@ -122,12 +123,22 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
   }
 
   if (prior.awaitingConfirm && ex.affirm && !ex.decline && !slot && proposedFuture) {
+    const nextQueuedStop = prior.queued?.[0];
     return {
       kind: 'visit_booked',
       label: prior.proposedLabel ?? '',
       projectName: prior.projectName ?? '',
       projectId: prior.projectId ?? '',
       iso: prior.proposedIso ?? '',
+      ...(nextQueuedStop
+        ? {
+            nextQueuedStop: {
+              projectId: nextQueuedStop.projectId,
+              projectName: nextQueuedStop.projectName,
+              ...(nextQueuedStop.slotText ? { slotText: nextQueuedStop.slotText } : {}),
+            },
+          }
+        : {}),
     };
   }
 

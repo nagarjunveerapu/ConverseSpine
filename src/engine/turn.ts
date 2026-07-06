@@ -5,7 +5,7 @@
 import * as discover from './phases/discover.js';
 import * as focused from './phases/focused.js';
 import * as visit from './phases/visit.js';
-import { exitVisitPhase, shouldExitVisitForIntent } from './phases/visit.js';
+import { exitVisitPhase, isVisitFollowUpQuestion, shouldExitVisitForIntent } from './phases/visit.js';
 import * as handoff from './phases/handoff.js';
 import { extractFacts, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes } from './facts.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
@@ -322,8 +322,21 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = { ...state, phase: 'visit' };
   }
 
-  if (state.phase === 'visit' && shouldExitVisitForIntent(ex)) {
+  if (state.phase === 'visit' && shouldExitVisitForIntent(ex, trimmedText)) {
     state = exitVisitPhase(state);
+  }
+
+  if (
+    (state.phase === 'discover' || state.phase === 'handoff') &&
+    isVisitFollowUpQuestion(trimmedText) &&
+    (ex.namedProjects?.length ?? 0) >= 1 &&
+    state.discover.lastOffered.length >= 1
+  ) {
+    state = { ...state, phase: 'visit' };
+  }
+
+  if (state.phase === 'visit' && isVisitFollowUpQuestion(trimmedText)) {
+    ex = { ...ex, pickName: undefined, implicitProjectPick: undefined, transition: 'none' };
   }
 
   const now = new Date(deps.clock.nowMs());
@@ -425,9 +438,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
   if (!reply.trim()) reply = "Let me pull those details together and follow up shortly.";
 
-  if (goal.kind === 'visit_booked' && (state.visit?.queued?.length ?? 0) > 0) {
-    const next = state.visit!.queued![0]!;
-    reply = `${reply.trim()}\n\nNext up — which day works for *${next.projectName}*?`;
+  if (goal.kind === 'visit_booked') {
+    const next = goal.nextQueuedStop ?? state.visit?.queued?.[0];
+    if (next) {
+      reply = `${reply.trim()}\n\nNext up — which day works for *${next.projectName}*?`;
+    }
   }
 
   state = applyGoalToState(state, goal, evidence);
@@ -1126,7 +1141,16 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
     case 'visit_propose':
       return { ...s, phase: 'visit', visit: goal.state };
     case 'visit_booked':
-      return applyVisitBooked(s);
+      return applyVisitBooked(
+        s,
+        goal.nextQueuedStop
+          ? {
+              projectId: goal.nextQueuedStop.projectId,
+              projectName: goal.nextQueuedStop.projectName,
+              ...(goal.nextQueuedStop.slotText ? { slotText: goal.nextQueuedStop.slotText } : {}),
+            }
+          : undefined,
+      );
     case 'warm_ack':
       return { ...s, postVisitAckPending: false };
     case 'handoff':

@@ -34,17 +34,21 @@ export function incObjection(s: ConversationState): ConversationState {
   return { ...s, objectionCount: (s.objectionCount ?? 0) + 1 };
 }
 
-export function applyVisitBooked(s: ConversationState): ConversationState {
+export function applyVisitBooked(
+  s: ConversationState,
+  explicitNext?: { projectId: string; projectName: string; slotText?: string },
+): ConversationState {
   const queued = s.visit?.queued ?? [];
-  if (queued.length > 0) {
-    const [next, ...rest] = queued;
+  const next = queued[0] ?? explicitNext;
+  if (next) {
+    const rest = queued.length > 0 ? queued.slice(1) : [];
     return {
       ...s,
       phase: 'visit',
       visit: {
-        projectId: next!.projectId,
-        projectName: next!.projectName,
-        ...(next!.slotText ? { slotText: next!.slotText } : {}),
+        projectId: next.projectId,
+        projectName: next.projectName,
+        ...(next.slotText ? { slotText: next.slotText } : {}),
         ...(rest.length ? { queued: rest } : {}),
       },
     };

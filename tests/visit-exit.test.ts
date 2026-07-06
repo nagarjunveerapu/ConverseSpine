@@ -15,6 +15,9 @@ describe('visit exit', () => {
 
   it('stays in visit for bare day answers', () => {
     expect(shouldExitVisitForIntent({ constraints: {}, askTopic: undefined })).toBe(false);
+    expect(shouldExitVisitForIntent({ constraints: {}, pickName: 'Beta' }, 'what about Beta?')).toBe(
+      false,
+    );
   });
 
   it('clears visit state and returns to discover', () => {

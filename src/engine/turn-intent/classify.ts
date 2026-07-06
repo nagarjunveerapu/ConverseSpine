@@ -6,6 +6,7 @@ import { isBudgetFitQuestion } from '../facts.js';
 import { extractRecoveryPatchFromText } from './extract-recovery-patch.js';
 import { classifyFocusedPivot, shouldRunFocusedTurnIntent } from './focused-intent.js';
 import { isCompareAmongOfferedTurn } from './compare-intent.js';
+import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../phases/visit.js';
 import { classifyTurnIntentLlm } from './llm-classifier.js';
 import { defaultProbePrompt } from './pending-prompt.js';
 import type {
@@ -162,6 +163,7 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
   }
 
   for (const o of input.last_offered) {
+    if (input.phase === 'visit') continue;
     if (t.toLowerCase().includes(o.name.toLowerCase())) {
       return {
         kind: 'ask_named_project',
@@ -178,6 +180,11 @@ export function shouldRunTurnIntent(state: ConversationState, actionId?: string,
   if (text && isCompareAmongOfferedTurn(text)) return false;
   if (actionId) return true;
   if (state.postVisitAckPending) return false;
+  // Visit queue owns scheduling — RTI must not commit focus or recovery mid-visit.
+  if (state.phase === 'visit') {
+    if (text && (isVisitFollowUpQuestion(text) || isVisitRouteExpand(text))) return false;
+    return false;
+  }
   if (state.phase === 'focused') {
     if (state.rti?.pendingPrompt) return true;
     return Boolean(text && shouldRunFocusedTurnIntent(state, text, actionId));
