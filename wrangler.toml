@@ -1,0 +1,84 @@
+# ConverseSpine — production bot Worker
+# CRM: NayaDesk (service binding). Spine: deterministic turn contract.
+
+name = "converse-spine"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[vars]
+LOG_LEVEL = "info"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_BUILDER_ID = "lokations"
+ADVISOR_BUILDER_ID = "naya-advisor"
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
+
+[[vectorize]]
+binding = "INTENT_VECTORS"
+index_name = "naya-intent-phrasings"
+
+[ai]
+binding = "AI"
+
+[[kv_namespaces]]
+binding = "TURN_CACHE"
+id = "00000000000000000000000000000000"
+preview_id = "00000000000000000000000000000000"
+
+[[durable_objects.bindings]]
+name = "TURN_DEBOUNCER"
+class_name = "TurnDebouncer"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TurnDebouncer"]
+
+# ── Local dev (wrangler dev) ───────────────────────────────────────────
+[env.dev]
+name = "converse-spine-dev"
+
+# No local NAYADESK service binding in dev — when both wrangler processes run,
+# binding hijacks to localhost:8787 which lacks the naya-advisor catalog (21 projects
+# live on naya-db-dev). Advisor + ConverseSpine dev use HTTP → nayadesk-dev cloud.
+[[env.dev.kv_namespaces]]
+binding = "TURN_CACHE"
+id = "00000000000000000000000000000000"
+preview_id = "00000000000000000000000000000000"
+
+[env.dev.vars]
+NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
+ADVISOR_BUILDER_ID = "naya-advisor"
+
+[[env.dev.durable_objects.bindings]]
+name = "TURN_DEBOUNCER"
+class_name = "TurnDebouncer"
+
+[[env.dev.vectorize]]
+binding = "INTENT_VECTORS"
+index_name = "naya-intent-phrasings"
+
+[env.dev.ai]
+binding = "AI"
+
+# ── Production ─────────────────────────────────────────────────────────
+[env.prod]
+name = "converse-spine"
+
+[[env.prod.services]]
+binding = "NAYADESK"
+service = "nayadesk"
+
+[[env.prod.durable_objects.bindings]]
+name = "TURN_DEBOUNCER"
+class_name = "TurnDebouncer"
+
+[[env.prod.vectorize]]
+binding = "INTENT_VECTORS"
+index_name = "naya-intent-phrasings"
+
+[env.prod.ai]
+binding = "AI"

@@ -1,0 +1,459 @@
+import type { ComposeRequest, EvidenceSet, Match, ProbeKind, TurnGoal } from './types.js';
+
+export function buildComposeRequest(
+  goal: TurnGoal,
+  evidence: EvidenceSet,
+  ctx: Omit<ComposeRequest['context'], never> & ComposeRequest['context'],
+): ComposeRequest {
+  return { goal, evidence, context: ctx };
+}
+
+export function renderComposePrompt(req: ComposeRequest): string {
+  const { goal, evidence, context } = req;
+  const lines: string[] = [];
+  lines.push(
+    `You are a warm, concise WhatsApp property advisor for ${context.builderName || 'the builder'}.`,
+  );
+  lines.push(`Write ONE short reply (2-4 sentences, WhatsApp tone). No markdown headers or bullet dumps.`);
+  lines.push(`This turn's GOAL: ${describeGoal(goal)}.`);
+  lines.push('');
+  lines.push('EVIDENCE — the ONLY facts you may state:');
+  lines.push(renderEvidence(evidence));
+  lines.push('');
+  if (context.buyerName) lines.push(`Buyer's name: ${context.buyerName}.`);
+  const c = context.constraints;
+  const known = [
+    c.location && `area ${c.location}`,
+    c.bhk,
+    c.budgetMaxInr && `budget ~${formatInr(c.budgetMaxInr)}`,
+    c.purpose,
+  ].filter(Boolean);
+  if (known.length) lines.push(`Known so far: ${known.join(', ')}. Don't re-ask these.`);
+  if (context.alreadyShownSameSet) {
+    lines.push(`You already showed these exact projects — do NOT relist; advance the conversation.`);
+  }
+  if (context.buyerText && /\b(which.*better|better for)\b/i.test(context.buyerText)) {
+    lines.push(
+      `The buyer wants consultative guidance using ONLY the comparison facts — weigh trade-offs honestly, no invented claims.`,
+    );
+  }
+  if (goal.kind === 'answer' && goal.topic === 'legal' && evidence.detail?.reraNumber) {
+    lines.push(
+      `Lead with RERA registration (${evidence.detail.reraNumber}) — do NOT give a generic location/price recap.`,
+    );
+  }
+  if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
+    lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
+  }
+  lines.push('');
+  lines.push('RULES: State ONLY facts in EVIDENCE. One natural next-step question. No filler closers.');
+  return lines.join('\n');
+}
+
+function describeGoal(g: TurnGoal): string {
+  switch (g.kind) {
+    case 'greet':
+      return 'greet and ask what they are looking for';
+    case 'orient':
+      return 'briefly describe the portfolio and ask area/budget/size';
+    case 'probe':
+      return `ask their ${g.slot}`;
+    case 'recommend':
+      return 'recommend matching projects from EVIDENCE';
+    case 'advance':
+      return 'do NOT relist — nudge forward or ask one missing slot';
+    case 'no_fit':
+      return 'honestly say nothing fits and state the real starting point';
+    case 'ack_reject_recommend':
+      return 'acknowledge they passed on the last option and offer alternatives';
+    case 'objection':
+      return `acknowledge ${g.topic} concern and reframe using EVIDENCE angles only`;
+    case 'answer':
+      return `answer their ${g.topic} question from EVIDENCE`;
+    case 'commit':
+      return 'confirm their project choice and offer next step';
+    case 'propose_visit':
+      return 'offer to set up a site visit and ask which day works';
+    case 'visit_ask':
+    case 'visit_propose':
+      return 'continue visit setup using the exact copy in EVIDENCE';
+    case 'visit_booked':
+      return 'confirm the visit is booked';
+    case 'visit_recall':
+      return 'recall visits from EVIDENCE only';
+    case 'warm_ack':
+      return 'warm short ack after visit booked — no escalation';
+    case 'handoff':
+      return 'reassure a human will follow up';
+    case 'smalltalk':
+      return 'respond warmly and briefly, then gently ask what property they are looking for';
+    default:
+      return 'respond helpfully and steer back to property search';
+  }
+}
+
+function renderEvidence(ev: EvidenceSet): string {
+  const out: string[] = [];
+  if (ev.matches?.length) {
+    out.push(
+      'matches:\n' +
+        ev.matches
+          .map(
+            (m) =>
+              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}`,
+          )
+          .join('\n'),
+    );
+  }
+  if (ev.floor) out.push(`catalog floor: ${ev.floor.display}`);
+  if (ev.noMatch) out.push(`no exact match: ${ev.noMatch.reasoning}`);
+  if (ev.catalog) {
+    out.push(
+      `portfolio: ${ev.catalog.projectTypes.join(', ')} in ${ev.catalog.microMarkets.slice(0, 5).join(', ')}`,
+    );
+  }
+  if (ev.detail) {
+    out.push(
+      `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, from ${ev.detail.startingPriceDisplay}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
+    );
+  }
+  if (ev.location) {
+    const l = ev.location;
+    const bits = [
+      l.microMarketOverview,
+      l.connectivitySummary,
+      l.nearbyPois?.length ? `nearby: ${l.nearbyPois.join('; ')}` : '',
+      l.driveTimes?.length ? `drive times: ${l.driveTimes.join('; ')}` : '',
+    ].filter(Boolean);
+    out.push(`location for ${l.projectName}: ${bits.join(' | ') || l.microMarket}`);
+  }
+  if (ev.media) {
+    out.push(
+      ev.media.allowed
+        ? `media: ${ev.media.title ?? ev.media.assetKind ?? 'asset'}${ev.media.cdnUrl ? ` → ${ev.media.cdnUrl}` : ''}`
+        : `media withheld: ${ev.media.reason ?? ev.media.redirectHint ?? 'visit required'}`,
+    );
+  }
+  if (ev.emi) {
+    out.push(
+      `emi: ${ev.emi.emiFormatted}/mo on ${ev.emi.basisFormatted} at ${ev.emi.ratePercent}% for ${ev.emi.tenureYears} yrs`,
+    );
+  }
+  if (ev.units?.length) {
+    out.push(`units:\n${ev.units.map((u) => `  - ${u.unitType}: ${u.priceDisplay}`).join('\n')}`);
+  }
+  if (ev.visits?.visits.length) {
+    out.push(
+      `visits:\n${ev.visits.visits.map((v) => `  - ${v.projectName}: ${v.label}${v.confirmed ? ' (confirmed)' : ''}`).join('\n')}`,
+    );
+  }
+  if (ev.pricing) {
+    out.push(
+      `pricing for ${ev.pricing.projectName}: ${ev.pricing.components.map((c) => `${c.label} ${c.value}`).join('; ')}`,
+    );
+  }
+  if (ev.compare?.tableText) out.push('comparison:\n' + ev.compare.tableText);
+  if (ev.objection) {
+    out.push(`ack: ${ev.objection.acknowledged}`);
+    out.push(`reframe angles:\n${ev.objection.reframeAngles.map((a) => `  - ${a}`).join('\n')}`);
+  }
+  if (ev.nextSlot) out.push(`missing slot to ask: ${ev.nextSlot}`);
+  return out.length ? out.join('\n') : '  (no data — ask a clarifying question, invent nothing)';
+}
+
+export function fallbackReply(req: ComposeRequest): string {
+  const { goal, evidence: ev, context } = req;
+  const name = context.buyerName ? ` ${context.buyerName}` : '';
+  switch (goal.kind) {
+    case 'greet': {
+      const rb = context.returningBuyer;
+      if (rb && rb.daysSinceLastSeen >= 1) {
+        const welcome = rb.buyerName ? `Welcome back, ${rb.buyerName}!` : 'Welcome back!';
+        return `${welcome} Still exploring property, or picking up where we left off?`;
+      }
+      return `Hi${name}! I can help you find the right property. What are you after — area, budget, or configuration?`;
+    }
+    case 'orient': {
+      const types = ev.catalog?.projectTypes.join(', ') || 'homes';
+      const from =
+        ev.catalog && ev.catalog.priceMinInr > 0 ? `, starting from ${formatInr(ev.catalog.priceMinInr)}` : '';
+      return `We have ${types} on our books${from}. Which area, budget, and size are you thinking?`;
+    }
+    case 'probe':
+      return probeCopy(goal.slot);
+    case 'recommend':
+    case 'ack_reject_recommend': {
+      const ms = (ev.matches ?? []).slice(0, 3);
+      if (!ms.length) {
+        return `I couldn't find a fresh match with those filters — tell me if you'd like to adjust area or budget?`;
+      }
+      const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
+      const list = ms
+        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}`)
+        .join('; ');
+      return `${pre}Here's what fits: ${list}. Want details on any of these, or shall I set up a visit?`;
+    }
+    case 'advance': {
+      const lead = ev.matches?.[0]?.name;
+      if (ev.nextSlot) return `Those are still the closest fits. ${probeCopy(ev.nextSlot)}`;
+      return `Those are the ones that fit${lead ? ` — want full details on *${lead}*, or a site visit?` : '.'}`;
+    }
+    case 'no_fit': {
+      const b = context.constraints.budgetMaxInr ? formatInr(context.constraints.budgetMaxInr) : 'that budget';
+      if (ev.constraintGap) {
+        const g = ev.constraintGap;
+        const loc = g.location ? ` in *${g.location}*` : '';
+        const budget = g.budgetDisplay ? ` at ${g.budgetDisplay}` : b !== 'that budget' ? ` at ${b}` : '';
+        if (g.alternateProject && g.alternatePriceDisplay) {
+          return `No *${g.bhk ?? 'that configuration'}*${budget}${loc} on our books — we do have *${g.alternateProject}* from ${g.alternatePriceDisplay}. Want me to open *${g.alternateProject}*?`;
+        }
+        return `No *${g.bhk ?? 'that configuration'}*${budget}${loc} on our books. Want to adjust BHK, budget, or area?`;
+      }
+      if (ev.budgetGap) {
+        const loc = ev.budgetGap.location ? ` in *${ev.budgetGap.location}*` : '';
+        return `Nothing${loc} starts within ${ev.budgetGap.budgetDisplay} — closest on your brief is *${ev.budgetGap.closestName}* from ${ev.budgetGap.closestDisplay}. Want to raise budget or try another area?`;
+      }
+      if (ev.floor) {
+        return `Nothing sits within ${b} — options begin at ${ev.floor.display}${ev.floor.projectName ? ` with *${ev.floor.projectName}*` : ''}. Want the closest options?`;
+      }
+      if (ev.noMatch?.reasoning) {
+        return `${ev.noMatch.reasoning}. Want to adjust budget, area, or property type?`;
+      }
+      return `I don't have an exact match right now. Want to adjust budget or area?`;
+    }
+    case 'objection': {
+      const o = ev.objection;
+      const angle = o?.reframeAngles[0];
+      const ack = o?.acknowledged ?? 'I hear you';
+      return `${ack}.${angle ? ` ${angle}` : ' Let me get you specifics.'} Want the numbers or a site visit?`;
+    }
+    case 'answer': {
+      const topics = goal.topics?.length ? goal.topics : [goal.topic];
+      const chunks: string[] = [];
+
+      if (topics.includes('price') && ev.pricing) {
+        const p = ev.pricing;
+        const parts = p.components.slice(0, 4).map(formatPriceComponent).join(', ');
+        chunks.push(`*Pricing — ${p.projectName}:* ${parts || formatStartingPrice(p.startingDisplay) || 'on file'}`);
+      }
+      if (topics.includes('property_type') && ev.detail?.projectType) {
+        chunks.push(projectTypeLine(ev.detail));
+      }
+      if (topics.includes('legal') && ev.detail) {
+        chunks.push(legalSnapshotLine(ev.detail));
+      }
+      if (topics.includes('location') && ev.location) {
+        chunks.push(locationSnapshotLine(ev.location));
+      }
+      if (topics.includes('emi') && ev.emi) {
+        chunks.push(emiSnapshotLine(ev.emi));
+      }
+      if (chunks.length > 1) {
+        return `${chunks.join('\n\n')}. Want the full breakdown or a site visit?`;
+      }
+      if (chunks.length === 1) {
+        return `${chunks[0]}. Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`;
+      }
+
+      if (goal.topic === 'price' && ev.pricing) {
+        const p = ev.pricing;
+        const parts = p.components.slice(0, 3).map(formatPriceComponent).join(', ');
+        return `For *${p.projectName}*: ${parts || formatStartingPrice(p.startingDisplay) || 'pricing on file'}. Want the full breakdown or a visit?`;
+      }
+      if (goal.topic === 'property_type' && ev.detail?.projectType) {
+        return `${projectTypeLine(ev.detail)} Want pricing, plot sizes, or a visit?`;
+      }
+      if (goal.topic === 'compare' && ev.compare?.tableText.trim()) {
+        const advice = compareAdviceLine(context.buyerText ?? '', ev.compare.projects);
+        return advice ? `${advice}\n\n${ev.compare.tableText.trim()}` : ev.compare.tableText.trim();
+      }
+      if (goal.topic === 'legal' && ev.detail) {
+        return `${focusedLegalLine(ev.detail, context.buyerText)}. I can share the full approval checklist on a call or at your site visit.`;
+      }
+      if (goal.topic === 'location' && ev.location) {
+        return `${locationSnapshotLine(ev.location)}. Want pricing, legal details, or a visit?`;
+      }
+      if (goal.topic === 'media' && ev.media) {
+        if (ev.media.allowed && ev.media.cdnUrl) {
+          return `Here's the ${ev.media.title ?? ev.media.assetKind ?? 'asset'} for *${ev.media.projectName}*: ${ev.media.cdnUrl}`;
+        }
+        return ev.media.redirectHint ?? ev.media.reason ?? `I can share that after a site visit is confirmed for *${ev.media.projectName}*.`;
+      }
+      if (goal.topic === 'emi' && ev.emi) {
+        return `${emiSnapshotLine(ev.emi)}. Want the full cost breakdown or a visit?`;
+      }
+      if (goal.topic === 'availability' && ev.units?.length) {
+        const list = ev.units.slice(0, 4).map((u) => `${u.unitType} from ${u.priceDisplay}`).join('; ');
+        return `Available configurations: ${list}. Want pricing on a specific size?`;
+      }
+      if (ev.detail) {
+        const d = ev.detail;
+        return `*${d.name}* is in ${d.microMarket}${d.startingPriceDisplay ? `, from ${d.startingPriceDisplay}` : ''}${d.possession ? `, possession ${d.possession}` : ''}. Want pricing, legal details, or a visit?`;
+      }
+      return `Let me get that confirmed and follow up shortly.`;
+    }
+    case 'commit':
+      return `Great choice${name} — let's look at *${goal.projectName}*. Want pricing, legal status, or to line up a visit?`;
+    case 'propose_visit':
+      return `Happy to set up a visit. Which day works for you?`;
+    case 'visit_ask':
+    case 'visit_propose':
+      return goal.copy;
+    case 'visit_booked':
+      return `Done — your visit to *${goal.projectName}* is set for ${goal.label}. Our team will confirm details before the day.`;
+    case 'visit_recall': {
+      const vs = ev.visits?.visits ?? [];
+      if (!vs.length) {
+        return ev.visits?.siteVisitHours
+          ? `I don't see a confirmed visit yet. Site visits are ${ev.visits.siteVisitHours} — want to book one?`
+          : "I don't see a confirmed visit on file yet — want to set one up?";
+      }
+      const list = vs.map((v) => `*${v.projectName}* — ${v.label}${v.confirmed ? '' : ' (pending)'}`).join('; ');
+      return `Your visits: ${list}. Our team will confirm details before the day.`;
+    }
+    case 'handoff':
+      return `I'll have our team reach out directly on this — they'll take it from here.`;
+    case 'warm_ack': {
+      const name = context.buyerName ? `, ${context.buyerName}` : '';
+      if (context.focusProjectName) {
+        return `You're all set${name}! If anything else comes up on *${context.focusProjectName}* — pricing, legal, or another visit — just ask.`;
+      }
+      return `You're all set${name}! If anything else comes up — pricing, legal, or a visit — just ask.`;
+    }
+    case 'smalltalk':
+      return `Doing well, thanks${name}! What kind of property are you exploring — area, budget, or configuration?`;
+    default:
+      return `Tell me the area, budget, or a project name and I'll pull live options from our catalog.`;
+  }
+}
+
+function focusedLegalLine(d: import('./types.js').ProjectDetail, buyerText?: string): string {
+  const t = (buyerText ?? '').toLowerCase();
+  if (/\b(?:ec|encumbrance)\b/.test(t) && d.ecStatus) {
+    return `For *${d.name}*, EC: ${d.ecStatus}`;
+  }
+  if (/\b(?:bank|loan|approv|lender|finance)\b/.test(t) && d.loanEligibility) {
+    return `For *${d.name}*, home loan: ${d.loanEligibility}`;
+  }
+  return legalSnapshotLine(d);
+}
+
+function legalSnapshotLine(d: import('./types.js').ProjectDetail): string {
+  const bits: string[] = [];
+  if (d.reraNumber) bits.push(`RERA: ${d.reraNumber}`);
+  if (d.khata) bits.push(`Khata: ${d.khata}`);
+  if (d.naStatus) bits.push(`NA: ${d.naStatus}`);
+  if (d.ecStatus) bits.push(`EC: ${d.ecStatus}`);
+  if (d.possession) bits.push(`Possession: ${d.possession}`);
+  if (d.loanEligibility) bits.push(`Loan: ${d.loanEligibility}`);
+  if (d.configurations?.length) {
+    const configs = d.configurations
+      .slice(0, 4)
+      .map((c) => `${c.unitType}${c.priceDisplay ? ` from ${c.priceDisplay}` : ''}`)
+      .join('; ');
+    bits.push(`Configurations: ${configs}`);
+  }
+  if (bits.length) return `Regulatory snapshot for *${d.name}*: ${bits.join('. ')}`;
+  return `Legal and title details for *${d.name}* are on file with our team`;
+}
+
+function projectTypeLine(d: import('./types.js').ProjectDetail): string {
+  return `*${d.name}* is a *${humanizeProjectType(d.projectType)}* project in ${d.microMarket}.`;
+}
+
+function humanizeProjectType(raw?: string): string {
+  if (!raw) return 'residential';
+  const s = raw.toLowerCase();
+  if (s.includes('plot')) return 'plotted development';
+  if (s.includes('plantation')) return 'managed plantation estate';
+  if (s.includes('villa')) return 'villa project';
+  if (s.includes('apartment')) return 'apartment project';
+  return raw.replace(/_/g, ' ');
+}
+
+function formatPriceComponent(c: { label: string; value: string }): string {
+  const label = c.label.trim();
+  let value = c.value.trim();
+  if (/^starting from$/i.test(label)) {
+    value = value.replace(/^from\s+/i, '').trim();
+    return `Starting from ${value}`;
+  }
+  return `${label} ${value}`.replace(/\s+/g, ' ').trim();
+}
+
+function formatStartingPrice(display?: string): string {
+  if (!display) return '';
+  return display.replace(/^from\s+/i, '').trim();
+}
+
+function locationSnapshotLine(l: import('./types.js').LocationEvidence): string {
+  const bits: string[] = [`*${l.projectName}* is in ${l.microMarket}`];
+  if (l.microMarketOverview) bits.push(l.microMarketOverview);
+  if (l.connectivitySummary) bits.push(l.connectivitySummary);
+  if (l.nearbyPois?.length) bits.push(`Nearby: ${l.nearbyPois.slice(0, 3).join(', ')}`);
+  if (l.driveTimes?.length) bits.push(l.driveTimes.slice(0, 2).join('; '));
+  return bits.join('. ');
+}
+
+function emiSnapshotLine(e: import('./types.js').EmiEvidence): string {
+  const down = e.downPaymentFormatted ? ` (~${e.downPaymentFormatted} down on ${e.basisFormatted})` : '';
+  return `Indicative EMI: *${e.emiFormatted}/month*${down} at ${e.ratePercent}% for ${e.tenureYears} years`;
+}
+
+function compareAdviceLine(
+  buyerText: string,
+  projects: Array<{ name?: string; starting_price_lakhs?: number; possession_date?: string }>,
+): string {
+  if (projects.length < 2) return '';
+  const [a, b] = projects;
+  if (/\bbudget\b/i.test(buyerText)) {
+    const sorted = [...projects].sort(
+      (x, y) => (x.starting_price_lakhs ?? 0) - (y.starting_price_lakhs ?? 0),
+    );
+    const lead = sorted[0];
+    const next = sorted[1];
+    if (lead?.name && next?.name) {
+      const leadPrice =
+        lead.starting_price_lakhs && lead.starting_price_lakhs > 0
+          ? formatInr(Math.round(lead.starting_price_lakhs * 100_000))
+          : '';
+      const nextPrice =
+        next.starting_price_lakhs && next.starting_price_lakhs > 0
+          ? formatInr(Math.round(next.starting_price_lakhs * 100_000))
+          : '';
+      return `On your budget, *${lead.name}*${leadPrice ? ` starts lower at ${leadPrice}` : ' is the lower entry point'}${nextPrice ? `; *${next.name}* from ${nextPrice}` : `; *${next.name}* is the next step up`}. Both are on your board — tap one for full pricing.`;
+    }
+  }
+  if (/\binvest/i.test(buyerText)) {
+    const cheaper =
+      (a?.starting_price_lakhs ?? 0) <= (b?.starting_price_lakhs ?? 0) ? a : b;
+    return `For investment, *${cheaper?.name}* has the lower entry point on our catalog — happy to walk through yields on a call.`;
+  }
+  if (/\bfamil/i.test(buyerText)) {
+    return `For families, compare location fit and configuration — both are in the table below. Tell me your must-haves and I can steer you.`;
+  }
+  return '';
+}
+
+function probeCopy(slot: ProbeKind): string {
+  switch (slot) {
+    case 'location':
+      return 'Which area or part of the city are you looking in?';
+    case 'budget':
+      return 'What budget range are you working with?';
+    case 'bhk':
+      return 'How many bedrooms — 2 BHK, 3 BHK, something else?';
+    case 'purpose':
+      return 'Is this for you to live in, or as an investment?';
+  }
+}
+
+function priceOf(m: Match): string {
+  return m.startingPriceDisplay || (m.startingPriceInr > 0 ? formatInr(m.startingPriceInr) : '');
+}
+
+export function formatInr(inr: number): string {
+  if (!isFinite(inr) || inr <= 0) return '';
+  if (inr >= 10_000_000) return `₹${(inr / 10_000_000).toFixed(2).replace(/\.?0+$/, '')} Cr`;
+  return `₹${(inr / 100_000).toFixed(2).replace(/\.?0+$/, '')} L`;
+}

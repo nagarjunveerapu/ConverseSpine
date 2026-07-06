@@ -1,0 +1,9 @@
+{{#if location}}Here are options{{#if budget}} within {{budget}}{{/if}} around *{{location}}*:
+{{else}}Here are projects that match what you've shared:
+{{/if}}
+{{#each projects}}
+• *{{name}}* — {{micro_market}}, from ₹{{starting_price_lakhs}} L{{#if match_reasons.length}} ({{match_reasons.[0]}}){{/if}}
+{{/each}}
+{{#unless projects.length}}I couldn't find a match in the catalog with those filters. Try a nearby area or a higher budget?{{/unless}}
+{{#if projects.length}}
+Reply with a project name for details, pricing, or a site visit.{{/if}}

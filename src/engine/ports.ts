@@ -1,0 +1,238 @@
+import type { ComposeRequest } from './types.js';
+import type { EmiFacts } from './emi.js';
+
+export type SignalKind = 'location' | 'property_type' | 'purpose' | 'transition';
+
+export interface ExtractSignal {
+  kind: SignalKind;
+  value: string;
+}
+
+export interface EngineLlm {
+  compose(req: ComposeRequest): Promise<string>;
+  extractSignals(text: string, need: readonly SignalKind[]): Promise<readonly ExtractSignal[]>;
+}
+
+export interface StoredVisit {
+  projectId: string;
+  projectName: string;
+  iso: string;
+  label: string;
+  confirmed: boolean;
+}
+
+export interface ProjectFaq {
+  questionKey: string;
+  question: string;
+  answer: string;
+}
+
+export interface UnitConfig {
+  unitType: string;
+  priceDisplay: string;
+  priceMinInr: number;
+}
+
+export interface LocationIntel {
+  connectivitySummary?: string;
+  microMarketOverview?: string;
+  nearbyPois?: string[];
+  driveTimes?: string[];
+}
+
+export interface LandedCostFacts {
+  projectName: string;
+  unitType: string;
+  baseDisplay: string;
+  oneTime: Array<{ label: string; display: string }>;
+  recurring: Array<{ label: string; display: string }>;
+  totalDisplay: string;
+  disclaimer?: string;
+}
+
+export interface MediaShareResult {
+  allowed: boolean;
+  title?: string;
+  cdnUrl?: string;
+  assetKind?: string;
+  reason?: string;
+  redirectHint?: string;
+}
+
+export interface EngineData {
+  search(builderId: string, filters: import('./types.js').SearchFilters): Promise<{
+    matches: Array<{
+      project_id: string;
+      name: string;
+      micro_market: string;
+      starting_price_inr: number;
+      starting_price_display: string;
+      match_reasons?: string[];
+      project_type?: string;
+    }>;
+    expandedLocations?: string[];
+    noMatchReasoning?: string;
+  }>;
+  catalog(builderId: string): Promise<{
+    priceMinInr: number;
+    priceMaxInr: number;
+    projectTypes: string[];
+    microMarkets: string[];
+    total: number;
+    sample: Array<{ name: string; startingPriceDisplay: string }>;
+  }>;
+  /** conversation-context when focused; getProject fallback otherwise. */
+  projectDetail(builderId: string, ndConversationId: string, projectId: string): Promise<{
+    projectId: string;
+    name: string;
+    microMarket: string;
+    summary?: string;
+    reraNumber?: string;
+    possession?: string;
+    projectType?: string;
+    startingPriceDisplay?: string;
+    khata?: string;
+    naStatus?: string;
+    ecStatus?: string;
+    loanEligibility?: string;
+    faqs?: ProjectFaq[];
+    configurations?: UnitConfig[];
+    location?: LocationIntel;
+  } | null>;
+  pricing(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<{
+    projectName: string;
+    startingDisplay?: string;
+    components: Array<{ label: string; value: string }>;
+    withheld?: Array<{ label: string; redirectHint: string }>;
+  } | null>;
+  landedCost(builderId: string, ndConversationId: string, projectId: string, unitType: string): Promise<LandedCostFacts | null>;
+  compare(ndConversationId: string, projectIds: string[]): Promise<{
+    tableText: string;
+    projects: Array<Record<string, unknown>>;
+    matrix?: import('./types.js').CompareMatrixPayload;
+  } | null>;
+  priceBasis(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<{
+    priceInr: number;
+    display: string;
+  } | null>;
+  listUnits(projectId: string): Promise<UnitConfig[]>;
+  mediaShare(ndConversationId: string, projectId: string, assetKind: string, unitType?: string): Promise<MediaShareResult | null>;
+  conversationContext(ndConversationId: string): Promise<import('../crm/nayadesk-client.js').NdContextBundle | null>;
+  objectionContext(ndConversationId: string): Promise<{
+    playbooks: Array<{ topic: string; reframeAngles: string[]; escalateAfter: number }>;
+    escalationPhone?: string;
+  } | null>;
+  siteVisitsItinerary(ndConversationId: string): Promise<readonly StoredVisit[]>;
+  builder(builderId: string): Promise<{ siteVisitHours: string; name?: string; escalationPhone?: string } | null>;
+  recordVisit(
+    ids: { ndConversationId: string; buyerPhone: string; builderId: string },
+    visit: { projectId: string; projectName: string; iso: string; label: string },
+  ): Promise<boolean>;
+  /** Turn-start bundle — returning buyer, builder persona, recent messages. */
+  bootstrapContext(ndConversationId: string): Promise<{
+    returningBuyer?: { buyerName: string; daysSinceLastSeen: number; lastProjectId?: string };
+    builderPersona?: { botName?: string; preferredTone?: string };
+    recentMessages: Array<{ role: 'buyer' | 'bot'; text: string; atMs: number }>;
+    rejectedProjectIds: string[];
+    turnIndex: number;
+  }>;
+  geoAreasInRegion(region: string, builderId: string): Promise<Array<{ name: string; distanceKm: number }>>;
+  faqLookup(projectId: string, questionKey: string): Promise<{ question: string; answer: string } | null>;
+  getProfile(builderId: string, buyerPhone: string): Promise<Record<string, unknown>>;
+}
+
+export interface EngineCrm {
+  ensureLead(builderId: string, buyerPhone: string): Promise<{ conversationId: string } | null>;
+  appendMessage(conversationId: string, direction: 'inbound' | 'outbound', content: string, meta?: { replyKey?: string }): Promise<void>;
+  updateFacts(conversationId: string, facts: Record<string, string | undefined>): Promise<void>;
+  commitProject(conversationId: string, projectId: string): Promise<void>;
+  releaseProject(conversationId: string): Promise<void>;
+  syncShortlist(conversationId: string, projectIds: string[]): Promise<void>;
+  syncMatching(conversationId: string, projectIds: string[]): Promise<void>;
+  setStage(conversationId: string, stage: 'new' | 'engaged' | 'qualified' | 'visit_booked' | 'escalated' | 'cold' | 'dropped'): Promise<void>;
+  appendSharedFact(conversationId: string, factKind: string, projectId: string, turnIndex: number): Promise<void>;
+  appendTurnLedger(entry: {
+    conversationId: string;
+    turnIndex: number;
+    builderId: string;
+    buyerPhone: string;
+    buyerText: string;
+    reply: string;
+    goal: string;
+    tools: string[];
+    offeredProjectIds?: string[];
+    phase: string;
+  }): Promise<void>;
+  postJourneySignals(
+    builderId: string,
+    buyerPhone: string,
+    conversationId: string,
+    signals: Record<string, unknown>,
+    extras?: { shortlistAdd?: string[]; rejectedAdd?: string[] },
+  ): Promise<void>;
+  postJourneyTurnSnapshot(
+    builderId: string,
+    buyerPhone: string,
+    conversationId: string,
+    goal: string,
+    phase: string,
+  ): Promise<void>;
+  postProfileObservations(
+    builderId: string,
+    buyerPhone: string,
+    conversationId: string,
+    observations: Array<{ fact_key: string; value: unknown; provenance: string }>,
+  ): Promise<void>;
+  postChoiceEvent(
+    builderId: string,
+    buyerPhone: string,
+    conversationId: string,
+    matches: Array<{ projectId: string; name: string }>,
+    constraints: Record<string, unknown>,
+  ): Promise<void>;
+  postChoiceResponse(conversationId: string, responseText: string, responseIntent?: string): Promise<void>;
+  deleteBuyerMemory(conversationId: string): Promise<void>;
+  mirrorMemory(conversationId: string): Promise<void>;
+}
+
+export interface EngineStore {
+  load(convId: string): Promise<import('./types.js').ConversationState | null>;
+  save(state: import('./types.js').ConversationState): Promise<void>;
+  logTurn(entry: {
+    convId: string;
+    turnIndex: number;
+    buyerText: string;
+    reply: string;
+    phase: string;
+    goal: string;
+    grounding: string;
+  }): Promise<void>;
+}
+
+export interface EngineClock {
+  nowMs(): number;
+  nowIso(): string;
+}
+
+export interface SemanticNluPort {
+  enrich(
+    text: string,
+    builderId: string,
+    ex: import('./types.js').Extracted,
+    ctx: { phase: import('./types.js').Phase; microMarkets: readonly string[] },
+  ): Promise<import('./types.js').Extracted>;
+}
+
+export interface EngineDeps {
+  data: EngineData;
+  llm: EngineLlm;
+  semantic: SemanticNluPort;
+  crm: EngineCrm;
+  store: EngineStore;
+  clock: EngineClock;
+  turnIntent?: {
+    classify(input: import('./turn-intent/types.js').TurnIntentInput): Promise<import('./turn-intent/types.js').TurnIntentResult>;
+  };
+}
+
+export type { EmiFacts };

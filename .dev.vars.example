@@ -1,0 +1,18 @@
+# ConverseSpine local secrets — copy to .dev.vars (gitignored)
+# wrangler dev --env dev reads this file.
+
+BOT_SHARED_SECRET=copy-from-NayaDesk-.dev.vars
+# Advisor dev: cloud nayadesk-dev has naya-advisor catalog (~21 projects).
+# Local NayaDesk (localhost:8787) does NOT — only use if you seed that tenant.
+NAYADESK_URL=https://nayadesk-dev.nagarjun-arjun.workers.dev
+
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+# Optional — Langfuse cloud project keys
+# LANGFUSE_PUBLIC_KEY=pk-lf-...
+# LANGFUSE_SECRET_KEY=sk-lf-...
+# LANGFUSE_BASE_URL=https://cloud.langfuse.com
+
+DEFAULT_BUILDER_ID=lokations

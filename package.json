@@ -1,0 +1,30 @@
+{
+  "name": "converse-spine",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Production sales bot — deterministic turn spine + NayaDesk CRM",
+  "scripts": {
+    "demo": "tsx src/cli.ts",
+    "script": "tsx src/script-demo.ts",
+    "eval:quality": "tsx src/eval/cli.ts",
+    "eval:scenarios": "EVAL_MODE=scenarios tsx src/eval/cli.ts",
+    "dev": "wrangler dev --env dev --port 8789",
+    "deploy:dev": "wrangler deploy --env dev",
+    "deploy:prod": "wrangler deploy --env prod",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "handlebars": "^4.7.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "wrangler": "^4.14.0"
+  }
+}
