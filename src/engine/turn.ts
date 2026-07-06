@@ -17,8 +17,8 @@ import {
 } from './turn-intent/compare-intent.js';
 import { matchesFromLastOffered } from './matches-from-offered.js';
 import { resolveFocusedSwitchGoal } from './project_switch.js';
-import { driveLeg } from './trip-logistics.js';
-import { projectGeo } from './project-geo.js';
+import { driveLeg, haversineDriveMinutes } from './trip-logistics.js';
+import { projectGeo, resolveOriginGeo } from './project-geo.js';
 import {
   applyExtracted,
   applyVisitBooked,
@@ -369,12 +369,37 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const now = new Date(deps.clock.nowMs());
   let visitCtx: visit.VisitCtx | null = null;
   if (state.phase === 'visit') {
+    let visitState = state.visit;
+    const originCandidate =
+      visitState?.lastAsk === 'origin' && !visitState.originText
+        ? trimmedText
+        : visitState?.originText;
+    if (originCandidate && visitState?.originLat == null) {
+      const geo =
+        (await deps.data.resolveGeo(originCandidate).catch(() => null)) ??
+        resolveOriginGeo(originCandidate);
+      if (geo) {
+        visitState = {
+          ...(visitState ?? {}),
+          originText: visitState?.originText ?? originCandidate.trim(),
+          originLat: geo.lat,
+          originLng: geo.lng,
+          originAsked: true,
+        };
+        state = { ...state, visit: visitState };
+      }
+    }
+
     visitCtx = {
       text: input.text,
       now,
       siteVisitHours:
         (await deps.data.builder(state.builderId).catch(() => null))?.siteVisitHours ??
         'Mon–Sun, 9am–7pm',
+      originGeo:
+        visitState?.originLat != null && visitState?.originLng != null
+          ? { lat: visitState.originLat, lng: visitState.originLng }
+          : null,
     };
     if (nd) {
       const booked = await deps.data.siteVisitsItinerary(nd).catch(() => []);
@@ -393,6 +418,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
               driveFromPriorMin = leg.minutes;
               driveSource = 'distance_matrix';
             }
+          }
+          if (driveFromPriorMin == null) {
+            driveFromPriorMin = haversineDriveMinutes(fromGeo, toGeo);
+            driveSource = 'haversine';
           }
         }
       }

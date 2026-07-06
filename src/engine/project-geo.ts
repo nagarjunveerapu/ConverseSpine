@@ -23,6 +23,7 @@ const ORIGIN_COORDS: Record<string, GeoPoint> = {
   bagalur: { lat: 13.139, lng: 77.658 },
   'north bangalore': { lat: 13.07, lng: 77.625 },
   hebbal: { lat: 13.035, lng: 77.597 },
+  yelahanka: { lat: 13.1007, lng: 77.5963 },
   indiranagar: { lat: 12.978, lng: 77.641 },
   koramangala: { lat: 12.935, lng: 77.624 },
 };
@@ -43,6 +44,17 @@ export function resolveOriginGeo(originText: string): GeoPoint | null {
     if (key.includes(name)) return pt;
   }
   return null;
+}
+
+/** Cached NayaDesk geocode first, then local alias table. */
+export function resolveOriginGeoCached(
+  originText: string,
+  cached?: { lat: number; lng: number } | null,
+): GeoPoint | null {
+  if (cached?.lat != null && cached?.lng != null) {
+    return { lat: cached.lat, lng: cached.lng };
+  }
+  return resolveOriginGeo(originText);
 }
 
 export function collectVisitProjectIds(state: ConversationState): string[] {

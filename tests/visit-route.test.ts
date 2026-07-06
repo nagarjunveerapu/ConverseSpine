@@ -52,6 +52,67 @@ describe('visit route scheduling', () => {
     }
   });
 
+  it('proposes stop 2 with stagger explain when buyer picks same day', () => {
+    const s = {
+      ...initState('t', 'naya-advisor'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'eldorado',
+        projectName: 'Brigade Eldorado',
+        lastAsk: 'same_day_choice' as const,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: 'same day',
+        now,
+        bookedVisits: [
+          {
+            ...cornerstoneBooked,
+            iso: '2026-07-13T10:00:00+05:30',
+            label: 'Monday at 10:00 AM',
+          },
+        ],
+        driveFromPriorMin: 25,
+        driveSource: 'distance_matrix',
+      },
+    );
+    expect(goal.kind).toBe('visit_propose');
+    if (goal.kind === 'visit_propose') {
+      expect(goal.copy).toContain('on site');
+      expect(goal.copy).toContain('25 min drive');
+      expect(goal.copy).toMatch(/works, or tell me another time/i);
+      expect(goal.state.lastAsk).toBe('stagger_propose');
+    }
+  });
+
+  it('different day after same_day_choice asks for a new day', () => {
+    const s = {
+      ...initState('t', 'naya-advisor'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'eldorado',
+        projectName: 'Brigade Eldorado',
+        lastAsk: 'same_day_choice' as const,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: 'different day',
+        now,
+        bookedVisits: [cornerstoneBooked],
+      },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).toBe('day');
+    }
+  });
+
   it('proposes stop 2 time when buyer says 2 PM after same-day time ask', () => {
     const s = {
       ...initState('t', 'naya-advisor'),

@@ -42,6 +42,7 @@ export function applyVisitBooked(
   const next = queued[0] ?? explicitNext;
   if (next) {
     const rest = queued.length > 0 ? queued.slice(1) : [];
+    const prev = s.visit ?? {};
     return {
       ...s,
       phase: 'visit',
@@ -50,6 +51,12 @@ export function applyVisitBooked(
         projectName: next.projectName,
         ...(next.slotText ? { slotText: next.slotText } : {}),
         ...(rest.length ? { queued: rest } : {}),
+        lastAsk: 'same_day_choice',
+        ...(prev.originText ? { originText: prev.originText } : {}),
+        ...(prev.originLat != null ? { originLat: prev.originLat } : {}),
+        ...(prev.originLng != null ? { originLng: prev.originLng } : {}),
+        ...(prev.originAsked ? { originAsked: prev.originAsked } : {}),
+        ...(prev.tripOrdered ? { tripOrdered: prev.tripOrdered } : {}),
       },
     };
   }

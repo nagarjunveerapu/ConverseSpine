@@ -243,6 +243,12 @@ export function fakeData(): EngineData {
     async geoAreasInRegion(_region) {
       return [{ name: 'Sakleshpur', distanceKm: 0 }];
     },
+    async resolveGeo(text) {
+      const key = text.trim().toLowerCase();
+      if (key.includes('yelahanka')) return { lat: 13.1007, lng: 77.5963 };
+      if (key.includes('whitefield')) return { lat: 12.969, lng: 77.749 };
+      return null;
+    },
     async faqLookup(_pid, key) {
       return key === 'amenities' ? { question: 'Amenities?', answer: 'Clubhouse and pool on file.' } : null;
     },
