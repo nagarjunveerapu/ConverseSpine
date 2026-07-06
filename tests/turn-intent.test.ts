@@ -113,6 +113,19 @@ describe('ruleClassify via classifyTurnIntent', () => {
     expect(intent.patch_clear).toContain('bhk');
     expect(intent.patch?.budgetMaxInr).toBe(20_000_000);
   });
+
+  it('parses increase budget to explicit amount (RTI-2)', async () => {
+    let state = initState('c1', 'naya-advisor');
+    state = {
+      ...state,
+      constraints: { budgetMaxInr: 5_000_000, propertyType: 'Villa' },
+      rti: { lastUiMode: 'search_recovery' },
+    };
+    const input = buildTurnIntentInput(state, 'increase budget to 3 Cr', 'advisor_web', 'search_recovery');
+    const intent = await classifyTurnIntent(noopEnv, input);
+    expect(intent.kind).toBe('apply_recovery_patch');
+    expect(intent.patch?.budgetMaxInr).toBe(30_000_000);
+  });
 });
 
 describe('defaultProbePrompt', () => {

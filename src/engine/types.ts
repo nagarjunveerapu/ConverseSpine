@@ -266,6 +266,12 @@ export interface EvidenceSet {
     closestName: string;
     closestDisplay: string;
   };
+  propertyTypeGap?: {
+    requestedType: string;
+    budgetDisplay?: string;
+    closestName: string;
+    closestDisplay: string;
+  };
   constraintGap?: {
     blocking: 'bhk' | 'budget' | 'joint';
     bhk?: string;

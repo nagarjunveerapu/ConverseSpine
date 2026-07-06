@@ -139,18 +139,27 @@ export async function planSearchRecovery(deps: RecoveryPlannerDeps): Promise<Sea
     );
   }
 
-  // 3 — Budget widen (~25%)
+  // 3 — Budget widen (smallest multiplier that preflights to ≥1 match)
   if (c.budgetMaxInr && actions.length < deps.maxActions) {
-    const bumped = Math.round(c.budgetMaxInr * 1.25);
-    const display = formatInr(bumped);
-    const merged = mergeConstraints(c, { budgetMaxInr: bumped, budgetMinInr: c.budgetMinInr });
-    await push(
-      `relax_budget:${bumped}`,
-      `Budget up to ${display}`,
-      merged,
-      { budget: display, ...(c.location ? { location: c.location } : {}) },
-      `Show me projects with budget up to ${display}`,
-    );
+    for (const mult of [1.25, 1.5, 2, 3, 5, 10]) {
+      const bumped = Math.round(c.budgetMaxInr * mult);
+      if (bumped <= c.budgetMaxInr) continue;
+      const display = formatInr(bumped);
+      const merged = mergeConstraints(c, { budgetMaxInr: bumped, budgetMinInr: c.budgetMinInr });
+      const action = await tryAction(
+        deps,
+        `relax_budget:${bumped}`,
+        `Budget up to ${display}`,
+        merged,
+        { budget: display, ...(c.location ? { location: c.location } : {}) },
+        `Show me projects with budget up to ${display}`,
+      );
+      if (action) {
+        seen.add(action.id);
+        actions.push(action);
+        break;
+      }
+    }
   }
 
   // 4 — Open to any area
