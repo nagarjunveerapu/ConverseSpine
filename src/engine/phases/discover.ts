@@ -207,6 +207,37 @@ export function buildBudgetNoFitEvidence(
   };
 }
 
+/** When property type filter yields zero but other types fit at same budget. */
+export function buildPropertyTypeNoFitEvidence(
+  c: Constraints,
+  withoutTypeMatches: Match[],
+  rejectedIds: readonly string[],
+): EvidenceSet | null {
+  if (!c.propertyType) return null;
+  let pool = withoutTypeMatches.filter((m) => !rejectedIds.includes(m.projectId));
+  if (c.budgetMaxInr) {
+    pool = pool.filter((m) => m.startingPriceInr > 0 && m.startingPriceInr <= c.budgetMaxInr!);
+  }
+  if (pool.length === 0) return null;
+  const cheapest = [...pool].sort((a, b) => a.startingPriceInr - b.startingPriceInr)[0]!;
+  const budgetDisplay = c.budgetMaxInr ? formatInr(c.budgetMaxInr) : undefined;
+  const altDisplay = cheapest.startingPriceDisplay || formatInr(cheapest.startingPriceInr);
+  const budgetBit = budgetDisplay ? ` at ${budgetDisplay}` : '';
+  return {
+    tools: ['search'],
+    propertyTypeGap: {
+      requestedType: c.propertyType,
+      budgetDisplay,
+      closestName: cheapest.name,
+      closestDisplay: altDisplay,
+    },
+    noMatch: {
+      reasoning: `No *${c.propertyType}*${budgetBit} on our books — closest fit is *${cheapest.name}* from ${altDisplay}`,
+      nearby: [],
+    },
+  };
+}
+
 /** When BHK+budget+location jointly fail but smaller configs exist nearby. */
 export function buildConstraintGapEvidence(
   c: Constraints,

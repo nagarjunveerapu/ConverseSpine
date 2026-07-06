@@ -539,6 +539,40 @@ async function fetchRecommend(
     }
   }
 
+  if (scopedMatches.length === 0 && s.constraints.propertyType) {
+    const { projectTypes: _pt, ...noTypeFilters } = filters;
+    const broadType = await searchWithFilters(deps, s.builderId, noTypeFilters);
+    const broadTypeRaw: Match[] = broadType.matches.map((m) => ({
+      projectId: m.project_id,
+      name: m.name,
+      microMarket: m.micro_market,
+      startingPriceInr: m.starting_price_inr,
+      startingPriceDisplay: m.starting_price_display,
+      matchReasons: m.match_reasons ?? [],
+      projectType: m.project_type,
+    }));
+    const typeEv = discover.buildPropertyTypeNoFitEvidence(
+      s.constraints,
+      broadTypeRaw,
+      s.discover.rejectedProjectIds,
+    );
+    if (typeEv) {
+      const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
+      const searchRecovery = await planSearchRecovery({
+        searchCount: async (f) => (await searchWithFilters(deps, s.builderId, f)).matches.length,
+        catalog,
+        constraints: s.constraints,
+        reason: typeEv.noMatch?.reasoning ?? 'Property type not available at this budget',
+        maxActions: 6,
+        variant: 'zero_match',
+      });
+      return {
+        goal: { kind: 'no_fit' },
+        evidence: { ...typeEv, searchRecovery },
+      };
+    }
+  }
+
   if (scopedMatches.length > 0) {
     if (base.kind === 'recommend' && !ex.wantsMore && isSameAsLast(s, scopedMatches)) {
       const miss = s.discover.advancedOnce ? undefined : discover.firstMissingSlot(s);

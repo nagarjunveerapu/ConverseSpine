@@ -1,8 +1,8 @@
 import { constraintsFromAdvisorPreferences } from '../../advisor/apply-preferences.js';
-import { parseBudgetToInr } from '../facts.js';
 import type { SuggestedAction } from '../recovery-planner.js';
 import { commitTo } from '../state.js';
 import type { ConversationState } from '../types.js';
+import { extractRecoveryPatchFromText } from './extract-recovery-patch.js';
 import { classifyTurnIntentLlm } from './llm-classifier.js';
 import { defaultProbePrompt } from './pending-prompt.js';
 import type {
@@ -110,23 +110,8 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
     }
   }
 
-  const budget = parseBudgetToInr(t);
-  if (budget && /\b(?:any|open)\b/i.test(t) && /\b(?:apartment|villa|bhk|config)/i.test(t)) {
-    const patch: TurnIntentResult['patch'] = {
-      budgetMaxInr: budget.max,
-      ...(budget.min !== undefined ? { budgetMinInr: budget.min } : {}),
-    };
-    const patch_clear: PatchClearKey[] = [];
-    if (/\bany\b/i.test(t) && /\b(?:apartment|villa|config|bhk)\b/i.test(t)) patch_clear.push('bhk');
-    if (/\bapartment/i.test(t)) patch.propertyType = 'Apartment';
-    if (/\bvilla/i.test(t)) patch.propertyType = 'Villa';
-    return {
-      kind: 'apply_recovery_patch',
-      confidence: 'extractor',
-      patch,
-      ...(patch_clear.length ? { patch_clear } : {}),
-    };
-  }
+  const recoveryPatch = extractRecoveryPatchFromText(t, input.ui_mode);
+  if (recoveryPatch) return recoveryPatch;
 
   return null;
 }

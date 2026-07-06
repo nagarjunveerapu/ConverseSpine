@@ -213,11 +213,20 @@ export function fallbackReply(req: ComposeRequest): string {
         const loc = ev.budgetGap.location ? ` in *${ev.budgetGap.location}*` : '';
         return `Nothing${loc} starts within ${ev.budgetGap.budgetDisplay} — closest on your brief is *${ev.budgetGap.closestName}* from ${ev.budgetGap.closestDisplay}. Want to raise budget or try another area?`;
       }
+      if (ev.propertyTypeGap) {
+        const g = ev.propertyTypeGap;
+        const budget = g.budgetDisplay ? ` at ${g.budgetDisplay}` : '';
+        return `No *${g.requestedType}*${budget} on our books — closest fit is *${g.closestName}* from ${g.closestDisplay}. Want to try that, or adjust budget or area?`;
+      }
       if (ev.floor) {
         return `Nothing sits within ${b} — options begin at ${ev.floor.display}${ev.floor.projectName ? ` with *${ev.floor.projectName}*` : ''}. Want the closest options?`;
       }
       if (ev.noMatch?.reasoning) {
-        return `${ev.noMatch.reasoning}. Want to adjust budget, area, or property type?`;
+        const emptyChips = ev.searchRecovery?.suggested_actions.length === 0;
+        const suffix = emptyChips
+          ? ' Tell me what to change — budget, area, or property type.'
+          : '. Want to adjust budget, area, or property type?';
+        return `${ev.noMatch.reasoning}${suffix}`;
       }
       return `I don't have an exact match right now. Want to adjust budget or area?`;
     }
