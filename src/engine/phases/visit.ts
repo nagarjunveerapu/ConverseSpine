@@ -241,6 +241,13 @@ function extractOriginFromText(text: string): string | null {
   return null;
 }
 
+/** Locality label for copy + geo — strips "I come from …" cue phrases. */
+export function normalizeOriginText(text: string): string {
+  const extracted = extractOriginFromText(text);
+  if (extracted) return extracted;
+  return text.trim();
+}
+
 function effectiveDriveMin(ctx: VisitCtx): number | null {
   return ctx.driveFromPriorMin ?? null;
 }
@@ -341,6 +348,13 @@ function step(input: {
     projectName = input.candidates[0]!.name;
   }
 
+  const originFromText = extractOriginFromText(input.text);
+  if (originFromText && !prior.originText) {
+    prior = { ...prior, originText: originFromText, originAsked: true };
+  } else if (looksLikeOriginAnswer(input.text, prior)) {
+    prior = { ...prior, originText: normalizeOriginText(input.text), originAsked: true };
+  }
+
   const baseState: VisitState = { ...prior, projectId, projectName, queued };
 
   if (!projectId || !projectName) {
@@ -351,12 +365,6 @@ function step(input: {
   }
 
   const stopCount = (projectId ? 1 : 0) + queued.length;
-  const originFromText = extractOriginFromText(input.text);
-  if (originFromText && !prior.originText) {
-    prior = { ...prior, originText: originFromText, originAsked: true };
-  } else if (looksLikeOriginAnswer(input.text, prior)) {
-    prior = { ...prior, originText: input.text.trim(), originAsked: true };
-  }
 
   if (stopCount >= 2 && !prior.originText && !prior.originAsked && !lastBookedVisit(input.booked)) {
     return {

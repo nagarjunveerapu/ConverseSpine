@@ -17,6 +17,36 @@ describe('visit origin intelligence', () => {
     expect(nearer).toMatch(/Brigade (Cornerstone|Eldorado)/);
   });
 
+  it('normalizes I come from cue to locality label', () => {
+    const s = {
+      ...initState('t', 'naya-advisor'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'eldorado',
+        projectName: 'Brigade Eldorado',
+        queued: [{ projectId: 'cornerstone', projectName: 'Brigade Cornerstone' }],
+        lastAsk: 'origin' as const,
+        originAsked: true,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: 'I come from Yelahanka',
+        now,
+        originGeo: yelahanka,
+        projectGeoCatalog: TEST_PROJECT_GEO,
+      },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.state.originText).toBe('Yelahanka');
+      expect(goal.copy).toContain('*Yelahanka*');
+      expect(goal.copy).not.toContain('I come from');
+    }
+  });
+
   it('tells buyer nearer first stop after origin answer', () => {
     const s = {
       ...initState('t', 'naya-advisor'),
