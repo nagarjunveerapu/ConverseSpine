@@ -375,14 +375,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
     const originCandidate =
       visitState?.lastAsk === 'origin' && !visitState.originText
-        ? trimmedText
-        : visitState?.originText;
+        ? visit.normalizeOriginText(trimmedText)
+        : visitState?.originText
+          ? visit.normalizeOriginText(visitState.originText)
+          : undefined;
     if (originCandidate && visitState?.originLat == null) {
       const geo = await deps.data.resolveGeo(originCandidate).catch(() => null);
       if (geo) {
         visitState = {
           ...(visitState ?? {}),
-          originText: visitState?.originText ?? originCandidate.trim(),
+          originText: visitState?.originText
+            ? visit.normalizeOriginText(visitState.originText)
+            : originCandidate.trim(),
           originLat: geo.lat,
           originLng: geo.lng,
           originAsked: true,
