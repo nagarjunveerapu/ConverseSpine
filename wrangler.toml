@@ -52,6 +52,11 @@ preview_id = "66ef723ea8614317b80aac74b77f03d1"
 [env.dev.vars]
 NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
 ADVISOR_BUILDER_ID = "naya-advisor"
+LOG_LEVEL = "info"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_BUILDER_ID = "lokations"
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 
 [[env.dev.durable_objects.bindings]]
 name = "TURN_DEBOUNCER"
