@@ -441,6 +441,17 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
       }
     },
 
+    async projectCoords(builderId) {
+      try {
+        const resp = await crm.searchProjects({ builder_id: builderId, max_results: 50 });
+        return (resp.matches ?? [])
+          .filter((m) => m.lat != null && m.lng != null)
+          .map((m) => ({ projectId: m.project_id, lat: m.lat!, lng: m.lng! }));
+      } catch {
+        return [];
+      }
+    },
+
     async faqLookup(projectId, questionKey) {
       try {
         const r = await crm.faqLookup(projectId, questionKey);

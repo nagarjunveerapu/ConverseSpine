@@ -1,10 +1,12 @@
-/** Project + origin geo lookup — catalog coords with test-id aliases. */
+/** Project + origin geo — all reference coords from NayaDesk (GEO-DB-1). */
 
-import type { ConversationState } from './types.js';
 import type { GeoPoint } from './geo.js';
 import { haversineKm } from './geo.js';
 
-const PROJECT_COORDS: Record<string, GeoPoint> = {
+export type ProjectGeoCatalog = Readonly<Record<string, GeoPoint>>;
+
+/** Test-only catalog — production loads via NayaDesk search / resolveGeo. */
+export const TEST_PROJECT_GEO: ProjectGeoCatalog = {
   'brigade-eldorado': { lat: 13.139, lng: 77.658 },
   eldorado: { lat: 13.139, lng: 77.658 },
   'brigade-cornerstone': { lat: 13.18, lng: 77.68 },
@@ -17,57 +19,39 @@ const PROJECT_COORDS: Record<string, GeoPoint> = {
   krishnaja: { lat: 12.254, lng: 75.923 },
 };
 
-const ORIGIN_COORDS: Record<string, GeoPoint> = {
-  whitefield: { lat: 12.969, lng: 77.749 },
-  devanahalli: { lat: 13.247, lng: 77.712 },
-  bagalur: { lat: 13.139, lng: 77.658 },
-  'north bangalore': { lat: 13.07, lng: 77.625 },
-  hebbal: { lat: 13.035, lng: 77.597 },
-  yelahanka: { lat: 13.1007, lng: 77.5963 },
-  indiranagar: { lat: 12.978, lng: 77.641 },
-  koramangala: { lat: 12.935, lng: 77.624 },
-};
-
-export function projectGeo(projectId: string): GeoPoint | null {
-  return PROJECT_COORDS[projectId] ?? PROJECT_COORDS[normalizeProjectId(projectId)] ?? null;
-}
-
-function normalizeProjectId(id: string): string {
+function normalizeProjectId(id: string, catalog: ProjectGeoCatalog): string {
+  if (catalog[id]) return id;
   if (id.startsWith('brigade-')) return id;
   const brigade = `brigade-${id}`;
-  return PROJECT_COORDS[brigade] ? brigade : id;
+  return catalog[brigade] ? brigade : id;
 }
 
-export function resolveOriginGeo(originText: string): GeoPoint | null {
-  const key = originText.trim().toLowerCase();
-  for (const [name, pt] of Object.entries(ORIGIN_COORDS)) {
-    if (key.includes(name)) return pt;
-  }
-  return null;
+export function projectGeo(
+  projectId: string,
+  catalog: ProjectGeoCatalog = TEST_PROJECT_GEO,
+): GeoPoint | null {
+  const key = normalizeProjectId(projectId, catalog);
+  return catalog[key] ?? catalog[projectId] ?? null;
 }
 
-/** Cached NayaDesk geocode first, then local alias table. */
+/** Session-resolved origin from NayaDesk geo/resolve — no local whitelist. */
 export function resolveOriginGeoCached(
-  originText: string,
+  _originText: string,
   cached?: { lat: number; lng: number } | null,
 ): GeoPoint | null {
   if (cached?.lat != null && cached?.lng != null) {
     return { lat: cached.lat, lng: cached.lng };
   }
-  return resolveOriginGeo(originText);
+  return null;
 }
 
-export function collectVisitProjectIds(state: ConversationState): string[] {
-  const ids: string[] = [];
-  if (state.visit?.projectId) ids.push(state.visit.projectId);
-  for (const q of state.visit?.queued ?? []) ids.push(q.projectId);
-  return ids;
-}
-
-export function buildProjectGeoMap(projectIds: readonly string[]): Record<string, GeoPoint> {
+export function buildProjectGeoMap(
+  projectIds: readonly string[],
+  catalog: ProjectGeoCatalog = TEST_PROJECT_GEO,
+): Record<string, GeoPoint> {
   const out: Record<string, GeoPoint> = {};
   for (const id of projectIds) {
-    const g = projectGeo(id);
+    const g = projectGeo(id, catalog);
     if (g) out[id] = g;
   }
   return out;
@@ -86,4 +70,14 @@ export function nearestProjectName(
     if (!best || km < best.km) best = { name: s.projectName, km };
   }
   return best?.name ?? null;
+}
+
+export function catalogFromProjectCoords(
+  rows: ReadonlyArray<{ projectId: string; lat: number; lng: number }>,
+): ProjectGeoCatalog {
+  const out: Record<string, GeoPoint> = { ...TEST_PROJECT_GEO };
+  for (const row of rows) {
+    out[row.projectId] = { lat: row.lat, lng: row.lng };
+  }
+  return out;
 }
