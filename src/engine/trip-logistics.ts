@@ -157,3 +157,13 @@ export async function planTrip(opts: {
 
   return { ordered, legs: enriched };
 }
+
+/** Urban drive estimate when Distance Matrix is unavailable (km → minutes). */
+export function estimateDriveMinutesFromKm(km: number): number {
+  return Math.max(8, Math.round(km * 2.4));
+}
+
+export function haversineDriveMinutes(from: GeoPoint, to: GeoPoint): number {
+  const km = haversineKm(from.lat, from.lng, to.lat, to.lng);
+  return estimateDriveMinutesFromKm(km);
+}

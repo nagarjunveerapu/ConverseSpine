@@ -431,6 +431,16 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
       }
     },
 
+    async resolveGeo(text) {
+      try {
+        const r = await crm.resolveGeo(text);
+        if (!r.resolved || r.lat == null || r.lng == null) return null;
+        return { lat: r.lat, lng: r.lng };
+      } catch {
+        return null;
+      }
+    },
+
     async faqLookup(projectId, questionKey) {
       try {
         const r = await crm.faqLookup(projectId, questionKey);

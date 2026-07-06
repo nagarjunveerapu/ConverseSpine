@@ -5,12 +5,21 @@ import type { StoredVisit } from './ports.js';
 export const SAME_DAY_RE =
   /\b(?:same\s+day|that\s+day|that\s+date|the\s+same\s+day|as\s+before)\b/i;
 
+export const DIFFERENT_DAY_RE =
+  /\b(?:different|another|next)\s+day\b|\b(?:a\s+)?different\s+day\b|\blater\s+in\s+the\s+week\b/i;
+
 export const SAME_TIME_RE = /\bsame\s+time\b/i;
 
 export const AFTER_THAT_RE = /\b(?:after\s+that|back\s+to\s+back)\b/i;
 
 export function isSameDayPhrase(text: string): boolean {
   return SAME_DAY_RE.test(text.trim());
+}
+
+export function isDifferentDayPhrase(text: string): boolean {
+  const t = text.trim();
+  if (isSameDayPhrase(t)) return false;
+  return DIFFERENT_DAY_RE.test(t);
 }
 
 export function isMorningAfternoonOnly(text: string): 'morning' | 'afternoon' | null {
