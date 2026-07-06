@@ -52,6 +52,39 @@ describe('visit route scheduling', () => {
     }
   });
 
+  it('proposes stop 2 time when buyer says 2 PM after same-day time ask', () => {
+    const s = {
+      ...initState('t', 'naya-advisor'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'eldorado',
+        projectName: 'Brigade Eldorado',
+        lastAsk: 'time' as const,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: '2 PM',
+        now,
+        bookedVisits: [
+          {
+            ...cornerstoneBooked,
+            iso: '2026-07-13T10:30:00+05:30',
+            label: 'Monday at 10:30 AM',
+          },
+        ],
+      },
+    );
+    expect(goal.kind).toBe('visit_propose');
+    if (goal.kind === 'visit_propose') {
+      expect(goal.iso).toBe('2026-07-13T14:00:00+05:30');
+      expect(goal.copy).toContain('Shall I block');
+      expect(goal.copy).toContain('Brigade Eldorado');
+    }
+  });
+
   it('asks origin when 2+ stops queued', () => {
     const s = {
       ...initState('t', 'naya-advisor'),

@@ -37,6 +37,12 @@ describe('visit-slot relative', () => {
     expect(slot?.proposedIso).toMatch(/^2026-07-13T10:30/);
   });
 
+  it('time-only on anchored day (stop 2 same-day ask)', () => {
+    const slot = parseVisitSlot('2 PM', now, { anchorDateIso: '2026-07-13' });
+    expect(slot?.humanLabel).toMatch(/Monday at 2:00 PM/);
+    expect(slot?.proposedIso).toBe('2026-07-13T14:00:00+05:30');
+  });
+
   it('detects morning/afternoon windows', () => {
     expect(isMorningWindow('morning works')).toBe(true);
     expect(isAfternoonWindow('afternoon please')).toBe(true);

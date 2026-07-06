@@ -246,10 +246,19 @@ function step(input: {
   booked: readonly StoredVisit[];
   ctx: VisitCtx;
 }): TurnGoal {
-  const anchorDate = resolveSameDayDate(input.text, lastBookedVisit(input.booked)?.iso);
-  const slotOpts = anchorDate ? { anchorDateIso: anchorDate } : undefined;
+  const lastBooked = lastBookedVisit(input.booked);
+  const isStop2Plus = !!lastBooked;
+  const anchorDate = resolveSameDayDate(input.text, lastBooked?.iso);
+  const timeOnlyOnAnchoredDay =
+    hasExplicitTime(input.text) &&
+    !parseDayAnchor(input.text, input.now) &&
+    (isStop2Plus || input.prior.lastAsk === 'time');
+  const effectiveAnchorIso =
+    anchorDate ??
+    (timeOnlyOnAnchoredDay && lastBooked?.iso ? lastBooked.iso.slice(0, 10) : null);
+  const slotOpts = effectiveAnchorIso ? { anchorDateIso: effectiveAnchorIso } : undefined;
   let slot = parseVisitSlot(input.text, input.now, slotOpts);
-  const dayAnchor = parseDayAnchor(input.text, input.now, anchorDate ?? undefined);
+  const dayAnchor = parseDayAnchor(input.text, input.now, effectiveAnchorIso ?? undefined);
   const declined = !slot && !dayAnchor && DECLINE.test(input.text);
   const askN = (input.prior.askCount ?? 0) + 1;
   let prefix = declined ? 'No problem — ' : '';
@@ -362,8 +371,6 @@ function step(input: {
   const stopPreview =
     queued.length > 0 ? ` — then *${queued.map((q) => q.projectName).join('*, *')}*` : '';
 
-  const lastBooked = lastBookedVisit(input.booked);
-  const isStop2Plus = !!lastBooked;
   const explicitTime = hasExplicitTime(input.text);
 
   if (prior.pendingDayIso && (isMorningWindow(input.text) || isAfternoonWindow(input.text))) {
