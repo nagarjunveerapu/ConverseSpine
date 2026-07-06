@@ -202,7 +202,7 @@ function followUpNamed(ex: Extracted, text: string, s: ConversationState): Offer
   const explicit = named.filter((p) => t.includes(p.name.toLowerCase()));
   if (explicit.length === 1) return explicit;
   const next = s.visit?.queued?.[0];
-  if (next) return [{ projectId: next.projectId, projectName: next.projectName }];
+  if (next) return [{ projectId: next.projectId, name: next.projectName }];
   return named.slice(0, 1);
 }
 
