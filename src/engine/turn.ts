@@ -6,6 +6,7 @@ import * as discover from './phases/discover.js';
 import * as focused from './phases/focused.js';
 import * as visit from './phases/visit.js';
 import { exitVisitPhase, isVisitFollowUpQuestion, shouldExitVisitForIntent } from './phases/visit.js';
+import { isVisitDayUtterance } from './visit-slot.js';
 import * as handoff from './phases/handoff.js';
 import { extractFacts, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes } from './facts.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
@@ -332,6 +333,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = releaseToDiscover(state);
   }
   if (ex.transition === 'want_visit') {
+    state = { ...state, phase: 'visit' };
+  }
+
+  const visitDayTurn = isVisitDayUtterance(trimmedText);
+  if (
+    visitDayTurn &&
+    state.phase !== 'visit' &&
+    (state.visit?.projectId ||
+      state.visit?.queued?.length ||
+      state.rti?.lastGoalKind?.startsWith('visit_') ||
+      state.focus)
+  ) {
     state = { ...state, phase: 'visit' };
   }
 

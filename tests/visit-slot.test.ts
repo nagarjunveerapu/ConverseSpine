@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractVisitTime,
   formatVisitTimeLabel,
+  isVisitDayUtterance,
   parseDayAnchor,
   parseVisitSlot,
   reparseVisitTime,
@@ -25,6 +26,12 @@ describe('visit-slot', () => {
   it('returns null for day-only — no silent 11 AM default', () => {
     expect(parseVisitSlot('Saturday', mondayBase)).toBeNull();
     expect(parseDayAnchor('Saturday', mondayBase)?.dayLabel).toBe('Saturday');
+  });
+
+  it('isVisitDayUtterance treats weekdays as scheduling not location', () => {
+    expect(isVisitDayUtterance('Tuesday')).toBe(true);
+    expect(isVisitDayUtterance('Tuesday morning')).toBe(true);
+    expect(isVisitDayUtterance('Tuesday pricing')).toBe(false);
   });
 
   it('extractVisitTime handles compact am/pm', () => {

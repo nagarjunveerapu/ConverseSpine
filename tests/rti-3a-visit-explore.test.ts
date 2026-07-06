@@ -164,4 +164,38 @@ describe('RTI-3A visit vs explore routing', () => {
     expect(r.debug.goal.kind).not.toBe('visit_ask');
     expect(['answer', 'commit']).toContain(r.debug.goal.kind);
   });
+
+  it('V05: Tuesday on visit board does not search Tuesday Apartment', async () => {
+    const deps = fakeDeps();
+    let state = {
+      ...initState('v05', 'brigade-group'),
+      phase: 'discover' as const,
+      turnCount: 6,
+      focus: { projectId: 'cornerstone', projectName: 'Brigade Cornerstone Utopia' },
+      constraints: { propertyType: 'Apartment', budgetMaxInr: 10_000_000 },
+      rti: { lastGoalKind: 'visit_ask' },
+      discover: {
+        ...initState('v05', 'brigade-group').discover,
+        oriented: true,
+        lastOffered: brigadeShortlist,
+      },
+    };
+    await deps.store.save(state);
+
+    const r = await runEngineTurn(
+      {
+        convId: state.convId,
+        builderId: state.builderId,
+        text: 'Tuesday',
+        buyerPhone: '+919999999993',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+
+    expect(r.debug.goal.kind).not.toBe('no_fit');
+    expect(r.reply).not.toMatch(/Tuesday Apartment/i);
+    expect(r.state.phase).toBe('visit');
+    expect(['visit_ask', 'visit_propose']).toContain(r.debug.goal.kind);
+  });
 });
