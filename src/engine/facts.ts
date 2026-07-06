@@ -216,7 +216,7 @@ function normalizePropertyType(raw: string): string {
   return raw;
 }
 
-function detectPropertyTypes(text: string): string | undefined {
+export function detectPropertyTypes(text: string): string | undefined {
   const found = new Set<string>();
   for (const segment of text.split(/\bor\b|,/i)) {
     const t = detectPropertyType(segment);
@@ -265,6 +265,20 @@ function mapObjectionTopic(text: string): ObjectionTopic {
   return 'custom';
 }
 
+/** Buyer asks what budget is needed for a property type (recovery / no-fit context). */
+export function isMinimumBudgetForTypeQuestion(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    /\b(?:minimum|min\.?|least|lowest|what|how much)\b.{0,48}\b(?:budget|price|cost|spend)\b.{0,32}\b(?:villa|apartment|flat|plot|land|plantation)s?\b/.test(
+      t,
+    ) ||
+    /\b(?:villa|apartment|flat|plot|land|plantation)s?\b.{0,32}\b(?:minimum|min\.?|start(?:ing)?|least)\b.{0,24}\b(?:budget|price|cost)\b/.test(
+      t,
+    ) ||
+    /\bwhat(?:'s| is) the minimum budget\b/.test(t)
+  );
+}
+
 export function parseBudgetToInr(raw: string): { max: number; min?: number } | null {
   const s = raw
     .toLowerCase()
@@ -282,7 +296,7 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
       return hi >= lo ? { min: lo, max: hi } : { min: hi, max: lo };
     }
   }
-  const single = s.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?\b/);
+  const single = s.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?(?=\s|$|[^\w])/);
   if (!single) return null;
   const v = toInr(parseFloat(single[1]!), single[2] ?? '');
   return v !== null && v > 0 ? { max: v } : null;
@@ -461,6 +475,14 @@ function cleanLocalityFragment(raw: string): string {
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 
 export function extractLocation(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (
+    /\b(?:keep|continue)\s+refining\b/i.test(trimmed) ||
+    /\brefine(?:\s+(?:the|my))?\s+search\b/i.test(trimmed)
+  ) {
+    return undefined;
+  }
+
   const GENERIC = /\b(properties|property|projects|options|plantation|homes|flats|apartments|villas)\b/i;
 
   const inTail = /\bin\s+(.+?)\s*$/i.exec(text.trim());
@@ -473,6 +495,15 @@ export function extractLocation(text: string): string | undefined {
   );
   if (propsIn?.[1] && !GENERIC.test(propsIn[1])) {
     return cleanLocalityFragment(propsIn[1]);
+  }
+
+  const cityProjects = /^([A-Za-z][A-Za-z\s]{2,24}?)\s+projects?\b/i.exec(trimmed);
+  if (
+    cityProjects?.[1] &&
+    !GENERIC.test(cityProjects[1]) &&
+    !/\b(?:show|me|other|more|the|my|all|some|any|different|find|list|see)\b/i.test(cityProjects[1])
+  ) {
+    return cleanLocalityFragment(cityProjects[1]);
   }
 
   const commaLead = /^([A-Za-z][A-Za-z\s]{2,24}?)\s*,/i.exec(text.trim());
@@ -497,8 +528,8 @@ export function extractLocation(text: string): string | undefined {
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&
-    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare)$/i.test(bare) &&
-    !/\b(?:compare|both|projects|options|show|visit|pricing)\b/i.test(bare) &&
+    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?)$/i.test(bare) &&
+    !/\b(?:compare|both|projects|options|show|visit|pricing|refining|refine)\b/i.test(bare) &&
     !isAdvisorBriefChipPhrase(bare)
   ) {
     return bare;

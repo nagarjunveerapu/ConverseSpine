@@ -1,8 +1,10 @@
-import { constraintsFromAdvisorPreferences } from '../../advisor/apply-preferences.js';
 import type { SuggestedAction } from '../recovery-planner.js';
-import { commitTo } from '../state.js';
+import { constraintsFromAdvisorPreferences } from '../../advisor/apply-preferences.js';
+import { commitTo, releaseToDiscover } from '../state.js';
 import type { ConversationState } from '../types.js';
+import { isBudgetFitQuestion } from '../facts.js';
 import { extractRecoveryPatchFromText } from './extract-recovery-patch.js';
+import { classifyFocusedPivot, shouldRunFocusedTurnIntent } from './focused-intent.js';
 import { classifyTurnIntentLlm } from './llm-classifier.js';
 import { defaultProbePrompt } from './pending-prompt.js';
 import type {
@@ -14,6 +16,21 @@ import type {
 
 const AFFIRM_ONLY = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|theek|done|confirm(?:ed)?|go ahead|sounds good|perfect|great)\.?!?\s*$/i;
 const DECLINE = /^(?:no|nope|nah|not that|not this|something else)\.?!?\s*$/i;
+const REFINE_CONTINUE =
+  /\b(?:keep|continue)\s+refining(?:\s+(?:the|my))?\s+search\b|\brefine(?:\s+(?:the|my))?\s+search\b/i;
+const LIST_AT_BUDGET =
+  /\b(?:what|which)\s+options?\b.{0,40}\bbudget\b|\boptions?\s+(?:do you have|at|within|for)\b.{0,30}\bbudget\b/i;
+
+/** Free-text that should re-run search/list — not contextual yes/no probe. */
+export function shouldPassthroughRecoverySearch(text: string): boolean {
+  const t = text.trim();
+  if (REFINE_CONTINUE.test(t)) return true;
+  if (LIST_AT_BUDGET.test(t)) return true;
+  if (isBudgetFitQuestion(t)) return true;
+  if (/\b(?:show|list|see)\s+(?:me\s+)?(?:the\s+)?options?\b/i.test(t)) return true;
+  if (/\bwhat (?:do you have|can you find|is available)\b/i.test(t)) return true;
+  return false;
+}
 
 function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -23,9 +40,20 @@ function matchAction(
   text: string,
   actions: readonly SuggestedAction[],
   actionId?: string,
+  constraints?: import('../types.js').Constraints,
 ): SuggestedAction | null {
   if (actionId) {
-    return actions.find((a) => a.id === actionId) ?? null;
+    const fromList = actions.find((a) => a.id === actionId);
+    if (fromList) return fromList;
+    if (actionId === 'relax_bhk:drop' || actionId === 'clear_bhk') {
+      return {
+        id: actionId,
+        label: 'Any configuration',
+        patch: { bhk: '' },
+        user_line: 'Show projects with any BHK configuration',
+        expected_matches: 1,
+      };
+    }
   }
   const t = normalize(text);
   for (const a of actions) {
@@ -69,8 +97,11 @@ function resolveProjectId(
 }
 
 function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
+  const focusedPivot = classifyFocusedPivot(input);
+  if (focusedPivot) return focusedPivot;
+
   const actions = input.suggested_actions;
-  const chip = matchAction(input.text, actions, input.action_id);
+  const chip = matchAction(input.text, actions, input.action_id, input.constraints);
   if (chip) return patchFromAction(chip);
 
   const pending = input.pending_prompt;
@@ -78,6 +109,25 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
 
   if (DECLINE.test(t)) {
     return { kind: 'reject_and_widen', confidence: 'rule' };
+  }
+
+  if (REFINE_CONTINUE.test(t)) {
+    return { kind: 'continue_search', confidence: 'rule' };
+  }
+
+  if (shouldPassthroughRecoverySearch(t)) {
+    return { kind: 'continue_search', confidence: 'rule' };
+  }
+
+  if (
+    /^budget\.?$/i.test(t) &&
+    (input.ui_mode === 'search_recovery' || input.ui_mode === 'preference_refine')
+  ) {
+    return {
+      kind: 'probe',
+      confidence: 'rule',
+      probe_prompt: 'What budget should I search up to? e.g. ₹1 Cr or ₹3 Cr.',
+    };
   }
 
   if (AFFIRM_ONLY.test(t)) {
@@ -116,12 +166,36 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
   return null;
 }
 
-export function shouldRunTurnIntent(
-  uiMode: TurnIntentInput['ui_mode'],
-  actionId?: string,
-): boolean {
+export function shouldRunTurnIntent(state: ConversationState, actionId?: string, text?: string): boolean {
   if (actionId) return true;
-  return uiMode === 'search_recovery' || uiMode === 'preference_refine';
+  if (state.postVisitAckPending) return false;
+  if (state.phase === 'focused') {
+    if (state.rti?.pendingPrompt) return true;
+    return Boolean(text && shouldRunFocusedTurnIntent(state, text, actionId));
+  }
+  if (text && shouldRunFocusedTurnIntent(state, text, actionId)) return true;
+  const mode = state.rti?.lastUiMode;
+  if (mode === 'search_recovery' || mode === 'preference_refine') return true;
+  if (state.rti?.lastGoalKind === 'no_fit') return true;
+  if (state.rti?.pendingPrompt) return true;
+  return false;
+}
+
+export function focusedUiMode(state: ConversationState): TurnIntentInput['ui_mode'] {
+  if (state.phase === 'focused') return 'focused';
+  return recoveryUiMode(state);
+}
+
+export function recoveryUiMode(state: ConversationState): TurnIntentInput['ui_mode'] {
+  if (state.rti?.lastUiMode === 'preference_refine') return 'preference_refine';
+  if (
+    state.rti?.lastUiMode === 'search_recovery' ||
+    state.rti?.lastGoalKind === 'no_fit' ||
+    state.rti?.pendingPrompt
+  ) {
+    return 'search_recovery';
+  }
+  return state.rti?.lastUiMode ?? 'brief_collect';
 }
 
 export async function classifyTurnIntent(
@@ -198,8 +272,25 @@ export function applyTurnIntentResult(
         next.rti?.pendingPrompt?.project_name ??
         pid;
       next = commitTo(next, pid, name);
+      next = {
+        ...next,
+        rti: {
+          ...next.rti,
+          pendingPrompt: undefined,
+        },
+      };
       return { state: next, clearedKeys, focusCommitted: { projectId: pid, projectName: name } };
     }
+  }
+
+  if (intent.kind === 'apply_recovery_patch') {
+    next = {
+      ...next,
+      rti: {
+        ...next.rti,
+        pendingPrompt: undefined,
+      },
+    };
   }
 
   if (intent.kind === 'probe' || intent.kind === 'unknown') {
@@ -210,8 +301,28 @@ export function applyTurnIntentResult(
     };
   }
 
-  if (intent.kind === 'reject_and_widen') {
+  if (intent.kind === 'reject_and_widen' || intent.kind === 'continue_search') {
+    next = {
+      ...next,
+      rti: {
+        ...next.rti,
+        pendingPrompt: undefined,
+      },
+    };
     return { state: next, clearedKeys };
+  }
+
+  if (intent.kind === 'release_focus' || intent.kind === 'broaden_constraints') {
+    next = releaseToDiscover(next);
+    next = {
+      ...next,
+      rti: {
+        ...next.rti,
+        pendingPrompt: undefined,
+        lastUiMode: 'matches_hub',
+      },
+    };
+    return { state: next, clearedKeys, releasedFocus: true };
   }
 
   return { state: next, clearedKeys };

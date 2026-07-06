@@ -7,7 +7,7 @@ import * as focused from './phases/focused.js';
 import * as visit from './phases/visit.js';
 import { exitVisitPhase, shouldExitVisitForIntent } from './phases/visit.js';
 import * as handoff from './phases/handoff.js';
-import { extractFacts, isLocationBroadenTurn } from './facts.js';
+import { extractFacts, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes } from './facts.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import { resolveFocusedSwitchGoal } from './project_switch.js';
 import {
@@ -24,7 +24,7 @@ import {
   releaseToDiscover,
   withNdConversation,
 } from './state.js';
-import { buildComposeRequest, fallbackReply, formatInr } from './compose.js';
+import { buildComposeRequest, fallbackReply, formatInr, minimumBudgetReply } from './compose.js';
 import { checkGrounding, stripBanned } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
@@ -32,6 +32,8 @@ import { planSearchRecovery, type SearchRecoveryEnvelope, type AdvisorUiMode, ty
 import {
   applyTurnIntentResult,
   buildTurnIntentInput,
+  focusedUiMode,
+  recoveryUiMode,
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
@@ -118,15 +120,68 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
-  const uiModeHint: AdvisorUiMode = state.rti?.lastUiMode ?? 'brief_collect';
+  const uiModeHint = state.phase === 'focused' ? focusedUiMode(state) : recoveryUiMode(state);
   const clearedKeys = new Set<PatchClearKey>(input.preferenceClears ?? []);
 
-  if (deps.turnIntent && shouldRunTurnIntent(uiModeHint, input.action_id)) {
+  if (isMinimumBudgetForTypeQuestion(trimmedText) && shouldRunTurnIntent(state, input.action_id, trimmedText)) {
+    const typeRaw = detectPropertyTypes(trimmedText) || state.constraints.propertyType;
+    if (typeRaw) {
+      const floor = await discover.cheapestMatchForPropertyType(
+        (f) => searchWithFilters(deps, state.builderId, f),
+        typeRaw,
+      );
+      if (floor) {
+        const typeLabel = discover.displayPropertyTypeLabel(typeRaw);
+        const reply = minimumBudgetReply(typeLabel, floor, state.constraints.budgetMaxInr);
+        const storedRecovery = storedSearchRecovery(state);
+        state = {
+          ...state,
+          turnCount: state.turnCount + 1,
+          rti: {
+            ...state.rti,
+            lastReplyExcerpt: excerptReply(reply),
+            lastUiMode: 'search_recovery',
+            lastGoalKind: 'no_fit',
+          },
+        };
+        state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
+        await deps.store.save(state);
+        await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+        await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'type_floor' }).catch(() => {});
+        return {
+          reply,
+          state,
+          debug: { phase: state.phase, goal: { kind: 'no_fit' }, tools: ['search'], grounding: 'pass' },
+          ...(storedRecovery ? { searchRecovery: capRecoveryForChannel(storedRecovery, channel) } : {}),
+          uiMode: 'search_recovery' as AdvisorUiMode,
+          whatsappActions: whatsAppButtons(storedRecovery, channel),
+        };
+      }
+    }
+  }
+
+  let recoveryChipTurn = false;
+  let focusPivotTurn = false;
+  let rtiFocusCommitted: { projectId: string; projectName: string } | undefined;
+
+  if (deps.turnIntent && shouldRunTurnIntent(state, input.action_id, trimmedText)) {
     const intentInput = buildTurnIntentInput(state, trimmedText, channel, uiModeHint, input.action_id);
     const intent = await deps.turnIntent.classify(intentInput);
     const applied = applyTurnIntentResult(state, intent, intentInput.suggested_actions);
     state = applied.state;
     for (const k of applied.clearedKeys) clearedKeys.add(k);
+    if (intent.kind === 'apply_recovery_patch' && intent.matched_action_id) {
+      recoveryChipTurn = true;
+    }
+
+    if (applied.focusCommitted) {
+      rtiFocusCommitted = applied.focusCommitted;
+    }
+
+    if (applied.releasedFocus) {
+      focusPivotTurn = true;
+      if (nd) await deps.crm.releaseProject(nd).catch(() => {});
+    }
 
     if (applied.probeReply) {
       const storedRecovery = storedSearchRecovery(state);
@@ -160,6 +215,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  if (rtiFocusCommitted) {
+    return completeRtiFocusCommit(state, rtiFocusCommitted, input, deps, nd, trimmedText);
+  }
+
   let ex = await extractFacts(trimmedText, state, deps.llm);
   const catalogForNlu = await deps.data.catalog(state.builderId).catch(() => null);
   ex = await deps.semantic.enrich(trimmedText, state.builderId, ex, {
@@ -170,6 +229,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ...ex,
     compareProjectIds: resolveCompareProjectIds(trimmedText, ex, state),
   };
+  if (recoveryChipTurn || focusPivotTurn) {
+    ex = {
+      ...ex,
+      askTopic: undefined,
+      askTopics: [],
+      transition: 'none',
+      isQuestion: false,
+      budgetFitQuestion: undefined,
+      budgetPickQuestion: undefined,
+      forceRecommendList: true,
+      ...(focusPivotTurn ? { wantsMore: true } : {}),
+    };
+  }
   const prevLoc = state.constraints.location;
   state = applyExtracted(state, ex, clearedKeys);
 
@@ -357,6 +429,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       reply,
       uiMode,
       turnCount: state.turnCount,
+      previousRti: state.rti,
     }),
   };
 
@@ -483,6 +556,16 @@ async function fetchRecommend(
       matchReasons: m.match_reasons ?? [],
       projectType: m.project_type,
     }));
+    const relaxedConstraints = { ...s.constraints };
+    delete relaxedConstraints.bhk;
+    const relaxedMatches = discover.filterSearchMatches(
+      withoutBhkRaw,
+      relaxedConstraints,
+      s.discover.rejectedProjectIds,
+    );
+    if (relaxedMatches.length > 0) {
+      return { goal: base, evidence: { tools: ['search'], matches: relaxedMatches } };
+    }
     const gapEv = discover.buildConstraintGapEvidence(
       s.constraints,
       withoutBhkRaw,
@@ -574,7 +657,12 @@ async function fetchRecommend(
   }
 
   if (scopedMatches.length > 0) {
-    if (base.kind === 'recommend' && !ex.wantsMore && isSameAsLast(s, scopedMatches)) {
+    if (
+      base.kind === 'recommend' &&
+      !ex.wantsMore &&
+      !ex.forceRecommendList &&
+      isSameAsLast(s, scopedMatches)
+    ) {
       const miss = s.discover.advancedOnce ? undefined : discover.firstMissingSlot(s);
       return {
         goal: { kind: 'advance', reason: 'same_set' },
@@ -1079,6 +1167,76 @@ function deriveAdvisorUiMode(
     return 'brief_collect';
   }
   return 'search_recovery';
+}
+
+async function completeRtiFocusCommit(
+  state: ConversationState,
+  focus: { projectId: string; projectName: string },
+  input: EngineTurnInput,
+  deps: EngineDeps,
+  nd: string,
+  buyerText: string,
+): Promise<EngineTurnOutput> {
+  const { projectId, projectName } = focus;
+  if (nd) await deps.crm.commitProject(nd, projectId).catch(() => {});
+  let s = await prefetchProjects(deps, state, [projectId]);
+  const answerGoal: Extract<TurnGoal, { kind: 'answer' }> = {
+    kind: 'answer',
+    topic: 'overview',
+    projectId,
+  };
+  const emptyEx = { constraints: s.constraints } as Extracted;
+  const evidence = nd ? await fetchAnswer(answerGoal, s, emptyEx, deps, nd) : { tools: [] };
+  const commitGoal: TurnGoal = { kind: 'commit', projectId, projectName, followUp: 'overview' };
+  const req = buildComposeRequest(commitGoal, evidence, {
+    buyerName: s.buyerName,
+    constraints: s.constraints,
+    alreadyShownSameSet: false,
+    builderName: friendlyBuilder(s.builderId),
+    buyerText,
+    focusProjectName: projectName,
+    returningBuyer: s.returningBuyer,
+  });
+  let reply = fallbackReply(req);
+  try {
+    const drafted = await deps.llm.compose(req);
+    if (drafted.trim()) reply = stripBanned(drafted);
+  } catch {
+    /* keep fallback */
+  }
+
+  s = { ...s, turnCount: s.turnCount + 1 };
+  s = appendTranscript(s, buyerText, reply, deps.clock.nowMs());
+  s = {
+    ...s,
+    rti: {
+      ...s.rti,
+      pendingPrompt: undefined,
+      lastGoalKind: 'commit',
+      lastUiMode: 'focused',
+      lastReplyExcerpt: excerptReply(reply),
+    },
+  };
+
+  await deps.store.save(s);
+  await deps.store.logTurn({
+    convId: s.convId,
+    turnIndex: s.turnCount,
+    buyerText,
+    reply,
+    phase: s.phase,
+    goal: 'commit',
+    grounding: 'pass',
+  });
+  await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+  await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'rti_confirm' }).catch(() => {});
+
+  return {
+    reply,
+    state: s,
+    debug: { phase: s.phase, goal: { kind: 'commit', projectId, projectName }, tools: evidence.tools, grounding: 'pass' },
+    uiMode: 'focused',
+  };
 }
 
 function storedSearchRecovery(state: ConversationState): SearchRecoveryEnvelope | undefined {

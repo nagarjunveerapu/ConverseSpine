@@ -9,7 +9,10 @@ const VALID_KINDS = new Set<TurnIntentResult['kind']>([
   'reject_and_widen',
   'compare_among_offered',
   'continue_brief',
+  'continue_search',
   'focused_question',
+  'release_focus',
+  'broaden_constraints',
   'unknown',
 ]);
 
@@ -46,6 +49,7 @@ Rules:
 - "2 cr any apartment", budget/BHK/type changes → apply_recovery_patch + patch/patch_clear
 - Named project ("show Clarks") → ask_named_project + focus_project_id if matched in last_offered
 - "no"/"not that" → reject_and_widen
+- phase=focused + area/budget/type pivot ("Bangalore projects", "looking in Whitefield") → release_focus or broaden_constraints + patch
 - patch_clear may include: bhk, location, propertyType, budget
 - Never invent project ids or prices`;
 

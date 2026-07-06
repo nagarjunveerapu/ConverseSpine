@@ -26,7 +26,9 @@ export function constraintsFromAdvisorPreferences(
   if (bhk) out.bhk = bhk;
 
   const propertyType = prefs.property_type?.trim();
-  if (propertyType) out.propertyType = propertyType;
+  if (propertyType && propertyType.toLowerCase() !== 'open to suggestions') {
+    out.propertyType = propertyType;
+  }
 
   const purpose = prefs.purpose?.trim().toLowerCase();
   if (purpose === 'investment') out.purpose = 'investment';
@@ -51,8 +53,11 @@ export function mergeAdvisorPreferences(
       delete next.location;
     }
   }
-  if ('property_type' in prefs && !prefs.property_type?.trim()) {
-    delete next.propertyType;
+  if ('property_type' in prefs) {
+    const pt = prefs.property_type?.trim();
+    if (!pt || pt.toLowerCase() === 'open to suggestions') {
+      delete next.propertyType;
+    }
   }
 
   return next;

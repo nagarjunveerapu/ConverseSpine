@@ -39,6 +39,28 @@ export function buildPendingPrompt(
     };
   }
 
+  if (evidence.budgetGap?.closestProjectId) {
+    const g = evidence.budgetGap;
+    return {
+      kind: 'offer_project',
+      project_id: g.closestProjectId,
+      project_name: g.closestName,
+      chip_ids: chipIds,
+      asked_at_turn: turnCount,
+    };
+  }
+
+  if (evidence.propertyTypeGap?.closestProjectId) {
+    const g = evidence.propertyTypeGap;
+    return {
+      kind: 'offer_project',
+      project_id: g.closestProjectId,
+      project_name: g.closestName,
+      chip_ids: chipIds,
+      asked_at_turn: turnCount,
+    };
+  }
+
   if (evidence.budgetGap) {
     return {
       kind: 'binary_budget_or_area',
@@ -86,6 +108,7 @@ export function buildRtiStateUpdate(input: {
   reply: string;
   uiMode: AdvisorUiMode;
   turnCount: number;
+  previousRti?: RtiState;
 }): RtiState {
   const pendingPrompt = buildPendingPrompt(
     input.goal,
@@ -93,11 +116,17 @@ export function buildRtiStateUpdate(input: {
     input.searchRecovery,
     input.turnCount,
   );
+  const successTurn =
+    input.goal.kind === 'recommend' ||
+    input.goal.kind === 'commit' ||
+    input.goal.kind === 'advance' ||
+    (input.evidence.matches?.length ?? 0) > 0;
+  const suggestedActions = input.searchRecovery?.suggested_actions.length
+    ? input.searchRecovery.suggested_actions
+    : input.previousRti?.lastSuggestedActions;
   return {
-    ...(pendingPrompt ? { pendingPrompt } : {}),
-    ...(input.searchRecovery?.suggested_actions.length
-      ? { lastSuggestedActions: input.searchRecovery.suggested_actions }
-      : {}),
+    ...(!successTurn && pendingPrompt ? { pendingPrompt } : {}),
+    ...(suggestedActions?.length ? { lastSuggestedActions: suggestedActions } : {}),
     lastGoalKind: input.goal.kind,
     lastEvidenceKind: evidenceKindFromEvidence(input.evidence),
     lastReplyExcerpt: excerptReply(input.reply),

@@ -1,6 +1,8 @@
 import type { EngineCrm, EngineData, EngineDeps, EngineStore } from '../src/engine/ports.js';
 import { noopEngineLlm } from '../src/engine/adapters/llm.js';
 import { noopSemanticNlu } from '../src/engine/adapters/semantic-nlu.js';
+import { classifyTurnIntent } from '../src/engine/turn-intent/classify.js';
+import type { Env } from '../src/env.js';
 import type { CatalogEnvelope, Match, SearchFilters } from '../src/engine/types.js';
 
 interface P {
@@ -302,5 +304,8 @@ export function fakeDeps(): EngineDeps {
     semantic: noopSemanticNlu(),
     store: fakeStore(),
     clock: { nowMs: () => 1_700_000_000_000, nowIso: () => '2026-07-05T00:00:00.000Z' },
+    turnIntent: {
+      classify: (input) => classifyTurnIntent({} as Env, input),
+    },
   };
 }

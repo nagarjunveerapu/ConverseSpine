@@ -8,6 +8,7 @@ import { prefetchProjects } from '../engine/project-cache.js';
 import { commitTo, initState, withNdConversation } from '../engine/state.js';
 import { mapAdvisorTurnResponse } from './map-response.js';
 import { mergeAdvisorPreferences, preferenceClearsFromPatch } from './apply-preferences.js';
+import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
 import type { AdvisorTurnRequest, AdvisorTurnResponse } from './types.js';
 import { sessionToConvId, sessionToPhone } from './session.js';
 
@@ -45,6 +46,7 @@ export async function handleAdvisorTurn(
 
   const projectId = body.project_id?.trim();
   const projectName = body.project_name?.trim();
+  const pivotTurn = isFocusedSearchPivot(text);
 
   if (body.preferences && Object.keys(body.preferences).length > 0) {
     preferenceClears = preferenceClearsFromPatch(body.preferences);
@@ -53,15 +55,21 @@ export async function handleAdvisorTurn(
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);
       if (lead) existing = withNdConversation(existing, lead.conversationId, buyer_phone);
     }
-    existing = {
-      ...existing,
-      constraints: mergeAdvisorPreferences(existing.constraints, body.preferences),
-      discover: { ...existing.discover, oriented: true },
-    };
-    await rt.engine.store.save(existing);
+    const inRecovery =
+      existing.rti?.lastUiMode === 'search_recovery' ||
+      existing.rti?.lastUiMode === 'preference_refine' ||
+      existing.rti?.lastGoalKind === 'no_fit';
+    if (!inRecovery) {
+      existing = {
+        ...existing,
+        constraints: mergeAdvisorPreferences(existing.constraints, body.preferences),
+        discover: { ...existing.discover, oriented: true },
+      };
+      await rt.engine.store.save(existing);
+    }
   }
 
-  if (projectId) {
+  if (projectId && !pivotTurn) {
     let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
     if (!existing.ndConversationId && buyer_phone) {
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);

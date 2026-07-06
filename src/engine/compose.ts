@@ -210,23 +210,27 @@ export function fallbackReply(req: ComposeRequest): string {
         return `No *${g.bhk ?? 'that configuration'}*${budget}${loc} on our books. Want to adjust BHK, budget, or area?`;
       }
       if (ev.budgetGap) {
-        const loc = ev.budgetGap.location ? ` in *${ev.budgetGap.location}*` : '';
-        return `Nothing${loc} starts within ${ev.budgetGap.budgetDisplay} — closest on your brief is *${ev.budgetGap.closestName}* from ${ev.budgetGap.closestDisplay}. Want to raise budget or try another area?`;
+        const g = ev.budgetGap;
+        const loc = g.location ? ` in *${g.location}*` : '';
+        return `Nothing${loc} starts within ${g.budgetDisplay} — closest on your brief is *${g.closestName}* from ${g.closestDisplay}. Want me to open *${g.closestName}*?`;
       }
       if (ev.propertyTypeGap) {
         const g = ev.propertyTypeGap;
         const budget = g.budgetDisplay ? ` at ${g.budgetDisplay}` : '';
-        return `No *${g.requestedType}*${budget} on our books — closest fit is *${g.closestName}* from ${g.closestDisplay}. Want to try that, or adjust budget or area?`;
+        return `No *${g.requestedType}*${budget} on our books — closest fit is *${g.closestName}* from ${g.closestDisplay}. Want me to open *${g.closestName}*?`;
       }
       if (ev.floor) {
-        return `Nothing sits within ${b} — options begin at ${ev.floor.display}${ev.floor.projectName ? ` with *${ev.floor.projectName}*` : ''}. Want the closest options?`;
+        const lead = ev.floor.projectName ? ` with *${ev.floor.projectName}*` : '';
+        const fork = ev.floor.projectName ? ` Want me to open *${ev.floor.projectName}*?` : ' Want the closest options?';
+        return `Nothing sits within ${b} — options begin at ${ev.floor.display}${lead}.${fork}`;
       }
       if (ev.noMatch?.reasoning) {
         const emptyChips = ev.searchRecovery?.suggested_actions.length === 0;
         const suffix = emptyChips
           ? ' Tell me what to change — budget, area, or property type.'
           : '. Want to adjust budget, area, or property type?';
-        return `${ev.noMatch.reasoning}${suffix}`;
+        const base = ev.noMatch.reasoning.endsWith('.') ? ev.noMatch.reasoning : `${ev.noMatch.reasoning}.`;
+        return `${base}${suffix}`;
       }
       return `I don't have an exact match right now. Want to adjust budget or area?`;
     }
@@ -465,4 +469,13 @@ export function formatInr(inr: number): string {
   if (!isFinite(inr) || inr <= 0) return '';
   if (inr >= 10_000_000) return `₹${(inr / 10_000_000).toFixed(2).replace(/\.?0+$/, '')} Cr`;
   return `₹${(inr / 100_000).toFixed(2).replace(/\.?0+$/, '')} L`;
+}
+
+export function minimumBudgetReply(
+  typeLabel: string,
+  floor: { name: string; display: string },
+  buyerBudgetMaxInr?: number,
+): string {
+  const briefBit = buyerBudgetMaxInr ? ` Your brief is ${formatInr(buyerBudgetMaxInr)}.` : '';
+  return `${typeLabel}s on our books start from *${floor.display}* (*${floor.name}*).${briefBit} Want to raise budget or try another property type?`;
 }
