@@ -4,6 +4,9 @@ import type { CatalogEnvelope, Constraints, SearchFilters } from './types.js';
 
 export type RecoveryVariant = 'zero_match' | 'widen';
 
+/** What blocked the search — drives chip ordering. */
+export type RecoveryHint = 'property_type' | 'budget' | 'location' | 'constraint' | 'general';
+
 export type AdvisorUiMode =
   | 'brief_collect'
   | 'search_recovery'
@@ -11,7 +14,7 @@ export type AdvisorUiMode =
   | 'matches_hub'
   | 'focused';
 
-function briefPropertyTypeLabel(projectType: string): string {
+export function briefPropertyTypeLabel(projectType: string): string {
   const lc = projectType.toLowerCase();
   if (lc === 'apartment') return 'Apartment';
   if (lc === 'villa' || lc === 'managed_villa_resort') return 'Villa';
@@ -42,6 +45,7 @@ export interface RecoveryPlannerDeps {
   reason: string;
   maxActions: number;
   variant: RecoveryVariant;
+  hint?: RecoveryHint;
 }
 
 export function constraintsSnapshot(c: Constraints): Record<string, string | undefined> {
@@ -60,8 +64,14 @@ function mergeConstraints(base: Constraints, patch: Partial<Constraints>): Const
   return next;
 }
 
-function truncateLabel(label: string, max = 20): string {
+function truncateLabel(label: string, max = 22): string {
   return label.length <= max ? label : `${label.slice(0, max - 1)}…`;
+}
+
+function isBangaloreMicroMarket(loc: string): boolean {
+  return /\b(?:bangalore|bengaluru|devanahalli|whitefield|sarjapur|electronic city|north bangalore|aerospace|hebbal|yelahanka)\b/i.test(
+    loc,
+  );
 }
 
 async function tryAction(
@@ -83,12 +93,208 @@ async function tryAction(
   };
 }
 
+type PushFn = (
+  push: (
+    id: string,
+    label: string,
+    merged: Constraints,
+    patch: Record<string, string | undefined>,
+    userLine: string,
+  ) => Promise<void>,
+  ctx: {
+    c: Constraints;
+    currentLoc: string;
+    currentType: string;
+    variant: RecoveryVariant;
+    catalog: CatalogEnvelope;
+    budgetPatch: () => Record<string, string | undefined>;
+  },
+) => Promise<void>;
+
+const pushTypeSameLocation: PushFn = async (push, { c, currentType, variant, catalog }) => {
+  if (variant !== 'zero_match' || !c.location || !c.propertyType) return;
+  for (const slug of catalog.projectTypes) {
+    const label = briefPropertyTypeLabel(slug);
+    if (currentType.includes(label.toLowerCase())) continue;
+    const merged = mergeConstraints(c, { propertyType: label });
+    await push(
+      `relax_type:${slug}`,
+      `Switch to ${label}`,
+      merged,
+      { property_type: label, location: c.location },
+      `Show me ${label} projects in ${c.location}`,
+    );
+  }
+};
+
+const pushTypeBroadArea: PushFn = async (push, { c, currentType, variant, catalog, budgetPatch }) => {
+  if (variant !== 'zero_match' || !c.propertyType) return;
+  for (const slug of catalog.projectTypes) {
+    const label = briefPropertyTypeLabel(slug);
+    if (currentType.includes(label.toLowerCase())) continue;
+    const merged = mergeConstraints(c, { propertyType: label, location: '' });
+    await push(
+      `relax_type_broad:${slug}`,
+      `Try ${label} (any area)`,
+      merged,
+      { property_type: label, location: 'Open to suggestions', ...budgetPatch() },
+      `Show me ${label} projects — open to any area`,
+    );
+  }
+};
+
+const pushBangaloreBroad: PushFn = async (push, { c, budgetPatch }) => {
+  if (!c.location || !isBangaloreMicroMarket(c.location)) return;
+  const merged = mergeConstraints(c, { location: 'Bangalore' });
+  await push(
+    'relax_location:bangalore',
+    'Search all Bangalore',
+    merged,
+    { location: 'Bangalore', ...budgetPatch() },
+    'Show me projects in Bangalore',
+  );
+};
+
+const pushAlternateMarkets: PushFn = async (push, { c, currentLoc, catalog, budgetPatch }) => {
+  for (const market of catalog.microMarkets) {
+    if (!market || market.toLowerCase() === currentLoc) continue;
+    if (currentLoc && market.toLowerCase().includes(currentLoc)) continue;
+    const merged = mergeConstraints(c, { location: market });
+    await push(
+      `relax_location:${market}`,
+      `Try ${market.split('/')[0]?.trim() ?? market}`,
+      merged,
+      { location: market, ...budgetPatch() },
+      `Show me projects in ${market}`,
+    );
+  }
+};
+
+const pushBudgetWiden: PushFn = async (push, { c, budgetPatch }) => {
+  if (!c.budgetMaxInr) return;
+  for (const mult of [1.25, 1.5, 2, 3, 5, 10]) {
+    const bumped = Math.round(c.budgetMaxInr! * mult);
+    if (bumped <= c.budgetMaxInr!) continue;
+    const display = formatInr(bumped);
+    const merged = mergeConstraints(c, { budgetMaxInr: bumped, budgetMinInr: c.budgetMinInr });
+    await push(
+      `relax_budget:${bumped}`,
+      `Budget up to ${display}`,
+      merged,
+      { budget: display, ...(c.location ? { location: c.location } : {}) },
+      `Show me projects with budget up to ${display}`,
+    );
+    break;
+  }
+};
+
+const pushOpenArea: PushFn = async (push, { c, budgetPatch }) => {
+  if (!c.location) return;
+  const merged = mergeConstraints(c, { location: '' });
+  await push(
+    'relax_location:open',
+    'Open to any area',
+    merged,
+    { location: 'Open to suggestions', ...budgetPatch() },
+    'Show me projects — open to any area',
+  );
+};
+
+const pushDropBhk: PushFn = async (push, { c, budgetPatch }) => {
+  if (!c.bhk) return;
+  const merged = mergeConstraints(c, { bhk: undefined });
+  delete merged.bhk;
+  await push(
+    'relax_bhk:drop',
+    'Any configuration',
+    merged,
+    {
+      ...(c.location ? { location: c.location } : {}),
+      ...budgetPatch(),
+      bhk: '',
+    },
+    'Show me projects with any BHK configuration',
+  );
+};
+
+const pushClearPropertyType: PushFn = async (push, { c, budgetPatch }) => {
+  if (!c.propertyType) return;
+  const merged = mergeConstraints(c, { propertyType: undefined });
+  delete merged.propertyType;
+  await push(
+    'relax_type:open',
+    'Any property type',
+    merged,
+    {
+      ...(c.location ? { location: c.location } : {}),
+      ...budgetPatch(),
+      property_type: '',
+    },
+    'Show me projects — any property type',
+  );
+};
+
+function strategyOrder(hint: RecoveryHint): PushFn[] {
+  switch (hint) {
+    case 'property_type':
+      return [
+        pushTypeSameLocation,
+        pushTypeBroadArea,
+        pushBangaloreBroad,
+        pushClearPropertyType,
+        pushAlternateMarkets,
+        pushBudgetWiden,
+        pushOpenArea,
+        pushDropBhk,
+      ];
+    case 'budget':
+      return [
+        pushBudgetWiden,
+        pushTypeBroadArea,
+        pushBangaloreBroad,
+        pushAlternateMarkets,
+        pushOpenArea,
+        pushDropBhk,
+      ];
+    case 'location':
+      return [
+        pushBangaloreBroad,
+        pushAlternateMarkets,
+        pushOpenArea,
+        pushTypeBroadArea,
+        pushBudgetWiden,
+        pushDropBhk,
+      ];
+    case 'constraint':
+      return [
+        pushDropBhk,
+        pushTypeBroadArea,
+        pushBudgetWiden,
+        pushBangaloreBroad,
+        pushAlternateMarkets,
+        pushOpenArea,
+      ];
+    default:
+      return [
+        pushTypeSameLocation,
+        pushTypeBroadArea,
+        pushBangaloreBroad,
+        pushAlternateMarkets,
+        pushBudgetWiden,
+        pushOpenArea,
+        pushClearPropertyType,
+        pushDropBhk,
+      ];
+  }
+}
+
 /** Rank catalog-backed relaxations; only return actions that preflight to ≥1 match. */
 export async function planSearchRecovery(deps: RecoveryPlannerDeps): Promise<SearchRecoveryEnvelope> {
   const actions: SuggestedAction[] = [];
   const seen = new Set<string>();
   const c = deps.constraints;
   const mode = deps.variant === 'zero_match' ? 'search_recovery' : 'preference_refine';
+  const hint = deps.hint ?? 'general';
 
   const push = async (
     id: string,
@@ -106,89 +312,21 @@ export async function planSearchRecovery(deps: RecoveryPlannerDeps): Promise<Sea
 
   const currentLoc = (c.location ?? '').toLowerCase();
   const currentType = (c.propertyType ?? '').toLowerCase();
+  const budgetPatch = (): Record<string, string | undefined> =>
+    c.budgetMaxInr ? { budget: formatInr(c.budgetMaxInr) } : {};
 
-  // 1 — Property-type pivot at same location (zero_match only)
-  if (deps.variant === 'zero_match' && c.location && c.propertyType) {
-    for (const slug of deps.catalog.projectTypes) {
-      const label = briefPropertyTypeLabel(slug);
-      if (currentType.includes(label.toLowerCase())) continue;
-      const merged = mergeConstraints(c, { propertyType: label });
-      await push(
-        `relax_type:${slug}`,
-        `Try ${label} in ${c.location}`,
-        merged,
-        { property_type: label, location: c.location },
-        `Show me ${label} projects in ${c.location}`,
-      );
-      if (actions.length >= deps.maxActions) break;
-    }
-  }
+  const ctx = {
+    c,
+    currentLoc,
+    currentType,
+    variant: deps.variant,
+    catalog: deps.catalog,
+    budgetPatch,
+  };
 
-  // 2 — Alternate micro-markets (keep budget + type)
-  for (const market of deps.catalog.microMarkets) {
+  for (const strategy of strategyOrder(hint)) {
     if (actions.length >= deps.maxActions) break;
-    if (!market || market.toLowerCase() === currentLoc) continue;
-    if (currentLoc && market.toLowerCase().includes(currentLoc)) continue;
-    const merged = mergeConstraints(c, { location: market });
-    await push(
-      `relax_location:${market}`,
-      `Try ${market.split('/')[0]?.trim() ?? market}`,
-      merged,
-      { location: market, ...(c.budgetMaxInr ? { budget: formatInr(c.budgetMaxInr) } : {}) },
-      `Show me projects in ${market}`,
-    );
-  }
-
-  // 3 — Budget widen (smallest multiplier that preflights to ≥1 match)
-  if (c.budgetMaxInr && actions.length < deps.maxActions) {
-    for (const mult of [1.25, 1.5, 2, 3, 5, 10]) {
-      const bumped = Math.round(c.budgetMaxInr * mult);
-      if (bumped <= c.budgetMaxInr) continue;
-      const display = formatInr(bumped);
-      const merged = mergeConstraints(c, { budgetMaxInr: bumped, budgetMinInr: c.budgetMinInr });
-      const action = await tryAction(
-        deps,
-        `relax_budget:${bumped}`,
-        `Budget up to ${display}`,
-        merged,
-        { budget: display, ...(c.location ? { location: c.location } : {}) },
-        `Show me projects with budget up to ${display}`,
-      );
-      if (action) {
-        seen.add(action.id);
-        actions.push(action);
-        break;
-      }
-    }
-  }
-
-  // 4 — Open to any area
-  if (c.location && actions.length < deps.maxActions) {
-    const merged = mergeConstraints(c, { location: '' });
-    await push(
-      'relax_location:open',
-      'Open to any area',
-      merged,
-      { location: 'Open to suggestions', ...(c.budgetMaxInr ? { budget: formatInr(c.budgetMaxInr) } : {}) },
-      'Show me projects — open to any area',
-    );
-  }
-
-  // 5 — Drop BHK filter if present
-  if (c.bhk && actions.length < deps.maxActions) {
-    const merged = mergeConstraints(c, { bhk: undefined });
-    delete merged.bhk;
-    await push(
-      'relax_bhk:drop',
-      'Any configuration',
-      merged,
-      {
-        ...(c.location ? { location: c.location } : {}),
-        ...(c.budgetMaxInr ? { budget: formatInr(c.budgetMaxInr) } : {}),
-        bhk: '',
-      },
-      'Show me projects with any BHK configuration',
-    );
+    await strategy(push, ctx);
   }
 
   return {

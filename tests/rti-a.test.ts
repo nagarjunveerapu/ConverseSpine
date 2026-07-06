@@ -157,7 +157,9 @@ describe('RTI-A pending probing', () => {
     );
 
     expect(out.state.constraints.bhk).toBeUndefined();
-    expect(out.state.rti?.pendingPrompt?.kind).not.toBe('chip_menu');
     expect(['recommend', 'advance', 'no_fit']).toContain(out.debug.goal.kind);
+    if (out.debug.goal.kind === 'no_fit') {
+      expect(out.searchRecovery?.suggested_actions.length).toBeGreaterThan(0);
+    }
   });
 });

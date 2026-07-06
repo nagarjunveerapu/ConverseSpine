@@ -7,12 +7,14 @@ export type PendingPromptKind =
   | 'offer_project'
   | 'offer_widen'
   | 'binary_budget_or_area'
-  | 'chip_menu';
+  | 'chip_menu'
+  | 'location_broaden';
 
 export interface PendingPrompt {
   kind: PendingPromptKind;
   project_id?: string;
   project_name?: string;
+  location_target?: string;
   chip_ids?: string[];
   asked_at_turn: number;
 }
@@ -49,7 +51,7 @@ export interface RtiState {
   pendingPrompt?: PendingPrompt;
   lastSuggestedActions?: SuggestedAction[];
   lastGoalKind?: string;
-  lastEvidenceKind?: 'constraint_gap' | 'budget_gap' | 'matches' | 'floor';
+  lastEvidenceKind?: 'constraint_gap' | 'budget_gap' | 'property_type_gap' | 'matches' | 'floor';
   lastReplyExcerpt?: string;
   lastUiMode?: AdvisorUiMode;
 }

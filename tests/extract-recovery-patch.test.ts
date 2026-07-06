@@ -17,4 +17,13 @@ describe('extractRecoveryPatchFromText', () => {
     expect(intent?.patch_clear).toContain('bhk');
     expect(intent?.patch?.propertyType).toBe('Apartment');
   });
+
+  it('parses location and type in compound recovery text', () => {
+    const intent = extractRecoveryPatchFromText(
+      'broader Bangalore area and switch to apartment',
+      'search_recovery',
+    );
+    expect(intent?.patch?.location).toBe('Bangalore');
+    expect(intent?.patch?.propertyType).toBe('Apartment');
+  });
 });

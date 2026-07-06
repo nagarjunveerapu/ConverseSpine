@@ -119,6 +119,9 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
     return { kind: 'continue_search', confidence: 'rule' };
   }
 
+  const recoveryPatch = extractRecoveryPatchFromText(t, input.ui_mode);
+  if (recoveryPatch && !AFFIRM_ONLY.test(t)) return recoveryPatch;
+
   if (
     /^budget\.?$/i.test(t) &&
     (input.ui_mode === 'search_recovery' || input.ui_mode === 'preference_refine')
@@ -143,10 +146,17 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
         };
       }
     }
+    if (pending?.kind === 'location_broaden') {
+      return {
+        kind: 'apply_recovery_patch',
+        confidence: 'rule',
+        patch: { location: pending.location_target ?? 'Bangalore' },
+      };
+    }
     return {
       kind: 'probe',
       confidence: 'rule',
-      probe_prompt: defaultProbePrompt(pending?.kind, input.channel),
+      probe_prompt: defaultProbePrompt(pending?.kind, input.channel, actions.length),
     };
   }
 
@@ -159,9 +169,6 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
       };
     }
   }
-
-  const recoveryPatch = extractRecoveryPatchFromText(t, input.ui_mode);
-  if (recoveryPatch) return recoveryPatch;
 
   return null;
 }
@@ -211,7 +218,7 @@ export async function classifyTurnIntent(
   return {
     kind: 'unknown',
     confidence: 'abstain',
-    probe_prompt: defaultProbePrompt(input.pending_prompt?.kind, input.channel),
+    probe_prompt: defaultProbePrompt(input.pending_prompt?.kind, input.channel, input.suggested_actions.length),
   };
 }
 
@@ -297,7 +304,9 @@ export function applyTurnIntentResult(
     return {
       state: next,
       clearedKeys,
-      probeReply: intent.probe_prompt ?? defaultProbePrompt(next.rti?.pendingPrompt?.kind, 'advisor_web'),
+      probeReply:
+        intent.probe_prompt ??
+        defaultProbePrompt(next.rti?.pendingPrompt?.kind, 'advisor_web', actions.length),
     };
   }
 
