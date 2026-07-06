@@ -26,8 +26,8 @@ binding = "AI"
 
 [[kv_namespaces]]
 binding = "TURN_CACHE"
-id = "00000000000000000000000000000000"
-preview_id = "00000000000000000000000000000000"
+id = "66ef723ea8614317b80aac74b77f03d1"
+preview_id = "66ef723ea8614317b80aac74b77f03d1"
 
 [[durable_objects.bindings]]
 name = "TURN_DEBOUNCER"
@@ -46,8 +46,8 @@ name = "converse-spine-dev"
 # live on naya-db-dev). Advisor + ConverseSpine dev use HTTP → nayadesk-dev cloud.
 [[env.dev.kv_namespaces]]
 binding = "TURN_CACHE"
-id = "00000000000000000000000000000000"
-preview_id = "00000000000000000000000000000000"
+id = "66ef723ea8614317b80aac74b77f03d1"
+preview_id = "66ef723ea8614317b80aac74b77f03d1"
 
 [env.dev.vars]
 NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
@@ -67,6 +67,10 @@ binding = "AI"
 # ── Production ─────────────────────────────────────────────────────────
 [env.prod]
 name = "converse-spine"
+
+[[env.prod.kv_namespaces]]
+binding = "TURN_CACHE"
+id = "53df7275a01b4527a3421e36d7586864"
 
 [[env.prod.services]]
 binding = "NAYADESK"

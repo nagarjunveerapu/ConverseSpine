@@ -3,6 +3,10 @@
 **ConverseEngine** — clean-room turn kernel (see [docs/CONVERSE_ENGINE.md](docs/CONVERSE_ENGINE.md)).  
 NayaDesk CRM, WhatsApp ingress, quality eval.
 
+[![CI](https://github.com/nagarjunveerapu/ConverseSpine/actions/workflows/ci.yml/badge.svg)](https://github.com/nagarjunveerapu/ConverseSpine/actions/workflows/ci.yml)
+
+**CI/CD:** PR → CI (typecheck + tests). Merge to `main` → auto-deploy **converse-spine-dev**. Prod is manual. See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+
 ## Quick start
 
 ```bash

@@ -169,7 +169,8 @@ export function filterSearchMatches(
 ): Match[] {
   let ms = raw.filter((m) => !rejectedIds.includes(m.projectId));
   if (c.budgetMaxInr) {
-    ms = ms.filter((m) => m.startingPriceInr > 0 && m.startingPriceInr <= c.budgetMaxInr);
+    const budgetMax = c.budgetMaxInr;
+    ms = ms.filter((m) => m.startingPriceInr > 0 && m.startingPriceInr <= budgetMax);
   }
   return ms.slice(0, 3);
 }

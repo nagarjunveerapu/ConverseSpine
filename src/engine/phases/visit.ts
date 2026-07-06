@@ -50,7 +50,10 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
     const focus =
       s.focus ??
       (s.discover.lastOffered[0]
-        ? { projectId: s.discover.lastOffered[0].projectId, name: s.discover.lastOffered[0].name }
+        ? {
+            projectId: s.discover.lastOffered[0].projectId,
+            projectName: s.discover.lastOffered[0].name,
+          }
         : null);
     if (focus) return focused.decide({ ...s, focus }, ex);
   }

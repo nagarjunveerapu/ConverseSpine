@@ -296,7 +296,7 @@ export class NayaDeskClient {
   }): Promise<{
     projects: Array<Record<string, unknown>>;
     table_text?: string;
-    matrix?: { projects: Array<{ project_id: string; name: string }>; rows: Array<{ label: string; values: string[] }> };
+    matrix?: { projects: Array<{ project_id: string; name: string }>; rows: Array<{ key?: string; label: string; values: string[] }> };
   }> {
     return this.call('POST', '/api/projects/compare', req);
   }
@@ -367,6 +367,9 @@ export class NayaDeskClient {
     snapshot_in?: Record<string, unknown>;
     resolved_intent?: Record<string, unknown>;
     action_plan?: Record<string, unknown>;
+    offered_project_ids?: string[];
+    disclosed_facts?: unknown[];
+    verify?: Record<string, unknown>;
   }): Promise<{ ok: boolean }> {
     return this.call('POST', '/api/turn-ledger/append', req);
   }
