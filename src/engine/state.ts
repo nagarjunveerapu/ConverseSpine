@@ -208,10 +208,12 @@ function pruneUndefined(c: Partial<Constraints>): Partial<Constraints> {
 }
 
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
+import { extractDayWord } from './visit-slot.js';
 
 function isPlausibleLocation(loc: string): boolean {
   const lc = loc.toLowerCase().trim();
   if (!lc || lc.length < 3) return false;
+  if (extractDayWord(lc)) return false;
   if (isAdvisorBriefChipPhrase(loc)) return false;
   if (/\b(compare|both|projects|options|show|visit|pricing|legal|plantation|properties|property|homes|flats|apartments|investment|preservation|appreciation|diversification|rental)\b/.test(lc)) {
     return false;

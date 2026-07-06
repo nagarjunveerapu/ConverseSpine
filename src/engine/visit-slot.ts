@@ -37,6 +37,18 @@ export function extractDayWord(text: string): string | null {
   return m?.[1] ?? null;
 }
 
+/** Bare day/time scheduling — not a location or search constraint. */
+export function isVisitDayUtterance(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (/\b(?:pricing|price|legal|rera|compare|configurations?|units?|bhk|brochure|amenities|emi)\b/i.test(t)) {
+    return false;
+  }
+  const hasDay = extractDayWord(t) != null || /\b(?:tomorrow|today)\b/i.test(t);
+  if (!hasDay) return false;
+  return t.split(/\s+/).length <= 5;
+}
+
 /** Explicit clock time from buyer text — null when none stated. */
 export function extractVisitTime(text: string): { hour: number; minute: number } | null {
   const compact = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);

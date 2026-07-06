@@ -4,7 +4,7 @@
  */
 import type { EngineLlm } from './ports.js';
 import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic } from './types.js';
-import { extractDayWord } from './visit-slot.js';
+import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 
 const AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|theek|done|confirm(?:ed)?|go ahead|sounds good|perfect|great)\b/i;
 const REJECT =
@@ -88,7 +88,7 @@ export async function extractFacts(
     if (budget.min !== undefined) constraints.budgetMinInr = budget.min;
   }
   if (bhk && !constraints.bhk) constraints.bhk = bhk;
-  if (!constraints.location && askTopic !== 'compare') {
+  if (!constraints.location && askTopic !== 'compare' && !isVisitDayUtterance(text)) {
     constraints.location = extractLocation(text);
   }
   if (propertyTypeKw) constraints.propertyType = propertyTypeKw;
@@ -485,6 +485,7 @@ import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 
 export function extractLocation(text: string): string | undefined {
   const trimmed = text.trim();
+  if (isVisitDayUtterance(trimmed)) return undefined;
   if (
     /\b(?:keep|continue)\s+refining\b/i.test(trimmed) ||
     /\brefine(?:\s+(?:the|my))?\s+search\b/i.test(trimmed)
@@ -534,6 +535,7 @@ export function extractLocation(text: string): string | undefined {
     }
   }
   const bare = text.trim();
+  if (extractDayWord(bare)) return undefined;
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&
