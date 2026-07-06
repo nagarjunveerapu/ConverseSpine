@@ -57,7 +57,18 @@ export interface VisitState {
   proposedIso?: string;
   queued?: QueuedVisit[];
   askCount?: number;
-  lastAsk?: 'project' | 'day' | 'time';
+  lastAsk?: 'project' | 'day' | 'time' | 'origin' | 'window';
+  /** Buyer-stated pickup origin for multi-stop routing. */
+  originText?: string;
+  originAsked?: boolean;
+  /** Queue reordered once by travel from origin. */
+  tripOrdered?: boolean;
+  /** Day-only anchor pending morning/afternoon choice. */
+  pendingDayIso?: string;
+  pendingDayLabel?: string;
+  /** Precomputed drive from last booked stop (Maps). */
+  driveFromPriorMin?: number | null;
+  driveSource?: 'distance_matrix' | 'haversine' | 'none';
 }
 
 export interface ConversationState {
@@ -77,6 +88,13 @@ export interface ConversationState {
   postVisitAckPending?: boolean;
   /** Cached NayaDesk project facts for focused / shortlisted projects. */
   projectCache?: Record<string, ProjectDetail>;
+  /** Last-read confirmed visits from NayaDesk (itinerary mirror for board). */
+  visitBookedCache?: Array<{
+    projectId: string;
+    projectName: string;
+    iso: string;
+    label: string;
+  }>;
   /** From NayaDesk returning_buyer on turn bootstrap. */
   returningBuyer?: { buyerName: string; daysSinceLastSeen: number };
   /** Contextual turn intent session (recovery yes/no, chips). */
@@ -122,7 +140,7 @@ export type TurnGoal =
       followUpTopics?: AnswerTopic[];
     }
   | { kind: 'propose_visit'; projectId?: string }
-  | { kind: 'visit_ask'; ask: 'project' | 'day' | 'time'; copy: string; state: VisitState }
+  | { kind: 'visit_ask'; ask: 'project' | 'day' | 'time' | 'origin' | 'window'; copy: string; state: VisitState }
   | { kind: 'visit_propose'; iso: string; label: string; projectName: string; projectId: string; copy: string; state: VisitState }
   | {
       kind: 'visit_booked';

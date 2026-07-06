@@ -233,6 +233,8 @@ export interface EngineDeps {
   turnIntent?: {
     classify(input: import('./turn-intent/types.js').TurnIntentInput): Promise<import('./turn-intent/types.js').TurnIntentResult>;
   };
+  /** Optional Maps key for visit route drive-time stagger. */
+  maps?: { apiKey?: string };
 }
 
 export type { EmiFacts };

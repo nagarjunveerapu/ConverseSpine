@@ -1,4 +1,4 @@
-/** IST visit slot parsing — buyer-stated day/time only. */
+/** IST visit slot parsing — buyer-stated day/time only. No silent 11 AM default. */
 
 const DAY_NAMES: Record<string, number> = {
   sun: 0,
@@ -19,12 +19,15 @@ const DAY_NAMES: Record<string, number> = {
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const DAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const DEFAULT_HOUR = 11;
-const DEFAULT_MINUTE = 0;
 
 export interface ParsedVisitSlot {
   proposedIso: string;
   humanLabel: string;
+}
+
+export interface ParsedDayAnchor {
+  dayIso: string;
+  dayLabel: string;
 }
 
 export function extractDayWord(text: string): string | null {
@@ -34,8 +37,8 @@ export function extractDayWord(text: string): string | null {
   return m?.[1] ?? null;
 }
 
-/** Parse explicit time from buyer text; default 11:00 AM when only a day is given. */
-export function extractVisitTime(text: string): { hour: number; minute: number } {
+/** Explicit clock time from buyer text — null when none stated. */
+export function extractVisitTime(text: string): { hour: number; minute: number } | null {
   const compact = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
   if (compact) {
     let hour = parseInt(compact[1]!, 10);
@@ -53,7 +56,7 @@ export function extractVisitTime(text: string): { hour: number; minute: number }
     return { hour: parseInt(twentyFour[1]!, 10), minute: parseInt(twentyFour[2]!, 10) };
   }
 
-  return { hour: DEFAULT_HOUR, minute: DEFAULT_MINUTE };
+  return null;
 }
 
 export function formatVisitTimeLabel(hour: number, minute: number): string {
@@ -64,17 +67,24 @@ export function formatVisitTimeLabel(hour: number, minute: number): string {
 }
 
 export function hasExplicitTime(text: string): boolean {
-  return (
-    /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.test(text) ||
-    /\b([01]?\d|2[0-3]):([0-5]\d)\b/.test(text)
-  );
+  return extractVisitTime(text) !== null;
 }
 
-/** Re-time a previously chosen day — e.g. buyer says "12 AM" after Saturday was proposed. */
+export function isMorningWindow(text: string): boolean {
+  return /\b(morning|subah)\b/i.test(text) && !/\b(afternoon|evening|dopahar|shaam)\b/i.test(text);
+}
+
+export function isAfternoonWindow(text: string): boolean {
+  return /\b(afternoon|dopahar)\b/i.test(text) && !/\bmorning\b/i.test(text);
+}
+
+/** Re-time a previously chosen day — e.g. buyer says "12 PM" after Saturday was proposed. */
 export function reparseVisitTime(priorIso: string, timeText: string): ParsedVisitSlot | null {
   const anchor = new Date(priorIso);
   if (Number.isNaN(anchor.getTime())) return null;
-  const { hour, minute } = extractVisitTime(timeText);
+  const parsed = extractVisitTime(timeText);
+  if (!parsed) return null;
+  const { hour, minute } = parsed;
   const parts = toIstParts(anchor);
   const target = istInstant(parts.year, parts.month, parts.day, hour, minute);
   if (target.getTime() <= Date.now()) return null;
@@ -85,42 +95,99 @@ export function reparseVisitTime(priorIso: string, timeText: string): ParsedVisi
   };
 }
 
-export function parseVisitSlot(raw: string, now: Date): ParsedVisitSlot | null {
+/** Day anchor without inventing a clock time. */
+export function parseDayAnchor(raw: string, now: Date, anchorDateIso?: string): ParsedDayAnchor | null {
   const text = raw.toLowerCase().trim();
-  if (!text) return null;
+  if (!text && !anchorDateIso) return null;
 
-  const { hour, minute } = extractVisitTime(raw);
-  const timeLabel = formatVisitTimeLabel(hour, minute);
+  if (anchorDateIso && /same\s+day|that\s+day|that\s+date|as\s+before/i.test(text)) {
+    const parts = anchorDateIso.slice(0, 10).split('-').map(Number);
+    if (parts.length !== 3) return null;
+    const d = istInstant(parts[0]!, parts[1]! - 1, parts[2]!, 12, 0);
+    const ist = toIstParts(d);
+    return { dayIso: anchorDateIso.slice(0, 10), dayLabel: DAY_FULL[ist.dow]! };
+  }
 
   const ist = toIstParts(now);
-  let target: Date | null = null;
+  let parts: IstParts | null = null;
   let dayLabel = '';
 
   if (/\btomorrow\b/.test(text)) {
-    target = istInstantFromParts(addDaysParts(ist, 1), hour, minute);
+    parts = addDaysParts(ist, 1);
     dayLabel = 'Tomorrow';
   } else if (/\btoday\b/.test(text)) {
-    target = istInstant(ist.year, ist.month, ist.day, hour, minute);
+    parts = ist;
     dayLabel = 'Today';
   } else {
     for (const [word, dow] of Object.entries(DAY_NAMES)) {
       if (new RegExp(`\\b${word}\\b`).test(text)) {
-        const next = addDaysParts(ist, nextDowDelta(ist.dow, dow));
-        target = istInstantFromParts(next, hour, minute);
+        parts = addDaysParts(ist, nextDowDelta(ist.dow, dow));
         dayLabel = DAY_FULL[dow]!;
         break;
       }
     }
   }
 
-  if (!target || target.getTime() <= now.getTime()) return null;
+  if (!parts) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dayIso = `${parts.year}-${pad(parts.month + 1)}-${pad(parts.day)}`;
+  const probe = istInstant(parts.year, parts.month, parts.day, 18, 0);
+  if (probe.getTime() <= now.getTime()) return null;
+  return { dayIso, dayLabel };
+}
 
-  const parts = toIstParts(target);
-  const iso = toIstIso(parts.year, parts.month, parts.day, hour, minute);
+export function slotFromDayAndTime(
+  dayAnchor: ParsedDayAnchor,
+  hour: number,
+  minute: number,
+): ParsedVisitSlot {
+  const [y, mo, d] = dayAnchor.dayIso.split('-').map(Number);
   return {
-    proposedIso: iso,
-    humanLabel: `${dayLabel} at ${timeLabel}`,
+    proposedIso: toIstIso(y!, mo! - 1, d!, hour, minute),
+    humanLabel: `${dayAnchor.dayLabel} at ${formatVisitTimeLabel(hour, minute)}`,
   };
+}
+
+export function parseVisitSlot(
+  raw: string,
+  now: Date,
+  opts?: { anchorDateIso?: string; forceTime?: { hour: number; minute: number } },
+): ParsedVisitSlot | null {
+  const text = raw.toLowerCase().trim();
+  if (!text && !opts?.forceTime) return null;
+
+  const explicit = opts?.forceTime ?? extractVisitTime(raw);
+  const dayOnly = !explicit && !isMorningWindow(raw) && !isAfternoonWindow(raw);
+
+  const dayAnchor = parseDayAnchor(raw, now, opts?.anchorDateIso);
+  if (!dayAnchor) return null;
+
+  if (dayOnly) return null;
+
+  let hour: number;
+  let minute: number;
+  if (explicit) {
+    hour = explicit.hour;
+    minute = explicit.minute;
+  } else if (isMorningWindow(raw)) {
+    hour = 10;
+    minute = 30;
+  } else if (isAfternoonWindow(raw)) {
+    hour = 14;
+    minute = 0;
+  } else {
+    return null;
+  }
+
+  const target = istInstant(
+    ...(() => {
+      const [y, mo, d] = dayAnchor.dayIso.split('-').map(Number);
+      return [y!, mo! - 1, d!, hour, minute] as const;
+    })(),
+  );
+  if (target.getTime() <= now.getTime()) return null;
+
+  return slotFromDayAndTime(dayAnchor, hour, minute);
 }
 
 interface IstParts {
@@ -142,10 +209,6 @@ function toIstParts(d: Date): IstParts {
 
 function istInstant(year: number, month: number, day: number, hour: number, minute: number): Date {
   return new Date(Date.UTC(year, month, day, hour, minute, 0, 0) - IST_OFFSET_MS);
-}
-
-function istInstantFromParts(parts: IstParts, hour: number, minute: number): Date {
-  return istInstant(parts.year, parts.month, parts.day, hour, minute);
 }
 
 function toIstIso(year: number, month: number, day: number, hour: number, minute: number): string {

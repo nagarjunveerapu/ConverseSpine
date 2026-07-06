@@ -44,11 +44,12 @@ describe('RTI-D visit multi-stop (unit)', () => {
     const goal = visit.decide(s, ex, { text, now: new Date('2026-07-10T10:00:00+05:30') });
     expect(goal.kind).toBe('visit_ask');
     if (goal.kind !== 'visit_ask') return;
+    expect(goal.ask).toBe('origin');
     expect(goal.state.projectId).toBe('eldorado');
     expect(goal.state.queued).toEqual([
       { projectId: 'cornerstone', projectName: 'Brigade Cornerstone' },
     ]);
-    expect(goal.copy).toMatch(/cornerstone/i);
+    expect(goal.copy).toMatch(/coming from/i);
   });
 
   it('ALSO appends a stop without switching away from the first project', () => {
@@ -66,9 +67,10 @@ describe('RTI-D visit multi-stop (unit)', () => {
     const goal = visit.decide(s, ex, { text, now: new Date('2026-07-10T10:00:00+05:30') });
     expect(goal.kind).toBe('visit_ask');
     if (goal.kind !== 'visit_ask') return;
+    expect(goal.ask).toBe('origin');
     expect(goal.state.projectId).toBe('eldorado');
     expect(goal.state.queued?.some((q) => q.projectId === 'cornerstone')).toBe(true);
-    expect(goal.copy).toMatch(/cornerstone/i);
+    expect(goal.copy).toMatch(/coming from/i);
   });
 
   it('isVisitRouteExpand detects add/also phrasing', () => {
