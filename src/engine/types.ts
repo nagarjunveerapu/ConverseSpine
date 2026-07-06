@@ -124,7 +124,15 @@ export type TurnGoal =
   | { kind: 'propose_visit'; projectId?: string }
   | { kind: 'visit_ask'; ask: 'project' | 'day' | 'time'; copy: string; state: VisitState }
   | { kind: 'visit_propose'; iso: string; label: string; projectName: string; projectId: string; copy: string; state: VisitState }
-  | { kind: 'visit_booked'; label: string; projectName: string; projectId: string; iso: string }
+  | {
+      kind: 'visit_booked';
+      label: string;
+      projectName: string;
+      projectId: string;
+      iso: string;
+      /** Remaining stop after this booking — captured at confirm time. */
+      nextQueuedStop?: { projectId: string; projectName: string; slotText?: string };
+    }
   | { kind: 'visit_recall' }
   | { kind: 'handoff' }
   | { kind: 'warm_ack' }
