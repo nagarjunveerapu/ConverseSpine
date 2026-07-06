@@ -171,7 +171,15 @@ export function parseVisitSlot(
   const explicit = opts?.forceTime ?? extractVisitTime(raw);
   const dayOnly = !explicit && !isMorningWindow(raw) && !isAfternoonWindow(raw);
 
-  const dayAnchor = parseDayAnchor(raw, now, opts?.anchorDateIso);
+  let dayAnchor = parseDayAnchor(raw, now, opts?.anchorDateIso);
+  if (!dayAnchor && opts?.anchorDateIso && explicit) {
+    const parts = opts.anchorDateIso.slice(0, 10).split('-').map(Number);
+    if (parts.length === 3) {
+      const d = istInstant(parts[0]!, parts[1]! - 1, parts[2]!, 12, 0);
+      const ist = toIstParts(d);
+      dayAnchor = { dayIso: opts.anchorDateIso.slice(0, 10), dayLabel: DAY_FULL[ist.dow]! };
+    }
+  }
   if (!dayAnchor) return null;
 
   if (dayOnly) return null;
