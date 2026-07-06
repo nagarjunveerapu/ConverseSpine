@@ -475,6 +475,14 @@ function cleanLocalityFragment(raw: string): string {
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 
 export function extractLocation(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (
+    /\b(?:keep|continue)\s+refining\b/i.test(trimmed) ||
+    /\brefine(?:\s+(?:the|my))?\s+search\b/i.test(trimmed)
+  ) {
+    return undefined;
+  }
+
   const GENERIC = /\b(properties|property|projects|options|plantation|homes|flats|apartments|villas)\b/i;
 
   const inTail = /\bin\s+(.+?)\s*$/i.exec(text.trim());
@@ -487,6 +495,15 @@ export function extractLocation(text: string): string | undefined {
   );
   if (propsIn?.[1] && !GENERIC.test(propsIn[1])) {
     return cleanLocalityFragment(propsIn[1]);
+  }
+
+  const cityProjects = /^([A-Za-z][A-Za-z\s]{2,24}?)\s+projects?\b/i.exec(trimmed);
+  if (
+    cityProjects?.[1] &&
+    !GENERIC.test(cityProjects[1]) &&
+    !/\b(?:show|me|other|more|the|my|all|some|any|different|find|list|see)\b/i.test(cityProjects[1])
+  ) {
+    return cleanLocalityFragment(cityProjects[1]);
   }
 
   const commaLead = /^([A-Za-z][A-Za-z\s]{2,24}?)\s*,/i.exec(text.trim());
@@ -511,8 +528,8 @@ export function extractLocation(text: string): string | undefined {
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&
-    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare)$/i.test(bare) &&
-    !/\b(?:compare|both|projects|options|show|visit|pricing)\b/i.test(bare) &&
+    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?)$/i.test(bare) &&
+    !/\b(?:compare|both|projects|options|show|visit|pricing|refining|refine)\b/i.test(bare) &&
     !isAdvisorBriefChipPhrase(bare)
   ) {
     return bare;

@@ -4,6 +4,7 @@ import {
   applyTurnIntentResult,
   buildTurnIntentInput,
   classifyTurnIntent,
+  shouldPassthroughRecoverySearch,
 } from '../src/engine/turn-intent/classify.js';
 import { defaultProbePrompt } from '../src/engine/turn-intent/pending-prompt.js';
 import { initState } from '../src/engine/state.js';
@@ -100,6 +101,31 @@ describe('ruleClassify via classifyTurnIntent', () => {
     expect(applied.probeReply).toContain('Tap a button');
   });
 
+  it('confirm_suggestion clears pending prompt', async () => {
+    let state = initState('c1', 'naya-advisor');
+    state = {
+      ...state,
+      discover: {
+        ...state.discover,
+        lastOffered: [{ projectId: 'clarks', name: 'Clarks Exotica' }],
+      },
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_project',
+          project_id: 'clarks',
+          project_name: 'Clarks Exotica',
+          asked_at_turn: 2,
+        },
+        lastUiMode: 'search_recovery',
+      },
+    };
+    const input = buildTurnIntentInput(state, 'yes', 'whatsapp', 'search_recovery');
+    const intent = await classifyTurnIntent(noopEnv, input);
+    const applied = applyTurnIntentResult(state, intent, []);
+    expect(applied.focusCommitted?.projectId).toBe('clarks');
+    expect(applied.state.rti?.pendingPrompt).toBeUndefined();
+  });
+
   it('parses free-text budget widen extractor', async () => {
     let state = initState('c1', 'naya-advisor');
     state = {
@@ -125,6 +151,70 @@ describe('ruleClassify via classifyTurnIntent', () => {
     const intent = await classifyTurnIntent(noopEnv, input);
     expect(intent.kind).toBe('apply_recovery_patch');
     expect(intent.patch?.budgetMaxInr).toBe(30_000_000);
+  });
+
+  it('chip patch clears pending prompt', async () => {
+    let state = initState('c1', 'naya-advisor');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: { kind: 'chip_menu', chip_ids: ['clear_bhk'], asked_at_turn: 1 },
+        lastSuggestedActions: sampleActions,
+        lastUiMode: 'search_recovery',
+      },
+    };
+    const input = buildTurnIntentInput(state, 'Any configuration', 'advisor_web', 'search_recovery', 'clear_bhk');
+    const intent = await classifyTurnIntent(noopEnv, input);
+    const applied = applyTurnIntentResult(state, intent, sampleActions);
+    expect(applied.state.rti?.pendingPrompt).toBeUndefined();
+  });
+
+  it('lists-at-budget questions passthrough to search, not probe', async () => {
+    let state = initState('c1', 'naya-advisor');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_project',
+          project_id: 'clarks',
+          project_name: 'Clarks Exotica',
+          asked_at_turn: 2,
+        },
+        lastUiMode: 'search_recovery',
+      },
+    };
+    const input = buildTurnIntentInput(
+      state,
+      'what options do you have with my budget',
+      'advisor_web',
+      'search_recovery',
+    );
+    const intent = await classifyTurnIntent(noopEnv, input);
+    expect(intent.kind).toBe('continue_search');
+    const applied = applyTurnIntentResult(state, intent, []);
+    expect(applied.probeReply).toBeUndefined();
+  });
+
+  it('keep refining continues search and clears pending offer', async () => {
+    let state = initState('c1', 'naya-advisor');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_project',
+          project_id: 'clarks',
+          project_name: 'Clarks Exotica',
+          asked_at_turn: 2,
+        },
+        lastUiMode: 'search_recovery',
+      },
+    };
+    const input = buildTurnIntentInput(state, 'keep refining the search', 'advisor_web', 'search_recovery');
+    const intent = await classifyTurnIntent(noopEnv, input);
+    expect(intent.kind).toBe('continue_search');
+    const applied = applyTurnIntentResult(state, intent, []);
+    expect(applied.probeReply).toBeUndefined();
+    expect(applied.state.rti?.pendingPrompt).toBeUndefined();
   });
 });
 

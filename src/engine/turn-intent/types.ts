@@ -23,9 +23,12 @@ export type TurnIntentKind =
   | 'probe'
   | 'ask_named_project'
   | 'reject_and_widen'
+  | 'continue_search'
   | 'compare_among_offered'
   | 'continue_brief'
   | 'focused_question'
+  | 'release_focus'
+  | 'broaden_constraints'
   | 'unknown';
 
 export type TurnIntentConfidence = 'rule' | 'extractor' | 'llm' | 'abstain';
@@ -73,4 +76,6 @@ export interface TurnIntentApplyResult {
   /** When set, skip normal goal pipeline and return this reply with stored recovery. */
   probeReply?: string;
   focusCommitted?: { projectId: string; projectName: string };
+  /** Focus released — re-run discover/recommend, do not answer@focus. */
+  releasedFocus?: boolean;
 }

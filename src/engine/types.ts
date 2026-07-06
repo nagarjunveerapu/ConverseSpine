@@ -265,12 +265,14 @@ export interface EvidenceSet {
     location?: string;
     closestName: string;
     closestDisplay: string;
+    closestProjectId?: string;
   };
   propertyTypeGap?: {
     requestedType: string;
     budgetDisplay?: string;
     closestName: string;
     closestDisplay: string;
+    closestProjectId?: string;
   };
   typeFloor?: {
     propertyType: string;
@@ -336,6 +338,8 @@ export interface Extracted {
   budgetFitQuestion?: boolean;
   /** "Which fits my budget best?" — compare/advise among shortlist. */
   budgetPickQuestion?: boolean;
+  /** Recovery chip applied — re-list matches even if same as last turn. */
+  forceRecommendList?: boolean;
 }
 
 export interface ComposeContext {

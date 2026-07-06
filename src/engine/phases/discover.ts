@@ -199,6 +199,7 @@ export function buildBudgetNoFitEvidence(
       location: c.location,
       closestName: cheapest.name,
       closestDisplay,
+      closestProjectId: cheapest.projectId,
     },
     noMatch: {
       reasoning: `Nothing${locBit} starts within ${formatInr(c.budgetMaxInr)} — closest is *${cheapest.name}* from ${closestDisplay}`,
@@ -230,6 +231,7 @@ export function buildPropertyTypeNoFitEvidence(
       budgetDisplay,
       closestName: cheapest.name,
       closestDisplay: altDisplay,
+      closestProjectId: cheapest.projectId,
     },
     noMatch: {
       reasoning: `No *${c.propertyType}*${budgetBit} on our books — closest fit is *${cheapest.name}* from ${altDisplay}`,

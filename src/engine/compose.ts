@@ -210,16 +210,19 @@ export function fallbackReply(req: ComposeRequest): string {
         return `No *${g.bhk ?? 'that configuration'}*${budget}${loc} on our books. Want to adjust BHK, budget, or area?`;
       }
       if (ev.budgetGap) {
-        const loc = ev.budgetGap.location ? ` in *${ev.budgetGap.location}*` : '';
-        return `Nothing${loc} starts within ${ev.budgetGap.budgetDisplay} — closest on your brief is *${ev.budgetGap.closestName}* from ${ev.budgetGap.closestDisplay}. Want to raise budget or try another area?`;
+        const g = ev.budgetGap;
+        const loc = g.location ? ` in *${g.location}*` : '';
+        return `Nothing${loc} starts within ${g.budgetDisplay} — closest on your brief is *${g.closestName}* from ${g.closestDisplay}. Want me to open *${g.closestName}*?`;
       }
       if (ev.propertyTypeGap) {
         const g = ev.propertyTypeGap;
         const budget = g.budgetDisplay ? ` at ${g.budgetDisplay}` : '';
-        return `No *${g.requestedType}*${budget} on our books — closest fit is *${g.closestName}* from ${g.closestDisplay}. Want to try that, or adjust budget or area?`;
+        return `No *${g.requestedType}*${budget} on our books — closest fit is *${g.closestName}* from ${g.closestDisplay}. Want me to open *${g.closestName}*?`;
       }
       if (ev.floor) {
-        return `Nothing sits within ${b} — options begin at ${ev.floor.display}${ev.floor.projectName ? ` with *${ev.floor.projectName}*` : ''}. Want the closest options?`;
+        const lead = ev.floor.projectName ? ` with *${ev.floor.projectName}*` : '';
+        const fork = ev.floor.projectName ? ` Want me to open *${ev.floor.projectName}*?` : ' Want the closest options?';
+        return `Nothing sits within ${b} — options begin at ${ev.floor.display}${lead}.${fork}`;
       }
       if (ev.noMatch?.reasoning) {
         const emptyChips = ev.searchRecovery?.suggested_actions.length === 0;
