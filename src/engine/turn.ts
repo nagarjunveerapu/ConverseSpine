@@ -46,6 +46,8 @@ import {
 } from './turn-intent/classify.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
+import { classifyTurnRouting } from './turn-routing/classify.js';
+import { buildTurnRoutingInput } from './turn-routing/types.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
 import { constraintsSnapshot } from './recovery-planner.js';
 import type {
@@ -294,6 +296,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const prevLoc = state.constraints.location;
   state = applyExtracted(state, ex, clearedKeys);
 
+  const routing = classifyTurnRouting(buildTurnRoutingInput(state, ex, trimmedText));
+  state = {
+    ...state,
+    rti: {
+      ...state.rti,
+      lastRouting: routing,
+    },
+  };
+
   const locationBroaden =
     isLocationBroadenTurn(trimmedText) ||
     Boolean(state.constraints.location && state.constraints.location !== prevLoc);
@@ -330,14 +341,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   if (
     (state.phase === 'discover' || state.phase === 'handoff') &&
-    isVisitFollowUpQuestion(trimmedText) &&
+    isVisitFollowUpQuestion(trimmedText, ex) &&
     (ex.namedProjects?.length ?? 0) >= 1 &&
-    state.discover.lastOffered.length >= 1
+    state.discover.lastOffered.length >= 1 &&
+    routing.routing !== 'answer_on_project'
   ) {
     state = { ...state, phase: 'visit' };
   }
 
-  if (state.phase === 'visit' && isVisitFollowUpQuestion(trimmedText)) {
+  if (state.phase === 'visit' && isVisitFollowUpQuestion(trimmedText, ex)) {
     ex = { ...ex, pickName: undefined, implicitProjectPick: undefined, transition: 'none' };
   }
 

@@ -63,6 +63,10 @@ export function resolveCompareProjectIds(
   }
 
   if (fromRefs.length === 1 && pool.length >= 2) {
+    const hasSubstantiveTopic =
+      (ex.askTopics ?? []).some((t) => t !== 'compare') ||
+      (ex.askTopic != null && ex.askTopic !== 'compare');
+    if (hasSubstantiveTopic) return [];
     const other = pool.find((p) => p.project_id !== fromRefs[0]!.project_id);
     if (other) return [fromRefs[0]!.project_id, other.project_id];
   }
