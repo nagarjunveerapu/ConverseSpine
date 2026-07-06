@@ -168,13 +168,18 @@ export function extractFactsSync(text: string, s: ConversationState): Extracted 
   if (purpose) constraints.purpose = purpose;
   const askTopics = detectTopics(text);
   const askTopic = askTopics[0];
+  const transitionKw = detectTransition(text);
+  const namedProjects = resolveNamed(text, s);
+  const affirm = AFFIRM.test(text.trim());
   return {
     constraints,
-    transition: 'none',
+    transition: transitionKw ?? 'none',
     wantsMore: WANTS_MORE_RE.test(text),
     isQuestion: text.includes('?'),
+    affirm,
     ...(askTopic ? { askTopic } : {}),
     ...(askTopics.length ? { askTopics } : {}),
+    ...(namedProjects.length ? { namedProjects } : {}),
     ...(budgetPickQuestion ? { budgetPickQuestion: true, compareAdvice: true } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
   };

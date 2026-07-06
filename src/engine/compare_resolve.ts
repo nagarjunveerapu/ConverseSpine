@@ -37,6 +37,8 @@ export function resolveCompareProjectIds(
   ex: Extracted,
   s: ConversationState,
 ): string[] {
+  if (ex.transition === 'want_visit') return [];
+
   const pool = projectPool(s);
   const recent: ContextMessage[] = (s.discover.recentMessages ?? []).map((m) => ({
     text: m.text,

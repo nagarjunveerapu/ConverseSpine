@@ -300,10 +300,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (nd) await deps.crm.releaseProject(nd).catch(() => {});
     state = releaseToDiscover(state);
   }
-  if (state.phase === 'focused' && ex.transition === 'want_visit') {
-    state = { ...state, phase: 'visit' };
-  }
-  if (ex.transition === 'want_visit' && state.phase === 'discover' && state.focus) {
+  if (ex.transition === 'want_visit') {
     state = { ...state, phase: 'visit' };
   }
 
