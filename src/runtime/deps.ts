@@ -31,6 +31,7 @@ export class ConverseRuntime {
       turnIntent: {
         classify: (input) => classifyTurnIntent(env, input),
       },
+      maps: env.GOOGLE_PLACES_API_KEY ? { apiKey: env.GOOGLE_PLACES_API_KEY } : undefined,
     };
   }
 

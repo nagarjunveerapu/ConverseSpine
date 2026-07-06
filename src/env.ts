@@ -40,4 +40,7 @@ export interface Env {
   META_ACCESS_TOKEN?: string;
 
   TURN_DEBOUNCER?: DurableObjectNamespace;
+
+  /** Google Distance Matrix for visit route stagger (same secret as Naya worker). */
+  GOOGLE_PLACES_API_KEY?: string;
 }

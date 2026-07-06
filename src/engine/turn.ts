@@ -16,6 +16,8 @@ import {
 } from './turn-intent/compare-intent.js';
 import { matchesFromLastOffered } from './matches-from-offered.js';
 import { resolveFocusedSwitchGoal } from './project_switch.js';
+import { driveLeg } from './trip-logistics.js';
+import { projectGeo } from './project-geo.js';
 import {
   applyExtracted,
   applyVisitBooked,
@@ -340,16 +342,52 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const now = new Date(deps.clock.nowMs());
-  let visitCtx =
-    state.phase === 'visit'
-      ? {
-          text: input.text,
-          now,
-          siteVisitHours:
-            (await deps.data.builder(state.builderId).catch(() => null))?.siteVisitHours ??
-            'Mon–Sun, 9am–7pm',
+  let visitCtx: visit.VisitCtx | null = null;
+  if (state.phase === 'visit') {
+    visitCtx = {
+      text: input.text,
+      now,
+      siteVisitHours:
+        (await deps.data.builder(state.builderId).catch(() => null))?.siteVisitHours ??
+        'Mon–Sun, 9am–7pm',
+    };
+    if (nd) {
+      const booked = await deps.data.siteVisitsItinerary(nd).catch(() => []);
+      const lastBooked = booked.filter((v) => v.confirmed && v.iso).at(-1);
+      const activeId = state.visit?.projectId;
+      let driveFromPriorMin: number | null = null;
+      let driveSource: visit.VisitCtx['driveSource'] = 'none';
+      if (lastBooked && activeId) {
+        const fromGeo = projectGeo(lastBooked.projectId);
+        const toGeo = projectGeo(activeId);
+        if (fromGeo && toGeo) {
+          const apiKey = deps.maps?.apiKey;
+          if (apiKey) {
+            const leg = await driveLeg(apiKey, fromGeo, toGeo);
+            if (leg?.minutes != null) {
+              driveFromPriorMin = leg.minutes;
+              driveSource = 'distance_matrix';
+            }
+          }
         }
-      : null;
+      }
+      visitCtx = { ...visitCtx, bookedVisits: booked, driveFromPriorMin, driveSource };
+      state = {
+        ...state,
+        visit: state.visit
+          ? { ...state.visit, driveFromPriorMin, driveSource }
+          : state.visit,
+        visitBookedCache: booked
+          .filter((v) => v.confirmed)
+          .map((v) => ({
+            projectId: v.projectId,
+            projectName: v.projectName,
+            iso: v.iso,
+            label: v.label,
+          })),
+      };
+    }
+  }
   let goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
 
   let evidence: EvidenceSet = { tools: [] };
@@ -441,7 +479,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (goal.kind === 'visit_booked') {
     const next = goal.nextQueuedStop ?? state.visit?.queued?.[0];
     if (next) {
-      reply = `${reply.trim()}\n\nNext up — which day works for *${next.projectName}*?`;
+      reply = `${reply.trim()}\n\nNext up — same day for *${next.projectName}*, or a different day?`;
     }
   }
 

@@ -437,7 +437,7 @@ describe('Post-visit ack', () => {
     await say('hi');
     await say('plantation in sakleshpur');
     await say('give me details on the project');
-    await say('book a visit Saturday');
+    await say('book a visit Saturday morning');
     await say('yes');
 
     const afterBook = await deps.store.load('visit-ack');

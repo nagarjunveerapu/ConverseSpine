@@ -1,6 +1,7 @@
 import { formatInr } from '../engine/compose.js';
 import { mapProjectDetailDto } from './map-project-detail.js';
 import { mapVisitQueue } from './map-visit-queue.js';
+import { mapVisitItinerary } from './map-visit-itinerary.js';
 import type { AdvisorMapInput, AdvisorProjectCard, AdvisorTurnResponse } from './types.js';
 
 export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnResponse {
@@ -19,6 +20,7 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
         }
       : undefined;
   const visitQueue = mapVisitQueue(state);
+  const visitItinerary = mapVisitItinerary(state);
 
   return {
     status: 'ok',
@@ -29,6 +31,7 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     ...(focusedDetail ? { focused_project: mapProjectDetailDto(focusedDetail) } : {}),
     ...(visitBooked ? { visit_booked: visitBooked } : {}),
     ...(visitQueue ? { visit_queue: visitQueue } : {}),
+    ...(visitItinerary ? { visit_itinerary: visitItinerary } : {}),
     ...(compareMatrix ? { compare_matrix: compareMatrix } : {}),
     ...(projects.length ? { projects } : {}),
     ...(state.discover.lastOffered.length

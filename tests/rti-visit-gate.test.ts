@@ -59,7 +59,7 @@ describe('RTI visit gate end-to-end', () => {
     expect(r.state.phase).toBe('visit');
 
     r = await runEngineTurn(
-      { convId: state.convId, builderId: state.builderId, text: 'Saturday', channel: 'advisor_web' },
+      { convId: state.convId, builderId: state.builderId, text: 'Saturday morning', channel: 'advisor_web' },
       deps,
     );
     expect(r.debug.goal.kind).toBe('visit_propose');

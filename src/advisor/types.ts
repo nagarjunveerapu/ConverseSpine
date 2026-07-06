@@ -56,6 +56,8 @@ export interface AdvisorTurnResponse {
     awaiting_confirm?: boolean;
     proposed_label?: string;
   };
+  /** Full route with consent states — booked + proposed + queued. */
+  visit_itinerary?: import('./map-visit-itinerary.js').AdvisorVisitItinerary;
   compare_matrix?: {
     projects: Array<{ project_id: string; name: string }>;
     rows: Array<{ key?: string; label: string; values: readonly string[] }>;
