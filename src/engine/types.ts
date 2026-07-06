@@ -57,9 +57,11 @@ export interface VisitState {
   proposedIso?: string;
   queued?: QueuedVisit[];
   askCount?: number;
-  lastAsk?: 'project' | 'day' | 'time' | 'origin' | 'window';
+  lastAsk?: 'project' | 'day' | 'time' | 'origin' | 'window' | 'same_day_choice' | 'stagger_propose';
   /** Buyer-stated pickup origin for multi-stop routing. */
   originText?: string;
+  originLat?: number;
+  originLng?: number;
   originAsked?: boolean;
   /** Queue reordered once by travel from origin. */
   tripOrdered?: boolean;
@@ -140,7 +142,7 @@ export type TurnGoal =
       followUpTopics?: AnswerTopic[];
     }
   | { kind: 'propose_visit'; projectId?: string }
-  | { kind: 'visit_ask'; ask: 'project' | 'day' | 'time' | 'origin' | 'window'; copy: string; state: VisitState }
+  | { kind: 'visit_ask'; ask: 'project' | 'day' | 'time' | 'origin' | 'window' | 'same_day_choice' | 'stagger_propose'; copy: string; state: VisitState }
   | { kind: 'visit_propose'; iso: string; label: string; projectName: string; projectId: string; copy: string; state: VisitState }
   | {
       kind: 'visit_booked';

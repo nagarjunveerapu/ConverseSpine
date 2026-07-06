@@ -2,6 +2,7 @@ import type { ConversationState, Extracted, OfferedProject, TurnGoal, VisitState
 import type { StoredVisit } from '../ports.js';
 import {
   extractDayWord,
+  formatVisitTimeLabel,
   hasExplicitTime,
   isAfternoonWindow,
   isMorningWindow,
@@ -18,8 +19,8 @@ import {
   VISIT_ON_SITE_MIN,
   wouldCollide,
 } from '../visit-calendar.js';
-import { isSameDayPhrase, lastBookedVisit, resolveSameDayDate } from '../visit-itinerary.js';
-import { buildProjectGeoMap, nearestProjectName, projectGeo, resolveOriginGeo } from '../project-geo.js';
+import { isSameDayPhrase, isDifferentDayPhrase, lastBookedVisit, resolveSameDayDate, addMinutesToIso } from '../visit-itinerary.js';
+import { buildProjectGeoMap, nearestProjectName, projectGeo, resolveOriginGeoCached } from '../project-geo.js';
 import { orderStopsByTravel, type TripStop } from '../trip-logistics.js';
 
 const DECLINE = /\b(no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i;
@@ -77,6 +78,7 @@ export interface VisitCtx {
   bookedVisits?: readonly StoredVisit[];
   driveFromPriorMin?: number | null;
   driveSource?: 'distance_matrix' | 'haversine' | 'none';
+  originGeo?: { lat: number; lng: number } | null;
 }
 
 export function exitVisitPhase(s: ConversationState): ConversationState {
@@ -230,10 +232,40 @@ function looksLikeOriginAnswer(text: string, prior: VisitState): boolean {
 }
 
 function extractOriginFromText(text: string): string | null {
-  const m = text.match(/\b(?:coming from|starting from|from)\s+(.+?)(?:\.|$)/i);
+  const m = text.match(
+    /\b(?:coming from|starting from|start from|leave from|i come from|i'll be in|from)\s+(.+?)(?:\s+on\b|[,.]|$)/i,
+  );
   if (m?.[1]) return m[1].trim();
   if (ORIGIN_CUE.test(text)) return null;
   return null;
+}
+
+function effectiveDriveMin(ctx: VisitCtx): number | null {
+  return ctx.driveFromPriorMin ?? null;
+}
+
+function formatOnSiteEndLabel(startIso: string): string {
+  const endIso = addMinutesToIso(startIso, VISIT_ON_SITE_MIN);
+  const m = /T(\d{2}):(\d{2})/.exec(endIso);
+  if (!m) return 'about 90 min on site';
+  const h = parseInt(m[1]!, 10);
+  const min = parseInt(m[2]!, 10);
+  return formatVisitTimeLabel(h, min);
+}
+
+function buildStaggerProposeCopy(
+  lastBooked: StoredVisit,
+  projectName: string,
+  slotLabel: string,
+  driveMin: number,
+  prefix: string,
+): string {
+  const endTime = formatOnSiteEndLabel(lastBooked.iso);
+  const body =
+    `your *${lastBooked.projectName}* visit runs until about ${endTime} on site. ` +
+    `~${driveMin} min drive to *${projectName}*, ` +
+    `so I'm placing *${projectName}* at *${slotLabel}* — works, or tell me another time.`;
+  return say(prefix, body);
 }
 
 function step(input: {
@@ -338,7 +370,10 @@ function step(input: {
   }
 
   if (stopCount >= 2 && prior.originText && !prior.tripOrdered) {
-    const anchor = resolveOriginGeo(prior.originText);
+    const anchor = resolveOriginGeoCached(prior.originText, input.ctx.originGeo ?? {
+      lat: prior.originLat,
+      lng: prior.originLng,
+    });
     if (anchor) {
       const toStop = (id: string, name: string): TripStop => {
         const g = projectGeo(id);
@@ -346,23 +381,23 @@ function step(input: {
       };
       const stops: TripStop[] = [toStop(projectId, projectName), ...queued.map((q) => toStop(q.projectId, q.projectName))];
       const geo = buildProjectGeoMap(stops.map((s) => s.project_id));
+      const nearer = nearestProjectName(
+        anchor,
+        stops.map((s) => ({ projectId: s.project_id, projectName: s.name })),
+        geo,
+      );
+      if (nearer) {
+        prefix = `${prefix}From *${prior.originText}*, *${nearer}* is your nearer first stop — `;
+      }
       const ordered = orderStopsByTravel(stops, anchor);
-        if (ordered[0]!.project_id !== projectId) {
-          const [first, ...rest] = ordered;
-          projectId = first!.project_id;
-          projectName = first!.name;
-          queued = rest.map((s) => ({
-            projectId: s.project_id,
-            projectName: s.name,
-          }));
-          const nearer = nearestProjectName(
-            anchor,
-            ordered.map((s) => ({ projectId: s.project_id, projectName: s.name })),
-            geo,
-          );
-        if (nearer) {
-          prefix = `${prefix}From *${prior.originText}*, *${nearer}* is the nearer first stop — `;
-        }
+      if (ordered[0]!.project_id !== projectId) {
+        const [first, ...rest] = ordered;
+        projectId = first!.project_id;
+        projectName = first!.name;
+        queued = rest.map((s) => ({
+          projectId: s.project_id,
+          projectName: s.name,
+        }));
       }
       prior = { ...prior, tripOrdered: true };
     }
@@ -372,6 +407,33 @@ function step(input: {
     queued.length > 0 ? ` — then *${queued.map((q) => q.projectName).join('*, *')}*` : '';
 
   const explicitTime = hasExplicitTime(input.text);
+  let fromStagger = false;
+
+  if (isStop2Plus && lastBooked && prior.lastAsk === 'same_day_choice') {
+    if (isDifferentDayPhrase(input.text)) {
+      return {
+        kind: 'visit_ask',
+        ask: 'day',
+        copy: say(
+          prefix,
+          `which day works for your visit to *${projectName}*? (e.g. Saturday, tomorrow)`,
+        ),
+        state: { ...baseState, ...prior, askCount: askN, lastAsk: 'day', slotText: undefined },
+      };
+    }
+  }
+
+  if (isStop2Plus && isVisitFollowUpQuestion(input.text) && !isSameDayPhrase(input.text) && !explicitTime) {
+    return {
+      kind: 'visit_ask',
+      ask: 'day',
+      copy: say(
+        prefix,
+        `which day works for your visit to *${projectName}*? (e.g. Saturday, tomorrow)`,
+      ),
+      state: { ...baseState, ...prior, askCount: askN, lastAsk: 'day' },
+    };
+  }
 
   if (prior.pendingDayIso && (isMorningWindow(input.text) || isAfternoonWindow(input.text))) {
     const window = isMorningWindow(input.text) ? 'morning' : 'afternoon';
@@ -391,7 +453,11 @@ function step(input: {
 
   if (!slot && dayAnchor && !explicitTime && !isMorningWindow(input.text) && !isAfternoonWindow(input.text)) {
     if (isStop2Plus && (isSameDayPhrase(input.text) || anchorDate)) {
-      slot = proposeStaggered(input.booked, dayAnchor, input.ctx);
+      const staggered = proposeStaggered(input.booked, dayAnchor, input.ctx);
+      if (staggered) {
+        slot = staggered;
+        fromStagger = true;
+      }
     } else if (!isStop2Plus) {
       return {
         kind: 'visit_ask',
@@ -411,13 +477,21 @@ function step(input: {
     }
   }
 
-  if (!slot && isStop2Plus && (isSameDayPhrase(input.text) || anchorDate) && !explicitTime) {
+  if (
+    !slot &&
+    isStop2Plus &&
+    (isSameDayPhrase(input.text) || anchorDate || (prior.lastAsk === 'same_day_choice' && BARE_AFFIRM.test(input.text.trim()))) &&
+    !explicitTime
+  ) {
     const anchor: ParsedDayAnchor = dayAnchor ?? {
       dayIso: lastBooked!.iso.slice(0, 10),
       dayLabel: extractDayWord(lastBooked!.label) ?? 'Same day',
     };
-    slot = proposeStaggered(input.booked, anchor, input.ctx);
-    if (!slot && input.ctx.driveFromPriorMin == null) {
+    const staggered = proposeStaggered(input.booked, anchor, input.ctx);
+    if (staggered) {
+      slot = staggered;
+      fromStagger = true;
+    } else if (effectiveDriveMin(input.ctx) == null) {
       return {
         kind: 'visit_ask',
         ask: 'time',
@@ -430,7 +504,7 @@ function step(input: {
     }
   }
 
-  if (!slot && !prior.slotText) {
+  if (!slot && !prior.slotText && prior.lastAsk !== 'same_day_choice') {
     if (BARE_AFFIRM.test(input.text.trim())) {
       return {
         kind: 'visit_ask',
@@ -475,19 +549,23 @@ function step(input: {
     };
   }
 
+  const driveMin = effectiveDriveMin(input.ctx);
   const driveNote =
-    input.ctx.driveFromPriorMin != null && lastBooked
-      ? ` (~${input.ctx.driveFromPriorMin} min drive from *${lastBooked.projectName}*)`
+    driveMin != null && lastBooked
+      ? ` (~${driveMin} min drive from *${lastBooked.projectName}*)`
       : '';
   const queuedNote =
     queued.length > 0
       ? ` After this we'll plan *${queued[0]!.projectName}*${queued.length > 1 ? ` and ${queued.length - 1} more` : ''}.`
       : '';
 
-  const copy = say(
-    prefix,
-    `shall I block *${parsed.humanLabel}* for your visit to *${projectName}*?${driveNote}${queuedNote} Reply yes to confirm.`,
-  );
+  const copy =
+    fromStagger && lastBooked && driveMin != null
+      ? buildStaggerProposeCopy(lastBooked, projectName, parsed.humanLabel, driveMin, prefix)
+      : say(
+          prefix,
+          `shall I block *${parsed.humanLabel}* for your visit to *${projectName}*?${driveNote}${queuedNote} Reply yes to confirm.`,
+        );
 
   return {
     kind: 'visit_propose',
@@ -506,7 +584,7 @@ function step(input: {
       proposedIso: parsed.proposedIso,
       proposedLabel: parsed.humanLabel,
       slotText: input.text,
-      lastAsk: 'time',
+      lastAsk: fromStagger ? 'stagger_propose' : 'time',
       pendingDayIso: undefined,
       pendingDayLabel: undefined,
     },
@@ -520,7 +598,7 @@ function proposeStaggered(
 ): ReturnType<typeof parseVisitSlot> {
   const prior = lastBookedVisit(booked);
   if (!prior?.iso) return null;
-  const driveMin = ctx.driveFromPriorMin;
+  const driveMin = effectiveDriveMin(ctx);
   if (driveMin == null) return null;
   const nextIso = staggerAfter(prior.iso, driveMin, VISIT_ON_SITE_MIN);
   const h = parseInt(/T(\d{2}):(\d{2})/.exec(nextIso)?.[1] ?? '12', 10);
