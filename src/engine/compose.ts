@@ -226,7 +226,8 @@ export function fallbackReply(req: ComposeRequest): string {
         const suffix = emptyChips
           ? ' Tell me what to change — budget, area, or property type.'
           : '. Want to adjust budget, area, or property type?';
-        return `${ev.noMatch.reasoning}${suffix}`;
+        const base = ev.noMatch.reasoning.endsWith('.') ? ev.noMatch.reasoning : `${ev.noMatch.reasoning}.`;
+        return `${base}${suffix}`;
       }
       return `I don't have an exact match right now. Want to adjust budget or area?`;
     }
@@ -465,4 +466,13 @@ export function formatInr(inr: number): string {
   if (!isFinite(inr) || inr <= 0) return '';
   if (inr >= 10_000_000) return `₹${(inr / 10_000_000).toFixed(2).replace(/\.?0+$/, '')} Cr`;
   return `₹${(inr / 100_000).toFixed(2).replace(/\.?0+$/, '')} L`;
+}
+
+export function minimumBudgetReply(
+  typeLabel: string,
+  floor: { name: string; display: string },
+  buyerBudgetMaxInr?: number,
+): string {
+  const briefBit = buyerBudgetMaxInr ? ` Your brief is ${formatInr(buyerBudgetMaxInr)}.` : '';
+  return `${typeLabel}s on our books start from *${floor.display}* (*${floor.name}*).${briefBit} Want to raise budget or try another property type?`;
 }

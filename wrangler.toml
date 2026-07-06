@@ -91,3 +91,11 @@ index_name = "naya-intent-phrasings"
 
 [env.prod.ai]
 binding = "AI"
+
+[env.prod.vars]
+LOG_LEVEL = "info"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_BUILDER_ID = "lokations"
+ADVISOR_BUILDER_ID = "naya-advisor"
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com"

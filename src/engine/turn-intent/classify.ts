@@ -80,6 +80,17 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
     return { kind: 'reject_and_widen', confidence: 'rule' };
   }
 
+  if (
+    /^budget\.?$/i.test(t) &&
+    (input.ui_mode === 'search_recovery' || input.ui_mode === 'preference_refine')
+  ) {
+    return {
+      kind: 'probe',
+      confidence: 'rule',
+      probe_prompt: 'What budget should I search up to? e.g. ₹1 Cr or ₹3 Cr.',
+    };
+  }
+
   if (AFFIRM_ONLY.test(t)) {
     if (pending?.kind === 'offer_project') {
       const pid =
@@ -116,12 +127,25 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
   return null;
 }
 
-export function shouldRunTurnIntent(
-  uiMode: TurnIntentInput['ui_mode'],
-  actionId?: string,
-): boolean {
+export function shouldRunTurnIntent(state: ConversationState, actionId?: string): boolean {
   if (actionId) return true;
-  return uiMode === 'search_recovery' || uiMode === 'preference_refine';
+  const mode = state.rti?.lastUiMode;
+  if (mode === 'search_recovery' || mode === 'preference_refine') return true;
+  if (state.rti?.lastGoalKind === 'no_fit') return true;
+  if (state.rti?.pendingPrompt) return true;
+  return false;
+}
+
+export function recoveryUiMode(state: ConversationState): TurnIntentInput['ui_mode'] {
+  if (state.rti?.lastUiMode === 'preference_refine') return 'preference_refine';
+  if (
+    state.rti?.lastUiMode === 'search_recovery' ||
+    state.rti?.lastGoalKind === 'no_fit' ||
+    state.rti?.pendingPrompt
+  ) {
+    return 'search_recovery';
+  }
+  return state.rti?.lastUiMode ?? 'brief_collect';
 }
 
 export async function classifyTurnIntent(

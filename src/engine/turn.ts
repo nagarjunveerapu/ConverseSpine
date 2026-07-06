@@ -7,7 +7,7 @@ import * as focused from './phases/focused.js';
 import * as visit from './phases/visit.js';
 import { exitVisitPhase, shouldExitVisitForIntent } from './phases/visit.js';
 import * as handoff from './phases/handoff.js';
-import { extractFacts, isLocationBroadenTurn } from './facts.js';
+import { extractFacts, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes } from './facts.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import { resolveFocusedSwitchGoal } from './project_switch.js';
 import {
@@ -24,7 +24,7 @@ import {
   releaseToDiscover,
   withNdConversation,
 } from './state.js';
-import { buildComposeRequest, fallbackReply, formatInr } from './compose.js';
+import { buildComposeRequest, fallbackReply, formatInr, minimumBudgetReply } from './compose.js';
 import { checkGrounding, stripBanned } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
@@ -32,6 +32,7 @@ import { planSearchRecovery, type SearchRecoveryEnvelope, type AdvisorUiMode, ty
 import {
   applyTurnIntentResult,
   buildTurnIntentInput,
+  recoveryUiMode,
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
@@ -118,10 +119,47 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
-  const uiModeHint: AdvisorUiMode = state.rti?.lastUiMode ?? 'brief_collect';
+  const uiModeHint = recoveryUiMode(state);
   const clearedKeys = new Set<PatchClearKey>(input.preferenceClears ?? []);
 
-  if (deps.turnIntent && shouldRunTurnIntent(uiModeHint, input.action_id)) {
+  if (isMinimumBudgetForTypeQuestion(trimmedText) && shouldRunTurnIntent(state, input.action_id)) {
+    const typeRaw = detectPropertyTypes(trimmedText) || state.constraints.propertyType;
+    if (typeRaw) {
+      const floor = await discover.cheapestMatchForPropertyType(
+        (f) => searchWithFilters(deps, state.builderId, f),
+        typeRaw,
+      );
+      if (floor) {
+        const typeLabel = discover.displayPropertyTypeLabel(typeRaw);
+        const reply = minimumBudgetReply(typeLabel, floor, state.constraints.budgetMaxInr);
+        const storedRecovery = storedSearchRecovery(state);
+        state = {
+          ...state,
+          turnCount: state.turnCount + 1,
+          rti: {
+            ...state.rti,
+            lastReplyExcerpt: excerptReply(reply),
+            lastUiMode: 'search_recovery',
+            lastGoalKind: 'no_fit',
+          },
+        };
+        state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
+        await deps.store.save(state);
+        await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+        await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'type_floor' }).catch(() => {});
+        return {
+          reply,
+          state,
+          debug: { phase: state.phase, goal: { kind: 'no_fit' }, tools: ['search'], grounding: 'pass' },
+          ...(storedRecovery ? { searchRecovery: capRecoveryForChannel(storedRecovery, channel) } : {}),
+          uiMode: 'search_recovery' as AdvisorUiMode,
+          whatsappActions: whatsAppButtons(storedRecovery, channel),
+        };
+      }
+    }
+  }
+
+  if (deps.turnIntent && shouldRunTurnIntent(state, input.action_id)) {
     const intentInput = buildTurnIntentInput(state, trimmedText, channel, uiModeHint, input.action_id);
     const intent = await deps.turnIntent.classify(intentInput);
     const applied = applyTurnIntentResult(state, intent, intentInput.suggested_actions);

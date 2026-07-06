@@ -53,12 +53,18 @@ export async function handleAdvisorTurn(
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);
       if (lead) existing = withNdConversation(existing, lead.conversationId, buyer_phone);
     }
-    existing = {
-      ...existing,
-      constraints: mergeAdvisorPreferences(existing.constraints, body.preferences),
-      discover: { ...existing.discover, oriented: true },
-    };
-    await rt.engine.store.save(existing);
+    const inRecovery =
+      existing.rti?.lastUiMode === 'search_recovery' ||
+      existing.rti?.lastUiMode === 'preference_refine' ||
+      existing.rti?.lastGoalKind === 'no_fit';
+    if (!inRecovery) {
+      existing = {
+        ...existing,
+        constraints: mergeAdvisorPreferences(existing.constraints, body.preferences),
+        discover: { ...existing.discover, oriented: true },
+      };
+      await rt.engine.store.save(existing);
+    }
   }
 
   if (projectId) {

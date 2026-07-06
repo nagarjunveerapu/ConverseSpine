@@ -306,3 +306,40 @@ function commitPickWithFollowUp(
   }
   return { kind: 'commit', projectId: pick.projectId, projectName: pick.name };
 }
+
+export interface TypeFloorHit {
+  name: string;
+  display: string;
+  priceInr: number;
+}
+
+/** Cheapest catalog project for a property type (no budget cap). */
+export async function cheapestMatchForPropertyType(
+  search: (filters: SearchFilters) => Promise<{
+    matches: Array<{ name: string; starting_price_inr: number; starting_price_display: string }>;
+  }>,
+  propertyType: string,
+): Promise<TypeFloorHit | null> {
+  const filters: SearchFilters = {
+    projectTypes: mapProjectTypesForSearch(propertyType),
+    maxResults: 25,
+  };
+  const result = await search(filters);
+  const pool = result.matches.filter((m) => m.starting_price_inr > 0);
+  if (!pool.length) return null;
+  const cheapest = [...pool].sort((a, b) => a.starting_price_inr - b.starting_price_inr)[0]!;
+  return {
+    name: cheapest.name,
+    display: cheapest.starting_price_display || formatInr(cheapest.starting_price_inr),
+    priceInr: cheapest.starting_price_inr,
+  };
+}
+
+export function displayPropertyTypeLabel(raw: string): string {
+  const s = raw.toLowerCase();
+  if (s.includes('villa')) return 'Villa';
+  if (s.includes('apartment') || s.includes('flat')) return 'Apartment';
+  if (s.includes('plot') || s.includes('land')) return 'Plot / land';
+  if (s.includes('plantation') || s.includes('planted') || s.includes('estate')) return 'Planted estate';
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}

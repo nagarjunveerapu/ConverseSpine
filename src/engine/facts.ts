@@ -216,7 +216,7 @@ function normalizePropertyType(raw: string): string {
   return raw;
 }
 
-function detectPropertyTypes(text: string): string | undefined {
+export function detectPropertyTypes(text: string): string | undefined {
   const found = new Set<string>();
   for (const segment of text.split(/\bor\b|,/i)) {
     const t = detectPropertyType(segment);
@@ -265,6 +265,20 @@ function mapObjectionTopic(text: string): ObjectionTopic {
   return 'custom';
 }
 
+/** Buyer asks what budget is needed for a property type (recovery / no-fit context). */
+export function isMinimumBudgetForTypeQuestion(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    /\b(?:minimum|min\.?|least|lowest|what|how much)\b.{0,48}\b(?:budget|price|cost|spend)\b.{0,32}\b(?:villa|apartment|flat|plot|land|plantation)s?\b/.test(
+      t,
+    ) ||
+    /\b(?:villa|apartment|flat|plot|land|plantation)s?\b.{0,32}\b(?:minimum|min\.?|start(?:ing)?|least)\b.{0,24}\b(?:budget|price|cost)\b/.test(
+      t,
+    ) ||
+    /\bwhat(?:'s| is) the minimum budget\b/.test(t)
+  );
+}
+
 export function parseBudgetToInr(raw: string): { max: number; min?: number } | null {
   const s = raw
     .toLowerCase()
@@ -282,7 +296,7 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
       return hi >= lo ? { min: lo, max: hi } : { min: hi, max: lo };
     }
   }
-  const single = s.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?\b/);
+  const single = s.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?(?=\s|$|[^\w])/);
   if (!single) return null;
   const v = toInr(parseFloat(single[1]!), single[2] ?? '');
   return v !== null && v > 0 ? { max: v } : null;

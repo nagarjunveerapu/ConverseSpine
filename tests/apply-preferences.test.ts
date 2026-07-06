@@ -26,6 +26,11 @@ describe('constraintsFromAdvisorPreferences', () => {
     const c = constraintsFromAdvisorPreferences({ location: 'Open to suggestions' });
     expect(c.location).toBeUndefined();
   });
+
+  it('skips open to suggestions property type', () => {
+    const c = constraintsFromAdvisorPreferences({ property_type: 'Open to suggestions' });
+    expect(c.propertyType).toBeUndefined();
+  });
 });
 
 describe('mergeAdvisorPreferences', () => {
