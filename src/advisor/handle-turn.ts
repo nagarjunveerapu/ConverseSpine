@@ -9,6 +9,7 @@ import { commitTo, initState, withNdConversation } from '../engine/state.js';
 import { mapAdvisorTurnResponse } from './map-response.js';
 import { mergeAdvisorPreferences, preferenceClearsFromPatch } from './apply-preferences.js';
 import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
+import { isVisitRouteExpand } from '../engine/phases/visit.js';
 import type { AdvisorTurnRequest, AdvisorTurnResponse } from './types.js';
 import { sessionToConvId, sessionToPhone } from './session.js';
 
@@ -69,7 +70,7 @@ export async function handleAdvisorTurn(
     }
   }
 
-  if (projectId && !pivotTurn) {
+  if (projectId && !pivotTurn && !isVisitRouteExpand(text)) {
     let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
     if (!existing.ndConversationId && buyer_phone) {
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);

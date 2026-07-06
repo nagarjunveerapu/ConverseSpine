@@ -37,7 +37,9 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
     if (detailGoal) return detailGoal;
   }
 
-  if (ex.transition === 'want_visit') return { kind: 'propose_visit' };
+  if (ex.transition === 'want_visit' && !(ex.namedProjects?.length)) {
+    return { kind: 'propose_visit' };
+  }
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom' };
 
   if (ex.rejected && hasNarrowingConstraint(s.constraints)) return { kind: 'ack_reject_recommend' };
