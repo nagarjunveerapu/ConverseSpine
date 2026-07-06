@@ -29,6 +29,11 @@ export interface VisitCtx {
   now: Date;
 }
 
+/** Buyer asks about the next (or another) queued visit stop. */
+export function isVisitFollowUpQuestion(text: string): boolean {
+  return /\bwhat about\b/i.test(text.trim());
+}
+
 /** Leave visit scheduling when the buyer asks something else (compare, more options, etc.). */
 export function shouldExitVisitForIntent(ex: Extracted): boolean {
   if (ex.transition === 'want_visit') return false;
@@ -50,6 +55,21 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
   const now = ctx.now;
 
   if (ex.recall) return { kind: 'visit_recall' };
+
+  if (
+    isVisitFollowUpQuestion(ctx.text) &&
+    (ex.namedProjects?.length ?? 0) >= 1 &&
+    (s.phase === 'visit' || (s.visit?.queued?.length ?? 0) > 0 || !!s.visit?.projectId)
+  ) {
+    return step({
+      text: ctx.text,
+      named: ex.namedProjects ?? [],
+      candidates: candidatesOf(s),
+      prior: prior,
+      now,
+      affirm: ex.affirm,
+    });
+  }
 
   const visitRouteExpand =
     ALSO_RE.test(ctx.text.trim()) && (ex.namedProjects?.length ?? 0) === 1 && !!prior.projectId;

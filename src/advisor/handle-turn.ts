@@ -9,7 +9,7 @@ import { commitTo, initState, withNdConversation } from '../engine/state.js';
 import { mapAdvisorTurnResponse } from './map-response.js';
 import { mergeAdvisorPreferences, preferenceClearsFromPatch } from './apply-preferences.js';
 import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
-import { isVisitRouteExpand } from '../engine/phases/visit.js';
+import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../engine/phases/visit.js';
 import type { AdvisorTurnRequest, AdvisorTurnResponse } from './types.js';
 import { sessionToConvId, sessionToPhone } from './session.js';
 
@@ -76,11 +76,15 @@ export async function handleAdvisorTurn(
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);
       if (lead) existing = withNdConversation(existing, lead.conversationId, buyer_phone);
     }
-    const name =
-      projectName ||
-      existing.discover.lastOffered.find((p) => p.projectId === projectId)?.name ||
-      projectId;
-    if (existing.focus?.projectId !== projectId) {
+    const skipStickyFocus =
+      existing.phase === 'visit' ||
+      isVisitFollowUpQuestion(text) ||
+      (isVisitRouteExpand(text) && existing.visit?.projectId);
+    if (!skipStickyFocus && existing.focus?.projectId !== projectId) {
+      const name =
+        projectName ||
+        existing.discover.lastOffered.find((p) => p.projectId === projectId)?.name ||
+        projectId;
       if (existing.ndConversationId) {
         await rt.engine.crm.commitProject(existing.ndConversationId, projectId).catch(() => {});
       }

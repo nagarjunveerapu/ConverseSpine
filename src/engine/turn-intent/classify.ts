@@ -5,6 +5,7 @@ import type { ConversationState } from '../types.js';
 import { isBudgetFitQuestion } from '../facts.js';
 import { extractRecoveryPatchFromText } from './extract-recovery-patch.js';
 import { classifyFocusedPivot, shouldRunFocusedTurnIntent } from './focused-intent.js';
+import { isCompareAmongOfferedTurn } from './compare-intent.js';
 import { classifyTurnIntentLlm } from './llm-classifier.js';
 import { defaultProbePrompt } from './pending-prompt.js';
 import type {
@@ -174,6 +175,7 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
 }
 
 export function shouldRunTurnIntent(state: ConversationState, actionId?: string, text?: string): boolean {
+  if (text && isCompareAmongOfferedTurn(text)) return false;
   if (actionId) return true;
   if (state.postVisitAckPending) return false;
   if (state.phase === 'focused') {

@@ -9,6 +9,12 @@ import { exitVisitPhase, shouldExitVisitForIntent } from './phases/visit.js';
 import * as handoff from './phases/handoff.js';
 import { extractFacts, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes } from './facts.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
+import {
+  isCompareAmongOfferedTurn,
+  prepareCompareExtracted,
+  shouldAllowBudgetGapNoFit,
+} from './turn-intent/compare-intent.js';
+import { matchesFromLastOffered } from './matches-from-offered.js';
 import { resolveFocusedSwitchGoal } from './project_switch.js';
 import {
   applyExtracted,
@@ -254,9 +260,21 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     phase: state.phase,
     microMarkets: catalogForNlu?.microMarkets ?? [],
   });
+
+  if (isCompareAmongOfferedTurn(trimmedText) && state.discover.lastOffered.length >= 2) {
+    if (state.phase === 'focused' || state.phase === 'handoff') {
+      if (nd && state.focus) await deps.crm.releaseProject(nd).catch(() => {});
+      state = releaseToDiscover(state);
+    }
+  }
+
+  ex = prepareCompareExtracted(trimmedText, state, ex);
   ex = {
     ...ex,
-    compareProjectIds: resolveCompareProjectIds(trimmedText, ex, state),
+    compareProjectIds:
+      ex.compareProjectIds && ex.compareProjectIds.length >= 2
+        ? ex.compareProjectIds
+        : resolveCompareProjectIds(trimmedText, ex, state),
   };
   if (recoveryChipTurn || focusPivotTurn) {
     ex = {
@@ -336,7 +354,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       goal = answerGoal;
     }
   } else if (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') {
-    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps));
+    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText));
   } else if (goal.kind === 'objection') {
     ({ goal, evidence } = await fetchObjection(goal, state, deps, nd));
   } else if (goal.kind === 'answer') {
@@ -360,6 +378,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const visitDeterministic =
     goal.kind === 'visit_ask' || goal.kind === 'visit_propose' || goal.kind === 'visit_booked';
+  const firstShortlistTurn =
+    state.discover.lastOffered.length === 0 &&
+    (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
+    (evidence.matches?.length ?? 0) > 0;
   const compareDeterministic = goal.kind === 'answer' && goal.topic === 'compare';
   const multiAnswerDeterministic =
     goal.kind === 'answer' && (goal.topics?.length ?? 0) > 1;
@@ -373,6 +395,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let draft: string;
   if (
     visitDeterministic ||
+    firstShortlistTurn ||
     compareDeterministic ||
     multiAnswerDeterministic ||
     locationDeterministic ||
@@ -401,6 +424,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     grounding = 'repaired';
   }
   if (!reply.trim()) reply = "Let me pull those details together and follow up shortly.";
+
+  if (goal.kind === 'visit_booked' && (state.visit?.queued?.length ?? 0) > 0) {
+    const next = state.visit!.queued![0]!;
+    reply = `${reply.trim()}\n\nNext up — which day works for *${next.projectName}*?`;
+  }
 
   state = applyGoalToState(state, goal, evidence);
   if (evidence.detail && goal.kind === 'answer') {
@@ -541,7 +569,14 @@ async function fetchRecommend(
   s: ConversationState,
   ex: Extracted,
   deps: EngineDeps,
+  buyerText: string,
 ): Promise<{ goal: TurnGoal; evidence: EvidenceSet }> {
+  const relistShortlist = (): { goal: TurnGoal; evidence: EvidenceSet } | null => {
+    const ms = matchesFromLastOffered(s);
+    if (ms.length < 2) return null;
+    return { goal: { kind: 'recommend' }, evidence: { tools: [], matches: ms } };
+  };
+
   let filters = discover.searchFilters(s.constraints);
   const strictSearch = await searchWithFilters(deps, s.builderId, filters);
 
@@ -561,6 +596,20 @@ async function fetchRecommend(
     .filter((m) => (ex.wantsMore ? !offeredIds.has(m.projectId) : true));
 
   const matches = discover.filterSearchMatches(rawMatches, s.constraints, s.discover.rejectedProjectIds);
+
+  if (matches.length === 0 && base.kind === 'recommend' && s.discover.lastOffered.length === 0) {
+    const broadened = await broadenInitialShortlist(
+      deps,
+      s.builderId,
+      filters,
+      s.constraints,
+      s.discover.rejectedProjectIds,
+      [],
+    );
+    if (broadened.length > 0) {
+      return { goal: base, evidence: { tools: ['search'], matches: broadened } };
+    }
+  }
 
   let scopedMatches = matches;
   const budgetOnlyTurn = ex.constraints.budgetMaxInr !== undefined && !ex.constraints.location;
@@ -633,6 +682,23 @@ async function fetchRecommend(
       s.discover.rejectedProjectIds,
     );
     if (budgetEv) {
+      if (!shouldAllowBudgetGapNoFit(s, buyerText)) {
+        const relist = relistShortlist();
+        if (relist) return relist;
+      }
+      if (s.discover.lastOffered.length === 0) {
+        const broadened = await broadenInitialShortlist(
+          deps,
+          s.builderId,
+          filters,
+          s.constraints,
+          s.discover.rejectedProjectIds,
+          [],
+        );
+        if (broadened.length >= 2) {
+          return { goal: base, evidence: { tools: ['search'], matches: broadened } };
+        }
+      }
       const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
       const searchRecovery = await planSearchRecovery({
         searchCount: async (f) => (await searchWithFilters(deps, s.builderId, f)).matches.length,
@@ -686,19 +752,23 @@ async function fetchRecommend(
   }
 
   if (scopedMatches.length > 0) {
+    let listed = scopedMatches;
+    if (base.kind === 'recommend' && s.discover.lastOffered.length === 0 && listed.length < 3) {
+      listed = await broadenInitialShortlist(deps, s.builderId, filters, s.constraints, s.discover.rejectedProjectIds, listed);
+    }
     if (
       base.kind === 'recommend' &&
       !ex.wantsMore &&
       !ex.forceRecommendList &&
-      isSameAsLast(s, scopedMatches)
+      isSameAsLast(s, listed)
     ) {
       const miss = s.discover.advancedOnce ? undefined : discover.firstMissingSlot(s);
       return {
         goal: { kind: 'advance', reason: 'same_set' },
-        evidence: { tools: ['search'], matches: scopedMatches, ...(miss ? { nextSlot: miss } : {}) },
+        evidence: { tools: ['search'], matches: listed, ...(miss ? { nextSlot: miss } : {}) },
       };
     }
-    return { goal: base, evidence: { tools: ['search'], matches: scopedMatches } };
+    return { goal: base, evidence: { tools: ['search'], matches: listed } };
   }
 
   const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
@@ -713,6 +783,10 @@ async function fetchRecommend(
   );
 
   if (resolved.goal.kind === 'no_fit') {
+    if (!shouldAllowBudgetGapNoFit(s, buyerText)) {
+      const relist = relistShortlist();
+      if (relist) return relist;
+    }
     const searchRecovery = await planSearchRecovery({
       searchCount: async (filters) =>
         (await searchWithFilters(deps, s.builderId, filters)).matches.length,
@@ -738,6 +812,53 @@ async function searchWithFilters(
   filters: import('./types.js').SearchFilters,
 ): Promise<{ matches: Array<{ project_id: string; name: string; micro_market: string; starting_price_inr: number; starting_price_display: string; match_reasons?: string[]; project_type?: string }> }> {
   return deps.data.search(builderId, filters).catch(() => ({ matches: [] }));
+}
+
+function rawToMatches(
+  rows: Array<{ project_id: string; name: string; micro_market: string; starting_price_inr: number; starting_price_display: string; match_reasons?: string[]; project_type?: string }>,
+): Match[] {
+  return rows.map((m) => ({
+    projectId: m.project_id,
+    name: m.name,
+    microMarket: m.micro_market,
+    startingPriceInr: m.starting_price_inr,
+    startingPriceDisplay: m.starting_price_display,
+    matchReasons: m.match_reasons ?? [],
+    projectType: m.project_type,
+  }));
+}
+
+/** First shortlist after brief — relax BHK/type filters to surface up to 3 options. */
+async function broadenInitialShortlist(
+  deps: EngineDeps,
+  builderId: string,
+  filters: import('./types.js').SearchFilters,
+  constraints: import('./types.js').Constraints,
+  rejectedIds: readonly string[],
+  current: Match[],
+): Promise<Match[]> {
+  const merged = [...current];
+  const seen = new Set(merged.map((m) => m.projectId));
+  const relaxPlans: import('./types.js').SearchFilters[] = [];
+  if (filters.bhks) {
+    const { bhks: _b, ...noBhk } = filters;
+    relaxPlans.push(noBhk);
+  }
+  if (filters.projectTypes) {
+    const { projectTypes: _p, bhks: _b, ...noType } = filters;
+    relaxPlans.push(noType);
+  }
+  for (const plan of relaxPlans) {
+    const broad = await searchWithFilters(deps, builderId, plan);
+    const ms = discover.filterSearchMatches(rawToMatches(broad.matches), constraints, rejectedIds);
+    for (const m of ms) {
+      if (seen.has(m.projectId)) continue;
+      seen.add(m.projectId);
+      merged.push(m);
+      if (merged.length >= 3) return merged;
+    }
+  }
+  return merged;
 }
 
 async function fetchObjection(
