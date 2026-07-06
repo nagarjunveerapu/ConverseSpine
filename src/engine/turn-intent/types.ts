@@ -54,6 +54,7 @@ export interface RtiState {
   lastEvidenceKind?: 'constraint_gap' | 'budget_gap' | 'property_type_gap' | 'matches' | 'floor';
   lastReplyExcerpt?: string;
   lastUiMode?: AdvisorUiMode;
+  lastRouting?: import('../turn-routing/types.js').TurnRoutingResult;
 }
 
 export interface TurnIntentInput {

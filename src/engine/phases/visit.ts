@@ -21,7 +21,6 @@ import {
 import { isSameDayPhrase, lastBookedVisit, resolveSameDayDate } from '../visit-itinerary.js';
 import { buildProjectGeoMap, nearestProjectName, projectGeo, resolveOriginGeo } from '../project-geo.js';
 import { orderStopsByTravel, type TripStop } from '../trip-logistics.js';
-import * as focused from './focused.js';
 
 const DECLINE = /\b(no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i;
 const BARE_AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|sounds good)\.?!?\s*$/i;
@@ -41,23 +40,27 @@ const VISIT_DEFERRABLE_TOPICS: import('../types.js').AnswerTopic[] = [
   'availability',
 ];
 
-export interface VisitCtx {
-  text: string;
-  now: Date;
-  siteVisitHours?: string;
-  bookedVisits?: readonly StoredVisit[];
-  driveFromPriorMin?: number | null;
-  driveSource?: 'distance_matrix' | 'haversine' | 'none';
+const TOPIC_PROBE_IN_WHAT_ABOUT =
+  /\b(?:pricing|price|legal|rera|configurations?|unit types?|units?|bhk|floor plans?|brochure|amenities|location|emi|availability|possession|media|overview|details?)\b/i;
+
+export interface VisitFollowUpExtract {
+  askTopic?: import('../types.js').AnswerTopic;
+  askTopics?: import('../types.js').AnswerTopic[];
 }
 
-/** Buyer asks about the next (or another) queued visit stop. */
-export function isVisitFollowUpQuestion(text: string): boolean {
-  return /\bwhat about\b/i.test(text.trim());
+/** Buyer asks about the next (or another) queued visit stop — not a project Q&A probe. */
+export function isVisitFollowUpQuestion(text: string, ex?: VisitFollowUpExtract): boolean {
+  const t = text.trim();
+  if (!/\bwhat about\b/i.test(t)) return false;
+  if (ex?.askTopic && ex.askTopic !== 'compare') return false;
+  if (ex?.askTopics?.some((topic) => topic !== 'compare')) return false;
+  if (TOPIC_PROBE_IN_WHAT_ABOUT.test(t)) return false;
+  return true;
 }
 
 /** Leave visit scheduling when the buyer asks something else (compare, more options, etc.). */
 export function shouldExitVisitForIntent(ex: Extracted, text?: string): boolean {
-  if (text && isVisitFollowUpQuestion(text)) return false;
+  if (text && isVisitFollowUpQuestion(text, ex)) return false;
   if (ex.transition === 'want_visit') return false;
   if (ex.askTopic === 'compare') return true;
   if ((ex.compareProjectIds?.length ?? 0) >= 2) return true;
@@ -65,6 +68,15 @@ export function shouldExitVisitForIntent(ex: Extracted, text?: string): boolean 
   if (ex.transition === 'see_others') return true;
   if (ex.rejected) return true;
   return false;
+}
+
+export interface VisitCtx {
+  text: string;
+  now: Date;
+  siteVisitHours?: string;
+  bookedVisits?: readonly StoredVisit[];
+  driveFromPriorMin?: number | null;
+  driveSource?: 'distance_matrix' | 'haversine' | 'none';
 }
 
 export function exitVisitPhase(s: ConversationState): ConversationState {
@@ -79,8 +91,22 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
 
   if (ex.recall) return { kind: 'visit_recall' };
 
+  const visitRouteExpand =
+    ALSO_RE.test(ctx.text.trim()) && (ex.namedProjects?.length ?? 0) === 1 && !!prior.projectId;
+
   if (
-    isVisitFollowUpQuestion(ctx.text) &&
+    ex.askTopic &&
+    VISIT_DEFERRABLE_TOPICS.includes(ex.askTopic) &&
+    !parseVisitSlot(ctx.text, now) &&
+    !parseDayAnchor(ctx.text, now) &&
+    !visitRouteExpand
+  ) {
+    const answerGoal = deferToProjectAnswer(s, ex);
+    if (answerGoal) return answerGoal;
+  }
+
+  if (
+    isVisitFollowUpQuestion(ctx.text, ex) &&
     (ex.namedProjects?.length ?? 0) >= 1 &&
     (s.phase === 'visit' || (s.visit?.queued?.length ?? 0) > 0 || !!s.visit?.projectId)
   ) {
@@ -94,27 +120,6 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
       booked,
       ctx,
     });
-  }
-
-  const visitRouteExpand =
-    ALSO_RE.test(ctx.text.trim()) && (ex.namedProjects?.length ?? 0) === 1 && !!prior.projectId;
-
-  if (
-    ex.askTopic &&
-    VISIT_DEFERRABLE_TOPICS.includes(ex.askTopic) &&
-    !parseVisitSlot(ctx.text, now) &&
-    !parseDayAnchor(ctx.text, now) &&
-    !visitRouteExpand
-  ) {
-    const focus =
-      s.focus ??
-      (s.discover.lastOffered[0]
-        ? {
-            projectId: s.discover.lastOffered[0].projectId,
-            projectName: s.discover.lastOffered[0].name,
-          }
-        : null);
-    if (focus) return focused.decide({ ...s, focus }, ex);
   }
 
   const anchorDate = resolveSameDayDate(ctx.text, lastBookedVisit(booked)?.iso);
@@ -169,6 +174,25 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
   }
 
   return step({ text: ctx.text, named: ex.namedProjects ?? [], candidates: candidatesOf(s), prior, now, affirm: ex.affirm, booked, ctx });
+}
+
+function deferToProjectAnswer(s: ConversationState, ex: Extracted): TurnGoal | null {
+  const named = ex.namedProjects?.[0];
+  const projectId =
+    named?.projectId ??
+    s.focus?.projectId ??
+    s.discover.lastOffered[0]?.projectId;
+  if (!projectId) return null;
+
+  const topics = (ex.askTopics ?? []).filter((t) => t !== 'compare');
+  const primary =
+    topics[0] ?? (ex.askTopic && ex.askTopic !== 'compare' ? ex.askTopic : undefined) ?? 'overview';
+  return {
+    kind: 'answer',
+    topic: primary,
+    projectId,
+    ...(topics.length > 1 ? { topics } : {}),
+  };
 }
 
 function followUpNamed(ex: Extracted, text: string, s: ConversationState): OfferedProject[] {
