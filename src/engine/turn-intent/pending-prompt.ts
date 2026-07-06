@@ -12,6 +12,7 @@ export function evidenceKindFromEvidence(
 ): RtiState['lastEvidenceKind'] | undefined {
   if (ev.constraintGap) return 'constraint_gap';
   if (ev.budgetGap) return 'budget_gap';
+  if (ev.propertyTypeGap) return 'property_type_gap';
   if (ev.floor) return 'floor';
   if (ev.matches?.length) return 'matches';
   return undefined;
@@ -88,17 +89,30 @@ export function buildPendingPrompt(
   return undefined;
 }
 
-export function defaultProbePrompt(kind: PendingPromptKind | undefined, channel: 'advisor_web' | 'whatsapp'): string {
+export function defaultProbePrompt(
+  kind: PendingPromptKind | undefined,
+  channel: 'advisor_web' | 'whatsapp',
+  chipCount = 0,
+): string {
   if (kind === 'offer_project') {
     return 'Did you want me to open that project, or keep refining your search?';
   }
   if (kind === 'binary_budget_or_area') {
-    return 'Raise budget, or try another area? Pick an option below.';
+    return chipCount > 0
+      ? 'Raise budget, or try another area? Pick an option below.'
+      : 'Raise budget, or try another area?';
   }
-  if (channel === 'whatsapp') {
-    return 'Tap a button below or reply with what to change — BHK, budget, or area.';
+  if (kind === 'location_broaden') {
+    return chipCount > 0
+      ? 'Want to search all Bangalore? Pick an option below or say yes.'
+      : 'Want to search all Bangalore instead of this corridor?';
   }
-  return 'Tap a chip below or tell me what to change — BHK, budget, or area.';
+  if (chipCount > 0) {
+    return channel === 'whatsapp'
+      ? 'Tap a button below or reply with what to change — area, budget, or property type.'
+      : 'Tap a chip below or tell me what to change — area, budget, or property type.';
+  }
+  return 'Tell me what to change — area, budget, property type, or BHK.';
 }
 
 export function buildRtiStateUpdate(input: {

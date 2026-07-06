@@ -25,6 +25,14 @@ const LOKATIONS: readonly P[] = [
     display: '₹39 L',
   },
   {
+    id: 'clarks',
+    name: 'Clarks Exotica',
+    market: 'North Bangalore',
+    type: 'villa',
+    priceInr: 7_500_000,
+    display: '₹75 L',
+  },
+  {
     id: 'coorg-estate',
     name: 'Coorg Hills Estate',
     market: 'Coorg',
@@ -62,7 +70,8 @@ function filterCatalog(f: SearchFilters): P[] {
       (p) =>
         p.type.toLowerCase().includes(want) ||
         want.includes(p.type.toLowerCase()) ||
-        (want.includes('plantation') && p.type.includes('plantation')),
+        (want.includes('plantation') && p.type.includes('plantation')) ||
+        (want.includes('villa') && p.type.includes('villa')),
     );
   }
   if (f.locations) {
@@ -72,6 +81,7 @@ function filterCatalog(f: SearchFilters): P[] {
         p.market.toLowerCase().includes(loc) ||
         loc.includes(p.market.toLowerCase()) ||
         loc.includes('coorg') ||
+        (loc.includes('bangalore') && p.market.toLowerCase().includes('bangalore')) ||
         (loc.includes('coorg') && p.market.toLowerCase().includes('sakleshpur')),
     );
   }
@@ -121,7 +131,7 @@ export function fakeData(): EngineData {
       return {
         priceMinInr: Math.min(...prices),
         priceMaxInr: Math.max(...prices),
-        projectTypes: ['plantation'],
+        projectTypes: ['plantation', 'villa', 'apartment'],
         microMarkets: [...new Set(LOKATIONS.map((p) => p.market))],
         total: LOKATIONS.length,
         sample: LOKATIONS.map((p) => ({ name: p.name, startingPriceDisplay: p.display })),

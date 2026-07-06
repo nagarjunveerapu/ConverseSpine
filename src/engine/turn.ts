@@ -28,7 +28,7 @@ import { buildComposeRequest, fallbackReply, formatInr, minimumBudgetReply } fro
 import { checkGrounding, stripBanned } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
-import { planSearchRecovery, type SearchRecoveryEnvelope, type AdvisorUiMode, type SuggestedAction } from './recovery-planner.js';
+import { planSearchRecovery, type RecoveryHint, type SearchRecoveryEnvelope, type AdvisorUiMode, type SuggestedAction } from './recovery-planner.js';
 import {
   applyTurnIntentResult,
   buildTurnIntentInput,
@@ -37,6 +37,7 @@ import {
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
+import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
 import { constraintsSnapshot } from './recovery-planner.js';
 import type {
@@ -131,17 +132,34 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         typeRaw,
       );
       if (floor) {
+        const prePatch = extractRecoveryPatchFromText(trimmedText, recoveryUiMode(state));
+        if (prePatch) {
+          const preApplied = applyTurnIntentResult(state, prePatch, state.rti?.lastSuggestedActions ?? []);
+          state = preApplied.state;
+        }
         const typeLabel = discover.displayPropertyTypeLabel(typeRaw);
         const reply = minimumBudgetReply(typeLabel, floor, state.constraints.budgetMaxInr);
-        const storedRecovery = storedSearchRecovery(state);
+        const searchRecovery = await freshSearchRecovery(deps, state, channel, 'property_type');
+        const cappedRecovery = capRecoveryForChannel(searchRecovery, channel);
         state = {
           ...state,
           turnCount: state.turnCount + 1,
           rti: {
             ...state.rti,
+            lastSuggestedActions: searchRecovery.suggested_actions,
             lastReplyExcerpt: excerptReply(reply),
             lastUiMode: 'search_recovery',
             lastGoalKind: 'no_fit',
+            lastEvidenceKind: 'property_type_gap',
+            ...(cappedRecovery.suggested_actions.length
+              ? {
+                  pendingPrompt: {
+                    kind: 'chip_menu',
+                    chip_ids: cappedRecovery.suggested_actions.map((a) => a.id),
+                    asked_at_turn: state.turnCount,
+                  },
+                }
+              : {}),
           },
         };
         state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
@@ -152,9 +170,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           reply,
           state,
           debug: { phase: state.phase, goal: { kind: 'no_fit' }, tools: ['search'], grounding: 'pass' },
-          ...(storedRecovery ? { searchRecovery: capRecoveryForChannel(storedRecovery, channel) } : {}),
+          searchRecovery: cappedRecovery,
           uiMode: 'search_recovery' as AdvisorUiMode,
-          whatsappActions: whatsAppButtons(storedRecovery, channel),
+          whatsappActions: whatsAppButtons(searchRecovery, channel),
         };
       }
     }
@@ -170,7 +188,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const applied = applyTurnIntentResult(state, intent, intentInput.suggested_actions);
     state = applied.state;
     for (const k of applied.clearedKeys) clearedKeys.add(k);
-    if (intent.kind === 'apply_recovery_patch' && intent.matched_action_id) {
+    if (intent.kind === 'apply_recovery_patch') {
       recoveryChipTurn = true;
     }
 
@@ -184,33 +202,44 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
 
     if (applied.probeReply) {
-      const storedRecovery = storedSearchRecovery(state);
+      let searchRecovery = storedSearchRecovery(state);
+      if (!searchRecovery?.suggested_actions.length) {
+        searchRecovery = await freshSearchRecovery(deps, state, channel);
+      }
+      const cappedRecovery = capRecoveryForChannel(searchRecovery, channel);
       const reply = applied.probeReply;
       state = {
         ...state,
         turnCount: state.turnCount + 1,
         rti: {
           ...state.rti,
-          pendingPrompt: {
-            kind: 'chip_menu',
-            chip_ids: state.rti?.lastSuggestedActions?.map((a) => a.id),
-            asked_at_turn: state.turnCount,
-          },
+          lastSuggestedActions: searchRecovery.suggested_actions,
+          ...(cappedRecovery.suggested_actions.length
+            ? {
+                pendingPrompt: {
+                  kind: 'chip_menu',
+                  chip_ids: cappedRecovery.suggested_actions.map((a) => a.id),
+                  asked_at_turn: state.turnCount,
+                },
+              }
+            : {}),
           lastReplyExcerpt: excerptReply(reply),
+          lastUiMode: 'search_recovery',
         },
       };
       state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
       await deps.store.save(state);
       await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
       await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'rti_probe' }).catch(() => {});
-      const uiMode: AdvisorUiMode = storedRecovery?.mode === 'preference_refine' ? 'preference_refine' : 'search_recovery';
+      const uiMode: AdvisorUiMode =
+        searchRecovery.mode === 'preference_refine' ? 'preference_refine' : 'search_recovery';
       return {
         reply,
         state,
         debug: { phase: state.phase, goal: { kind: 'no_fit' }, tools: [], grounding: 'pass' },
-        ...(storedRecovery ? { searchRecovery: capRecoveryForChannel(storedRecovery, channel) } : {}),
+        searchRecovery: cappedRecovery,
         uiMode,
-        whatsappActions: whatsAppButtons(storedRecovery, channel),
+        whatsappActions: whatsAppButtons(searchRecovery, channel),
       };
     }
   }
@@ -580,6 +609,7 @@ async function fetchRecommend(
         reason: gapEv.noMatch?.reasoning ?? 'Configuration not available at this budget',
         maxActions: 6,
         variant: 'zero_match',
+        hint: 'constraint',
       });
       return {
         goal: { kind: 'no_fit' },
@@ -614,6 +644,7 @@ async function fetchRecommend(
         reason: budgetEv.noMatch?.reasoning ?? 'Budget too low for current filters',
         maxActions: 6,
         variant: 'zero_match',
+        hint: 'budget',
       });
       return {
         goal: { kind: 'no_fit' },
@@ -648,6 +679,7 @@ async function fetchRecommend(
         reason: typeEv.noMatch?.reasoning ?? 'Property type not available at this budget',
         maxActions: 6,
         variant: 'zero_match',
+        hint: 'property_type',
       });
       return {
         goal: { kind: 'no_fit' },
@@ -692,6 +724,7 @@ async function fetchRecommend(
       reason: resolved.evidence.noMatch?.reasoning ?? reasoning,
       maxActions: 6,
       variant: 'zero_match',
+      hint: recoveryHintFromEvidence(resolved.evidence),
     });
     return {
       goal: resolved.goal,
@@ -1237,6 +1270,39 @@ async function completeRtiFocusCommit(
     debug: { phase: s.phase, goal: { kind: 'commit', projectId, projectName }, tools: evidence.tools, grounding: 'pass' },
     uiMode: 'focused',
   };
+}
+
+function recoveryHintFromEvidence(ev: EvidenceSet): RecoveryHint {
+  if (ev.propertyTypeGap) return 'property_type';
+  if (ev.budgetGap) return 'budget';
+  if (ev.constraintGap) return 'constraint';
+  return 'general';
+}
+
+function recoveryHintFromState(state: ConversationState): RecoveryHint {
+  const k = state.rti?.lastEvidenceKind;
+  if (k === 'property_type_gap') return 'property_type';
+  if (k === 'budget_gap') return 'budget';
+  if (k === 'constraint_gap') return 'constraint';
+  return 'general';
+}
+
+async function freshSearchRecovery(
+  deps: EngineDeps,
+  state: ConversationState,
+  channel: TurnIntentChannel,
+  hint?: RecoveryHint,
+): Promise<SearchRecoveryEnvelope> {
+  const catalog = await deps.data.catalog(state.builderId).catch(() => emptyCatalog());
+  return planSearchRecovery({
+    searchCount: async (f) => (await searchWithFilters(deps, state.builderId, f)).matches.length,
+    catalog,
+    constraints: state.constraints,
+    reason: 'Adjust your search?',
+    maxActions: channel === 'whatsapp' ? 3 : 6,
+    variant: 'zero_match',
+    hint: hint ?? recoveryHintFromState(state),
+  });
 }
 
 function storedSearchRecovery(state: ConversationState): SearchRecoveryEnvelope | undefined {

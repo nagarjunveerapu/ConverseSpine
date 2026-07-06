@@ -477,5 +477,5 @@ export function minimumBudgetReply(
   buyerBudgetMaxInr?: number,
 ): string {
   const briefBit = buyerBudgetMaxInr ? ` Your brief is ${formatInr(buyerBudgetMaxInr)}.` : '';
-  return `${typeLabel}s on our books start from *${floor.display}* (*${floor.name}*).${briefBit} Want to raise budget or try another property type?`;
+  return `${typeLabel}s on our books start from *${floor.display}* (*${floor.name}*).${briefBit} Pick an option below to adjust area, budget, or property type.`;
 }

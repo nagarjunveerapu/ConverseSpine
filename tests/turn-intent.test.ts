@@ -219,7 +219,11 @@ describe('ruleClassify via classifyTurnIntent', () => {
 });
 
 describe('defaultProbePrompt', () => {
-  it('uses WhatsApp copy for chip menu', () => {
-    expect(defaultProbePrompt('chip_menu', 'whatsapp')).toMatch(/button/i);
+  it('uses WhatsApp copy for chip menu when chips exist', () => {
+    expect(defaultProbePrompt('chip_menu', 'whatsapp', 2)).toMatch(/button/i);
+  });
+
+  it('does not promise chips when none exist', () => {
+    expect(defaultProbePrompt('chip_menu', 'advisor_web', 0)).not.toMatch(/chip below/i);
   });
 });

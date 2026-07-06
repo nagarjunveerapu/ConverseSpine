@@ -468,7 +468,11 @@ export function isLocationBroadenTurn(text: string): boolean {
 
 /** Strip trailing broaden words from a captured locality fragment. */
 function cleanLocalityFragment(raw: string): string {
-  return raw.trim().replace(/\s+(?:too|also|as well)\.?\s*$/i, '').trim();
+  return raw
+    .trim()
+    .replace(/[?!.,;:]+$/, '')
+    .replace(/\s+(?:too|also|as well)\.?\s*$/i, '')
+    .trim();
 }
 
 /** "coorg, 50L", "looking in Sakleshpur", bare locality. */
