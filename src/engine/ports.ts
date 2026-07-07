@@ -237,6 +237,8 @@ export interface EngineDeps {
   };
   /** Optional Maps key for visit route drive-time stagger. */
   maps?: { apiKey?: string };
+  /** Workers AI + Vectorize for RTI-3B turn routing. */
+  routingEnv?: Pick<import('../env.js').Env, 'AI' | 'INTENT_VECTORS'>;
 }
 
 export type { EmiFacts };

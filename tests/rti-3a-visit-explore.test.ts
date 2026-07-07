@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { extractFactsSync } from '../src/engine/facts.js';
 import { initState } from '../src/engine/state.js';
 import { isVisitFollowUpQuestion, decide } from '../src/engine/phases/visit.js';
-import { classifyTurnRouting } from '../src/engine/turn-routing/classify.js';
+import { classifyTurnRouting, classifyTurnRoutingRules } from '../src/engine/turn-routing/classify.js';
 import { buildTurnRoutingInput } from '../src/engine/turn-routing/types.js';
 import { detectFocusedSwitchIntent, resolveFocusedSwitchGoal } from '../src/engine/project_switch.js';
 import { extractFacts } from '../src/engine/facts.js';
@@ -40,7 +40,7 @@ describe('RTI-3A visit vs explore routing', () => {
       discover: { ...initState('t', 'brigade-group').discover, lastOffered: brigadeShortlist },
     };
     const ex = extractFactsSync('what about the unit configurations of Eldorado?', state);
-    const routing = classifyTurnRouting(buildTurnRoutingInput(state, ex, 'what about the unit configurations of Eldorado?'));
+    const routing = classifyTurnRoutingRules(buildTurnRoutingInput(state, ex, 'what about the unit configurations of Eldorado?'));
     expect(routing.routing).toBe('answer_on_project');
     expect(routing.answer_topic).toBe('availability');
   });

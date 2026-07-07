@@ -297,7 +297,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const prevLoc = state.constraints.location;
   state = applyExtracted(state, ex, clearedKeys);
 
-  const routing = classifyTurnRouting(buildTurnRoutingInput(state, ex, trimmedText));
+  const routing = await classifyTurnRouting(deps.routingEnv, buildTurnRoutingInput(state, ex, trimmedText));
   state = {
     ...state,
     rti: {
@@ -354,10 +354,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   if (
     (state.phase === 'discover' || state.phase === 'handoff') &&
-    isVisitFollowUpQuestion(trimmedText, ex) &&
     (ex.namedProjects?.length ?? 0) >= 1 &&
     state.discover.lastOffered.length >= 1 &&
-    routing.routing !== 'answer_on_project'
+    routing.routing === 'visit_schedule_stop'
   ) {
     state = { ...state, phase: 'visit' };
   }
