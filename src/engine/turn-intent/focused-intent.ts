@@ -1,6 +1,7 @@
 import type { Constraints } from '../types.js';
 import {
   detectPropertyTypes,
+  detectTopics,
   extractLocation,
   isLocationBroadenTurn,
   parseBudgetToInr,
@@ -21,6 +22,10 @@ function isFocusedProjectQuestion(text: string): boolean {
     return true;
   }
   if (/^location(?:\s+details?)?\s*\.?\s*$/i.test(t) || /\blocation details?\b/i.test(t)) return true;
+  if (/\b(?:want|need)\b.*\bdetails?\b/i.test(t)) return true;
+  if (/\bdetails?\b.*\b(?:the|this)\s+project\b/i.test(t)) return true;
+  if (/\b(?:the|this)\s+project(?:'s)?\s+details?\b/i.test(t)) return true;
+  if (/\b(?:breakdown|break[- ]?up|landed cost|all[- ]in)\b/i.test(t)) return true;
   return (
     /\b(?:is this|are these|what (?:type|kind)|apartment or|plot or|villa or|legal status|rera status|possession date)\b/i.test(
       t,
@@ -33,6 +38,7 @@ function isFocusedProjectQuestion(text: string): boolean {
 export function isFocusedSearchPivot(text: string): boolean {
   const t = text.trim();
   if (!t || isFocusedProjectQuestion(t)) return false;
+  if (detectTopics(t).length > 0) return false;
   if (EXPLORE_MORE_RE.test(t)) return true;
   if (isLocationBroadenTurn(t)) return true;
   if (extractLocation(t)) return true;
@@ -41,7 +47,9 @@ export function isFocusedSearchPivot(text: string): boolean {
   if (/\b(?:also|too|as well)\b/i.test(t) && /\b(?:plantation|villa|apartment|plot|bhk|budget|area|location|type)\b/i.test(t)) {
     return true;
   }
-  if (/^[A-Za-z][A-Za-z\s]{2,28}\s+projects?\b/i.test(t)) return true;
+  if (/^[A-Za-z][A-Za-z\s]{2,28}\s+projects?\b/i.test(t) && !/\b(?:want|tell|details?|about|give|show|the|this|my|need)\b/i.test(t)) {
+    return true;
+  }
   if (/\b(?:looking|searching|interested)\s+(?:in|for)\s+[A-Za-z]/i.test(t)) return true;
   if (/\b(?:change|switch|update)\s+(?:my\s+)?(?:area|location|budget|bhk|property type)\b/i.test(t)) return true;
   return false;

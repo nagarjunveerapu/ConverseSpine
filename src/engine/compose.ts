@@ -249,11 +249,14 @@ export function fallbackReply(req: ComposeRequest): string {
         const parts = p.components.slice(0, 4).map(formatPriceComponent).join(', ');
         chunks.push(`*Pricing — ${p.projectName}:* ${parts || formatStartingPrice(p.startingDisplay) || 'on file'}`);
       }
+      if (topics.includes('price') && ev.landedCost) {
+        chunks.push(landedCostLine(ev.landedCost));
+      }
       if (topics.includes('property_type') && ev.detail?.projectType) {
         chunks.push(projectTypeLine(ev.detail));
       }
       if (topics.includes('legal') && ev.detail) {
-        chunks.push(legalSnapshotLine(ev.detail));
+        chunks.push(legalSnapshotLine(ev.detail, false));
       }
       if (topics.includes('location') && ev.location) {
         chunks.push(locationSnapshotLine(ev.location));
@@ -268,6 +271,9 @@ export function fallbackReply(req: ComposeRequest): string {
         return `${chunks[0]}. Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`;
       }
 
+      if (goal.topic === 'price' && ev.landedCost) {
+        return `${landedCostLine(ev.landedCost)}. Want anything else on *${ev.landedCost.projectName}*, or a visit?`;
+      }
       if (goal.topic === 'price' && ev.pricing) {
         const p = ev.pricing;
         const parts = p.components.slice(0, 3).map(formatPriceComponent).join(', ');
@@ -351,7 +357,7 @@ function focusedLegalLine(d: import('./types.js').ProjectDetail, buyerText?: str
   return legalSnapshotLine(d);
 }
 
-function legalSnapshotLine(d: import('./types.js').ProjectDetail): string {
+function legalSnapshotLine(d: import('./types.js').ProjectDetail, includeConfigs = true): string {
   const bits: string[] = [];
   if (d.reraNumber) bits.push(`RERA: ${d.reraNumber}`);
   if (d.khata) bits.push(`Khata: ${d.khata}`);
@@ -359,7 +365,7 @@ function legalSnapshotLine(d: import('./types.js').ProjectDetail): string {
   if (d.ecStatus) bits.push(`EC: ${d.ecStatus}`);
   if (d.possession) bits.push(`Possession: ${d.possession}`);
   if (d.loanEligibility) bits.push(`Loan: ${d.loanEligibility}`);
-  if (d.configurations?.length) {
+  if (includeConfigs && d.configurations?.length) {
     const configs = d.configurations
       .slice(0, 4)
       .map((c) => `${c.unitType}${c.priceDisplay ? ` from ${c.priceDisplay}` : ''}`)
@@ -411,6 +417,17 @@ function locationSnapshotLine(l: import('./types.js').LocationEvidence): string 
 function emiSnapshotLine(e: import('./types.js').EmiEvidence): string {
   const down = e.downPaymentFormatted ? ` (~${e.downPaymentFormatted} down on ${e.basisFormatted})` : '';
   return `Indicative EMI: *${e.emiFormatted}/month*${down} at ${e.ratePercent}% for ${e.tenureYears} years`;
+}
+
+function landedCostLine(lc: import('./types.js').LandedCostEvidence): string {
+  const oneTime = lc.oneTime
+    .slice(0, 3)
+    .map((c) => `${c.label}: ${c.display}`)
+    .join('; ');
+  const base = `*Cost breakdown — ${lc.projectName} (${lc.unitType}):* base ${lc.baseDisplay}`;
+  const charges = oneTime ? `; ${oneTime}` : '';
+  const total = lc.totalDisplay ? `; all-in ~${lc.totalDisplay}` : '';
+  return `${base}${charges}${total}`;
 }
 
 function compareAdviceLine(

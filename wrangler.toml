@@ -40,18 +40,20 @@ new_classes = ["TurnDebouncer"]
 # ── Local dev (wrangler dev) ───────────────────────────────────────────
 [env.dev]
 name = "converse-spine-dev"
+remote = true
 
 # Deployed dev: NAYADESK service binding (avoids CF error 1042 on worker→worker HTTP).
-# Local wrangler dev: if binding hijacks to localhost:8787 without naya-advisor catalog,
-# NAYADESK_URL HTTP fallback still applies when binding returns 503 or throws.
+# Local wrangler dev: remote = true → hits nayadesk-dev on Cloudflare (not local sim).
 [[env.dev.services]]
 binding = "NAYADESK"
 service = "nayadesk-dev"
+remote = true
 
 [[env.dev.kv_namespaces]]
 binding = "TURN_CACHE"
 id = "66ef723ea8614317b80aac74b77f03d1"
 preview_id = "66ef723ea8614317b80aac74b77f03d1"
+remote = true
 
 [env.dev.vars]
 NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
@@ -69,9 +71,11 @@ class_name = "TurnDebouncer"
 [[env.dev.vectorize]]
 binding = "INTENT_VECTORS"
 index_name = "naya-intent-phrasings"
+remote = true
 
 [env.dev.ai]
 binding = "AI"
+remote = true
 
 # ── Production ─────────────────────────────────────────────────────────
 [env.prod]

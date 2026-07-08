@@ -2,6 +2,10 @@
 
 **The bot kernel** — built in this repo. Not a patch on legacy Naya.
 
+**Architecture map (layers, classes, Mermaid diagrams):** [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md)
+
+**Per-layer guide (when each layer runs + examples):** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md)
+
 ## Design
 
 One control loop per turn:

@@ -89,13 +89,20 @@ export async function extractFacts(
   }
   if (bhk && !constraints.bhk) constraints.bhk = bhk;
   if (!constraints.location && askTopic !== 'compare' && !isVisitDayUtterance(text)) {
-    constraints.location = extractLocation(text);
+    constraints.location = extractLocation(text, { phase: s.phase, askTopics });
   }
   if (propertyTypeKw) constraints.propertyType = propertyTypeKw;
   if (purposeKw) constraints.purpose = purposeKw;
 
   const needLlm: Array<'location' | 'property_type' | 'purpose' | 'transition'> = [];
-  if (!constraints.location) needLlm.push('location');
+  if (
+    !constraints.location &&
+    askTopics.length === 0 &&
+    s.phase !== 'focused' &&
+    s.phase !== 'visit'
+  ) {
+    needLlm.push('location');
+  }
   if (!constraints.propertyType) needLlm.push('property_type');
   if (!constraints.purpose && !purposeKw) needLlm.push('purpose');
   if (!transitionKw) needLlm.push('transition');
@@ -116,7 +123,7 @@ export async function extractFacts(
 
   const transition = transitionKw ?? asTransitionFromSignals(undefined);
   const detailsPick = detectDetailsPick(text, s);
-  const implicitProjectPick = wantsImplicitProjectPick(text, s.discover.lastOffered);
+  const implicitProjectPick = wantsImplicitProjectPick(text, s.discover.lastOffered, s.focus);
   const pickName =
     detailsPick ??
     (shownName && !reject && askTopic !== 'compare' && namedProjects.length <= 1 ? shownName : undefined);
@@ -158,7 +165,8 @@ export function extractFactsSync(text: string, s: ConversationState): Extracted 
   const budgetFitQuestion = !budgetPickQuestion && isBudgetFitQuestion(text, budget);
   const constraints: Extracted['constraints'] = {};
   if (budget) constraints.budgetMaxInr = budget.max;
-  const loc = extractLocation(text);
+  const askTopics = detectTopics(text);
+  const loc = extractLocation(text, { phase: s.phase, askTopics });
   if (loc) constraints.location = loc;
   const bhk = extractConfigurationFilters(text);
   if (bhk) constraints.bhk = bhk;
@@ -166,7 +174,6 @@ export function extractFactsSync(text: string, s: ConversationState): Extracted 
   if (propertyType) constraints.propertyType = propertyType;
   const purpose = detectPurpose(text);
   if (purpose) constraints.purpose = purpose;
-  const askTopics = detectTopics(text);
   const askTopic = askTopics[0];
   const transitionKw = detectTransition(text);
   const namedProjects = resolveNamed(text, s);
@@ -454,14 +461,41 @@ function detectMediaAssetKind(text: string): string | undefined {
   return undefined;
 }
 
-export function wantsImplicitProjectPick(text: string, offered: readonly OfferedProject[]): boolean {
-  if (offered.length !== 1) return false;
+export function wantsImplicitProjectPick(
+  text: string,
+  offered: readonly OfferedProject[],
+  focus?: { projectId: string; projectName: string },
+): boolean {
   const s = text.toLowerCase();
-  return (
-    /\bdetails?\s+on\s+(?:the|this)\s+project\b/.test(s) ||
-    /\b(?:give me|want|need)\s+(?:full\s+)?details?\s+(?:on\s+)?(?:the|this)\s+project\b/.test(s)
+  const refersToThisProject =
+    /\b(?:details?|info|more)\s+(?:on\s+)?(?:the|this)\s+project\b/.test(s) ||
+    /\b(?:give me|want|need)\b.*\bdetails?\b.*\b(?:the|this)\s+project\b/.test(s) ||
+    /\b(?:the|this)\s+project(?:'s)?\s+details?\b/.test(s);
+  if (!refersToThisProject) return false;
+  return offered.length >= 1 || Boolean(focus);
+}
+
+/** Buyer asking for component-wise / all-in pricing — fetch landed-cost evidence. */
+export function wantsCostBreakdown(text: string): boolean {
+  return /\b(?:breakdown|break[- ]?up|landed cost|all[- ]in(?:\s+cost)?|component[- ]wise|cost break)\b/i.test(
+    text,
   );
 }
+
+/** Price/legal/detail turn — must not mutate location or release focus. */
+export function isDetailAskTurn(
+  ex: Pick<Extracted, 'askTopic' | 'askTopics' | 'transition' | 'implicitProjectPick'>,
+): boolean {
+  const topics = (ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : [])).filter((t) => t !== 'compare');
+  if (topics.length > 0) return true;
+  if (ex.transition === 'want_details' || ex.implicitProjectPick) return true;
+  return false;
+}
+
+export type ExtractLocationContext = {
+  phase?: ConversationState['phase'];
+  askTopics?: AnswerTopic[];
+};
 
 export function isLocationBroadenTurn(text: string): boolean {
   return (
@@ -483,8 +517,9 @@ function cleanLocalityFragment(raw: string): string {
 /** "coorg, 50L", "looking in Sakleshpur", bare locality. */
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 
-export function extractLocation(text: string): string | undefined {
+export function extractLocation(text: string, ctx?: ExtractLocationContext): string | undefined {
   const trimmed = text.trim();
+  if (ctx?.askTopics?.length) return undefined;
   if (isVisitDayUtterance(trimmed)) return undefined;
   if (
     /\b(?:keep|continue)\s+refining\b/i.test(trimmed) ||
@@ -536,11 +571,13 @@ export function extractLocation(text: string): string | undefined {
   }
   const bare = text.trim();
   if (extractDayWord(bare)) return undefined;
+  if (/\b(?:tell me about|more about|details? on|info on|about)\b/i.test(bare)) return undefined;
+  if (ctx?.phase === 'focused' || ctx?.phase === 'visit') return undefined;
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&
     !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?)$/i.test(bare) &&
-    !/\b(?:compare|both|projects|options|show|visit|pricing|refining|refine)\b/i.test(bare) &&
+    !/\b(?:compare|both|projects|options|show|visit|pricing|refining|refine|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|floor plan)\b/i.test(bare) &&
     !isAdvisorBriefChipPhrase(bare)
   ) {
     return bare;

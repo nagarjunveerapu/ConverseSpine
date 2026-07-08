@@ -6,6 +6,7 @@
   "description": "Production sales bot — deterministic turn spine + NayaDesk CRM",
   "scripts": {
     "demo": "tsx src/cli.ts",
+    "chat": "tsx src/chat-repl.ts",
     "script": "tsx src/script-demo.ts",
     "eval:quality": "tsx src/eval/cli.ts",
     "eval:scenarios": "EVAL_MODE=scenarios tsx src/eval/cli.ts",
