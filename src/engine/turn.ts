@@ -8,7 +8,7 @@ import * as visit from './phases/visit.js';
 import { exitVisitPhase, isVisitFollowUpQuestion, shouldExitVisitForIntent } from './phases/visit.js';
 import { isVisitDayUtterance } from './visit-slot.js';
 import * as handoff from './phases/handoff.js';
-import { extractFacts, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes } from './facts.js';
+import { extractFacts, isDetailAskTurn, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes, wantsCostBreakdown } from './facts.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
   isCompareAmongOfferedTurn,
@@ -307,8 +307,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   };
 
   const locationBroaden =
-    isLocationBroadenTurn(trimmedText) ||
-    Boolean(state.constraints.location && state.constraints.location !== prevLoc);
+    !isDetailAskTurn(ex) &&
+    (isLocationBroadenTurn(trimmedText) ||
+      Boolean(state.constraints.location && state.constraints.location !== prevLoc));
   if (state.phase === 'focused' && locationBroaden && !state.postVisitAckPending) {
     if (nd) await deps.crm.releaseProject(nd).catch(() => {});
     state = releaseToDiscover(state);
@@ -328,7 +329,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   }
 
-  if (state.phase === 'focused' && (ex.transition === 'see_others' || (ex.wantsMore && !ex.askTopic))) {
+  if (
+    state.phase === 'focused' &&
+    (ex.transition === 'see_others' || (ex.wantsMore && !ex.askTopic && ex.transition !== 'want_details'))
+  ) {
     if (nd) await deps.crm.releaseProject(nd).catch(() => {});
     state = releaseToDiscover(state);
   }
@@ -460,7 +464,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         projectId: goal.projectId,
         ...(goal.followUpTopics?.length ? { topics: goal.followUpTopics } : {}),
       };
-      evidence = await fetchAnswer(answerGoal, state, ex, deps, nd);
+      evidence = await fetchAnswer(answerGoal, state, ex, deps, nd, trimmedText);
       goal = answerGoal;
     }
   } else if (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') {
@@ -468,7 +472,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   } else if (goal.kind === 'objection') {
     ({ goal, evidence } = await fetchObjection(goal, state, deps, nd));
   } else if (goal.kind === 'answer') {
-    evidence = await fetchAnswer(goal, state, ex, deps, nd);
+    evidence = await fetchAnswer(goal, state, ex, deps, nd, trimmedText);
   } else if (goal.kind === 'visit_recall') {
     evidence = await fetchVisitRecall(state, deps, nd);
   } else {
@@ -1005,6 +1009,7 @@ async function fetchAnswer(
   ex: Extracted,
   deps: EngineDeps,
   nd: string,
+  buyerText?: string,
 ): Promise<EvidenceSet> {
   if (!nd) return { tools: [] };
   const unitType = s.constraints.bhk;
@@ -1032,14 +1037,28 @@ async function fetchAnswer(
   }
 
   if (topics.includes('price')) {
-    const pricing = await deps.data.pricing(s.builderId, nd, goal.projectId, unitType).catch(() => null);
-    if (pricing) {
-      tools.push('pricing');
-      evidence = {
-        ...evidence,
-        tools,
-        pricing: { ...pricing, projectName: pricing.projectName || focusName },
-      };
+    const breakdownAsk = buyerText ? wantsCostBreakdown(buyerText) : false;
+    if (breakdownAsk && unitType) {
+      const landed = await deps.data.landedCost(s.builderId, nd, goal.projectId, unitType).catch(() => null);
+      if (landed) {
+        tools.push('landedCost');
+        evidence = {
+          ...evidence,
+          tools: [...new Set(tools)],
+          landedCost: landed,
+        };
+      }
+    }
+    if (!evidence.landedCost) {
+      const pricing = await deps.data.pricing(s.builderId, nd, goal.projectId, unitType).catch(() => null);
+      if (pricing) {
+        tools.push('pricing');
+        evidence = {
+          ...evidence,
+          tools: [...new Set(tools)],
+          pricing: { ...pricing, projectName: pricing.projectName || focusName },
+        };
+      }
     }
   }
 

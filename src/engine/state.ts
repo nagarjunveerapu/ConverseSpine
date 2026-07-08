@@ -146,6 +146,12 @@ export function resolvePick(
   if ((ex.implicitProjectPick || ex.transition === 'want_details') && offered.length === 1) {
     return offered[0] ?? null;
   }
+  if (ex.implicitProjectPick && s?.focus) {
+    return { projectId: s.focus.projectId, name: s.focus.projectName };
+  }
+  if (ex.transition === 'want_details' && s?.focus) {
+    return { projectId: s.focus.projectId, name: s.focus.projectName };
+  }
   if (ex.affirm && offered.length === 1) {
     if (s?.rti?.pendingPrompt?.kind === 'offer_project') return offered[0] ?? null;
     return null;
@@ -222,7 +228,7 @@ function isPlausibleLocation(loc: string): boolean {
   if (!lc || lc.length < 3) return false;
   if (extractDayWord(lc)) return false;
   if (isAdvisorBriefChipPhrase(loc)) return false;
-  if (/\b(compare|both|projects|options|show|visit|pricing|legal|plantation|properties|property|homes|flats|apartments|investment|preservation|appreciation|diversification|rental)\b/.test(lc)) {
+  if (/\b(compare|both|projects|options|show|visit|pricing|legal|plantation|properties|property|homes|flats|apartments|investment|preservation|appreciation|diversification|rental|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|about|tell)\b/.test(lc)) {
     return false;
   }
   if (lc.split(/\s+/).length > 8) return false;
