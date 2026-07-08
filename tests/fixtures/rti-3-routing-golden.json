@@ -1,0 +1,125 @@
+[
+  {
+    "id": "V01",
+    "input": {
+      "text": "what about the unit configurations of Eldorado?",
+      "builder_id": "brigade-group",
+      "phase": "focused",
+      "focus": { "project_id": "cornerstone", "project_name": "Brigade Cornerstone Utopia" },
+      "named_project_ids": ["eldorado"],
+      "ask_topic": "availability",
+      "ask_topics": ["availability"]
+    },
+    "expect_routing": "answer_on_project",
+    "expect_topic": "availability"
+  },
+  {
+    "id": "V02",
+    "input": {
+      "text": "what about Eldorado?",
+      "builder_id": "brigade-group",
+      "phase": "visit",
+      "visit": { "project_id": "cornerstone", "queued_count": 1, "awaiting_confirm": false, "booked_count": 1 },
+      "named_project_ids": ["eldorado"]
+    },
+    "expect_routing": "visit_schedule_stop"
+  },
+  {
+    "id": "V03",
+    "input": {
+      "text": "what about Eldorado legal status?",
+      "builder_id": "brigade-group",
+      "phase": "visit",
+      "visit": { "project_id": "cornerstone", "queued_count": 0, "awaiting_confirm": false, "booked_count": 0 },
+      "named_project_ids": ["eldorado"],
+      "ask_topic": "legal",
+      "ask_topics": ["legal"]
+    },
+    "expect_routing": "answer_on_project",
+    "expect_topic": "legal"
+  },
+  {
+    "id": "V04-rules",
+    "input": {
+      "text": "what about Eldorado pricing?",
+      "builder_id": "brigade-group",
+      "phase": "discover",
+      "named_project_ids": ["eldorado"],
+      "ask_topic": "price",
+      "ask_topics": ["price"]
+    },
+    "expect_routing": "answer_on_project",
+    "expect_topic": "price"
+  },
+  {
+    "id": "V05-rules",
+    "input": {
+      "text": "what about visiting Eldorado?",
+      "builder_id": "brigade-group",
+      "phase": "discover",
+      "named_project_ids": ["eldorado"],
+      "transition": "want_visit"
+    },
+    "expect_routing": "visit_schedule_stop"
+  },
+  {
+    "id": "V06-discover-defer",
+    "input": {
+      "text": "what about Eldorado?",
+      "builder_id": "brigade-group",
+      "phase": "discover",
+      "named_project_ids": ["eldorado"]
+    },
+    "expect_routing": "defer"
+  },
+  {
+    "id": "V07",
+    "input": {
+      "text": "yes",
+      "builder_id": "brigade-group",
+      "phase": "visit",
+      "named_project_ids": [],
+      "visit": { "awaiting_confirm": true, "queued_count": 0, "booked_count": 0 }
+    },
+    "expect_routing": "visit_confirm"
+  },
+  {
+    "id": "embed-get_availability",
+    "intent_kind": "get_availability",
+    "score": 0.85,
+    "input": {
+      "text": "Eldorado mein kaun se flat available hai?",
+      "builder_id": "brigade-group",
+      "phase": "focused",
+      "focus": { "project_id": "cornerstone", "project_name": "Brigade Cornerstone Utopia" },
+      "named_project_ids": ["eldorado"]
+    },
+    "expect_routing": "answer_on_project",
+    "expect_topic": "availability"
+  },
+  {
+    "id": "embed-get_project_info-discover",
+    "intent_kind": "get_project_info",
+    "score": 0.82,
+    "input": {
+      "text": "what about Eldorado?",
+      "builder_id": "brigade-group",
+      "phase": "discover",
+      "named_project_ids": ["eldorado"]
+    },
+    "expect_routing": "answer_on_project",
+    "expect_topic": "overview"
+  },
+  {
+    "id": "embed-book_visit",
+    "intent_kind": "book_visit",
+    "score": 0.88,
+    "input": {
+      "text": "when can I visit Eldorado?",
+      "builder_id": "brigade-group",
+      "phase": "discover",
+      "named_project_ids": ["eldorado"]
+    },
+    "expect_routing": "visit_schedule_stop"
+  }
+]

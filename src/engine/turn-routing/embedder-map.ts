@@ -1,0 +1,98 @@
+import type { AnswerTopic } from '../types.js';
+import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
+
+export const ROUTING_TAU_HIGH = 0.78;
+export const ROUTING_TAU_LOW = 0.62;
+
+const INTENT_TO_TOPIC: Record<string, AnswerTopic> = {
+  get_price: 'price',
+  get_legal_info: 'legal',
+  get_availability: 'availability',
+  get_unit_configs: 'availability',
+  get_brochure: 'media',
+  get_media: 'media',
+  get_amenities: 'amenities',
+  get_location_info: 'location',
+  ask_delivery_timeline: 'availability',
+  get_project_info: 'overview',
+  ask_about_builder: 'overview',
+  compute_emi: 'emi',
+  get_payment_plan: 'price',
+  negotiate_price: 'price',
+  ask_investment_return: 'price',
+};
+
+const ANSWER_INTENTS = new Set([
+  'get_price',
+  'get_legal_info',
+  'get_availability',
+  'get_unit_configs',
+  'get_brochure',
+  'get_media',
+  'get_amenities',
+  'get_location_info',
+  'ask_delivery_timeline',
+  'get_project_info',
+  'ask_about_builder',
+  'compute_emi',
+  'get_payment_plan',
+  'negotiate_price',
+  'ask_investment_return',
+]);
+
+export function hasVisitRoutingContext(input: TurnRoutingInput): boolean {
+  return (
+    input.phase === 'visit' ||
+    (input.visit?.booked_count ?? 0) >= 1 ||
+    (input.visit?.queued_count ?? 0) >= 1 ||
+    !!input.visit?.project_id
+  );
+}
+
+function projectId(input: TurnRoutingInput): string | undefined {
+  return input.named_project_ids[0];
+}
+
+/** Map Vectorize intent_kind + score to coarse routing (RTI-3B enforce). */
+export function mapIntentToRouting(
+  kind: string,
+  score: number,
+  input: TurnRoutingInput,
+): TurnRoutingResult | null {
+  if (score < ROUTING_TAU_HIGH) return null;
+
+  const pid = projectId(input);
+  const base = {
+    confidence: 'embedder' as const,
+    embedder_intent_kind: kind,
+    embedder_score: score,
+    ...(pid ? { project_id: pid } : {}),
+  };
+
+  if (kind === 'book_visit') {
+    return { routing: 'visit_schedule_stop', ...base };
+  }
+
+  if (kind === 'compare_projects') {
+    return { routing: 'compare_offered', ...base };
+  }
+
+  if (kind === 'find_projects' || kind === 'recommend') {
+    return { routing: 'search_pivot', ...base };
+  }
+
+  if (ANSWER_INTENTS.has(kind)) {
+    const topic = INTENT_TO_TOPIC[kind] ?? 'overview';
+    // Bare "what about X" in explore — prefer answer unless active visit queue.
+    if (
+      /\bwhat about\b/i.test(input.text) &&
+      !hasVisitRoutingContext(input) &&
+      kind === 'get_project_info'
+    ) {
+      return { routing: 'answer_on_project', answer_topic: 'overview', ...base };
+    }
+    return { routing: 'answer_on_project', answer_topic: topic, ...base };
+  }
+
+  return null;
+}

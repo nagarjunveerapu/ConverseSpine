@@ -26,6 +26,7 @@ export interface TurnRoutingResult {
 
 export interface TurnRoutingInput {
   text: string;
+  builder_id: string;
   phase: Phase;
   focus?: { project_id: string; project_name: string };
   visit?: {
@@ -38,6 +39,7 @@ export interface TurnRoutingInput {
   ask_topic?: AnswerTopic;
   ask_topics?: AnswerTopic[];
   named_project_ids: string[];
+  transition?: Extracted['transition'];
 }
 
 export function buildTurnRoutingInput(
@@ -47,7 +49,9 @@ export function buildTurnRoutingInput(
 ): TurnRoutingInput {
   return {
     text,
+    builder_id: state.builderId,
     phase: state.phase,
+    transition: ex.transition,
     ...(state.focus
       ? { focus: { project_id: state.focus.projectId, project_name: state.focus.projectName } }
       : {}),
