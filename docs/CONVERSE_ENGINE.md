@@ -6,6 +6,8 @@
 
 **Per-layer guide (when each layer runs + examples):** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md)
 
+**Consolidated implementation phases (P0–P8):** [`CONSOLIDATED_ROADMAP.md`](./CONSOLIDATED_ROADMAP.md)
+
 ## Design
 
 One control loop per turn:

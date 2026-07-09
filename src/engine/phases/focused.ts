@@ -30,6 +30,14 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
         : focus.projectId;
     return { kind: 'answer', topic: 'compare', projectId: pid };
   }
+  // Correction / multi-name without "compare" verb — keep both in play.
+  if ((ex.namedProjects?.length ?? 0) >= 2) {
+    return {
+      kind: 'answer',
+      topic: 'compare',
+      projectId: ex.namedProjects![0]!.projectId,
+    };
+  }
 
   const topics = answerTopics(ex);
   const primary = topics[0] ?? 'overview';

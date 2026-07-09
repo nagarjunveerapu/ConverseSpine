@@ -7,7 +7,7 @@ import { runEngineTurn } from '../engine/turn.js';
 import { prefetchProjects } from '../engine/project-cache.js';
 import { commitTo, initState, withNdConversation } from '../engine/state.js';
 import { mapAdvisorTurnResponse } from './map-response.js';
-import { mergeAdvisorPreferences, preferenceClearsFromPatch } from './apply-preferences.js';
+import { mergeAdvisorPreferences, preferenceClearsFromPatch, ingressFilledSlotsFromPreferences } from './apply-preferences.js';
 import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
 import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../engine/phases/visit.js';
 import type { AdvisorTurnRequest, AdvisorTurnResponse } from './types.js';
@@ -44,6 +44,7 @@ export async function handleAdvisorTurn(
   const convId = body.conversation_id?.trim() || sessionToConvId(session_id);
 
   let preferenceClears: import('../engine/turn-intent/types.js').PatchClearKey[] | undefined;
+  let ingressFilledSlots: import('../engine/ingress.js').IngressSlotKey[] | undefined;
 
   const projectId = body.project_id?.trim();
   const projectName = body.project_name?.trim();
@@ -51,6 +52,7 @@ export async function handleAdvisorTurn(
 
   if (body.preferences && Object.keys(body.preferences).length > 0) {
     preferenceClears = preferenceClearsFromPatch(body.preferences);
+    ingressFilledSlots = ingressFilledSlotsFromPreferences(body.preferences);
     let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
     if (!existing.ndConversationId && buyer_phone) {
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);
@@ -104,6 +106,7 @@ export async function handleAdvisorTurn(
         channel: 'advisor_web',
         action_id: body.action_id?.trim(),
         preferenceClears,
+        ingressFilledSlots,
       },
       rt.engine,
     );

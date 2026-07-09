@@ -14,7 +14,7 @@ export function isCompareAmongOfferedTurn(text: string): boolean {
   return false;
 }
 
-/** Merge compare intent with the current shortlist (project-agnostic). */
+/** Merge compare intent — prefer named pair, then discussed set, then shortlist. */
 export function prepareCompareExtracted(
   text: string,
   state: ConversationState,
@@ -22,15 +22,30 @@ export function prepareCompareExtracted(
 ): Extracted {
   if (!isCompareAmongOfferedTurn(text)) return ex;
   const offered = state.discover.lastOffered;
-  if (offered.length < 2) return ex;
-  const ids = offered.slice(0, 3).map((o) => o.projectId);
+  const discussed = state.discover.discussedProjects ?? [];
   const topics = ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : [];
   const withCompare = topics.includes('compare') ? topics : (['compare', ...topics] as Extracted['askTopics']);
+
+  // Named vector hits win. Do NOT overwrite with shortlist when names are absent —
+  // leave compareProjectIds unset so resolveCompareProjectIds can use anaphora /
+  // discussedProjects (e.g. "compare both" after Ayana + Krishnaja Q&A).
+  let ids: string[] | undefined;
+  if (ex.namedProjects && ex.namedProjects.length >= 2) {
+    ids = ex.namedProjects.slice(0, 3).map((p) => p.projectId);
+  } else if (ex.compareProjectIds && ex.compareProjectIds.length >= 2) {
+    ids = ex.compareProjectIds;
+  } else if (discussed.length >= 2 && /\b(?:both|these|those|them|the\s+two)\b/i.test(text)) {
+    ids = discussed.slice(0, 3).map((p) => p.projectId);
+  } else if (offered.length >= 2 && !/\b(?:both|these|those|them|the\s+two)\b/i.test(text)) {
+    // Bare "compare" / "compare all" without anaphora → shortlist is fine.
+    ids = offered.slice(0, 3).map((o) => o.projectId);
+  }
+
   return {
     ...ex,
     askTopic: 'compare',
     askTopics: withCompare,
-    compareProjectIds: ids,
+    ...(ids ? { compareProjectIds: ids } : {}),
     transition: 'none',
     wantsMore: false,
     budgetFitQuestion: undefined,

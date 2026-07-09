@@ -9,13 +9,18 @@ const GENERIC_COMPARE_RE =
   /\b(?:compare|which\s+(?:is|one)\s+better|what(?:'s|\s+is)\s+the\s+difference|difference\s+between|vs\.?|versus)\b/i;
 
 function projectPool(s: ConversationState): ProjectRef[] {
-  const pool: ProjectRef[] = s.discover.lastOffered.map((o) => ({
-    project_id: o.projectId,
-    name: o.name,
-  }));
-  if (s.focus && !pool.some((p) => p.project_id === s.focus!.projectId)) {
-    pool.unshift({ project_id: s.focus.projectId, name: s.focus.projectName });
-  }
+  const discussed = s.discover.discussedProjects ?? [];
+  const pool: ProjectRef[] = [];
+  const seen = new Set<string>();
+  const push = (project_id: string, name: string) => {
+    if (!project_id || seen.has(project_id)) return;
+    seen.add(project_id);
+    pool.push({ project_id, name });
+  };
+  // Discussed first — "both" after focused Q&A should beat stale search shortlist.
+  for (const p of discussed) push(p.projectId, p.name);
+  if (s.focus) push(s.focus.projectId, s.focus.projectName);
+  for (const o of s.discover.lastOffered) push(o.projectId, o.name);
   return pool;
 }
 
@@ -54,11 +59,21 @@ export function resolveCompareProjectIds(
   const fromRefs = resolveProjectReferences(buyerText, recent, pool);
   if (fromRefs.length >= 2) return uniqueIds(fromRefs);
 
+  const discussed = s.discover.discussedProjects ?? [];
+  const anaphora = /\b(?:both|these|those|them|the\s+two|dono)\b/i.test(buyerText);
+  if (anaphora && discussed.length >= 2) {
+    return uniqueIds(discussed.map((p) => ({ project_id: p.projectId, name: p.name })));
+  }
+
   if (
     pool.length >= 2 &&
     (ex.askTopic === 'compare' || GENERIC_COMPARE_RE.test(buyerText)) &&
     fromRefs.length === 0
   ) {
+    // Prefer discussed pair over search shortlist when buyer has engaged 2+ projects.
+    if (discussed.length >= 2) {
+      return uniqueIds(discussed.map((p) => ({ project_id: p.projectId, name: p.name })));
+    }
     return uniqueIds(pool);
   }
 

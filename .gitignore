@@ -3,6 +3,8 @@ data/*.db
 data/*.db-*
 dist/
 eval-reports/
+logs/
+scenarios/runs/
 .env
 .dev.vars
 .wrangler/

@@ -8,6 +8,8 @@ export interface Env {
 
   /** Intent phrasing corpus (NayaDesk → Vectorize). */
   INTENT_VECTORS?: VectorizeIndex;
+  /** Project-name resolution index (NayaDesk → Vectorize). */
+  PROJECT_VECTORS?: VectorizeIndex;
   /** Workers AI for embeddings when Vectorize query needs live embed. */
   AI?: Ai;
 
@@ -15,6 +17,8 @@ export interface Env {
   TURN_CACHE?: KVNamespace;
 
   LOG_LEVEL?: string;
+  /** Local dev: append turn debug JSONL to logs/turn-debug.jsonl */
+  LOCAL_TURN_LOG?: string;
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;

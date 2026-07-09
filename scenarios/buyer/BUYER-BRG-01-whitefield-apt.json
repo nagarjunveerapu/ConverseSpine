@@ -1,0 +1,49 @@
+{
+  "id": "BUYER-BRG-01",
+  "title": "Apartment buyer Devanahalli — clarify pick, then configs/legal/visit",
+  "builder_id": "brigade-group",
+  "tags": ["buyer", "brigade", "apartment", "long"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 BHK in Devanahalli under 80 lakh" },
+    {
+      "text": "give me details on the project",
+      "assert": {
+        "reply_includes": ["which"],
+        "reply_excludes": ["is in Devanahalli", "possession"]
+      }
+    },
+    {
+      "text": "Brigade Orchards",
+      "assert": {
+        "reply_includes": ["orchards"],
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "what unit configurations are available?",
+      "assert": {
+        "reply_excludes": ["no *apartment*", "closest fit", "tap a button", "on our books"]
+      }
+    },
+    {
+      "text": "are there any legal issues?",
+      "assert": {
+        "reply_excludes": ["i hear you", "tap a button"]
+      }
+    },
+    {
+      "text": "what about the pricing",
+      "assert": {
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "ok lets do a site visit",
+      "assert": {
+        "reply_includes": ["visit"],
+        "reply_excludes": ["don't see a confirmed visit", "tap a button"]
+      }
+    }
+  ]
+}

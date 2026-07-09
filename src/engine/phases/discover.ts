@@ -19,14 +19,26 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   if (ex.askTopic === 'compare' && (ex.compareProjectIds?.length ?? 0) >= 2) {
     return { kind: 'answer', topic: 'compare', projectId: ex.compareProjectIds![0]! };
   }
+  // "Ayana and Krishnaja" / correction after wrong compare — two named projects → compare.
+  if ((ex.namedProjects?.length ?? 0) >= 2 && !ex.transition) {
+    return {
+      kind: 'answer',
+      topic: 'compare',
+      projectId: ex.namedProjects![0]!.projectId,
+    };
+  }
 
-  // "details on the project" with a shortlist → commit (don't re-search or probe budget).
-  if (
-    (ex.implicitProjectPick || ex.transition === 'want_details') &&
-    d.lastOffered.length === 1
-  ) {
-    const only = d.lastOffered[0]!;
-    return commitPickWithFollowUp(only, ex);
+  // Details ask: commit only when pick is unambiguous (named/ordinal or singleton).
+  // Multi shortlist without a name → ask which project (do not default to [0]).
+  if (ex.implicitProjectPick || ex.transition === 'want_details') {
+    const explicit = resolvePick(ex, d.lastOffered, s);
+    if (explicit) return commitPickWithFollowUp(explicit, ex);
+    if (d.lastOffered.length === 1) {
+      return commitPickWithFollowUp(d.lastOffered[0]!, ex);
+    }
+    if (d.lastOffered.length >= 2) {
+      return { kind: 'clarify_project_pick' };
+    }
   }
 
   const pick = resolvePick(ex, d.lastOffered, s);
@@ -298,7 +310,9 @@ function commitPickWithFollowUp(
   const topic =
     topics[0] ??
     (ex.askTopic && ex.askTopic !== 'compare' ? ex.askTopic : undefined) ??
-    (ex.transition === 'want_details' ? 'overview' : undefined);
+    (ex.transition === 'want_details' || ex.implicitProjectPick || ex.pickName || ex.pickOrdinal
+      ? 'overview'
+      : undefined);
   if (topic) {
     return {
       kind: 'commit',

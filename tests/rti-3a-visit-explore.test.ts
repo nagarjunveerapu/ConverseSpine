@@ -53,7 +53,10 @@ describe('RTI-3A visit vs explore routing', () => {
       visit: { projectId: 'cornerstone', projectName: 'Brigade Cornerstone Utopia' },
       discover: { ...initState('t', 'brigade-group').discover, lastOffered: brigadeShortlist },
     };
-    const ex = extractFactsSync('what about the unit configurations of Eldorado?', s);
+    const ex = {
+      ...extractFactsSync('what about the unit configurations of Eldorado?', s),
+      namedProjects: [{ projectId: 'eldorado', name: 'Brigade Eldorado' }],
+    };
     const goal = decide(s, ex, {
       text: 'what about the unit configurations of Eldorado?',
       now: new Date('2026-07-10T10:00:00+05:30'),
@@ -73,7 +76,10 @@ describe('RTI-3A visit vs explore routing', () => {
       discover: { ...initState('t', 'brigade-group').discover, lastOffered: brigadeShortlist },
     };
     const text = 'what about the unit configurations of Eldorado?';
-    const ex = extractFactsSync(text, state);
+    const ex = {
+      ...extractFactsSync(text, state),
+      namedProjects: [{ projectId: 'eldorado', name: 'Brigade Eldorado' }],
+    };
     const intent = detectFocusedSwitchIntent(text, ex, state);
     expect(intent).toMatchObject({
       commit: { projectId: 'eldorado', name: 'Brigade Eldorado' },
@@ -90,7 +96,13 @@ describe('RTI-3A visit vs explore routing', () => {
       discover: { ...initState('t', 'brigade-group').discover, lastOffered: brigadeShortlist },
     };
     const text = 'what about the unit configurations of Eldorado?';
-    const ex = await extractFacts(text, state, deps.llm);
+    const { extracted: ex } = await import('../src/engine/extract-authority.js').then((m) =>
+      m.extractTurnAuthority(text, state, 'brigade-group', {
+        llm: deps.llm,
+        semantic: deps.semantic,
+        microMarkets: [],
+      }, { inputSource: 'free_text' }),
+    );
     const goal = await resolveFocusedSwitchGoal(text, ex, state, deps);
     expect(goal).toMatchObject({
       kind: 'commit',

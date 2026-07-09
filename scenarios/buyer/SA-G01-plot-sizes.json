@@ -1,0 +1,18 @@
+{
+  "id": "SA-G01",
+  "title": "Focused plot sizes → availability (not no_fit)",
+  "builder_id": "lokations",
+  "tags": ["sa-1", "availability", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    {
+      "text": "what plot sizes are offered?",
+      "assert": {
+        "reply_excludes": ["no *plot*", "closest fit", "tap a button", "on our books"],
+        "reply_includes": ["sqft", "plot"]
+      }
+    }
+  ]
+}

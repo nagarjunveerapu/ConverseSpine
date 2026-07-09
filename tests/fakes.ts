@@ -1,9 +1,10 @@
 import type { EngineCrm, EngineData, EngineDeps, EngineStore } from '../src/engine/ports.js';
 import { noopEngineLlm } from '../src/engine/adapters/llm.js';
-import { noopSemanticNlu } from '../src/engine/adapters/semantic-nlu.js';
+import type { SemanticNluPort, SemanticContext } from '../src/engine/adapters/semantic-nlu.js';
+import { shouldQueryProjectVectors } from '../src/engine/adapters/semantic-nlu.js';
 import { classifyTurnIntent } from '../src/engine/turn-intent/classify.js';
 import type { Env } from '../src/env.js';
-import type { CatalogEnvelope, Match, SearchFilters } from '../src/engine/types.js';
+import type { CatalogEnvelope, Match, OfferedProject, SearchFilters } from '../src/engine/types.js';
 
 interface P {
   id: string;
@@ -40,7 +41,42 @@ const LOKATIONS: readonly P[] = [
     priceInr: 4_800_000,
     display: '₹48 L',
   },
+  { id: 'eldorado', name: 'Brigade Eldorado', market: 'North Bangalore', type: 'apartment', priceInr: 6_500_000, display: '₹65 L' },
+  { id: 'cornerstone', name: 'Brigade Cornerstone', market: 'Devanahalli', type: 'apartment', priceInr: 5_200_000, display: '₹52 L' },
+  { id: 'orchards', name: 'Brigade Orchards', market: 'Sarjapur', type: 'apartment', priceInr: 8_000_000, display: '₹80 L' },
 ];
+
+/** Test double for PROJECT_VECTORS — catalog keyword match, not production logic. */
+function matchProjectsFromCatalog(text: string): OfferedProject[] {
+  const clauses = /\band\b/i.test(text)
+    ? text.split(/\band\b/i).map((p) => p.trim()).filter((p) => p.length >= 3)
+    : [text];
+  const byId = new Map<string, OfferedProject>();
+  for (let clause of clauses) {
+    clause = clause.replace(/^.*?\bcompare\b\s*/i, '').trim();
+    clause = clause.replace(/\bkirshnaja\b/gi, 'krishnaja');
+    const lc = clause.toLowerCase();
+    for (const p of LOKATIONS) {
+      const name = p.name.toLowerCase();
+      const tokens = name.split(/\s+/).filter((t) => t.length >= 4);
+      if (lc.includes(name) || tokens.some((t) => lc.includes(t))) {
+        byId.set(p.id, { projectId: p.id, name: p.name });
+      }
+    }
+  }
+  return [...byId.values()];
+}
+
+function fakeSemanticNlu(): SemanticNluPort {
+  return {
+    async enrich(text, _builderId, ex, ctx) {
+      if (ex.namedProjects?.length) return ex;
+      if (!shouldQueryProjectVectors(text, ex, ctx)) return ex;
+      const named = matchProjectsFromCatalog(text);
+      return named.length ? { ...ex, namedProjects: named } : ex;
+    },
+  };
+}
 
 function toMatch(p: P): Match {
   return {
@@ -325,7 +361,7 @@ export function fakeDeps(): EngineDeps {
     data: fakeData(),
     crm: fakeCrm(),
     llm: noopEngineLlm(),
-    semantic: noopSemanticNlu(),
+    semantic: fakeSemanticNlu(),
     store: fakeStore(),
     clock: { nowMs: () => 1_700_000_000_000, nowIso: () => '2026-07-05T00:00:00.000Z' },
     turnIntent: {

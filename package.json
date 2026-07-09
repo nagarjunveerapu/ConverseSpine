@@ -15,7 +15,9 @@
     "deploy:prod": "wrangler deploy --env prod",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:scenarios": "tsx scripts/run-buyer-scenarios.ts",
+    "test:probe": "tsx scripts/probe-project-vectors.ts"
   },
   "dependencies": {
     "handlebars": "^4.7.8"

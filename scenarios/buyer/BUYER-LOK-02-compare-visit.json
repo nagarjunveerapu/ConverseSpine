@@ -1,0 +1,27 @@
+{
+  "id": "BUYER-LOK-02",
+  "title": "Cross-project compare then visit (Ayana + Krishnaja)",
+  "builder_id": "lokations",
+  "tags": ["buyer", "lokations", "compare", "long"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "what about the pricing" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "pricing for krishnaja?" },
+    {
+      "text": "compare ayana and krishnaja greens",
+      "assert": {
+        "reply_includes": ["ayana", "krishnaja"]
+      }
+    },
+    {
+      "text": "come for the visit",
+      "assert": {
+        "reply_excludes": ["don't see a confirmed visit", "my visits"],
+        "reply_includes": ["visit"]
+      }
+    }
+  ]
+}

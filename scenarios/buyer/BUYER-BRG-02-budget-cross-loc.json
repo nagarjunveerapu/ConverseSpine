@@ -1,0 +1,42 @@
+{
+  "id": "BUYER-BRG-02",
+  "title": "Cross-location / budget refine then named project",
+  "builder_id": "brigade-group",
+  "tags": ["buyer", "brigade", "budget", "long"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "looking for 2 BHK in Devanahalli under 80 lakh" },
+    { "text": "show me the options" },
+    {
+      "text": "tell me about Brigade Eldorado",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "pricing?",
+      "assert": {
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "what configurations do you have?",
+      "assert": {
+        "reply_excludes": ["closest fit", "on our books", "tap a button"]
+      }
+    },
+    {
+      "text": "my budget is tight — any discount?",
+      "assert": {
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "ok show me something in Whitefield instead",
+      "assert": {
+        "reply_excludes": ["tap a button"]
+      }
+    }
+  ]
+}
