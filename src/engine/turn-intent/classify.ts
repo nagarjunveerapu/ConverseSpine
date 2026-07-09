@@ -398,10 +398,10 @@ export function buildTurnIntentInput(
     phase: state.phase,
     ui_mode: uiMode,
     constraints: state.constraints,
-    last_goal_kind: rti?.lastGoalKind ?? 'recommend',
+    last_goal_kind: rti?.lastGoalKind ?? state.feedForward?.priorGoalKind ?? 'recommend',
     last_evidence_kind: rti?.lastEvidenceKind,
-    last_reply_excerpt: rti?.lastReplyExcerpt ?? '',
-    pending_prompt: rti?.pendingPrompt,
+    last_reply_excerpt: rti?.lastReplyExcerpt ?? state.feedForward?.priorReplyExcerpt ?? '',
+    pending_prompt: rti?.pendingPrompt ?? state.feedForward?.pendingPrompt,
     suggested_actions: rti?.lastSuggestedActions ?? [],
     last_offered: state.discover.lastOffered.map((o) => ({
       project_id: o.projectId,

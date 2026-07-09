@@ -10,6 +10,7 @@ import { isVisitDayUtterance } from './visit-slot.js';
 import * as handoff from './phases/handoff.js';
 import { buildTurnLogSnapshot } from '../observability/turn-log-snapshot.js';
 import { extractTurnAuthority } from './extract-authority.js';
+import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { buildLedgerWritePayload } from './ledger-write.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
@@ -139,6 +140,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         const combined = [...boot.recentMessages, ...existing].slice(-20);
         state = { ...state, discover: { ...state.discover, recentMessages: combined } };
       }
+      // P2b — gap-fill RTI / focus from ledger prior (live KV wins).
+      state = hydrateStateFromFeedForward(state, mapLedgerPrior(boot.ledgerPrior));
     }
   }
 

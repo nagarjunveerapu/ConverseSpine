@@ -425,6 +425,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         recentMessages,
         rejectedProjectIds: ledger?.rejected_project_ids ?? [],
         turnIndex: ledger?.next_turn_index ?? 1,
+        ledgerPrior: ledger?.prior ?? null,
       };
     },
 

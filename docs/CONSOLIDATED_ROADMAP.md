@@ -67,8 +67,8 @@ Kernel (always code):
 | **P0** | Focus stability & depth gates | ✅ Shipped (PR [#19](https://github.com/nagarjunveerapu/ConverseSpine/pull/19)) |
 | **P1** | Extract authority & ingress flags | 🟡 P1a + P1b implemented locally; PR TBD |
 | **P1c** | PROJECT_VECTORS + discussedProjects | 🟡 Local (switch/compare); deploy TBD |
-| **SA** | Speech-act contract (slim) | ✅ SA-0…3 · 🟡 SA-5 with P2a · SA-4=P5 next |
-| **P2** | Turn ledger memory loop | 🟡 **P2a write** PR · P2b/c not started |
+| **SA** | Speech-act contract (slim) | ✅ SA-0…3 · ✅ SA-5 with P2a · SA-4=P5 next |
+| **P2** | Turn ledger memory loop | ✅ **P2a** · 🟡 **P2b read** in progress · P2c not started |
 | **P3** | Focused facet depth | ⏸️ Paused — **after SA** (act=answer stable first) |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** ([#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24)); BAML RTI not wired |
 | **P5** | Routing → goal enforcement | 🔴 **= SA-4** (routing ≡ speech act; not a second classifier) |
@@ -131,7 +131,7 @@ Kernel (always code):
 
 **Problem:** Bot does not read structured per-turn context from DB; compose/extract use this message only. Raw `messages` ≠ machine memory.
 
-**Infrastructure:** NayaDesk `turn_ledger` (0092) + GET/append API — **exists**. ConverseSpine writes **stub rows**, reads **rejected ids only**.
+**Infrastructure:** NayaDesk `turn_ledger` (0092) + GET/append API — **exists**. ConverseSpine **P2a** writes full rows (`speech_act`, snapshot, action_plan). **P2b** reads `prior` into `TurnFeedForward` (gap-fill only).
 
 ### P2a — Write full ledger row (every turn)
 
@@ -336,9 +336,11 @@ P1c (PROJECT_VECTORS / discussed) 🟡 local
   ↓
 SA-0 ✅ → SA-1 ✅ → SA-2 ✅ → SA-3 ✅
   ↓
-SA-5 + P2a (ledger write incl. speech_act)  ← NEXT
+SA-5 + P2a (ledger write incl. speech_act) ✅
   ↓
-P2b/c → SA-4 = P5 → P3 → P4/P6 → P7
+P2b (ledger prior read)  ← NEXT
+  ↓
+P2c → SA-4 = P5 → P3 → P4/P6 → P7
   ↓
 Desk Phase 2 — WhatsApp cutover (after SA + P2a + P4-CTA green)
 ```

@@ -398,7 +398,7 @@ Corpus rank + architecture constraints → ship order:
 | **SA-2** | `visit_book` vs `visit_recall` + discussed seed | Visit book/recall (~2k / ~0.15k) | ✅ [#25](https://github.com/nagarjunveerapu/ConverseSpine/pull/25) |
 | **SA-3** | availability lexicon → always pull units/configs | Thin size answers | 🟡 PR — pending gate + deterministic compose |
 | **SA-4** | `lastRouting` / decide ≡ speech act | Dedup routers | **Is** P5-core, not a second system |
-| **SA-5** | Ledger `speech_act` + topics in `resolved_intent_json` | Debug on Dev | 🟡 with P2a write (`ledger-write.ts`) |
+| **SA-5** | Ledger `speech_act` + topics in `resolved_intent_json` | Debug on Dev | ✅ P2a write · 🟡 P2b read (`ledger-read.ts`) |
 
 **Do not wait on:** P2 full read loop, P3 facet templates, P6 BAML, P8 OpenSearch.  
 **Out of v1:** payment_plan/investment/builder topics, broker act, recommend_ask, FacetIntent enum, multi-agent router.
