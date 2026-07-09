@@ -246,6 +246,7 @@ export function extractFactsSync(
   const pickName = detailsPick ?? shortlistPick;
   const ordinal = detectOrdinal(text);
   const affirm = AFFIRM.test(text.trim());
+  const implicitProjectPick = wantsImplicitProjectPick(text, s.discover.lastOffered, s.focus);
   return {
     constraints,
     transition: transitionKw ?? 'none',
@@ -257,6 +258,7 @@ export function extractFactsSync(
     ...(namedProjects.length ? { namedProjects } : {}),
     ...(pickName ? { pickName } : {}),
     ...(ordinal !== null ? { pickOrdinal: ordinal } : {}),
+    ...(implicitProjectPick ? { implicitProjectPick: true } : {}),
     ...(budgetPickQuestion ? { budgetPickQuestion: true, compareAdvice: true } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
   };
@@ -635,7 +637,8 @@ function detectDetailsPick(text: string, s: ConversationState): string | undefin
     );
   if (!m?.[1]) return undefined;
   const needle = m[1].trim().toLowerCase();
-  if (/^(?:the|this)\s+project$/i.test(needle)) return undefined;
+  // "details on the project" / "this project" — not a named pick
+  if (/^(?:the|this)(?:\s+project)?$/i.test(needle)) return undefined;
   for (const o of s.discover.lastOffered) {
     const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
     if (needle.includes(distinctive) || distinctive.includes(needle)) return o.name;

@@ -139,8 +139,10 @@ export function resolvePick(
   if (typeof ex.pickOrdinal === 'number' && ex.pickOrdinal >= 1 && ex.pickOrdinal <= offered.length) {
     return offered[ex.pickOrdinal - 1] ?? null;
   }
-  if (ex.namedProjects?.length >= 1) {
-    const n = ex.namedProjects[0]!;
+  const named = ex.namedProjects;
+  if (named && named.length >= 1) {
+    const n = named[0];
+    if (!n) return null;
     return offered.find((o) => o.projectId === n.projectId) ?? n;
   }
   if (ex.pickName) {

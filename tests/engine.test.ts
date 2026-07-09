@@ -199,8 +199,15 @@ describe('ConverseEngine facts', () => {
       ...initState('c1', 'lokations'),
       discover: { ...initState('c1', 'lokations').discover, lastOffered: offered },
     };
-    const ex = { ...extractFactsSync('give me details on the project', s), transition: 'want_details' as const };
-    expect(resolvePick(ex, offered)?.name).toBe('Ayana');
+    const ex = extractFactsSync('give me details on the project', s);
+    expect(ex.transition).toBe('want_details');
+    expect(ex.pickName).toBeUndefined();
+    expect(resolvePick(ex, offered, s)?.name).toBe('Ayana');
+    expect(discover.decide(s, ex)).toMatchObject({
+      kind: 'commit',
+      projectId: 'ayana',
+      followUp: 'overview',
+    });
   });
 });
 
