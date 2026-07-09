@@ -68,7 +68,7 @@ Kernel (always code):
 | **P1** | Extract authority & ingress flags | 🟡 P1a + P1b implemented locally; PR TBD |
 | **P1c** | PROJECT_VECTORS + discussedProjects | 🟡 Local (switch/compare); deploy TBD |
 | **SA** | Speech-act contract (slim) | 🟡 SA-0/1/2 ✅ · **SA-3 PR** · SA-4=P5 next |
-| **P2** | Turn ledger memory loop | 🔴 Designed (D1 table exists); not wired in loop |
+| **P2** | Turn ledger memory loop | 🟡 **P2a write** in progress (SA-5 speech_act); P2b/c not started |
 | **P3** | Focused facet depth | ⏸️ Paused — **after SA** (act=answer stable first) |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** ([#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24)); BAML RTI not wired |
 | **P5** | Routing → goal enforcement | 🔴 **= SA-4** (routing ≡ speech act; not a second classifier) |
@@ -334,32 +334,17 @@ P1a/b (extract authority + funnel) ✅ local
   ↓
 P1c (PROJECT_VECTORS / discussed) 🟡 local
   ↓
-SA-0 ✅ (chip catalog + free-text→chip resolve)
+SA-0 ✅ → SA-1 ✅ → SA-2 ✅ → SA-3 ✅
   ↓
-┌─────────────────────────────────────────────────────────────┐
-│  NEXT (parallel OK — different layers):                     │
-│  • P4-CTA  — focused CTA → yes (RTI pendingPrompt)  ← LIVE  │
-│  • Desk #185 merge + migrate — North Bangalore expand       │
-│  • SA-1..3 — permissions / visit_book≠recall / availability │
-└─────────────────────────────────────────────────────────────┘
+SA-5 + P2a (ledger write incl. speech_act)  ← NEXT
   ↓
-SA-5 + P2a (ledger write incl. speech_act) → P2b/c
+P2b/c → SA-4 = P5 → P3 → P4/P6 → P7
   ↓
-SA-4 = P5 (routing ≡ speech act)
-  ↓
-P3 A→F (facet depth copy/evidence — on stable act=answer)
-  ↓
-P4 remainder (BAML ClassifyTurnIntent) + P6 (BAML extract abstain)
-  ↓
-P7 (NBA, checklist_snapshot, board_tab)
-  ↓
-Desk Phase 2 — WhatsApp buyer cutover to Spine (after SA + P2a + P4-CTA green)
+Desk Phase 2 — WhatsApp cutover (after SA + P2a + P4-CTA green)
 ```
 
 **Parallel allowed:**
 
-- **P4-CTA** with SA-1..3 (RTI vs speech-act — different layers; do not conflate)
-- Desk #185 merge/migrate while Spine P4-CTA lands
 - P1 PR ship while SA tests land
 - NayaAdvisor UI (P7) after P3-E contract frozen
 

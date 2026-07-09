@@ -10,6 +10,7 @@ import { isVisitDayUtterance } from './visit-slot.js';
 import * as handoff from './phases/handoff.js';
 import { buildTurnLogSnapshot } from '../observability/turn-log-snapshot.js';
 import { extractTurnAuthority } from './extract-authority.js';
+import { buildLedgerWritePayload } from './ledger-write.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
 import { isDetailAskTurn, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes, wantsCostBreakdown } from './facts.js';
@@ -693,7 +694,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
   await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
   await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
-  await syncTelemetry(deps, nd, input, goal, evidence, state, reply).catch(() => {});
+  await syncTelemetry(deps, nd, input, goal, evidence, state, reply, {
+    ex,
+    extractProvenance,
+    inputSource,
+    grounding,
+  }).catch(() => {});
 
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
 
@@ -1491,9 +1497,27 @@ async function syncTelemetry(
   evidence: EvidenceSet,
   state: ConversationState,
   reply: string,
+  opts?: {
+    ex?: Extracted;
+    extractProvenance?: ExtractProvenance;
+    inputSource?: TurnInputSource;
+    grounding?: string;
+  },
 ): Promise<void> {
   if (!nd) return;
   const buyerPhone = state.ndBuyerPhone ?? input.buyerPhone;
+  const ledger = opts?.ex
+    ? buildLedgerWritePayload({
+        state,
+        ex: opts.ex,
+        goal,
+        evidence,
+        inputSource: opts.inputSource,
+        extractProvenance: opts.extractProvenance,
+        grounding: opts.grounding,
+      })
+    : null;
+
   await deps.crm.appendTurnLedger({
     conversationId: nd,
     turnIndex: state.turnCount,
@@ -1503,8 +1527,18 @@ async function syncTelemetry(
     reply,
     goal: goal.kind,
     tools: evidence.tools,
-    offeredProjectIds: evidence.matches?.map((m) => m.projectId),
+    offeredProjectIds: ledger?.offered_project_ids ?? evidence.matches?.map((m) => m.projectId),
     phase: state.phase,
+    ...(ledger
+      ? {
+          snapshotIn: ledger.snapshot_in,
+          resolvedIntent: ledger.resolved_intent,
+          actionPlan: ledger.action_plan,
+          verify: ledger.verify,
+          composer: ledger.composer,
+          toolRuns: ledger.tool_runs,
+        }
+      : {}),
   });
 
   await deps.crm.postJourneyTurnSnapshot(state.builderId, buyerPhone, nd, goal.kind, state.phase);

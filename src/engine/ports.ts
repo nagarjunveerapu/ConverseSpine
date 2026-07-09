@@ -168,6 +168,13 @@ export interface EngineCrm {
     tools: string[];
     offeredProjectIds?: string[];
     phase: string;
+    /** P2a / SA-5 — full column payloads when present. */
+    snapshotIn?: Record<string, unknown>;
+    resolvedIntent?: Record<string, unknown>;
+    actionPlan?: Record<string, unknown>;
+    verify?: Record<string, unknown>;
+    composer?: string;
+    toolRuns?: Array<{ name: string; args_summary: string; success: boolean; latency_ms: number }>;
   }): Promise<void>;
   postJourneySignals(
     builderId: string,
