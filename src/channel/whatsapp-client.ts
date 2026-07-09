@@ -18,6 +18,17 @@ export async function sendTyping(phoneNumberId: string, wamid: string, token: st
 }
 
 export async function sendText(phoneNumberId: string, to: string, text: string, token: string): Promise<boolean> {
+  const wamid = await sendTextWithWamid(phoneNumberId, to, text, token);
+  return !!wamid;
+}
+
+/** Like sendText but returns Graph wamid (for agent-send / delivery receipts). */
+export async function sendTextWithWamid(
+  phoneNumberId: string,
+  to: string,
+  text: string,
+  token: string,
+): Promise<string | null> {
   try {
     const res = await fetch(url(phoneNumberId), {
       method: 'POST',
@@ -29,9 +40,49 @@ export async function sendText(phoneNumberId: string, to: string, text: string, 
         text: { body: text.slice(0, 4096) },
       }),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as {
+      messages?: Array<{ id?: string }>;
+    } | null;
+    return body?.messages?.[0]?.id ?? null;
   } catch {
-    return false;
+    return null;
+  }
+}
+
+export type MediaKind = 'image' | 'document' | 'video';
+
+/** Human agent-send media (brochure / floor plan) by public link. */
+export async function sendMedia(
+  phoneNumberId: string,
+  to: string,
+  kind: MediaKind,
+  link: string,
+  opts: { caption?: string; filename?: string } = {},
+  token: string,
+): Promise<string | null> {
+  const payload: Record<string, unknown> = { link };
+  if (opts.caption) payload.caption = opts.caption;
+  if (kind === 'document' && opts.filename) payload.filename = opts.filename;
+  try {
+    const res = await fetch(url(phoneNumberId), {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: to.replace(/\D/g, ''),
+        type: kind,
+        [kind]: payload,
+      }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as {
+      messages?: Array<{ id?: string }>;
+    } | null;
+    return body?.messages?.[0]?.id ?? null;
+  } catch {
+    return null;
   }
 }
 

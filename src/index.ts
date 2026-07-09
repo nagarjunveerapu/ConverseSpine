@@ -3,7 +3,7 @@ import { handleAdvisorBriefFacets } from './advisor/handle-brief-facets.js';
 import { handleAdvisorProjectDetail } from './advisor/handle-project-detail.js';
 import { handleAdvisorTurn } from './advisor/handle-turn.js';
 import { createWorkerRuntime } from './runtime/deps.js';
-import { handleChat, health, json } from './worker/routes.js';
+import { handleAgentSend, handleChat, health, json, toDeskChatResponse } from './worker/routes.js';
 import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 
@@ -18,6 +18,21 @@ export default {
     try {
       if (path === '/health' && method === 'GET') {
         return health(env);
+      }
+
+      // Human takeover from NayaDesk lead dossier (Graph send + TURN_CACHE invalidate).
+      if (path === '/internal/agent-send' && method === 'POST') {
+        const secret = request.headers.get('x-bot-secret');
+        if (env.BOT_SHARED_SECRET && secret !== env.BOT_SHARED_SECRET) {
+          return json({ error: 'forbidden' }, 403);
+        }
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ error: 'invalid_json' }, 400);
+        }
+        return handleAgentSend(env, body as Parameters<typeof handleAgentSend>[1]);
       }
 
       if (path === '/webhook' && method === 'GET') {
@@ -102,7 +117,8 @@ export default {
           },
           ctx,
         );
-        return json(result);
+        // Desk-shaped envelope so Playground / Auto / Vault keep working.
+        return json(toDeskChatResponse(result));
       }
 
       return json({ error: 'not_found', path }, 404);

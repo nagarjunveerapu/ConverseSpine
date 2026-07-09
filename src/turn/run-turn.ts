@@ -54,6 +54,13 @@ export async function runTurn(
     composer: result.debug.goal.kind,
     turn_index: result.state.turnCount,
     ...(result.whatsappActions ? { whatsapp_actions: result.whatsappActions } : {}),
+    debug: {
+      phase: result.debug.phase,
+      goal: result.debug.goal,
+      tools: result.debug.tools,
+      grounding: result.debug.grounding,
+      ...(result.debug.speech_act ? { speech_act: result.debug.speech_act } : {}),
+    },
   };
 }
 
