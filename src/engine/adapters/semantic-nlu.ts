@@ -174,6 +174,10 @@ export function shouldQueryProjectVectors(
   ctx: SemanticContext,
 ): boolean {
   if (ex.namedProjects?.length || text.trim().length < 3) return false;
+  // Bare affirm is a dialogue act — never invent a project from catalog noise.
+  if (ex.affirm && !PROJECT_REF_RE.test(text) && text.trim().split(/\s+/).length <= 3) {
+    return false;
+  }
   // "visit them" / "compare both" — do not invent Desire Spaces from catalog noise.
   if (isAnaphoricProjectRef(text)) return false;
   const t = text.trim().toLowerCase();

@@ -43,6 +43,14 @@ export function detectFocusedSwitchIntent(
   if (ex.recall || ex.stop || ex.transition === 'see_others' || ex.wantsMore || ex.transition === 'want_visit') {
     return null;
   }
+  // Bare affirm is dialogue continuation — never switch from vector noise.
+  if (ex.affirm) {
+    const bare =
+      /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|theek|done|confirm(?:ed)?|go ahead|sounds good|perfect|great)\.?!?\s*$/i.test(
+        _text.trim(),
+      );
+    if (bare && !ex.pickName) return null;
+  }
   if ((ex.compareProjectIds?.length ?? 0) >= 2) return null;
   if (ex.askTopic === 'compare' && (ex.compareProjectIds?.length ?? 0) >= 2) return null;
   // Two named projects → compare path owns the turn, not a single-project switch.

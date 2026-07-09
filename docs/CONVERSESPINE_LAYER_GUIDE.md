@@ -521,8 +521,11 @@ End of every completed turn.
 | `no_fit` + budget gap chips | `pendingPrompt: { kind: 'chip_menu' }`, `lastUiMode: 'search_recovery'` |
 | `recommend` with matches | `lastGoalKind: 'recommend'`, clear pending |
 | Offered alternate project | `pendingPrompt: { kind: 'offer_project', project_id }` → next `yes` commits |
+| Focused `answer`/`availability` + units CTA | **P4-CTA:** `pendingPrompt: { kind: 'offer_pricing', … }` → next `yes` → price on **same** focus (not PROJECT_VECTORS) |
 
 **Files:** `engine/turn-intent/pending-prompt.ts`, `engine/turn.ts` (tail), `engine/store-kv.ts`
+
+**Gap (tracked):** Until P4-CTA ships, bare `yes` after “Want pricing on a specific size?” skips RTI and can invent a project via PROJECT_VECTORS — see [`CONSOLIDATED_ROADMAP.md`](./CONSOLIDATED_ROADMAP.md) §P4-CTA.
 
 ---
 

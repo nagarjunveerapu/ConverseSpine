@@ -44,6 +44,7 @@ Schema: {"kind": string, "confidence": "llm", "patch": object|null, "patch_clear
 
 Rules:
 - Bare "yes"/"ok" with pending_prompt.kind=offer_project → confirm_suggestion + focus_project_id if known
+- Bare "yes"/"ok" with pending_prompt.kind=offer_pricing + phase=focused → focused_question (stay on focus; pricing follow-up)
 - Bare "yes" with offer_widen, chip_menu, binary_budget_or_area, or missing pending → probe (never guess)
 - Chip label or user_line match in text → apply_recovery_patch + matched_action_id
 - "2 cr any apartment", budget/BHK/type changes → apply_recovery_patch + patch/patch_clear

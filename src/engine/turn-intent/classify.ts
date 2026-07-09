@@ -148,6 +148,15 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
         };
       }
     }
+    // P4-CTA: bare yes after focused availability CTA → price on same focus.
+    if (pending?.kind === 'offer_pricing' && input.phase === 'focused') {
+      return {
+        kind: 'focused_question',
+        confidence: 'rule',
+        ask_topic: pending.topic ?? 'price',
+        ...(pending.project_id ? { focus_project_id: pending.project_id } : {}),
+      };
+    }
     if (pending?.kind === 'location_broaden') {
       return {
         kind: 'apply_recovery_patch',
@@ -341,6 +350,21 @@ export function applyTurnIntentResult(
       },
     };
     return { state: next, clearedKeys, releasedFocus: true };
+  }
+
+  if (intent.kind === 'focused_question') {
+    next = {
+      ...next,
+      rti: {
+        ...next.rti,
+        pendingPrompt: undefined,
+      },
+    };
+    return {
+      state: next,
+      clearedKeys,
+      ...(intent.ask_topic ? { seedAskTopic: intent.ask_topic } : {}),
+    };
   }
 
   return { state: next, clearedKeys };
