@@ -55,6 +55,8 @@ export function buildTurnLogSnapshot(input: {
       ...(ex.affirm ? { affirm: true } : {}),
       ...(ex.wantsMore ? { wants_more: true } : {}),
       ...(Object.keys(ex.constraints).length ? { constraints: { ...ex.constraints } } : {}),
+      ...(ex.speechAct ? { speech_act: ex.speechAct } : {}),
+      ...(ex.chipPathIds?.length ? { chip_path_ids: ex.chipPathIds } : {}),
     },
     ...(switchIntent ? { switch_intent: switchIntent } : {}),
     goal,

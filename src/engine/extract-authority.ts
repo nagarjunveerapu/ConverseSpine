@@ -8,7 +8,7 @@
  */
 import type { SemanticNluPort } from './adapters/semantic-nlu.js';
 import type { EngineLlm } from './ports.js';
-import { extractFacts, isDetailAskTurn } from './facts.js';
+import { extractFacts, isDetailAskTurn, looksLikeConfigAsk } from './facts.js';
 import type {
   ExtractProvenance,
   FieldProvenance,
@@ -107,17 +107,27 @@ export async function extractTurnAuthority(
   const enriched = await deps.semantic.enrich(text, builderId, base, {
     phase: state.phase,
     microMarkets: deps.microMarkets,
+    offeredProjectNames: [
+      ...state.discover.lastOffered.map((o) => o.name),
+      ...(state.focus?.projectName ? [state.focus.projectName] : []),
+    ],
   });
 
   const mergedRaw = mergeExtractedAuthority(base, enriched);
+  const topicsBeforeBridge = mergedRaw.askTopics ?? (mergedRaw.askTopic ? [mergedRaw.askTopic] : []);
+  const withTopicBridge = bridgeUnknownConfigAsk(mergedRaw, text, chipResolution);
   const merged = stampSpeechAct(
-    applySpeechActPermissions(mergedRaw, chipResolution),
+    applySpeechActPermissions(withTopicBridge, chipResolution),
     chipResolution,
   );
 
   if (merged.askTopics?.length && !baseRaw.askTopics?.length) {
-    provenance.fields.askTopics =
-      chipResolution.primary?.topic && merged.askTopics.includes(chipResolution.primary.topic)
+    const bridgedIn =
+      topicsBeforeBridge.length === 0 &&
+      (withTopicBridge.askTopics?.length ?? 0) > 0;
+    provenance.fields.askTopics = bridgedIn
+      ? 'bridge'
+      : chipResolution.primary?.topic && merged.askTopics.includes(chipResolution.primary.topic)
         ? 'chip_resolve'
         : 'embedder';
   }
@@ -182,6 +192,29 @@ export function stampSpeechAct(extracted: Extracted, resolution: ChipResolution)
     ...extracted,
     speechAct: resolution.speechAct,
     ...(resolution.chipPathIds.length ? { chipPathIds: resolution.chipPathIds } : {}),
+  };
+}
+
+/**
+ * Chip miss + shortlist/project identity already known + config lexicon →
+ * seed availability. INTENT_VECTORS often returns find_projects for
+ * "options for 2BHK in Eldorado"; this is a narrow bridge, not free-text
+ * chip sprawl. Novel asks without a named shortlist project still rely on embedder.
+ */
+export function bridgeUnknownConfigAsk(
+  extracted: Extracted,
+  text: string,
+  resolution: ChipResolution,
+): Extracted {
+  if (resolution.primary) return extracted;
+  const existing = extracted.askTopics ?? (extracted.askTopic ? [extracted.askTopic] : []);
+  if (existing.length) return extracted;
+  if (!(extracted.namedProjects?.length || extracted.pickName)) return extracted;
+  if (!looksLikeConfigAsk(text)) return extracted;
+  return {
+    ...extracted,
+    askTopic: 'availability',
+    askTopics: ['availability'],
   };
 }
 

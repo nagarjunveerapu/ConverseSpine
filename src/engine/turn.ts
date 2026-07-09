@@ -42,6 +42,7 @@ import { buildComposeRequest, fallbackReply, formatInr, minimumBudgetReply } fro
 import { checkGrounding, stripBanned } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
+import { filterUnitsByBhk, resolveAvailabilityBhkFilter } from './unit-config.js';
 import { planSearchRecovery, type RecoveryHint, type SearchRecoveryEnvelope, type AdvisorUiMode, type SuggestedAction } from './recovery-planner.js';
 import {
   applyTurnIntentResult,
@@ -1150,23 +1151,42 @@ async function fetchAnswer(
   }
 
   if (topics.includes('availability')) {
+    const bhkFilter = resolveAvailabilityBhkFilter({
+      buyerText,
+      constraintBhk: s.constraints.bhk,
+    });
+    const toEvidenceUnits = (
+      rows: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string }>,
+    ) =>
+      filterUnitsByBhk(rows, bhkFilter).map((c) => ({
+        unitType: c.unitType,
+        priceDisplay: c.priceDisplay,
+        ...(c.sizeDisplay ? { sizeDisplay: c.sizeDisplay } : {}),
+      }));
+
     const cachedConfigs = s.projectCache?.[goal.projectId]?.configurations;
     if (cachedConfigs?.length) {
-      tools.push('listUnits');
-      evidence = {
-        ...evidence,
-        tools: [...new Set(tools)],
-        units: cachedConfigs.map((c) => ({ unitType: c.unitType, priceDisplay: c.priceDisplay })),
-      };
-    } else {
-      const units = await deps.data.listUnits(goal.projectId).catch(() => []);
+      const units = toEvidenceUnits(cachedConfigs);
       if (units.length) {
         tools.push('listUnits');
         evidence = {
           ...evidence,
           tools: [...new Set(tools)],
-          units: units.map((u) => ({ unitType: u.unitType, priceDisplay: u.priceDisplay })),
+          units,
         };
+      }
+    } else {
+      const listed = await deps.data.listUnits(goal.projectId).catch(() => []);
+      if (listed.length) {
+        const units = toEvidenceUnits(listed);
+        if (units.length) {
+          tools.push('listUnits');
+          evidence = {
+            ...evidence,
+            tools: [...new Set(tools)],
+            units,
+          };
+        }
       }
     }
   }

@@ -1,0 +1,32 @@
+{
+  "id": "UE-05",
+  "title": "options for 2BHK in Eldorado → embedder topic + BHK filter (not regex sprawl)",
+  "builder_id": "brigade-group",
+  "tags": ["units-enrichment", "bhk-filter", "embedder", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "2 BHK in Devanahalli under 70 lakh",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["from ₹31 L", "from ₹31L"]
+      }
+    },
+    {
+      "text": "what options are there for 2BHK in Eldorado",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["2 BHK"],
+        "reply_excludes": ["1 BHK", "3 BHK", "no exact match", "tap a button", "aren't published yet"]
+      }
+    },
+    {
+      "text": "what different configurations of 2BHK are there?",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["2 BHK"],
+        "reply_excludes": ["1 BHK", "3 BHK", "no exact match"]
+      }
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { formatInr } from '../engine/compose.js';
+import { filterUnitsByBhk } from '../engine/unit-config.js';
 import { mapProjectDetailDto } from './map-project-detail.js';
 import { mapVisitQueue } from './map-visit-queue.js';
 import { mapVisitItinerary } from './map-visit-itinerary.js';
@@ -10,6 +11,9 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
   const prefs = mapPrefsSnapshot(state);
   const focusId = state.focus?.projectId;
   const focusedDetail = focusId ? state.projectCache?.[focusId] : undefined;
+  const focusedDto = focusedDetail
+    ? scopeFocusedConfigurations(mapProjectDetailDto(focusedDetail), state.constraints.bhk)
+    : undefined;
   const visitBooked =
     debug.goal.kind === 'visit_booked' && 'projectId' in debug.goal
       ? {
@@ -28,7 +32,7 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     reply,
     conversation_id: state.convId,
     ...(state.ndConversationId ? { nd_conversation_id: state.ndConversationId } : {}),
-    ...(focusedDetail ? { focused_project: mapProjectDetailDto(focusedDetail) } : {}),
+    ...(focusedDto ? { focused_project: focusedDto } : {}),
     ...(visitBooked ? { visit_booked: visitBooked } : {}),
     ...(visitQueue ? { visit_queue: visitQueue } : {}),
     ...(visitItinerary ? { visit_itinerary: visitItinerary } : {}),
@@ -47,6 +51,33 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
       tools: debug.tools,
       grounding: debug.grounding,
     },
+  };
+}
+
+/** Prefer buyer's BHK on the focused board — full list when multi-select or no BHK. */
+export function scopeFocusedConfigurations(
+  dto: import('./map-project-detail.js').AdvisorProjectDetailDto,
+  constraintBhk: string | undefined,
+): import('./map-project-detail.js').AdvisorProjectDetailDto {
+  const configs = dto.configurations;
+  if (!configs?.length || !constraintBhk?.trim()) return dto;
+  if (/[·,]/.test(constraintBhk) || /\bor\b/i.test(constraintBhk)) return dto;
+  const mapped = configs.map((c) => ({
+    unitType: c.unit_type,
+    priceDisplay: c.price_display,
+    priceMinInr: c.price_min_inr,
+    ...(c.size_display ? { sizeDisplay: c.size_display } : {}),
+  }));
+  const filtered = filterUnitsByBhk(mapped, constraintBhk.trim());
+  if (filtered.length === 0 || filtered.length === mapped.length) return dto;
+  return {
+    ...dto,
+    configurations: filtered.map((c) => ({
+      unit_type: c.unitType,
+      price_display: c.priceDisplay,
+      price_min_inr: c.priceMinInr,
+      ...(c.sizeDisplay ? { size_display: c.sizeDisplay } : {}),
+    })),
   };
 }
 

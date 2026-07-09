@@ -1,0 +1,37 @@
+{
+  "id": "UE-01",
+  "title": "Orchards configs — enrichment size + price in reply",
+  "builder_id": "brigade-group",
+  "tags": ["units-enrichment", "availability", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "tell me about Brigade Orchards",
+      "assert": {
+        "reply_includes": ["orchards"],
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "what unit configurations are available?",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["sqft", "BHK"],
+        "reply_excludes": [
+          "no *apartment*",
+          "closest fit",
+          "tap a button",
+          "on our books",
+          "aren't published yet"
+        ]
+      }
+    },
+    {
+      "text": "what sizes for 2 BHK?",
+      "assert": {
+        "reply_includes": ["sqft"],
+        "reply_excludes": ["tap a button", "aren't published yet"]
+      }
+    }
+  ]
+}

@@ -27,6 +27,9 @@ export interface LocalTurnLogEntry {
     affirm?: boolean;
     wants_more?: boolean;
     constraints?: Record<string, unknown>;
+    /** SA: chip resolve vs unknown (corpus: promote frequent unknowns). */
+    speech_act?: string;
+    chip_path_ids?: string[];
   };
   switch_intent?: unknown;
   goal: unknown;

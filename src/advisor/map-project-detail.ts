@@ -13,7 +13,12 @@ export interface AdvisorProjectDetailDto {
   na_status?: string;
   ec_status?: string;
   loan_eligibility?: string;
-  configurations?: Array<{ unit_type: string; price_display: string; price_min_inr: number }>;
+  configurations?: Array<{
+    unit_type: string;
+    price_display: string;
+    price_min_inr: number;
+    size_display?: string;
+  }>;
   location?: {
     connectivity_summary?: string;
     micro_market_overview?: string;
@@ -43,6 +48,7 @@ export function mapProjectDetailDto(d: ProjectDetail): AdvisorProjectDetailDto {
             unit_type: c.unitType,
             price_display: c.priceDisplay,
             price_min_inr: c.priceMinInr,
+            ...(c.sizeDisplay ? { size_display: c.sizeDisplay } : {}),
           })),
         }
       : {}),

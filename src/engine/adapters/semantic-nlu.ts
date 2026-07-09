@@ -1,6 +1,6 @@
 import type { Env } from '../../env.js';
 import type { AnswerTopic, ConversationState, Extracted, OfferedProject } from '../types.js';
-import { detectTopics, isDetailAskTurn } from '../facts.js';
+import { detectTopics, isDetailAskTurn, looksLikeConfigAsk } from '../facts.js';
 
 const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 const TOPIC_THRESHOLD = 0.72;
@@ -8,14 +8,28 @@ const LOCATION_THRESHOLD = 0.78;
 /** Low threshold — project names are short; intent vectors use 0.72. */
 export const PROJECT_VECTOR_THRESHOLD = 0.65;
 
+/**
+ * INTENT_VECTORS → AnswerTopic gap-fill when chip-resolve left speechAct unknown
+ * (or regex topics empty). Do NOT map find_projects / book_visit / recommend —
+ * those are search/visit moves, not answer facets.
+ */
 const INTENT_TO_TOPIC: Record<string, AnswerTopic> = {
   get_price: 'price',
   get_legal_info: 'legal',
+  get_availability: 'availability',
   get_unit_configs: 'availability',
+  get_brochure: 'media',
   get_media: 'media',
+  get_amenities: 'amenities',
+  get_location_info: 'location',
+  ask_delivery_timeline: 'availability',
+  get_project_info: 'overview',
+  ask_about_builder: 'overview',
+  compute_emi: 'emi',
+  get_payment_plan: 'price',
+  negotiate_price: 'price',
+  ask_investment_return: 'price',
   compare_projects: 'compare',
-  find_projects: 'availability',
-  book_visit: 'availability',
 };
 
 export interface SemanticNluPort {
@@ -25,6 +39,8 @@ export interface SemanticNluPort {
 export interface SemanticContext {
   phase: ConversationState['phase'];
   microMarkets: readonly string[];
+  /** Shortlist names — enables PROJECT_VECTORS on chip-miss when buyer names a match. */
+  offeredProjectNames?: readonly string[];
 }
 
 export interface ProjectVectorMatch {
@@ -174,6 +190,11 @@ export function shouldQueryProjectVectors(
   if (ex.transition === 'want_visit' || ex.transition === 'want_details') return true;
   if (ex.askTopic === 'compare' || ex.askTopic === 'media') return true;
   if (ex.askTopics?.some((t) => t === 'compare' || t === 'media')) return true;
+  // Chip miss + shortlist on the board: resolve which offered project was named.
+  // Do not vectorize bare discovery seeds (empty shortlist) — that broke Coorg funnel.
+  if (ex.speechAct === 'unknown' && (ctx.offeredProjectNames?.length ?? 0) > 0) {
+    return text.trim().length >= 6;
+  }
   return PROJECT_REF_RE.test(text);
 }
 
@@ -184,6 +205,8 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
       let next = ex;
       const topics = ex.askTopics?.length ? ex.askTopics : detectTopics(text);
 
+      // Topic gap-fill when chip-resolve left act unknown (or regex topics empty).
+      // INTENT_VECTORS never invents a chip — only fills AnswerTopic under answer/search.
       if (topics.length === 0 && env.INTENT_VECTORS) {
         const vectors = await embedTexts(env.AI, [text]);
         const query = vectors[0];
@@ -200,11 +223,29 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
               : '';
           const score = top?.score ?? 0;
           const topic = INTENT_TO_TOPIC[kind];
-          if (topic && score >= TOPIC_THRESHOLD) {
+          // find_projects often wins on "options for X in Project" — if shortlist
+          // already named a project, treat as unit/config ask (corpus will refine).
+          const namedOnShortlist =
+            (next.namedProjects?.length ?? 0) > 0 ||
+            ((ctx.offeredProjectNames?.length ?? 0) > 0 &&
+              ctx.offeredProjectNames!.some((n) =>
+                text.toLowerCase().includes(
+                  n.toLowerCase().replace(/^(brigade|lokations)\s+/i, ''),
+                ),
+              ));
+          const bridgedTopic =
+            !topic &&
+            namedOnShortlist &&
+            score >= TOPIC_THRESHOLD &&
+            (kind === 'find_projects' || kind === 'recommend') &&
+            looksLikeConfigAsk(text)
+              ? ('availability' as AnswerTopic)
+              : topic;
+          if (bridgedTopic && score >= TOPIC_THRESHOLD) {
             next = {
               ...next,
-              askTopic: next.askTopic ?? topic,
-              askTopics: next.askTopics?.length ? next.askTopics : [topic],
+              askTopic: next.askTopic ?? bridgedTopic,
+              askTopics: next.askTopics?.length ? next.askTopics : [bridgedTopic],
             };
           }
         }

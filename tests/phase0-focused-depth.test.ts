@@ -29,6 +29,14 @@ describe('Phase 0 — location extraction gates', () => {
     expect(extractLocation('looking in Whitefield')).toBe('Whitefield');
   });
 
+  it('in Eldorado is not a locality when Eldorado is on the shortlist', () => {
+    expect(
+      extractLocation('what options are there for 2BHK in Eldorado', {
+        projectNameHints: ['Brigade Eldorado', 'Brigade Orchards'],
+      }),
+    ).toBeUndefined();
+  });
+
   it('does not write poisoned location from breakdown ask in focused phase', () => {
     const s = commitTo(initState('c1', 'lokations'), 'ayana', 'Ayana');
     const ex = extractFactsSync('breakdown of costs', s);

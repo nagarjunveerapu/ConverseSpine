@@ -23,7 +23,9 @@
     {
       "text": "what unit configurations are available?",
       "assert": {
-        "reply_excludes": ["no *apartment*", "closest fit", "tap a button", "on our books"]
+        "goal_topic": "availability",
+        "reply_includes": ["sqft", "BHK"],
+        "reply_excludes": ["no *apartment*", "closest fit", "tap a button", "on our books", "aren't published yet"]
       }
     },
     {

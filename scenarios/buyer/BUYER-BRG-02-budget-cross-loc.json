@@ -23,7 +23,9 @@
     {
       "text": "what configurations do you have?",
       "assert": {
-        "reply_excludes": ["closest fit", "on our books", "tap a button"]
+        "goal_topic": "availability",
+        "reply_includes": ["sqft"],
+        "reply_excludes": ["closest fit", "on our books", "tap a button", "aren't published yet"]
       }
     },
     {

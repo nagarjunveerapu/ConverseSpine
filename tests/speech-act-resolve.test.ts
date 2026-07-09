@@ -53,6 +53,20 @@ describe('resolveFreeTextToChipPaths — catalog examples', () => {
     expect(r.speechAct).toBe('object');
   });
 
+  it('novel "options for 2BHK" stays unknown — INTENT embedder gap-fills, not regex', () => {
+    const r = resolveFreeTextToChipPaths('what options are there for 2BHK in Eldorado');
+    expect(r.speechAct).toBe('unknown');
+    expect(r.primary).toBeNull();
+  });
+
+  it('configurations chip alias still matches (closed menu)', () => {
+    const r = resolveFreeTextToChipPaths(
+      'what different configurations of 2BHK are there in Eldorado?',
+    );
+    expect(r.speechAct).toBe('answer');
+    expect(r.primary?.topic).toBe('availability');
+  });
+
   it('unmatched free text → unknown (embedder/LLM later)', () => {
     const r = resolveFreeTextToChipPaths('hmm interesting');
     expect(r.speechAct).toBe('unknown');

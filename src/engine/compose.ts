@@ -1,4 +1,5 @@
 import type { ComposeRequest, EvidenceSet, Match, ProbeKind, TurnGoal } from './types.js';
+import { formatUnitConfigLine } from './unit-config.js';
 
 export function buildComposeRequest(
   goal: TurnGoal,
@@ -142,7 +143,11 @@ function renderEvidence(ev: EvidenceSet): string {
     );
   }
   if (ev.units?.length) {
-    out.push(`units:\n${ev.units.map((u) => `  - ${u.unitType}: ${u.priceDisplay}`).join('\n')}`);
+    out.push(
+      `units:\n${ev.units
+        .map((u) => `  - ${formatUnitConfigLine(u)}`)
+        .join('\n')}`,
+    );
   }
   if (ev.visits?.visits.length) {
     out.push(
@@ -312,7 +317,7 @@ export function fallbackReply(req: ComposeRequest): string {
         return `${emiSnapshotLine(ev.emi)}. Want the full cost breakdown or a visit?`;
       }
       if (goal.topic === 'availability' && ev.units?.length) {
-        const list = ev.units.slice(0, 4).map((u) => `${u.unitType} from ${u.priceDisplay}`).join('; ');
+        const list = ev.units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
         return `Available configurations: ${list}. Want pricing on a specific size?`;
       }
       if (ev.detail) {
@@ -378,7 +383,7 @@ function legalSnapshotLine(d: import('./types.js').ProjectDetail, includeConfigs
   if (includeConfigs && d.configurations?.length) {
     const configs = d.configurations
       .slice(0, 4)
-      .map((c) => `${c.unitType}${c.priceDisplay ? ` from ${c.priceDisplay}` : ''}`)
+      .map((c) => formatUnitConfigLine(c))
       .join('; ');
     bits.push(`Configurations: ${configs}`);
   }

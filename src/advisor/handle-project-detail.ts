@@ -2,6 +2,7 @@ import { prefetchProjects } from '../engine/project-cache.js';
 import { commitTo, initState, withNdConversation } from '../engine/state.js';
 import type { ConverseRuntime } from '../runtime/deps.js';
 import { mapProjectDetailDto, type AdvisorProjectDetailDto } from './map-project-detail.js';
+import { scopeFocusedConfigurations } from './map-response.js';
 import { sessionToConvId, sessionToPhone } from './session.js';
 
 const DEFAULT_ADVISOR_BUILDER = 'naya-advisor';
@@ -53,5 +54,9 @@ export async function handleAdvisorProjectDetail(
   const detail = state.projectCache?.[project_id];
   if (!detail) return { status: 'error', error: 'project_unavailable' };
 
-  return { status: 'ok', project: mapProjectDetailDto(detail), live: true };
+  return {
+    status: 'ok',
+    project: scopeFocusedConfigurations(mapProjectDetailDto(detail), state.constraints.bhk),
+    live: true,
+  };
 }

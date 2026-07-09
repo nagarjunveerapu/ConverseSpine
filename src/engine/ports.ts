@@ -31,6 +31,10 @@ export interface UnitConfig {
   unitType: string;
   priceDisplay: string;
   priceMinInr: number;
+  /** Buyer-facing size band, e.g. "595-624 sqft" or "1200 sqft". */
+  sizeDisplay?: string;
+  sizeMinSqft?: number;
+  sizeMaxSqft?: number;
 }
 
 export interface LocationIntel {

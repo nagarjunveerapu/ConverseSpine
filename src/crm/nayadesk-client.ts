@@ -325,9 +325,35 @@ export class NayaDeskClient {
       size_max_sqft: number;
       is_available: number;
       disclosure_tier: string;
+      price_min_paise?: number;
+      price_max_paise?: number;
     }>;
   }> {
     return this.call('GET', `/api/projects/${encodeURIComponent(project_id)}/units`);
+  }
+
+  /**
+   * Aggregated unit overview (NayaDesk #178). Prefer over raw `/units` when
+   * available — groups by type with size/price ranges. Falls back callers
+   * should catch 404 until nayadesk-dev has the route deployed.
+   */
+  unitsEnrichmentSummary(project_id: string): Promise<{
+    project_id: string;
+    total_configurations: number;
+    unit_types: Array<{
+      type: string;
+      count: number;
+      price_range: { min: number; max: number; display: string };
+      size_range: { min: number | null; max: number | null; unit: string };
+      available: number;
+      disclosure_tier: string;
+      media_ids: string[];
+    }>;
+  }> {
+    return this.call(
+      'GET',
+      `/api/projects/${encodeURIComponent(project_id)}/units-enrichment/summary`,
+    );
   }
 
   applyStateWrites(
