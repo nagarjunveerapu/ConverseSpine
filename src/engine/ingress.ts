@@ -31,6 +31,7 @@ export type FieldProvenance =
   | 'regex'
   | 'llm'
   | 'embedder'
+  | 'bridge'
   | 'ingress_blocked'
   | 'chip_skip'
   | 'override'

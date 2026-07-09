@@ -1,0 +1,31 @@
+{
+  "id": "UE-04",
+  "title": "2 BHK ask filters configs; search price scoped (not 1 BHK floor)",
+  "builder_id": "brigade-group",
+  "tags": ["units-enrichment", "bhk-filter", "starting-price", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "2 BHK in Devanahalli under 70 lakh",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["from ₹31 L", "from ₹31L", "from 31 L"]
+      }
+    },
+    {
+      "text": "tell me about Brigade Eldorado",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "give me 2BHK configurations",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["2 BHK", "sqft"],
+        "reply_excludes": ["1 BHK", "3 BHK", "aren't published yet", "tap a button"]
+      }
+    }
+  ]
+}

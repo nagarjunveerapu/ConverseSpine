@@ -218,7 +218,37 @@ export function fakeData(): EngineData {
     },
     async listUnits(id) {
       const p = LOKATIONS.find((x) => x.id === id);
-      return p ? [{ unitType: 'Quarter acre', priceDisplay: p.display, priceMinInr: p.priceInr }] : [];
+      if (!p) return [];
+      if (p.type.includes('plantation') || p.type.includes('plot')) {
+        return [
+          {
+            unitType: 'Quarter acre',
+            priceDisplay: p.display,
+            priceMinInr: p.priceInr,
+            sizeDisplay: '10,890 sqft',
+            sizeMinSqft: 10890,
+            sizeMaxSqft: 10890,
+          },
+        ];
+      }
+      return [
+        {
+          unitType: '2 BHK',
+          priceDisplay: p.display,
+          priceMinInr: p.priceInr,
+          sizeDisplay: '1050-1180 sqft',
+          sizeMinSqft: 1050,
+          sizeMaxSqft: 1180,
+        },
+        {
+          unitType: '3 BHK',
+          priceDisplay: p.display,
+          priceMinInr: Math.round(p.priceInr * 1.2),
+          sizeDisplay: '1400-1550 sqft',
+          sizeMinSqft: 1400,
+          sizeMaxSqft: 1550,
+        },
+      ];
     },
     async mediaShare(_nd, _pid, assetKind) {
       return {

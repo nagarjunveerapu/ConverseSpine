@@ -27,7 +27,8 @@ function isFocusedProjectQuestion(text: string): boolean {
   if (/\bdetails?\b.*\b(?:the|this)\s+project\b/i.test(t)) return true;
   if (/\b(?:the|this)\s+project(?:'s)?\s+details?\b/i.test(t)) return true;
   if (/\b(?:breakdown|break[- ]?up|landed cost|all[- ]in)\b/i.test(t)) return true;
-  // SA-1: size/config Q&A on focused project — not a propertyType search pivot
+  // SA-1: size/config Q&A on focused project — not a propertyType search pivot.
+  // Novel phrasings rely on speech-act resolve + INTENT embedder topic fill.
   if (/\b(?:plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|configurations?|sizes?\s+offered|bhk options?)\b/i.test(t)) {
     return true;
   }
@@ -60,6 +61,11 @@ export function isFocusedSearchPivot(text: string): boolean {
   }
   if (/\b(?:looking|searching|interested)\s+(?:in|for)\s+[A-Za-z]/i.test(t)) return true;
   if (/\b(?:change|switch|update)\s+(?:my\s+)?(?:area|location|budget|bhk|property type)\b/i.test(t)) return true;
+  // Chip miss (unknown): interrogatives stay on the focused project so INTENT
+  // embedder can gap-fill topic — do not re-search. Explicit pivots already returned above.
+  if (!resolved.primary && /\b(?:what|which|how|tell me|give me|are there|is there)\b/i.test(t)) {
+    return false;
+  }
   return false;
 }
 

@@ -1,0 +1,19 @@
+{
+  "id": "UE-03",
+  "title": "Ayana plot sizes — sizeDisplay still present after enrichment wire",
+  "builder_id": "lokations",
+  "tags": ["units-enrichment", "availability", "lokations", "regression"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    {
+      "text": "what plot sizes are offered?",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["sqft"],
+        "reply_excludes": ["no *plot*", "closest fit", "tap a button", "on our books"]
+      }
+    }
+  ]
+}

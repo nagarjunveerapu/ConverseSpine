@@ -20,6 +20,7 @@ export async function hydrateProjectDetail(
       unitType: u.unitType,
       priceDisplay: u.priceDisplay,
       priceMinInr: u.priceMinInr ?? 0,
+      ...(u.sizeDisplay ? { sizeDisplay: u.sizeDisplay } : {}),
     }));
 
   if (configurations.length) {

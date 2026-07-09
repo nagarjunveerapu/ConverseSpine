@@ -1,6 +1,10 @@
 import type { NayaDeskClient } from '../../crm/nayadesk-client.js';
 import type { EngineCrm, EngineData, StoredVisit } from '../ports.js';
 import { formatInr } from '../compose.js';
+import {
+  mapEnrichmentSummaryToUnitConfigs,
+  mapLegacyUnitsToUnitConfigs,
+} from '../unit-config.js';
 
 function splitCsv(s: string): string[] {
   return s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -269,15 +273,17 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
     },
 
     async listUnits(projectId) {
+      // Prefer #178 enrichment summary (size + price ranges by type).
+      try {
+        const summary = await crm.unitsEnrichmentSummary(projectId);
+        const mapped = mapEnrichmentSummaryToUnitConfigs(summary);
+        if (mapped.length) return mapped;
+      } catch {
+        /* route may 404 until nayadesk-dev deploys #178 — fall through */
+      }
       try {
         const resp = await crm.listProjectUnits(projectId);
-        return (resp.units ?? [])
-          .filter((u) => u.is_available !== 0)
-          .map((u) => ({
-            unitType: u.unit_type,
-            priceDisplay: u.price_display,
-            priceMinInr: 0,
-          }));
+        return mapLegacyUnitsToUnitConfigs(resp.units ?? []);
       } catch {
         return [];
       }

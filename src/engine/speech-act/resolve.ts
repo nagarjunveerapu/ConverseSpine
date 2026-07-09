@@ -70,6 +70,8 @@ const FREE_TEXT_RULES: ReadonlyArray<{
     priority: 58,
   },
   {
+    // Closed chip aliases only — novel phrasings ("options for 2BHK…") stay unknown
+    // and gap-fill via INTENT_VECTORS (see semantic-nlu), not unbounded regex.
     id: 'chip.answer.availability',
     re: /\b(?:plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|configurations?|bhk options?|what\s+(?:sizes?|configs?|configurations?)\b|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|units?\s+(?:available|offered))\b/i,
     priority: 62,

@@ -7,6 +7,7 @@ import type { IngressSlotKey } from './ingress.js';
 import { isSlotWritable } from './ingress.js';
 import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic } from './types.js';
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
+import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 
 const AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|theek|done|confirm(?:ed)?|go ahead|sounds good|perfect|great)\b/i;
 const REJECT =
@@ -131,7 +132,7 @@ export async function extractFacts(
     !isVisitDayUtterance(text) &&
     isSlotWritable('location', filled, text)
   ) {
-    constraints.location = extractLocation(text, { phase: s.phase, askTopics });
+    constraints.location = extractLocation(text, locationExtractCtx(s, askTopics));
   }
   if (propertyTypeKw) constraints.propertyType = propertyTypeKw;
   if (purposeKw) constraints.purpose = purposeKw;
@@ -229,7 +230,7 @@ export function extractFactsSync(
   const askTopics = detectTopics(text);
   const loc =
     isSlotWritable('location', filled, text)
-      ? extractLocation(text, { phase: s.phase, askTopics })
+      ? extractLocation(text, locationExtractCtx(s, askTopics))
       : undefined;
   if (loc) constraints.location = loc;
   const bhk = isSlotWritable('bhk', filled, text) ? extractConfigurationFilters(text) : undefined;
@@ -317,9 +318,37 @@ function detectPropertyType(text: string): string | undefined {
   return undefined;
 }
 
-function resolveNamed(_text: string, _s: ConversationState): OfferedProject[] {
-  // Project names come from PROJECT_VECTORS in semantic.enrich — not regex.
-  return [];
+/** Distinctive tokens for shortlist identity ("Krishnaja Greens" → krishnaja, greens). */
+function offeredNameTokens(name: string): string[] {
+  const distinctive = name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
+  const tokens = distinctive.split(/\s+/).filter((t) => t.length >= 4);
+  return tokens.length ? tokens : distinctive.length >= 4 ? [distinctive] : [];
+}
+
+function resolveNamed(text: string, s: ConversationState): OfferedProject[] {
+  // Closed shortlist identity only — full catalog names come from PROJECT_VECTORS.
+  // Collect *all* shortlist hits (visit/compare multi-name), matching full name or tokens.
+  const offered = s.discover.lastOffered;
+  if (!offered.length) return [];
+  const t = text.trim().toLowerCase();
+  const hits: OfferedProject[] = [];
+  for (const o of offered) {
+    const name = o.name.toLowerCase();
+    const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
+    const tokens = offeredNameTokens(o.name);
+    if (
+      t.includes(name) ||
+      (distinctive.length >= 4 && t.includes(distinctive)) ||
+      tokens.some((tok) => t.includes(tok))
+    ) {
+      hits.push(o);
+    }
+  }
+  if (hits.length) return hits;
+  const hit = matchOfferedName(text, offered);
+  if (!hit) return [];
+  const row = offered.find((o) => o.name === hit);
+  return row ? [row] : [{ projectId: hit, name: hit }];
 }
 
 function mapObjectionTopic(text: string): ObjectionTopic {
@@ -470,7 +499,11 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   },
   { topic: 'emi', re: /\b(?:emi|loan|monthly payment|installment)\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
-  { topic: 'availability', re: /\b(?:possession|ready|available|when.*ready|units?|configurations?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b)\b/i },
+  {
+    // Keep aligned with chip.answer.availability aliases — novel asks → INTENT embedder.
+    topic: 'availability',
+    re: /\b(?:possession|ready|available|when.*ready|units?|configurations?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b)\b/i,
+  },
   { topic: 'media', re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|share (?:the )?(?:brochure|plan))\b/i },
 ];
 
@@ -540,7 +573,49 @@ export function isDetailAskTurn(
 export type ExtractLocationContext = {
   phase?: ConversationState['phase'];
   askTopics?: AnswerTopic[];
+  /** Shortlist + focus names — "in Eldorado" is a project ref, not a locality. */
+  projectNameHints?: readonly string[];
 };
+
+function projectNameHints(s: ConversationState): string[] {
+  const names = s.discover.lastOffered.map((o) => o.name);
+  if (s.focus?.projectName) names.push(s.focus.projectName);
+  return names;
+}
+
+function locationExtractCtx(
+  s: ConversationState,
+  askTopics: AnswerTopic[],
+): ExtractLocationContext {
+  return {
+    phase: s.phase,
+    askTopics,
+    projectNameHints: projectNameHints(s),
+  };
+}
+
+/** True when fragment looks like a known project name (shortlist / focus). */
+export function looksLikeOfferedProjectName(
+  fragment: string,
+  hints: readonly string[] | undefined,
+): boolean {
+  if (!hints?.length) return false;
+  const needle = fragment.trim().toLowerCase().replace(/^(brigade|lokations)\s+/i, '');
+  if (needle.length < 3) return false;
+  for (const raw of hints) {
+    const name = raw.toLowerCase();
+    const distinctive = name.replace(/^(brigade|lokations)\s+/i, '');
+    if (
+      needle === distinctive ||
+      distinctive.includes(needle) ||
+      needle.includes(distinctive) ||
+      name.includes(needle)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function isLocationBroadenTurn(text: string): boolean {
   return (
@@ -560,8 +635,6 @@ function cleanLocalityFragment(raw: string): string {
 }
 
 /** "coorg, 50L", "looking in Sakleshpur", bare locality. */
-import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
-
 export function extractLocation(text: string, ctx?: ExtractLocationContext): string | undefined {
   const trimmed = text.trim();
   if (ctx?.askTopics?.length) return undefined;
@@ -574,17 +647,28 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   }
 
   const GENERIC = /\b(properties|property|projects|options|plantation|homes|flats|apartments|villas)\b/i;
+  const hints = ctx?.projectNameHints;
+
+  const acceptLocality = (raw: string | undefined): string | undefined => {
+    if (!raw) return undefined;
+    const cleaned = cleanLocalityFragment(raw);
+    if (!cleaned || GENERIC.test(cleaned)) return undefined;
+    if (looksLikeOfferedProjectName(cleaned, hints)) return undefined;
+    return cleaned;
+  };
 
   const inTail = /\bin\s+(.+?)\s*$/i.exec(text.trim());
-  if (inTail?.[1] && !GENERIC.test(inTail[1])) {
-    return cleanLocalityFragment(inTail[1]);
+  if (inTail?.[1]) {
+    const loc = acceptLocality(inTail[1]);
+    if (loc) return loc;
   }
 
   const propsIn = /\b(?:properties|property|projects|options|homes)\s+in\s+([A-Za-z][A-Za-z\s]{2,20}?)(?:\s|$|[,.!?])/i.exec(
     text,
   );
-  if (propsIn?.[1] && !GENERIC.test(propsIn[1])) {
-    return cleanLocalityFragment(propsIn[1]);
+  if (propsIn?.[1]) {
+    const loc = acceptLocality(propsIn[1]);
+    if (loc) return loc;
   }
 
   const cityProjects = /^([A-Za-z][A-Za-z\s]{2,24}?)\s+projects?\b/i.exec(trimmed);
@@ -593,16 +677,19 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     !GENERIC.test(cityProjects[1]) &&
     !/\b(?:show|me|other|more|the|my|all|some|any|different|find|list|see)\b/i.test(cityProjects[1])
   ) {
-    return cleanLocalityFragment(cityProjects[1]);
+    const loc = acceptLocality(cityProjects[1]);
+    if (loc) return loc;
   }
 
   const commaLead = /^([A-Za-z][A-Za-z\s]{2,24}?)\s*,/i.exec(text.trim());
   if (commaLead?.[1] && !/\b(lakhs|crore|bhk|budget)\b/i.test(commaLead[1])) {
-    return commaLead[1].trim();
+    const loc = acceptLocality(commaLead[1]);
+    if (loc) return loc;
   }
   const meinLoc = /\b([A-Za-z][A-Za-z\s]{2,20}?)\s+mein\b/i.exec(text);
   if (meinLoc?.[1] && !/\b(lakhs|crore|bhk|budget)\b/i.test(meinLoc[1])) {
-    return meinLoc[1].trim();
+    const loc = acceptLocality(meinLoc[1]);
+    if (loc) return loc;
   }
   const patterns = [
     /\b(?:looking|interested|searching)\s+(?:in|at|around|near|for)\s+([A-Za-z][A-Za-z\s]{2,24}?)(?:\s|$|[,.!?])/i,
@@ -611,7 +698,8 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   for (const re of patterns) {
     const m = re.exec(text);
     if (m?.[1] && !GENERIC.test(m[1]) && !/\b(lakhs|crore|bhk|budget)\b/i.test(m[1])) {
-      return m[1].trim();
+      const loc = acceptLocality(m[1]);
+      if (loc) return loc;
     }
   }
   const bare = text.trim();
@@ -623,7 +711,8 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     bare.split(/\s+/).length <= 4 &&
     !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?)$/i.test(bare) &&
     !/\b(?:compare|both|projects|options|show|visit|pricing|refining|refine|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|floor plan)\b/i.test(bare) &&
-    !isAdvisorBriefChipPhrase(bare)
+    !isAdvisorBriefChipPhrase(bare) &&
+    !looksLikeOfferedProjectName(bare, hints)
   ) {
     return bare;
   }
@@ -647,6 +736,16 @@ function detectDetailsPick(text: string, s: ConversationState): string | undefin
   return m[1].trim();
 }
 
+/**
+ * Closed config/unit lexicon for chip-miss bridges (not chip free-text sprawl).
+ * Must match "options" / "2BHK" — word-boundary on bare `option`/`bhk` misses those.
+ */
+export function looksLikeConfigAsk(text: string): boolean {
+  return /(?:options?|configs?(?:urations?)?|units?|sizes?|available|(?:\d+(?:\.\d+)?\s*)?bhk|sq\.?\s*ft|sqft)/i.test(
+    text,
+  );
+}
+
 /** Bare shortlist reply after clarify — "Ayana", "Brigade Orchards", "Orchards". */
 export function matchOfferedName(
   text: string,
@@ -654,9 +753,21 @@ export function matchOfferedName(
 ): string | undefined {
   if (!offered.length) return undefined;
   const t = text.trim().toLowerCase().replace(/[?.!,]+$/g, '');
-  if (!t || t.split(/\s+/).length > 6) return undefined;
-  // Skip if clearly a facet/search ask, not a name pick
+  if (!t) return undefined;
+  const wordCount = t.split(/\s+/).length;
+  const hasEmbeddedName = offered.some((o) => {
+    const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
+    const tokens = offeredNameTokens(o.name);
+    return (
+      (distinctive.length >= 4 && t.includes(distinctive)) ||
+      tokens.some((tok) => t.includes(tok))
+    );
+  });
+  // Short bare picks only when no shortlist token is embedded (avoids "looking in Whitefield").
+  if (!hasEmbeddedName && wordCount > 6) return undefined;
+  // Skip facet-only asks unless a shortlist name is already in the utterance.
   if (
+    !hasEmbeddedName &&
     /\b(?:plot sizes?|configurations?|pricing|legal|emi|visit|budget|compare|show me|looking)\b/i.test(t)
   ) {
     return undefined;
@@ -665,12 +776,14 @@ export function matchOfferedName(
   for (const o of offered) {
     const name = o.name.toLowerCase();
     const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
+    const tokens = offeredNameTokens(o.name);
     let score = 0;
     if (t === name || t === distinctive) score = 100;
     else if (name.startsWith(t) || distinctive.startsWith(t)) score = 80;
     else if (t.includes(name) || t.includes(distinctive)) score = 70;
-    else if (name.includes(t) && t.length >= 4) score = 60;
-    else if (distinctive.includes(t) && t.length >= 4) score = 55;
+    else if (tokens.some((tok) => t.includes(tok))) score = 68;
+    else if (!hasEmbeddedName && name.includes(t) && t.length >= 4) score = 60;
+    else if (!hasEmbeddedName && distinctive.includes(t) && t.length >= 4) score = 55;
     if (score > 0 && (!best || score > best.score)) best = { name: o.name, score };
   }
   return best && best.score >= 55 ? best.name : undefined;

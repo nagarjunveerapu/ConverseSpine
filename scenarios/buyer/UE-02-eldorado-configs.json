@@ -1,0 +1,30 @@
+{
+  "id": "UE-02",
+  "title": "Eldorado configs — enrichment size bands after focus",
+  "builder_id": "brigade-group",
+  "tags": ["units-enrichment", "availability", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "tell me about Brigade Eldorado",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "what plot sizes and unit configurations do you have?",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["sqft"],
+        "reply_excludes": [
+          "closest fit",
+          "tap a button",
+          "on our books",
+          "aren't published yet",
+          "no *plot*"
+        ]
+      }
+    }
+  ]
+}

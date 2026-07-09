@@ -232,7 +232,12 @@ export interface ProjectDetail {
   ecStatus?: string;
   loanEligibility?: string;
   faqs?: Array<{ questionKey: string; question: string; answer: string }>;
-  configurations?: Array<{ unitType: string; priceDisplay: string; priceMinInr: number }>;
+  configurations?: Array<{
+    unitType: string;
+    priceDisplay: string;
+    priceMinInr: number;
+    sizeDisplay?: string;
+  }>;
   location?: {
     connectivitySummary?: string;
     microMarketOverview?: string;
@@ -336,7 +341,7 @@ export interface EvidenceSet {
   emi?: EmiEvidence;
   landedCost?: LandedCostEvidence;
   visits?: VisitEvidence;
-  units?: Array<{ unitType: string; priceDisplay: string }>;
+  units?: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string }>;
   searchRecovery?: import('./recovery-planner.js').SearchRecoveryEnvelope;
 }
 
