@@ -67,15 +67,15 @@ Kernel (always code):
 | **P0** | Focus stability & depth gates | ✅ Shipped (PR [#19](https://github.com/nagarjunveerapu/ConverseSpine/pull/19)) |
 | **P1** | Extract authority & ingress flags | 🟡 P1a + P1b implemented locally; PR TBD |
 | **P1c** | PROJECT_VECTORS + discussedProjects | 🟡 Local (switch/compare); deploy TBD |
-| **SA** | Speech-act contract (slim) | 🟡 SA-0/1/2 ✅ · **SA-3 PR** · SA-4=P5 next |
-| **P2** | Turn ledger memory loop | 🟡 **P2a write** in progress (SA-5 speech_act); P2b/c not started |
+| **SA** | Speech-act contract (slim) | ✅ SA-0…3 · 🟡 SA-5 with P2a · SA-4=P5 next |
+| **P2** | Turn ledger memory loop | 🟡 **P2a write** PR · P2b/c not started |
 | **P3** | Focused facet depth | ⏸️ Paused — **after SA** (act=answer stable first) |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** ([#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24)); BAML RTI not wired |
 | **P5** | Routing → goal enforcement | 🔴 **= SA-4** (routing ≡ speech act; not a second classifier) |
 | **P6** | BAML extract production | 🔴 Contract only; abstain-only — never act authority |
 | **P7** | Advisor UX parity | 🟡 API adapter exists; NBA / checklist_snapshot thin |
 | **P8** | Platform scale | ⏸️ Deferred (Redis, OpenSearch, Kafka, Postgres) |
-| **Desk** | Catalog search / cutover | 🟡 Location expand PR #185; WA cutover = later phase |
+| **Desk** | Catalog search / cutover | ✅ Location expand [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185); WA cutover later |
 
 ---
 
