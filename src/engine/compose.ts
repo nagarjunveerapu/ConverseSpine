@@ -60,6 +60,8 @@ function describeGoal(g: TurnGoal): string {
       return `ask their ${g.slot}`;
     case 'recommend':
       return 'recommend matching projects from EVIDENCE';
+    case 'clarify_project_pick':
+      return 'ask which shortlisted project they want details on — do not invent a pick';
     case 'advance':
       return 'do NOT relist — nudge forward or ask one missing slot';
     case 'no_fit':
@@ -192,6 +194,14 @@ export function fallbackReply(req: ComposeRequest): string {
         .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}`)
         .join('; ');
       return `${pre}Here's what fits: ${list}. Want details on any of these, or shall I set up a visit?`;
+    }
+    case 'clarify_project_pick': {
+      const ms = (ev.matches ?? []).slice(0, 3);
+      if (!ms.length) {
+        return 'Which project should I open for details?';
+      }
+      const list = ms.map((m, i) => `${i + 1}) *${m.name}*`).join(', ');
+      return `Which one should I open for details — ${list}?`;
     }
     case 'advance': {
       const lead = ev.matches?.[0]?.name;

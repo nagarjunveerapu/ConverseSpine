@@ -1,10 +1,12 @@
 import type { Env } from '../../env.js';
-import type { AnswerTopic, ConversationState, Extracted } from '../types.js';
-import { detectTopics } from '../facts.js';
+import type { AnswerTopic, ConversationState, Extracted, OfferedProject } from '../types.js';
+import { detectTopics, isDetailAskTurn } from '../facts.js';
 
 const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 const TOPIC_THRESHOLD = 0.72;
 const LOCATION_THRESHOLD = 0.78;
+/** Low threshold — project names are short; intent vectors use 0.72. */
+export const PROJECT_VECTOR_THRESHOLD = 0.65;
 
 const INTENT_TO_TOPIC: Record<string, AnswerTopic> = {
   get_price: 'price',
@@ -25,6 +27,12 @@ export interface SemanticContext {
   microMarkets: readonly string[];
 }
 
+export interface ProjectVectorMatch {
+  readonly projectId: string;
+  readonly name: string;
+  readonly score: number;
+}
+
 function cosine(a: number[], b: number[]): number {
   let dot = 0;
   let na = 0;
@@ -42,6 +50,131 @@ async function embedTexts(ai: Env['AI'], texts: string[]): Promise<number[][]> {
   if (!ai || texts.length === 0) return [];
   const resp = (await ai.run(EMBED_MODEL, { text: texts })) as { data?: number[][] };
   return resp.data ?? [];
+}
+
+/** Collect distinct projects from Vectorize matches above threshold. */
+export function collectNamedProjectsFromMatches(
+  matches: ReadonlyArray<{ score?: number; metadata?: Record<string, unknown> }>,
+  threshold = PROJECT_VECTOR_THRESHOLD,
+): OfferedProject[] {
+  const byId = new Map<string, { name: string; score: number }>();
+  for (const m of matches) {
+    const score = m.score ?? 0;
+    if (score < threshold) continue;
+    const meta = m.metadata ?? {};
+    const projectId =
+      typeof meta.project_id === 'string' ? meta.project_id : '';
+    const name = typeof meta.name === 'string' ? meta.name : '';
+    if (!projectId || !name) continue;
+    const prev = byId.get(projectId);
+    if (!prev || score > prev.score) {
+      byId.set(projectId, { name, score });
+    }
+  }
+  return [...byId.entries()]
+    .sort((a, b) => b[1].score - a[1].score)
+    .map(([projectId, { name }]) => ({ projectId, name }));
+}
+
+async function queryProjectVectors(
+  env: Env,
+  text: string,
+  builderId: string,
+): Promise<ReadonlyArray<{ score?: number; metadata?: Record<string, unknown> }>> {
+  const vectors = await embedTexts(env.AI!, [text]);
+  const query = vectors[0];
+  if (!query || !env.PROJECT_VECTORS) return [];
+  const results = await env.PROJECT_VECTORS.query(query, {
+    topK: 8,
+    returnMetadata: 'all',
+    filter: { builder_id: builderId },
+  }).catch(() => null);
+  return results?.matches ?? [];
+}
+
+/** Strip compare/visit lead-in so each clause embeds a project name, not the verb. */
+function clauseForProjectEmbed(clause: string): string {
+  return clause
+    .replace(/^.*?\bcompare\b\s*/i, '')
+    .replace(/^(?:visit|book)\s+/i, '')
+    .trim();
+}
+
+/** Resolve project names from Vectorize — per-clause when compare/visit/multi-name lists. */
+async function resolveNamedProjectsFromVectors(
+  env: Env,
+  text: string,
+  builderId: string,
+  ex: Extracted,
+): Promise<OfferedProject[]> {
+  const multiProject =
+    ex.askTopic === 'compare' ||
+    ex.transition === 'want_visit' ||
+    /\bcompare\b/i.test(text) ||
+    /\band\b/i.test(text);
+
+  const clauses =
+    multiProject && /\band\b/i.test(text)
+      ? text
+          .split(/\band\b/i)
+          .map((p) => p.trim())
+          .filter((p) => p.length >= 3)
+      : [text];
+
+  const allMatches: Array<{ score?: number; metadata?: Record<string, unknown> }> = [];
+  for (const clause of clauses.slice(0, 3)) {
+    const embedClause = clauseForProjectEmbed(clause);
+    if (embedClause.length < 3) continue;
+    allMatches.push(...(await queryProjectVectors(env, embedClause, builderId)));
+  }
+
+  const named = collectNamedProjectsFromMatches(allMatches);
+  return multiProject ? named.slice(0, 3) : named.slice(0, 1);
+}
+
+/** Buyer text likely references a project by name (not pure location/budget seed). */
+const PROJECT_REF_RE =
+  /\b(?:about|compare|visit|brochure|switch\s+to|tell\s+me|show\s+me|interested\s+in|know\s+more|more\s+about|also\s+about|share|add|sounds\s+good|looks\s+good)\b/i;
+
+/** Anaphoric visit/compare — resolve from discourse, not full-catalog embed noise. */
+const ANAPHORA_ONLY_RE =
+  /\b(?:both|these|those|them|the\s+two|dono|both\s+(?:the\s+)?projects?)\b/i;
+
+export function isAnaphoricProjectRef(text: string): boolean {
+  const t = text.trim();
+  if (!ANAPHORA_ONLY_RE.test(t)) return false;
+  // Has an explicit proper-name-ish token beyond anaphora → still vectorize.
+  const stripped = t
+    .replace(ANAPHORA_ONLY_RE, ' ')
+    .replace(/\b(?:compare|visit|see|tour|about|the|projects?|ones?|options?|i|would|like|to|can|you|okay|ok|please|also|and|both)\b/gi, ' ')
+    .replace(/[^a-z0-9\s]/gi, ' ')
+    .trim();
+  return stripped.length < 3;
+}
+
+export function shouldQueryProjectVectors(
+  text: string,
+  ex: Extracted,
+  ctx: SemanticContext,
+): boolean {
+  if (ex.namedProjects?.length || text.trim().length < 3) return false;
+  // "visit them" / "compare both" — do not invent Desire Spaces from catalog noise.
+  if (isAnaphoricProjectRef(text)) return false;
+  const t = text.trim().toLowerCase();
+  // Pure discovery constraint lines — location + budget without a project name.
+  if (
+    /\b\d+\s*(?:lakh|lac|l|cr|crore)\b/.test(t) &&
+    !PROJECT_REF_RE.test(text) &&
+    !/\b(?:ayana|krishnaja|brigade|greens|eldorado|cornerstone|utopia|exotica|orchards)\b/i.test(text)
+  ) {
+    return false;
+  }
+  if (ctx.phase === 'focused') return true;
+  if (ex.affirm) return true;
+  if (ex.transition === 'want_visit' || ex.transition === 'want_details') return true;
+  if (ex.askTopic === 'compare' || ex.askTopic === 'media') return true;
+  if (ex.askTopics?.some((t) => t === 'compare' || t === 'media')) return true;
+  return PROJECT_REF_RE.test(text);
 }
 
 export function makeSemanticNlu(env: Env): SemanticNluPort {
@@ -77,7 +210,13 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
         }
       }
 
-      if (!next.constraints.location && ctx.microMarkets.length > 0) {
+      const baseTopics = next.askTopics ?? (next.askTopic ? [next.askTopic] : []);
+      if (
+        !next.constraints.location &&
+        !isDetailAskTurn(next) &&
+        baseTopics.length === 0 &&
+        ctx.microMarkets.length > 0
+      ) {
         const locHint =
           /\b(?:in|near|around|at|projects?\s+in)\s+([A-Za-z][A-Za-z\s/.-]{2,40})/i.exec(text)?.[1]?.trim() ??
           text.trim();
@@ -102,6 +241,17 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
               };
             }
           }
+        }
+      }
+
+      // PROJECT_VECTORS — which project (full builder catalog, not shortlist).
+      if (
+        env.PROJECT_VECTORS &&
+        shouldQueryProjectVectors(text, next, ctx)
+      ) {
+        const picked = await resolveNamedProjectsFromVectors(env, text, builderId, next);
+        if (picked.length > 0) {
+          next = { ...next, namedProjects: picked };
         }
       }
 

@@ -371,7 +371,7 @@ describe('Coorg funnel (deterministic)', () => {
 });
 
 describe('Focused project switch detection', () => {
-  it('detects Krishnaja name while focused on Ayana', () => {
+  it('detects Krishnaja via namedProjects while focused on Ayana', () => {
     const s = {
       ...initState('c1', 'lokations'),
       phase: 'focused' as const,
@@ -381,9 +381,13 @@ describe('Focused project switch detection', () => {
         lastOffered: [{ projectId: 'ayana', name: 'Ayana' }],
       },
     };
-    const ex = extractFactsSync('What about Krishnaja Greens?', s);
+    const ex = {
+      constraints: {},
+      transition: 'none' as const,
+      namedProjects: [{ projectId: 'krishnaja', name: 'Krishnaja Greens' }],
+    };
     const intent = detectFocusedSwitchIntent('What about Krishnaja Greens?', ex, s);
-    expect(intent).toMatchObject({ searchText: 'Krishnaja Greens' });
+    expect(intent).toMatchObject({ commit: { projectId: 'krishnaja', name: 'Krishnaja Greens' } });
   });
 });
 

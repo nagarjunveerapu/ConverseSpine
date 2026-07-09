@@ -8,7 +8,11 @@ import * as visit from './phases/visit.js';
 import { exitVisitPhase, isVisitFollowUpQuestion, shouldExitVisitForIntent } from './phases/visit.js';
 import { isVisitDayUtterance } from './visit-slot.js';
 import * as handoff from './phases/handoff.js';
-import { extractFacts, isDetailAskTurn, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes, wantsCostBreakdown } from './facts.js';
+import { buildTurnLogSnapshot } from '../observability/turn-log-snapshot.js';
+import { extractTurnAuthority } from './extract-authority.js';
+import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
+import { resolveInputSource } from './ingress.js';
+import { isDetailAskTurn, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes, wantsCostBreakdown } from './facts.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
   isCompareAmongOfferedTurn,
@@ -29,6 +33,7 @@ import {
   isSameAsLast,
   markAsked,
   markOriented,
+  recordDiscussed,
   recordOffered,
   releaseToDiscover,
   withNdConversation,
@@ -58,6 +63,7 @@ import type {
   Extracted,
   Match,
   ObjectionTopic,
+  OfferedProject,
   TurnDebug,
   TurnGoal,
 } from './types.js';
@@ -71,6 +77,8 @@ export interface EngineTurnInput {
   channel?: TurnIntentChannel;
   action_id?: string;
   preferenceClears?: PatchClearKey[];
+  /** Slots pre-filled by advisor UI this turn — extract skips re-parsing them. */
+  ingressFilledSlots?: IngressSlotKey[];
 }
 
 export interface EngineTurnOutput {
@@ -85,6 +93,7 @@ export interface EngineTurnOutput {
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
   let state = (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId);
+  const inputSource = resolveInputSource(input.action_id);
 
   const trimmedText = input.text.trim();
   if (!trimmedText) {
@@ -97,7 +106,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     return {
       reply,
       state,
-      debug: { phase: state.phase, goal: { kind: 'smalltalk' }, tools: [], grounding: 'pass' },
+      debug: withIngressDebug({ phase: state.phase, goal: { kind: 'smalltalk' }, tools: [], grounding: 'pass' }, inputSource),
     };
   }
 
@@ -132,6 +141,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
+  const ingressFilled = new Set<IngressSlotKey>(input.ingressFilledSlots ?? []);
   const uiModeHint = state.phase === 'focused' ? focusedUiMode(state) : recoveryUiMode(state);
   const clearedKeys = new Set<PatchClearKey>(input.preferenceClears ?? []);
 
@@ -180,7 +190,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         return {
           reply,
           state,
-          debug: { phase: state.phase, goal: { kind: 'no_fit' }, tools: ['search'], grounding: 'pass' },
+          debug: withIngressDebug(
+            { phase: state.phase, goal: { kind: 'no_fit' }, tools: ['search'], grounding: 'pass' },
+            inputSource,
+          ),
           searchRecovery: cappedRecovery,
           uiMode: 'search_recovery' as AdvisorUiMode,
           whatsappActions: whatsAppButtons(searchRecovery, channel),
@@ -247,7 +260,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       return {
         reply,
         state,
-        debug: { phase: state.phase, goal: { kind: 'no_fit' }, tools: [], grounding: 'pass' },
+        debug: withIngressDebug(
+          { phase: state.phase, goal: { kind: 'no_fit' }, tools: [], grounding: 'pass' },
+          inputSource,
+        ),
         searchRecovery: cappedRecovery,
         uiMode,
         whatsappActions: whatsAppButtons(searchRecovery, channel),
@@ -259,12 +275,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     return completeRtiFocusCommit(state, rtiFocusCommitted, input, deps, nd, trimmedText);
   }
 
-  let ex = await extractFacts(trimmedText, state, deps.llm);
   const catalogForNlu = await deps.data.catalog(state.builderId).catch(() => null);
-  ex = await deps.semantic.enrich(trimmedText, state.builderId, ex, {
-    phase: state.phase,
+  const extractResult = await extractTurnAuthority(trimmedText, state, state.builderId, {
+    llm: deps.llm,
+    semantic: deps.semantic,
     microMarkets: catalogForNlu?.microMarkets ?? [],
+  }, {
+    inputSource,
+    ingressFilledSlots: ingressFilled,
+    actionId: input.action_id,
   });
+  let ex = extractResult.extracted;
+  const extractProvenance = extractResult.provenance;
 
   if (isCompareAmongOfferedTurn(trimmedText) && state.discover.lastOffered.length >= 2) {
     if (state.phase === 'focused' || state.phase === 'handoff') {
@@ -274,6 +296,20 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   ex = prepareCompareExtracted(trimmedText, state, ex);
+  // Named multi-project turns without the word "compare" still need compare IDs.
+  if (
+    !(ex.compareProjectIds && ex.compareProjectIds.length >= 2) &&
+    (ex.namedProjects?.length ?? 0) >= 2
+  ) {
+    ex = {
+      ...ex,
+      askTopic: ex.askTopic ?? 'compare',
+      askTopics: ex.askTopics?.includes('compare')
+        ? ex.askTopics
+        : (['compare', ...(ex.askTopics ?? [])] as Extracted['askTopics']),
+      compareProjectIds: ex.namedProjects!.slice(0, 3).map((p) => p.projectId),
+    };
+  }
   ex = {
     ...ex,
     compareProjectIds:
@@ -325,7 +361,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     return {
       reply,
       state,
-      debug: { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
+      debug: withIngressDebug(
+        { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
+        inputSource,
+      ),
     };
   }
 
@@ -496,6 +535,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state.discover.lastOffered.length === 0 &&
     (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
     (evidence.matches?.length ?? 0) > 0;
+  const clarifyPickDeterministic = goal.kind === 'clarify_project_pick';
   const compareDeterministic = goal.kind === 'answer' && goal.topic === 'compare';
   const multiAnswerDeterministic =
     goal.kind === 'answer' && (goal.topics?.length ?? 0) > 1;
@@ -510,6 +550,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (
     visitDeterministic ||
     firstShortlistTurn ||
+    clarifyPickDeterministic ||
     compareDeterministic ||
     multiAnswerDeterministic ||
     locationDeterministic ||
@@ -635,10 +676,28 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
 
+  const debugOut = withIngressDebug(
+    { phase: state.phase, goal, tools: evidence.tools, grounding },
+    inputSource,
+    extractProvenance,
+  );
+  deps.emitTurnLog?.(
+    buildTurnLogSnapshot({
+      turnInput: input,
+      state,
+      ex,
+      goal,
+      debug: debugOut,
+      reply,
+      evidence,
+      buyerText: trimmedText,
+    }),
+  );
+
   return {
     reply,
     state,
-    debug: { phase: state.phase, goal, tools: evidence.tools, grounding },
+    debug: debugOut,
     ...(evidence.compare?.matrix ? { compareMatrix: evidence.compare.matrix } : {}),
     ...(cappedRecovery ? { searchRecovery: cappedRecovery } : {}),
     uiMode,
@@ -1210,6 +1269,10 @@ async function enrichDetailLegal(
 }
 
 async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineDeps): Promise<EvidenceSet> {
+  if (goal.kind === 'clarify_project_pick') {
+    const matches = matchesFromLastOffered(s).slice(0, 3);
+    return { tools: ['lastOffered'], matches };
+  }
   if (goal.kind === 'orient') {
     const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
     return { tools: ['catalog'], catalog };
@@ -1227,6 +1290,8 @@ async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineD
 }
 
 function compareIds(s: ConversationState): string[] {
+  const discussed = s.discover.discussedProjects ?? [];
+  if (discussed.length >= 2) return discussed.map((p) => p.projectId).slice(0, 3);
   const ids = s.discover.lastOffered.map((o) => o.projectId);
   if (s.focus && !ids.includes(s.focus.projectId)) ids.unshift(s.focus.projectId);
   return ids.slice(0, 3);
@@ -1251,6 +1316,23 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
       return markOriented(s);
     case 'probe':
       return markAsked(s, goal.slot);
+    case 'answer': {
+      // Track projects the buyer actually engaged with (focus + compare pair).
+      const discussed: OfferedProject[] = [];
+      if (s.focus) discussed.push({ projectId: s.focus.projectId, name: s.focus.projectName });
+      if (goal.topic === 'compare') {
+        const matrixPs = ev.compare?.matrix?.projects;
+        if (matrixPs?.length) {
+          for (const p of matrixPs) discussed.push({ projectId: p.project_id, name: p.name });
+        }
+      } else if (goal.projectId) {
+        const fromOffered = s.discover.lastOffered.find((o) => o.projectId === goal.projectId);
+        const fromDiscussed = (s.discover.discussedProjects ?? []).find((o) => o.projectId === goal.projectId);
+        const name = fromOffered?.name ?? fromDiscussed?.name ?? s.focus?.projectName;
+        if (name) discussed.push({ projectId: goal.projectId, name });
+      }
+      return discussed.length ? recordDiscussed(s, discussed) : s;
+    }
     case 'propose_visit':
       return { ...s, phase: 'visit' };
     case 'visit_ask':
@@ -1525,7 +1607,10 @@ async function completeRtiFocusCommit(
   return {
     reply,
     state: s,
-    debug: { phase: s.phase, goal: { kind: 'commit', projectId, projectName }, tools: evidence.tools, grounding: 'pass' },
+    debug: withIngressDebug(
+      { phase: s.phase, goal: { kind: 'commit', projectId, projectName }, tools: evidence.tools, grounding: 'pass' },
+      resolveInputSource(input.action_id),
+    ),
     uiMode: 'focused',
   };
 }
@@ -1594,3 +1679,19 @@ function whatsAppButtons(
 }
 
 type CompareEvidence = import('./types.js').CompareEvidence;
+
+function withIngressDebug(
+  base: TurnDebug,
+  inputSource: TurnInputSource,
+  extractProvenance?: ExtractProvenance,
+): TurnDebug {
+  return {
+    ...base,
+    input_source: inputSource,
+    ...(extractProvenance ? { extract_provenance: extractProvenance } : {}),
+    ...(extractProvenance?.speech_act ? { speech_act: extractProvenance.speech_act } : {}),
+    ...(extractProvenance?.chip_path_ids?.length
+      ? { chip_path_ids: extractProvenance.chip_path_ids }
+      : {}),
+  };
+}

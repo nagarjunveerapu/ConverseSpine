@@ -6,6 +6,7 @@ import {
   isLocationBroadenTurn,
   parseBudgetToInr,
 } from '../facts.js';
+import { classifySpeechAct, isNonSearchSpeechAct } from '../speech-act/index.js';
 import type { PatchClearKey, TurnIntentInput, TurnIntentResult } from './types.js';
 
 const EXPLORE_MORE_RE =
@@ -26,6 +27,10 @@ function isFocusedProjectQuestion(text: string): boolean {
   if (/\bdetails?\b.*\b(?:the|this)\s+project\b/i.test(t)) return true;
   if (/\b(?:the|this)\s+project(?:'s)?\s+details?\b/i.test(t)) return true;
   if (/\b(?:breakdown|break[- ]?up|landed cost|all[- ]in)\b/i.test(t)) return true;
+  // SA-1: size/config Q&A on focused project — not a propertyType search pivot
+  if (/\b(?:plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|configurations?|sizes?\s+offered|bhk options?)\b/i.test(t)) {
+    return true;
+  }
   return (
     /\b(?:is this|are these|what (?:type|kind)|apartment or|plot or|villa or|legal status|rera status|possession date)\b/i.test(
       t,
@@ -38,6 +43,9 @@ function isFocusedProjectQuestion(text: string): boolean {
 export function isFocusedSearchPivot(text: string): boolean {
   const t = text.trim();
   if (!t || isFocusedProjectQuestion(t)) return false;
+  // SA-1: chip-canonical resolve wins — answer/compare/visit are not pivots
+  const resolved = classifySpeechAct({ text: t });
+  if (resolved.primary && isNonSearchSpeechAct(resolved.speechAct)) return false;
   if (detectTopics(t).length > 0) return false;
   if (EXPLORE_MORE_RE.test(t)) return true;
   if (isLocationBroadenTurn(t)) return true;

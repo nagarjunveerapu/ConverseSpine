@@ -7,6 +7,7 @@ import { runEngineTurn } from '../engine/turn.js';
 import { kvStore } from '../engine/store-kv.js';
 import type { EngineDeps } from '../engine/ports.js';
 import { LangfuseTracer } from '../observability/langfuse.js';
+import { emitLocalTurnLog, localTurnLogEnabled } from '../observability/local-turn-log.js';
 import { classifyTurnIntent } from '../engine/turn-intent/classify.js';
 
 /** ConverseEngine runtime — wires NayaDesk + KV state + LLM compose. */
@@ -33,6 +34,9 @@ export class ConverseRuntime {
       },
       maps: env.GOOGLE_PLACES_API_KEY ? { apiKey: env.GOOGLE_PLACES_API_KEY } : undefined,
       routingEnv: env.AI || env.INTENT_VECTORS ? { AI: env.AI, INTENT_VECTORS: env.INTENT_VECTORS } : undefined,
+      ...(localTurnLogEnabled(env)
+        ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
+        : {}),
     };
   }
 

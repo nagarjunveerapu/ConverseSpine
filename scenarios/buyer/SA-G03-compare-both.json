@@ -1,0 +1,19 @@
+{
+  "id": "SA-G03",
+  "title": "Discuss two projects then compare both",
+  "builder_id": "lokations",
+  "tags": ["sa-1", "compare", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    { "text": "tell me also about krishnaja greens" },
+    {
+      "text": "compare both",
+      "assert": {
+        "reply_includes": ["ayana", "krishnaja"],
+        "reply_excludes": ["tap a button"]
+      }
+    }
+  ]
+}

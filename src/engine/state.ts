@@ -139,6 +139,10 @@ export function resolvePick(
   if (typeof ex.pickOrdinal === 'number' && ex.pickOrdinal >= 1 && ex.pickOrdinal <= offered.length) {
     return offered[ex.pickOrdinal - 1] ?? null;
   }
+  if (ex.namedProjects?.length >= 1) {
+    const n = ex.namedProjects[0]!;
+    return offered.find((o) => o.projectId === n.projectId) ?? n;
+  }
   if (ex.pickName) {
     const n = ex.pickName.toLowerCase();
     return offered.find((o) => o.name.toLowerCase().includes(n)) ?? null;
@@ -194,12 +198,34 @@ export function markAsked(s: ConversationState, slot: DiscoverState['asked'][num
   return { ...s, discover: { ...s.discover, asked, ignoredProbes: s.discover.ignoredProbes + 1 } };
 }
 
+export function recordDiscussed(
+  s: ConversationState,
+  projects: ReadonlyArray<OfferedProject>,
+): ConversationState {
+  if (projects.length === 0) return s;
+  const prev = s.discover.discussedProjects ?? [];
+  const byId = new Map(prev.map((p) => [p.projectId, p]));
+  for (const p of projects) {
+    if (!p.projectId || !p.name) continue;
+    byId.set(p.projectId, { projectId: p.projectId, name: p.name });
+  }
+  const discussedProjects = [...byId.values()].slice(-6);
+  return { ...s, discover: { ...s.discover, discussedProjects } };
+}
+
 export function commitTo(s: ConversationState, projectId: string, projectName: string): ConversationState {
-  return { ...s, phase: 'focused', focus: { projectId, projectName } };
+  return recordDiscussed(
+    { ...s, phase: 'focused', focus: { projectId, projectName } },
+    [{ projectId, name: projectName }],
+  );
 }
 
 export function releaseToDiscover(s: ConversationState): ConversationState {
-  const { focus: _f, ...rest } = s;
+  const focus = s.focus;
+  const withDiscussed = focus
+    ? recordDiscussed(s, [{ projectId: focus.projectId, name: focus.projectName }])
+    : s;
+  const { focus: _f, ...rest } = withDiscussed;
   return { ...rest, phase: 'discover' };
 }
 

@@ -1,0 +1,17 @@
+{
+  "id": "SA-CLARIFY-PICK",
+  "title": "Multi shortlist — details ask clarifies which project",
+  "builder_id": "lokations",
+  "tags": ["clarify", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    {
+      "text": "give me details on the project",
+      "assert": {
+        "reply_includes": ["which"],
+        "reply_excludes": ["possession December", "from 25-50L"]
+      }
+    }
+  ]
+}

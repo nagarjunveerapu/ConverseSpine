@@ -239,6 +239,8 @@ export interface EngineDeps {
   maps?: { apiKey?: string };
   /** Workers AI + Vectorize for RTI-3B turn routing. */
   routingEnv?: Pick<import('../env.js').Env, 'AI' | 'INTENT_VECTORS'>;
+  /** Local dev JSONL turn log (wrangler dev only). */
+  emitTurnLog?: (entry: import('../observability/local-turn-log.js').LocalTurnLogEntry) => void;
 }
 
 export type { EmiFacts };

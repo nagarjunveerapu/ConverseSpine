@@ -25,6 +25,13 @@ export function buildPendingPrompt(
   searchRecovery: SearchRecoveryEnvelope | undefined,
   turnCount: number,
 ): PendingPrompt | undefined {
+  if (goal.kind === 'clarify_project_pick') {
+    return {
+      kind: 'chip_menu',
+      chip_ids: (evidence.matches ?? []).map((m) => m.projectId).slice(0, 3),
+      asked_at_turn: turnCount,
+    };
+  }
   if (goal.kind !== 'no_fit' && !searchRecovery) return undefined;
 
   const chipIds = searchRecovery?.suggested_actions.map((a) => a.id) ?? [];

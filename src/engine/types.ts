@@ -35,6 +35,11 @@ export interface DiscoverState {
   advancedOnce: boolean;
   /** Recent turns for anaphora ("both", "these") — newest last. */
   recentMessages?: TranscriptMessage[];
+  /**
+   * Projects the buyer has actually engaged with this session (focus, switch, named Q&A).
+   * Used for "compare both" / "visit them" when lastOffered is still the search shortlist.
+   */
+  discussedProjects?: OfferedProject[];
 }
 
 export interface FocusState {
@@ -130,6 +135,8 @@ export type TurnGoal =
   | { kind: 'probe'; slot: ProbeKind }
   | { kind: 'recommend' }
   | { kind: 'advance'; reason: 'same_set' }
+  /** Shortlist has 2+ projects; buyer asked for details without naming which. */
+  | { kind: 'clarify_project_pick' }
   | { kind: 'no_fit' }
   | { kind: 'ack_reject_recommend' }
   | { kind: 'objection'; topic: ObjectionTopic; projectId?: string }
@@ -368,6 +375,10 @@ export interface Extracted {
   budgetPickQuestion?: boolean;
   /** Recovery chip applied — re-list matches even if same as last turn. */
   forceRecommendList?: boolean;
+  /** SA-0: resolved speech act (chip path / free-text→chip). */
+  speechAct?: import('./speech-act/types.js').SpeechActKind;
+  /** SA-0: primary (+ optional secondary) chip path ids. */
+  chipPathIds?: import('./speech-act/types.js').ChipPathId[];
 }
 
 export interface ComposeContext {
@@ -391,4 +402,12 @@ export interface TurnDebug {
   goal: TurnGoal;
   tools: string[];
   grounding: 'pass' | 'repaired';
+  /** Set at ingress — chip tap vs typed message. */
+  input_source?: import('./ingress.js').TurnInputSource;
+  /** Per-field extract provenance (free-text funnel). */
+  extract_provenance?: import('./ingress.js').ExtractProvenance;
+  /** SA-0: chip-canonical speech act for this turn. */
+  speech_act?: import('./speech-act/types.js').SpeechActKind;
+  /** SA-0: resolved chip path ids (primary first). */
+  chip_path_ids?: import('./speech-act/types.js').ChipPathId[];
 }

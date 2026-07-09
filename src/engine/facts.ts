@@ -3,6 +3,8 @@
  * Surfaces facts only; never picks reply shape (phase machine owns goals).
  */
 import type { EngineLlm } from './ports.js';
+import type { IngressSlotKey } from './ingress.js';
+import { isSlotWritable } from './ingress.js';
 import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic } from './types.js';
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 
@@ -29,16 +31,46 @@ const HINGLISH_LOC_BUDGET_RE =
 const HINGLISH_LOC_BHK_BUDGET_RE =
   /\b([A-Za-z][A-Za-z\s]{2,20}?)\s+mein\s+(\d)\s*bhk\s+chahiye\s+budget\s+(\d+(?:\.\d+)?)\s*( lakh| lakhs| l| cr| crore| crores)/i;
 
+export interface ExtractFactsOptions {
+  inputSource?: 'chip' | 'free_text';
+  ingressFilledSlots?: ReadonlySet<IngressSlotKey>;
+}
+
+/** Chip ingress — dialogue signals only; RTI owns slot patches. */
+export function extractFactsChip(text: string): Extracted {
+  const t = text.trim();
+  const affirm = AFFIRM.test(t);
+  const decline =
+    /\b(?:no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i.test(t) &&
+    !affirm;
+  return {
+    constraints: {},
+    transition: 'none',
+    affirm,
+    decline,
+    ...(STOP_RE.test(text) ? { stop: true } : {}),
+    ...(VISIT_RECALL_RE.test(text) ? { recall: true } : {}),
+    ...(extractDayWord(text) || /\bvisit\b/i.test(text) ? { visitSlotText: text } : {}),
+  };
+}
+
 export async function extractFacts(
   text: string,
   s: ConversationState,
   llm: EngineLlm,
+  options?: ExtractFactsOptions,
 ): Promise<Extracted> {
+  if (options?.inputSource === 'chip') {
+    return extractFactsChip(text);
+  }
+
+  const filled = options?.ingressFilledSlots ?? new Set<IngressSlotKey>();
   const t = text.trim();
-  const budget = parseBudgetToInr(text);
+  const budget =
+    isSlotWritable('budget', filled, text) ? parseBudgetToInr(text) : null;
   const budgetPickQuestion = isBudgetPickQuestion(text);
   const budgetFitQuestion = !budgetPickQuestion && isBudgetFitQuestion(text, budget);
-  const bhk = normalizeConfig(text);
+  const bhk = isSlotWritable('bhk', filled, text) ? normalizeConfig(text) : undefined;
   const ordinal = detectOrdinal(text);
   const affirm = AFFIRM.test(t);
   const decline =
@@ -46,9 +78,9 @@ export async function extractFacts(
     !affirm;
   const nameM = NAME_RE.exec(text);
   const isQuestion = text.includes('?');
-  const purposeKw = detectPurpose(text);
+  const purposeKw = isSlotWritable('purpose', filled, text) ? detectPurpose(text) : undefined;
   const transitionKw = detectTransition(text);
-  const propertyTypeKw = detectPropertyTypes(text);
+  const propertyTypeKw = isSlotWritable('propertyType', filled, text) ? detectPropertyTypes(text) : undefined;
   const askTopics = detectTopics(text);
   const askTopic = askTopics[0];
   const shownName = detectShownName(text, s);
@@ -74,8 +106,13 @@ export async function extractFacts(
   const mediaAssetKind = detectMediaAssetKind(text);
 
   const constraints: Extracted['constraints'] = {};
-  const hinglishBhk = HINGLISH_LOC_BHK_BUDGET_RE.exec(text);
-  const hinglishBudget = HINGLISH_LOC_BUDGET_RE.exec(text);
+  const hinglishBhk = isSlotWritable('budget', filled, text) && isSlotWritable('bhk', filled, text) && isSlotWritable('location', filled, text)
+    ? HINGLISH_LOC_BHK_BUDGET_RE.exec(text)
+    : null;
+  const hinglishBudget =
+    isSlotWritable('budget', filled, text) && isSlotWritable('location', filled, text)
+      ? HINGLISH_LOC_BUDGET_RE.exec(text)
+      : null;
   if (hinglishBhk) {
     constraints.location = hinglishBhk[1].trim();
     constraints.bhk = `${hinglishBhk[2]} BHK`;
@@ -88,7 +125,12 @@ export async function extractFacts(
     if (budget.min !== undefined) constraints.budgetMinInr = budget.min;
   }
   if (bhk && !constraints.bhk) constraints.bhk = bhk;
-  if (!constraints.location && askTopic !== 'compare' && !isVisitDayUtterance(text)) {
+  if (
+    !constraints.location &&
+    askTopic !== 'compare' &&
+    !isVisitDayUtterance(text) &&
+    isSlotWritable('location', filled, text)
+  ) {
     constraints.location = extractLocation(text, { phase: s.phase, askTopics });
   }
   if (propertyTypeKw) constraints.propertyType = propertyTypeKw;
@@ -99,14 +141,16 @@ export async function extractFacts(
     !constraints.location &&
     askTopics.length === 0 &&
     s.phase !== 'focused' &&
-    s.phase !== 'visit'
+    s.phase !== 'visit' &&
+    isSlotWritable('location', filled, text)
   ) {
     needLlm.push('location');
   }
-  if (!constraints.propertyType) needLlm.push('property_type');
-  if (!constraints.purpose && !purposeKw) needLlm.push('purpose');
+  if (!constraints.propertyType && isSlotWritable('propertyType', filled, text)) needLlm.push('property_type');
+  if (!constraints.purpose && !purposeKw && isSlotWritable('purpose', filled, text)) needLlm.push('purpose');
   if (!transitionKw) needLlm.push('transition');
 
+  let transitionFromLlm: Extracted['transition'] | undefined;
   if (needLlm.length > 0) {
     const signals = await llm.extractSignals(text, needLlm).catch(() => []);
     for (const sig of signals) {
@@ -118,14 +162,22 @@ export async function extractFacts(
         const p = sig.value;
         if (p === 'self_use' || p === 'investment') constraints.purpose = p;
       }
+      if (
+        sig.kind === 'transition' &&
+        (sig.value === 'want_details' || sig.value === 'see_others' || sig.value === 'want_visit')
+      ) {
+        transitionFromLlm = sig.value;
+      }
     }
   }
 
-  const transition = transitionKw ?? asTransitionFromSignals(undefined);
+  const transition = transitionKw ?? transitionFromLlm;
   const detailsPick = detectDetailsPick(text, s);
+  const shortlistPick = matchOfferedName(text, s.discover.lastOffered);
   const implicitProjectPick = wantsImplicitProjectPick(text, s.discover.lastOffered, s.focus);
   const pickName =
     detailsPick ??
+    shortlistPick ??
     (shownName && !reject && askTopic !== 'compare' && namedProjects.length <= 1 ? shownName : undefined);
 
   return {
@@ -159,24 +211,40 @@ export async function extractFacts(
 }
 
 /** Sync extraction for unit tests without LLM. */
-export function extractFactsSync(text: string, s: ConversationState): Extracted {
-  const budget = parseBudgetToInr(text);
+export function extractFactsSync(
+  text: string,
+  s: ConversationState,
+  options?: ExtractFactsOptions,
+): Extracted {
+  if (options?.inputSource === 'chip') {
+    return extractFactsChip(text);
+  }
+
+  const filled = options?.ingressFilledSlots ?? new Set<IngressSlotKey>();
+  const budget = isSlotWritable('budget', filled, text) ? parseBudgetToInr(text) : null;
   const budgetPickQuestion = isBudgetPickQuestion(text);
   const budgetFitQuestion = !budgetPickQuestion && isBudgetFitQuestion(text, budget);
   const constraints: Extracted['constraints'] = {};
   if (budget) constraints.budgetMaxInr = budget.max;
   const askTopics = detectTopics(text);
-  const loc = extractLocation(text, { phase: s.phase, askTopics });
+  const loc =
+    isSlotWritable('location', filled, text)
+      ? extractLocation(text, { phase: s.phase, askTopics })
+      : undefined;
   if (loc) constraints.location = loc;
-  const bhk = extractConfigurationFilters(text);
+  const bhk = isSlotWritable('bhk', filled, text) ? extractConfigurationFilters(text) : undefined;
   if (bhk) constraints.bhk = bhk;
-  const propertyType = detectPropertyTypes(text);
+  const propertyType = isSlotWritable('propertyType', filled, text) ? detectPropertyTypes(text) : undefined;
   if (propertyType) constraints.propertyType = propertyType;
-  const purpose = detectPurpose(text);
+  const purpose = isSlotWritable('purpose', filled, text) ? detectPurpose(text) : undefined;
   if (purpose) constraints.purpose = purpose;
   const askTopic = askTopics[0];
   const transitionKw = detectTransition(text);
   const namedProjects = resolveNamed(text, s);
+  const detailsPick = detectDetailsPick(text, s);
+  const shortlistPick = matchOfferedName(text, s.discover.lastOffered);
+  const pickName = detailsPick ?? shortlistPick;
+  const ordinal = detectOrdinal(text);
   const affirm = AFFIRM.test(text.trim());
   return {
     constraints,
@@ -187,6 +255,8 @@ export function extractFactsSync(text: string, s: ConversationState): Extracted 
     ...(askTopic ? { askTopic } : {}),
     ...(askTopics.length ? { askTopics } : {}),
     ...(namedProjects.length ? { namedProjects } : {}),
+    ...(pickName ? { pickName } : {}),
+    ...(ordinal !== null ? { pickOrdinal: ordinal } : {}),
     ...(budgetPickQuestion ? { budgetPickQuestion: true, compareAdvice: true } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
   };
@@ -213,10 +283,6 @@ export function isBudgetPickQuestion(text: string): boolean {
     /\b(?:which|what).{0,40}(?:fits?|best|closest|works?).{0,40}(?:my\s+)?budget\b/i.test(text) ||
     /\b(?:best for my budget|fits my budget best|within my budget which)\b/i.test(text)
   );
-}
-
-function asTransitionFromSignals(_v: string | undefined): Extracted['transition'] | undefined {
-  return undefined;
 }
 
 function normalizePropertyType(raw: string): string {
@@ -249,21 +315,9 @@ function detectPropertyType(text: string): string | undefined {
   return undefined;
 }
 
-function resolveNamed(text: string, s: ConversationState): OfferedProject[] {
-  const lc = text.toLowerCase();
-  const pool: OfferedProject[] = [...s.discover.lastOffered];
-  if (s.focus && !pool.some((p) => p.projectId === s.focus!.projectId)) {
-    pool.push({ projectId: s.focus.projectId, name: s.focus.projectName });
-  }
-  const out: OfferedProject[] = [];
-  for (const o of pool) {
-    const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
-    const firstTok = distinctive.split(/\s+/)[0];
-    const hit =
-      (firstTok && firstTok.length >= 4 && lc.includes(firstTok)) || lc.includes(distinctive);
-    if (hit && !out.some((x) => x.projectId === o.projectId)) out.push(o);
-  }
-  return out;
+function resolveNamed(_text: string, _s: ConversationState): OfferedProject[] {
+  // Project names come from PROJECT_VECTORS in semantic.enrich — not regex.
+  return [];
 }
 
 function mapObjectionTopic(text: string): ObjectionTopic {
@@ -387,19 +441,8 @@ function detectTransition(text: string): Extracted['transition'] | undefined {
   return undefined;
 }
 
-function detectShownName(text: string, s: ConversationState): string | undefined {
-  const lc = text.toLowerCase();
-  for (const o of s.discover.lastOffered) {
-    const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
-    const firstTok = distinctive.split(/\s+/)[0];
-    if ((firstTok && firstTok.length >= 4 && lc.includes(firstTok)) || lc.includes(distinctive)) {
-      return o.name;
-    }
-  }
-  if (s.focus) {
-    const distinctive = s.focus.projectName.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
-    if (lc.includes(distinctive)) return s.focus.projectName;
-  }
+function detectShownName(_text: string, _s: ConversationState): string | undefined {
+  // Shown-name substring matching removed — project identity is PROJECT_VECTORS.
   return undefined;
 }
 
@@ -425,7 +468,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   },
   { topic: 'emi', re: /\b(?:emi|loan|monthly payment|installment)\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
-  { topic: 'availability', re: /\b(?:possession|ready|available|when.*ready|units?|configurations?|bhk options?)\b/i },
+  { topic: 'availability', re: /\b(?:possession|ready|available|when.*ready|units?|configurations?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b)\b/i },
   { topic: 'media', re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|share (?:the )?(?:brochure|plan))\b/i },
 ];
 
@@ -599,4 +642,33 @@ function detectDetailsPick(text: string, s: ConversationState): string | undefin
   }
   if (s.focus && s.focus.projectName.toLowerCase().includes(needle)) return s.focus.projectName;
   return m[1].trim();
+}
+
+/** Bare shortlist reply after clarify — "Ayana", "Brigade Orchards", "Orchards". */
+export function matchOfferedName(
+  text: string,
+  offered: readonly OfferedProject[],
+): string | undefined {
+  if (!offered.length) return undefined;
+  const t = text.trim().toLowerCase().replace(/[?.!,]+$/g, '');
+  if (!t || t.split(/\s+/).length > 6) return undefined;
+  // Skip if clearly a facet/search ask, not a name pick
+  if (
+    /\b(?:plot sizes?|configurations?|pricing|legal|emi|visit|budget|compare|show me|looking)\b/i.test(t)
+  ) {
+    return undefined;
+  }
+  let best: { name: string; score: number } | undefined;
+  for (const o of offered) {
+    const name = o.name.toLowerCase();
+    const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
+    let score = 0;
+    if (t === name || t === distinctive) score = 100;
+    else if (name.startsWith(t) || distinctive.startsWith(t)) score = 80;
+    else if (t.includes(name) || t.includes(distinctive)) score = 70;
+    else if (name.includes(t) && t.length >= 4) score = 60;
+    else if (distinctive.includes(t) && t.length >= 4) score = 55;
+    if (score > 0 && (!best || score > best.score)) best = { name: o.name, score };
+  }
+  return best && best.score >= 55 ? best.name : undefined;
 }

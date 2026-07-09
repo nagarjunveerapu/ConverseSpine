@@ -6,17 +6,28 @@ Visual reference for layers, classes, and turn flow. Complements [`CONVERSE_ENGI
 
 ---
 
-## Authority model (regex vs embeddings vs LLM)
+## Authority model (chips → free-text resolve → embedder → LLM)
+
+**Same engine for NayaAdvisor chips and WhatsApp/free text.**
 
 | Layer | Advisor web (`/api/advisor/turn`) | Free text (`/chat`, WhatsApp) |
 |-------|-----------------------------------|-------------------------------|
-| **Structured UI** | `preferences`, `project_id`, `action_id` — authority | N/A |
-| **Regex / rules** | Wins when slots are filled | First pass — budget, BHK, topics, location, transition |
-| **Embeddings** | Skip if `askTopics` / location already set | Gap-fill: intent Vectorize (≥0.72), location cosine (≥0.78) |
-| **LLM signals** | Rare | `extractSignals` only for unfilled location/type/purpose/transition |
-| **LLM compose** | Polish reply from evidence | Same — `fallbackReply` when deterministic or no API key |
+| **1. Chip / structured** | `action_id`, `preferences`, `project_id` — **authority** | Recovery / NBA `action_id` when present |
+| **2. Free-text → chip resolve** | Typed line matched to **same chip paths** (Compare, Legal, Price, Visit, …) | Same resolver — utterance becomes chip path(s) before extract sprawl |
+| **3. Path-local rules** | Closed regex/rules **for that chip path only** (easy) | Same — e.g. Legal path + optional Objection compound |
+| **4. Embeddings** | Skip if chip/topic already set | **Only if no chip match** (or topic still empty): INTENT ≥0.72, location ≥0.78, PROJECT names ≥0.65 |
+| **5. LLM** | Rare signals / compose polish | Last resort: `extractSignals` gaps; compose from evidence |
 
-**Conflict rule:** regex wins when confident. Embeddings/LLM fill gaps or break ties — they do not override gated regex hits (e.g. `isDetailAskTurn` blocking focus release).
+**Examples**
+
+| Input | Resolves to | Then |
+|-------|-------------|------|
+| Chip **Compare Projects** | compare path | compare evidence |
+| “can you compare the projects” | **same** compare path | same |
+| Chip **Legal** | answer + legal | legal detail |
+| “are there any legal issues?” | Legal (+ Objection if concern) | legal + playbook if needed |
+
+**Conflict rule:** chip / resolved-chip-path wins. Embeddings and LLM do not invent paths outside the chip menu. See [`SPEECH_ACT_CONTRACT_LLD.md`](./lld/SPEECH_ACT_CONTRACT_LLD.md) §0.4.
 
 ---
 

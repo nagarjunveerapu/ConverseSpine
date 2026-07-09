@@ -210,7 +210,10 @@ function followUpNamed(ex: Extracted, text: string, s: ConversationState): Offer
 }
 
 function candidatesOf(s: ConversationState): OfferedProject[] {
+  const discussed = s.discover.discussedProjects ?? [];
+  if (discussed.length >= 2) return [...discussed];
   if (s.focus) return [{ projectId: s.focus.projectId, name: s.focus.projectName }];
+  if (discussed.length === 1) return [...discussed];
   return [...s.discover.lastOffered];
 }
 
@@ -318,6 +321,18 @@ function step(input: {
     if (overflow > 0) {
       prefix = `${prefix}We'll start with ${capped.length} stops and set up the other ${overflow} after — `;
     }
+  } else if (
+    !projectId &&
+    input.named.length === 0 &&
+    input.candidates.length > 1 &&
+    /\b(?:both|these|those|them|the\s+two)\b/i.test(input.text)
+  ) {
+    // "visit them" — use discussed/focus set, not catalog embed noise.
+    const capped = input.candidates.slice(0, MAX_VISIT_STOPS);
+    const [first, ...rest] = capped;
+    projectId = first!.projectId;
+    projectName = first!.name;
+    queued = rest.map((p) => ({ projectId: p.projectId, projectName: p.name }));
   }
 
   const singleNamed = input.named.length === 1 ? input.named[0]! : null;

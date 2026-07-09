@@ -1,4 +1,5 @@
 import { parseBudgetToInr } from '../engine/facts.js';
+import type { IngressSlotKey } from '../engine/ingress.js';
 import type { PatchClearKey } from '../engine/turn-intent/types.js';
 import type { Constraints } from '../engine/types.js';
 
@@ -61,6 +62,21 @@ export function mergeAdvisorPreferences(
   }
 
   return next;
+}
+
+/** Slots explicitly set by advisor preferences this turn — extract must not re-parse them. */
+export function ingressFilledSlotsFromPreferences(
+  prefs: Record<string, string | undefined>,
+): IngressSlotKey[] {
+  const slots: IngressSlotKey[] = [];
+  const loc = prefs.location?.trim();
+  if (loc && loc.toLowerCase() !== 'open to suggestions') slots.push('location');
+  if (prefs.budget?.trim()) slots.push('budget');
+  if (prefs.bhk?.trim()) slots.push('bhk');
+  const pt = prefs.property_type?.trim();
+  if (pt && pt.toLowerCase() !== 'open to suggestions') slots.push('propertyType');
+  if (prefs.purpose?.trim()) slots.push('purpose');
+  return slots;
 }
 
 /** Keys explicitly cleared by advisor preferences patch this turn. */

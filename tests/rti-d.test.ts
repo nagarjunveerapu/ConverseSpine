@@ -30,9 +30,16 @@ function brigadeDiscoverState() {
 }
 
 describe('RTI-D visit multi-stop (unit)', () => {
-  it('resolveNamed picks both projects from visit line', () => {
+  it('PROJECT_VECTORS fills namedProjects for visit line (via semantic)', async () => {
     const s = brigadeDiscoverState();
-    const ex = extractFactsSync('I would like to visit eldorado and cornerstone', s);
+    const deps = fakeDeps();
+    const { extracted: ex } = await import('../src/engine/extract-authority.js').then((m) =>
+      m.extractTurnAuthority('I would like to visit eldorado and cornerstone', s, 'brigade-group', {
+        llm: deps.llm,
+        semantic: deps.semantic,
+        microMarkets: [],
+      }, { inputSource: 'free_text' }),
+    );
     expect(ex.transition).toBe('want_visit');
     expect(ex.namedProjects?.map((p) => p.projectId).sort()).toEqual(['cornerstone', 'eldorado']);
   });
@@ -40,7 +47,13 @@ describe('RTI-D visit multi-stop (unit)', () => {
   it('seeds visit queue for two named projects', () => {
     const s = { ...brigadeDiscoverState(), phase: 'visit' as const };
     const text = 'I would like to visit eldorado and cornerstone';
-    const ex = extractFactsSync(text, s);
+    const ex = {
+      ...extractFactsSync(text, s),
+      namedProjects: [
+        { projectId: 'eldorado', name: 'Brigade Eldorado' },
+        { projectId: 'cornerstone', name: 'Brigade Cornerstone' },
+      ],
+    };
     const goal = visit.decide(s, ex, { text, now: new Date('2026-07-10T10:00:00+05:30') });
     expect(goal.kind).toBe('visit_ask');
     if (goal.kind !== 'visit_ask') return;
@@ -63,7 +76,10 @@ describe('RTI-D visit multi-stop (unit)', () => {
       },
     };
     const text = 'add cornerstone too';
-    const ex = extractFactsSync(text, s);
+    const ex = {
+      ...extractFactsSync(text, s),
+      namedProjects: [{ projectId: 'cornerstone', name: 'Brigade Cornerstone' }],
+    };
     const goal = visit.decide(s, ex, { text, now: new Date('2026-07-10T10:00:00+05:30') });
     expect(goal.kind).toBe('visit_ask');
     if (goal.kind !== 'visit_ask') return;
