@@ -137,4 +137,12 @@ export interface TurnResult {
   composer: string;
   turn_index: number;
   whatsapp_actions?: Array<{ id: string; label: string; patch: Record<string, string | undefined>; user_line: string; expected_matches: number }>;
+  /** Engine debug — NayaDesk Auto/Vault map tools → brain.tool_calls. */
+  debug?: {
+    phase?: string;
+    goal?: unknown;
+    tools?: string[];
+    grounding?: string;
+    speech_act?: string;
+  };
 }
