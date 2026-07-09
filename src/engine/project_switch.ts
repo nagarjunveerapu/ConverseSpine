@@ -51,8 +51,10 @@ export function detectFocusedSwitchIntent(
   const focus = s.focus;
   const fu = followUpTopics(ex);
 
-  if (ex.namedProjects?.length >= 1) {
-    const n = ex.namedProjects[0]!;
+  const named = ex.namedProjects;
+  if (named && named.length >= 1) {
+    const n = named[0];
+    if (!n) return null;
     if (n.projectId !== focus.projectId) return { commit: n, ...fu };
     return null;
   }
