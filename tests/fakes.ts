@@ -138,6 +138,8 @@ function projectDetailFor(id: string) {
         startingPriceDisplay: p.display,
         projectType: p.type,
         summary: 'Managed coffee plantation estate in the Western Ghats.',
+        ecStatus: 'Clear — no encumbrance on record for the estate parcels.',
+        loanEligibility: 'HDFC, SBI, ICICI, Axis — subject to buyer credit.',
         location: {
           connectivitySummary: '2.5 hrs from Bangalore via NH75; nearest town Sakleshpur 12 km.',
           microMarketOverview: 'Rolling hills, coffee estates, cool climate year-round.',

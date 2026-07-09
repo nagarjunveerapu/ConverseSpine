@@ -548,7 +548,7 @@ export function nayadeskCrm(crm: NayaDeskClient): EngineCrm {
         resolved_intent: entry.resolvedIntent ?? { goal: entry.goal },
         action_plan: entry.actionPlan ?? {},
         offered_project_ids: entry.offeredProjectIds ?? [],
-        disclosed_facts: [],
+        disclosed_facts: entry.disclosedFacts ?? [],
         verify: entry.verify ?? { grounding: 'pass' },
         tool_runs:
           entry.toolRuns ??
