@@ -1,0 +1,16 @@
+{
+  "id": "SA-G02b",
+  "title": "my visits → visit_recall (not book schedule)",
+  "builder_id": "lokations",
+  "tags": ["speech-act", "sa-2", "visit-recall", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "my visits?",
+      "assert": {
+        "goal_kind": "visit_recall",
+        "reply_excludes": ["Which day works", "which project should I set up"]
+      }
+    }
+  ]
+}

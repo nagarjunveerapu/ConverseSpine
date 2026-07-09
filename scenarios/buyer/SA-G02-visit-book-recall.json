@@ -1,0 +1,24 @@
+{
+  "id": "SA-G02",
+  "title": "visit_book after two focuses seeds multi-stop (not which-project / not recall)",
+  "builder_id": "lokations",
+  "tags": ["speech-act", "sa-2", "visit", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    {
+      "text": "come for the visit",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes": ["coming from"],
+        "reply_excludes": [
+          "don't see a confirmed visit",
+          "Which project should I set up the visit for",
+          "Which day works"
+        ]
+      }
+    }
+  ]
+}

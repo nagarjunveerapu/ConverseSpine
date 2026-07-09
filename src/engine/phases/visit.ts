@@ -176,7 +176,20 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
     };
   }
 
-  return step({ text: ctx.text, named: ex.namedProjects ?? [], candidates: candidatesOf(s), prior, now, affirm: ex.affirm, booked, ctx });
+  return step({
+    text: ctx.text,
+    named: ex.namedProjects ?? [],
+    candidates: candidatesOf(s),
+    prior,
+    now,
+    affirm: ex.affirm,
+    booked,
+    ctx,
+    // SA-2: after compare, discussed set ≥2 — "come for the visit" seeds the queue
+    // without requiring "them/both" deixis.
+    seedDiscussedMulti:
+      ex.transition === 'want_visit' && (s.discover.discussedProjects?.length ?? 0) >= 2,
+  });
 }
 
 function deferToProjectAnswer(s: ConversationState, ex: Extracted): TurnGoal | null {
@@ -288,6 +301,8 @@ function step(input: {
   affirm?: boolean;
   booked: readonly StoredVisit[];
   ctx: VisitCtx;
+  /** SA-2 — seed multi-stop from discussedProjects on visit_book without deixis. */
+  seedDiscussedMulti?: boolean;
 }): TurnGoal {
   const lastBooked = lastBookedVisit(input.booked);
   const isStop2Plus = !!lastBooked;
@@ -325,9 +340,11 @@ function step(input: {
     !projectId &&
     input.named.length === 0 &&
     input.candidates.length > 1 &&
-    /\b(?:both|these|those|them|the\s+two)\b/i.test(input.text)
+    (/\b(?:both|these|those|them|the\s+two)\b/i.test(input.text) ||
+      // SA-2: "come for the visit" after compare — discussed set is the candidate pool.
+      Boolean(input.seedDiscussedMulti))
   ) {
-    // "visit them" — use discussed/focus set, not catalog embed noise.
+    // Multi-stop from discussed/focus set — not catalog embed noise.
     const capped = input.candidates.slice(0, MAX_VISIT_STOPS);
     const [first, ...rest] = capped;
     projectId = first!.projectId;
