@@ -7,7 +7,23 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 
 **Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
 
-**Last updated:** 2026-07-09
+**Last updated:** 2026-07-09 (P4-CTA + Desk cutover track added)
+
+**Rule for live failures:** Classify against this doc + [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) **before** coding. Prefer the next open phase slice over a one-off patch that drifts the plan.
+
+---
+
+## Where we are (ops snapshot — 2026-07-09)
+
+| Track | Status | Notes |
+|-------|--------|-------|
+| Desk tooling → Spine (Playground / agent-send) | ✅ Phase 1 | NayaDesk PRs #183–#184; WhatsApp buyers still on Naya |
+| Desk location expand (North Bangalore graph) | 🟡 PR | NayaDesk [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185) — migrate + smoke after merge |
+| Units enrichment / BHK-scoped list | ✅ | Spine #23; Desk #182 |
+| **Focused CTA → bare `yes`** | 🟡 **P4-CTA** | Fix on branch `fix/p4-cta-focused-pricing-affirm`; RTI-G02 live green |
+| Empty Neo pricing copy | ⏸️ DATA | `price_min_paise=0` — honest “not published” later; not a routing bug |
+
+**Do not** keep stacking playground patches outside the phase table. File the symptom under the owning phase, then implement that slice.
 
 ---
 
@@ -52,11 +68,12 @@ Kernel (always code):
 | **SA** | Speech-act contract (slim) | 🔴 Designed — [`SPEECH_ACT_CONTRACT_LLD.md`](./lld/SPEECH_ACT_CONTRACT_LLD.md); **next after P1** |
 | **P2** | Turn ledger memory loop | 🔴 Designed (D1 table exists); not wired in loop |
 | **P3** | Focused facet depth | ⏸️ Paused — **after SA** (act=answer stable first) |
-| **P4** | Contextual dialogue (RTI) | 🟡 Partial (RTI-2…G, 3A, 3B shipped; BAML RTI not wired) |
+| **P4** | Contextual dialogue (RTI) | 🟡 Partial — **next: P4-CTA** (focused pricing CTA → `yes`); BAML RTI not wired |
 | **P5** | Routing → goal enforcement | 🔴 **= SA-4** (routing ≡ speech act; not a second classifier) |
 | **P6** | BAML extract production | 🔴 Contract only; abstain-only — never act authority |
 | **P7** | Advisor UX parity | 🟡 API adapter exists; NBA / checklist_snapshot thin |
 | **P8** | Platform scale | ⏸️ Deferred (Redis, OpenSearch, Kafka, Postgres) |
+| **Desk** | Catalog search / cutover | 🟡 Location expand PR #185; WA cutover = later phase |
 
 ---
 
@@ -187,9 +204,9 @@ Kernel (always code):
 
 ## P4 — Contextual dialogue (RTI) 🟡
 
-**Problem:** Recovery yes/no, chip equivalence, free-text recovery patches need **dialogue** memory — not extract funnel.
+**Problem:** Recovery yes/no, chip equivalence, free-text recovery patches, and **focused follow-up CTAs** need **dialogue** memory — not extract funnel / PROJECT_VECTORS.
 
-**Source LLD:** [`ADVISOR_CONTEXTUAL_TURN_INTENT_LLD.md`](../../Naya/docs/lld/ADVISOR_CONTEXTUAL_TURN_INTENT_LLD.md)
+**Source LLD:** [`ADVISOR_CONTEXTUAL_TURN_INTENT_LLD.md`](../../Naya/docs/lld/ADVISOR_CONTEXTUAL_TURN_INTENT_LLD.md) · layer guide §2 + §13
 
 | Item | Status |
 |------|--------|
@@ -197,16 +214,45 @@ Kernel (always code):
 | RTI-B focused pivot | ✅ |
 | RTI-D…G visit/compare/shortlist | ✅ |
 | RTI rules + `llm-classifier.ts` | ✅ hand-rolled JSON |
+| **P4-CTA — focused CTA → bare affirm** | 🟡 PR pending — unit + RTI-G02 live green (2026-07-09) |
 | BAML `ClassifyTurnIntent` wired | 🔴 |
-| RTI reads ledger `prior` | 🔴 (P2b) |
+| RTI reads ledger `prior` | 🔴 (P2b — strengthens P4-CTA; not a hard gate for KV `pendingPrompt`) |
 
-**Remaining:**
+### P4-CTA — Focused availability CTA → `yes` (added 2026-07-09)
+
+**Symptom (playground):** North Bangalore → focus Eldorado → “details on 2BHK” → *Want pricing on a specific size?* → **`yes`** → reply about **Brigade Buena Vista** (wrong project).
+
+**Root cause (compound):**
+
+1. `buildPendingPrompt` only covers recovery / `offer_project` / chip menus — **not** focused `answer`+`availability` CTAs → `rti.pendingPrompt` unset → RTI skipped on bare `yes`.
+2. `shouldQueryProjectVectors` returns true for any focused text ≥3 chars → `"yes"` hits full-catalog PROJECT_VECTORS → hallucinated `namedProjects` (e.g. Buena Vista).
+3. `detectFocusedSwitchIntent` commits on that name before `focused.decide` can answer price on Eldorado.
+
+**Why this phase (not compose / not SA):** Layer guide — *“What does yes mean?”* → **RTI (2)**. CTA wording in compose is fine; binding the next affirm is RTI + persist.
+
+**Why not wait for full P2:** KV `rti.pendingPrompt` is enough for this CTA shape. P2b (`awaiting_response` from ledger) is the durable upgrade later — do not block P4-CTA on ledger read.
+
+| Touch | Role |
+|-------|------|
+| `turn-intent/types.ts` | New `PendingPromptKind` e.g. `offer_pricing` (topic + focus project) |
+| `turn-intent/pending-prompt.ts` | Persist when `answer` + `availability` + units (and clear on success turns carefully) |
+| `turn-intent/classify.ts` | Bare affirm + `offer_pricing` → stay focused, seed `askTopic: 'price'` |
+| `adapters/semantic-nlu.ts` | Gate: bare affirm must **not** query PROJECT_VECTORS |
+| `project_switch.ts` | Belt: affirm without pick/named project must not switch |
+| Tests | Golden **RTI-G02** — Eldorado 2BHK list → `yes` → `answer`/`price` on Eldorado; no Buena Vista |
+
+**Explicitly reject:** compose CTA regex; `reply_quality` strips; LLM prompt tweaks; discover re-search.
+
+**Exit criteria:** RTI-G02 green on local + playground smoke; existing RTI-G01 (`offer_project` → yes) still green.
+
+**Remaining (after P4-CTA):**
 
 - Wire BAML for `ClassifyTurnIntent` (replaces `llm-classifier.ts`)
-- RTI consumes `TurnFeedForward` not only KV `recentMessages[-4]`
+- RTI consumes `TurnFeedForward` not only KV `recentMessages[-4]` (P2b)
 - Chip label ↔ `action_id` parity table (same patch)
+- Generalize pending kinds for other focused CTAs (“Want pricing, legal, or a visit?”) without unbounded regex
 
-**Exit criteria:** Scenarios S15, S17, ADV-R02 in contextual turn intent scenarios doc.
+**Exit criteria (full P4):** Scenarios S15, S17, ADV-R02 + **RTI-G01/G02**.
 
 **Runs parallel to P1b** only for chip fast-path — RTI hook stays **before** extract funnel.
 
@@ -288,7 +334,12 @@ P1c (PROJECT_VECTORS / discussed) 🟡 local
   ↓
 SA-0 ✅ (chip catalog + free-text→chip resolve)
   ↓
-SA-1..3 (permissions / visit_book≠recall / availability)  ← NEXT
+┌─────────────────────────────────────────────────────────────┐
+│  NEXT (parallel OK — different layers):                     │
+│  • P4-CTA  — focused CTA → yes (RTI pendingPrompt)  ← LIVE  │
+│  • Desk #185 merge + migrate — North Bangalore expand       │
+│  • SA-1..3 — permissions / visit_book≠recall / availability │
+└─────────────────────────────────────────────────────────────┘
   ↓
 SA-5 + P2a (ledger write incl. speech_act) → P2b/c
   ↓
@@ -296,14 +347,18 @@ SA-4 = P5 (routing ≡ speech act)
   ↓
 P3 A→F (facet depth copy/evidence — on stable act=answer)
   ↓
-P4/P6 (BAML shadow abstain only — never act authority)
+P4 remainder (BAML ClassifyTurnIntent) + P6 (BAML extract abstain)
   ↓
 P7 (NBA, checklist_snapshot, board_tab)
+  ↓
+Desk Phase 2 — WhatsApp buyer cutover to Spine (after SA + P2a + P4-CTA green)
 ```
 
 **Parallel allowed:**
 
-- P1 PR ship while SA-0 tests land
+- **P4-CTA** with SA-1..3 (RTI vs speech-act — different layers; do not conflate)
+- Desk #185 merge/migrate while Spine P4-CTA lands
+- P1 PR ship while SA tests land
 - NayaAdvisor UI (P7) after P3-E contract frozen
 
 **Serial gates (do not skip):**
@@ -313,6 +368,8 @@ P7 (NBA, checklist_snapshot, board_tab)
 3. **P2a (with `speech_act`) before relying on Dev debug** — ledger must record the stamp  
 4. **Do not invent payment_plan/ROI topics before EngineData tools**  
 5. **P2c before P3-D polish** — disclosed_facts still needed for “don’t repeat RERA”  
+6. **P4-CTA before WhatsApp cutover** — bare `yes` after focused CTAs must not invent projects  
+7. **Do not “fix playground” outside this table** — add a row / golden ID first  
 
 ---
 
@@ -327,8 +384,10 @@ P7 (NBA, checklist_snapshot, board_tab)
 | **ADV-F01** | P3 | Orchards 7 facet questions (banks, EC, price, …) |
 | **MEM-G01** | P2 | legal → `"what banks?"` — uses ledger prior, not generic snapshot |
 | **RTI-G01** | P4 | offer_project → `yes` commits; offer_widen → `yes` probes |
+| **RTI-G02** | P4-CTA | Focus Eldorado → 2BHK listUnits CTA → `yes` → `answer`/`price` on Eldorado (not Buena Vista / vector noise) |
 | **V01–V08** | P5/SA-4 | Visit vs explore routing |
 | **CHIP-G01** | P1b | `action_id` vs typed chip label same patch |
+| **LOC-G01** | Desk | “North Bangalore” search → Eldorado/Orchards/Neo identity ahead of geo-only (after #185) |
 
 ---
 
@@ -352,8 +411,11 @@ Before each phase implementation, post:
 | Project switch mid-focused ("what about Cornerstone?") | P1c vectors + SA `switch` — partially local |
 | V02 visit follow-up after single stop booked | Visit LLD §11 — partial; SA-2 seeds discussed |
 | payment_plan / investment / builder topics | DEFER until EngineData tools (speech-act LLD) |
-| Prod soak / deploy ConverseSpine prod | After SA + P2a on Dev golden |
+| Prod soak / deploy ConverseSpine prod | After SA + P2a + **P4-CTA** on Dev golden |
 | Wire Slice 1 / P1c to main if not merged | PR follow-up |
+| Empty / zero-price unit UX (“not published” vs “on file”) | DATA + compose honesty — not RTI |
+| Soft-match WA recovery | After P4-CTA |
+| WhatsApp full cutover (Desk Phase 2) | After P4-CTA + SA + P2a green |
 
 ---
 

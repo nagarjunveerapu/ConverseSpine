@@ -1,0 +1,40 @@
+{
+  "id": "RTI-G02",
+  "title": "Focused Eldorado 2BHK CTA → yes stays on Eldorado pricing (not Buena Vista)",
+  "builder_id": "brigade-group",
+  "tags": ["rti", "p4-cta", "focused", "affirm", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "Apartment in North Bangalore",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["tap a button"]
+      }
+    },
+    {
+      "text": "Give me more details on Brigade Eldorado",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["buena vista", "tap a button"]
+      }
+    },
+    {
+      "text": "give me 2BHK configurations",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["2 BHK", "sqft"],
+        "reply_excludes": ["buena vista", "tap a button"]
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind": "answer",
+        "goal_topic": "price",
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["buena vista", "Budigere", "Old Madras"]
+      }
+    }
+  ]
+}

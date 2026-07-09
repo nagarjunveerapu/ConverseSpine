@@ -206,6 +206,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let recoveryChipTurn = false;
   let focusPivotTurn = false;
   let rtiFocusCommitted: { projectId: string; projectName: string } | undefined;
+  let rtiSeedAskTopic: import('./types.js').AnswerTopic | undefined;
 
   if (deps.turnIntent && shouldRunTurnIntent(state, input.action_id, trimmedText)) {
     const intentInput = buildTurnIntentInput(state, trimmedText, channel, uiModeHint, input.action_id);
@@ -215,6 +216,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     for (const k of applied.clearedKeys) clearedKeys.add(k);
     if (intent.kind === 'apply_recovery_patch') {
       recoveryChipTurn = true;
+    }
+    if (applied.seedAskTopic) {
+      rtiSeedAskTopic = applied.seedAskTopic;
     }
 
     if (applied.focusCommitted) {
@@ -288,6 +292,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   });
   let ex = extractResult.extracted;
   const extractProvenance = extractResult.provenance;
+
+  // P4-CTA: RTI seeded topic (e.g. price after offer_pricing → yes) wins over bare affirm.
+  if (rtiSeedAskTopic) {
+    ex = {
+      ...ex,
+      askTopic: rtiSeedAskTopic,
+      askTopics: [rtiSeedAskTopic],
+      affirm: undefined,
+    };
+  }
 
   if (isCompareAmongOfferedTurn(trimmedText) && state.discover.lastOffered.length >= 2) {
     if (state.phase === 'focused' || state.phase === 'handoff') {
@@ -642,6 +656,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       uiMode,
       turnCount: state.turnCount,
       previousRti: state.rti,
+      focus: state.focus
+        ? { projectId: state.focus.projectId, projectName: state.focus.projectName }
+        : null,
     }),
   };
 

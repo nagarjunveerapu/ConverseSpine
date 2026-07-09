@@ -24,6 +24,7 @@ export function buildPendingPrompt(
   evidence: EvidenceSet,
   searchRecovery: SearchRecoveryEnvelope | undefined,
   turnCount: number,
+  focus?: { projectId: string; projectName: string } | null,
 ): PendingPrompt | undefined {
   if (goal.kind === 'clarify_project_pick') {
     return {
@@ -32,6 +33,24 @@ export function buildPendingPrompt(
       asked_at_turn: turnCount,
     };
   }
+
+  // P4-CTA: focused availability list → "Want pricing on a specific size?"
+  // Persist so bare "yes" binds to price on the same focus (not PROJECT_VECTORS).
+  if (
+    goal.kind === 'answer' &&
+    goal.topic === 'availability' &&
+    (evidence.units?.length ?? 0) > 0 &&
+    focus?.projectId
+  ) {
+    return {
+      kind: 'offer_pricing',
+      project_id: focus.projectId,
+      project_name: focus.projectName,
+      topic: 'price',
+      asked_at_turn: turnCount,
+    };
+  }
+
   if (goal.kind !== 'no_fit' && !searchRecovery) return undefined;
 
   const chipIds = searchRecovery?.suggested_actions.map((a) => a.id) ?? [];
@@ -101,6 +120,9 @@ export function defaultProbePrompt(
   channel: 'advisor_web' | 'whatsapp',
   chipCount = 0,
 ): string {
+  if (kind === 'offer_pricing') {
+    return 'Want pricing on a specific size, or another detail on this project?';
+  }
   if (kind === 'offer_project') {
     return 'Did you want me to open that project, or keep refining your search?';
   }
@@ -130,23 +152,28 @@ export function buildRtiStateUpdate(input: {
   uiMode: AdvisorUiMode;
   turnCount: number;
   previousRti?: RtiState;
+  focus?: { projectId: string; projectName: string } | null;
 }): RtiState {
   const pendingPrompt = buildPendingPrompt(
     input.goal,
     input.evidence,
     input.searchRecovery,
     input.turnCount,
+    input.focus,
   );
   const successTurn =
     input.goal.kind === 'recommend' ||
     input.goal.kind === 'commit' ||
     input.goal.kind === 'advance' ||
     (input.evidence.matches?.length ?? 0) > 0;
+  // offer_pricing is a successful focused answer that still needs dialogue memory.
+  const keepPending =
+    pendingPrompt?.kind === 'offer_pricing' || (!successTurn && Boolean(pendingPrompt));
   const suggestedActions = input.searchRecovery?.suggested_actions.length
     ? input.searchRecovery.suggested_actions
     : input.previousRti?.lastSuggestedActions;
   return {
-    ...(!successTurn && pendingPrompt ? { pendingPrompt } : {}),
+    ...(keepPending && pendingPrompt ? { pendingPrompt } : {}),
     ...(suggestedActions?.length ? { lastSuggestedActions: suggestedActions } : {}),
     lastGoalKind: input.goal.kind,
     lastEvidenceKind: evidenceKindFromEvidence(input.evidence),

@@ -5,6 +5,7 @@ export type TurnIntentChannel = 'advisor_web' | 'whatsapp';
 
 export type PendingPromptKind =
   | 'offer_project'
+  | 'offer_pricing'
   | 'offer_widen'
   | 'binary_budget_or_area'
   | 'chip_menu'
@@ -14,6 +15,8 @@ export interface PendingPrompt {
   kind: PendingPromptKind;
   project_id?: string;
   project_name?: string;
+  /** For offer_pricing — topic to seed on bare affirm (usually price). */
+  topic?: import('../types.js').AnswerTopic;
   location_target?: string;
   chip_ids?: string[];
   asked_at_turn: number;
@@ -45,6 +48,8 @@ export interface TurnIntentResult {
   focus_project_id?: string;
   matched_action_id?: string;
   probe_prompt?: string;
+  /** focused_question — seed askTopic after RTI (e.g. price after offer_pricing). */
+  ask_topic?: import('../types.js').AnswerTopic;
 }
 
 export interface RtiState {
@@ -81,4 +86,6 @@ export interface TurnIntentApplyResult {
   focusCommitted?: { projectId: string; projectName: string };
   /** Focus released — re-run discover/recommend, do not answer@focus. */
   releasedFocus?: boolean;
+  /** Seed extract askTopic after RTI (P4-CTA offer_pricing → yes). */
+  seedAskTopic?: import('../types.js').AnswerTopic;
 }
