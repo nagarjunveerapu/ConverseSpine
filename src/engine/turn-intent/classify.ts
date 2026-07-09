@@ -195,7 +195,17 @@ export function shouldRunTurnIntent(state: ConversationState, actionId?: string,
     return false;
   }
   if (state.phase === 'focused') {
-    if (state.rti?.pendingPrompt) return true;
+    if (state.rti?.pendingPrompt) {
+      const pending = state.rti.pendingPrompt;
+      // SA-3 / P4-CTA: offer_pricing only binds bare affirm/decline.
+      // "what sizes for 2 BHK?" must reach extract → listUnits, not the pricing probe.
+      if (pending.kind === 'offer_pricing' && text) {
+        const t = text.trim();
+        if (AFFIRM_ONLY.test(t) || DECLINE.test(t)) return true;
+        return Boolean(shouldRunFocusedTurnIntent(state, text, actionId));
+      }
+      return true;
+    }
     return Boolean(text && shouldRunFocusedTurnIntent(state, text, actionId));
   }
   if (text && shouldRunFocusedTurnIntent(state, text, actionId)) return true;

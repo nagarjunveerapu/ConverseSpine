@@ -395,8 +395,8 @@ Corpus rank + architecture constraints → ship order:
 |-------|-------|----------|------------------|
 | **SA-0** | Chip catalog table + free-text→chip resolve + act classify tests | Foundation; Advisor/WhatsApp parity | **✅ landed** (`src/engine/speech-act/`, wired in `extract-authority`) |
 | **SA-1** | Permissions: resolved `answer`/Legal/Configs blocks propertyType search | Plot sizes / configs (~0.7k Dev) | **✅ landed** (`permissions.ts` + focused-pivot gate); verified via `npm run test:scenarios` |
-| **SA-2** | `visit_book` vs `visit_recall` + discussed seed | Visit book/recall (~2k / ~0.15k) | 🟡 PR — discussed multi-seed + chip seeds + SA-G02/G02b |
-| **SA-3** | availability lexicon → always pull units/configs | Thin size answers | Mini-P3 evidence bind; full P3 copy later |
+| **SA-2** | `visit_book` vs `visit_recall` + discussed seed | Visit book/recall (~2k / ~0.15k) | ✅ [#25](https://github.com/nagarjunveerapu/ConverseSpine/pull/25) |
+| **SA-3** | availability lexicon → always pull units/configs | Thin size answers | 🟡 PR — pending gate + deterministic compose |
 | **SA-4** | `lastRouting` / decide ≡ speech act | Dedup routers | **Is** P5-core, not a second system |
 | **SA-5** | Ledger `speech_act` + topics in `resolved_intent_json` | Debug on Dev | P2a column fill |
 

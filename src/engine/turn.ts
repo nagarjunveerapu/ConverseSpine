@@ -556,6 +556,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     goal.kind === 'answer' && (goal.topics?.length ?? 0) > 1;
   const locationDeterministic = goal.kind === 'answer' && goal.topic === 'location' && !!evidence.location;
   const mediaDeterministic = goal.kind === 'answer' && goal.topic === 'media' && !!evidence.media;
+  // SA-3: availability always uses units evidence template (not LLM paraphrase).
+  const availabilityDeterministic = goal.kind === 'answer' && goal.topic === 'availability';
   const visitRecallDeterministic = goal.kind === 'visit_recall' && !!evidence.visits;
   const warmAckDeterministic = goal.kind === 'warm_ack';
   const propertyTypeDeterministic =
@@ -570,6 +572,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     multiAnswerDeterministic ||
     locationDeterministic ||
     mediaDeterministic ||
+    availabilityDeterministic ||
     visitRecallDeterministic ||
     warmAckDeterministic ||
     propertyTypeDeterministic

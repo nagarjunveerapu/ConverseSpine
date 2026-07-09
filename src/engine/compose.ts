@@ -320,6 +320,11 @@ export function fallbackReply(req: ComposeRequest): string {
         const list = ev.units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
         return `Available configurations: ${list}. Want pricing on a specific size?`;
       }
+      // SA-3: availability with empty units — honest empty, not generic overview.
+      if (goal.topic === 'availability') {
+        const pname = ev.detail?.name ?? context.focusProjectName ?? 'this project';
+        return `Configuration details for *${pname}* aren't published yet — I can share pricing or book a visit to see options on site.`;
+      }
       if (ev.detail) {
         const d = ev.detail;
         return `*${d.name}* is in ${d.microMarket}${d.startingPriceDisplay ? `, from ${d.startingPriceDisplay}` : ''}${d.possession ? `, possession ${d.possession}` : ''}. Want pricing, legal details, or a visit?`;

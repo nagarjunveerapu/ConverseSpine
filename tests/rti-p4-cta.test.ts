@@ -145,3 +145,49 @@ describe('P4-CTA — vector + switch gates', () => {
     });
   });
 });
+
+describe('SA-3 — offer_pricing pending does not swallow size asks', () => {
+  it('shouldRunTurnIntent false for size ask while offer_pricing pending', async () => {
+    const { shouldRunTurnIntent } = await import('../src/engine/turn-intent/classify.js');
+    let state = commitTo(initState('c1', 'brigade-group'), 'orchards', 'Brigade Orchards');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_pricing',
+          project_id: 'orchards',
+          project_name: 'Brigade Orchards',
+          topic: 'price',
+          asked_at_turn: 3,
+        },
+        lastUiMode: 'focused',
+      },
+    };
+    expect(shouldRunTurnIntent(state, undefined, 'what sizes for 2 BHK?')).toBe(false);
+    expect(shouldRunTurnIntent(state, undefined, 'yes')).toBe(true);
+  });
+
+  it('engine: configs CTA → sizes for 2BHK still lists units', async () => {
+    const { runEngineTurn } = await import('../src/engine/turn.js');
+    const { fakeDeps } = await import('./fakes.js');
+    const deps = fakeDeps();
+    const convId = 'sa3-eldorado-sizes';
+    const turn = (text: string) =>
+      runEngineTurn(
+        { convId, builderId: 'brigade-group', text, buyerPhone: '+919999000003', channel: 'whatsapp' },
+        deps,
+      );
+
+    await turn('hi');
+    await turn('Apartment in North Bangalore');
+    await turn('tell me about Brigade Eldorado');
+    const configs = await turn('give me 2BHK configurations');
+    expect(configs.debug.goal).toMatchObject({ kind: 'answer', topic: 'availability' });
+    expect(configs.state.rti?.pendingPrompt?.kind).toBe('offer_pricing');
+
+    const sizes = await turn('what sizes for 2 BHK?');
+    expect(sizes.debug.goal).toMatchObject({ kind: 'answer', topic: 'availability' });
+    expect(sizes.reply.toLowerCase()).toMatch(/sqft|2 bhk/);
+    expect(sizes.reply.toLowerCase()).not.toMatch(/want pricing on a specific size, or another detail/);
+  });
+});
