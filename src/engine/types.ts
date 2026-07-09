@@ -106,6 +106,8 @@ export interface ConversationState {
   returningBuyer?: { buyerName: string; daysSinceLastSeen: number };
   /** Contextual turn intent session (recovery yes/no, chips). */
   rti?: import('./turn-intent/types.js').RtiState;
+  /** P2b — structured prior from turn_ledger (gap-fill source; live KV wins). */
+  feedForward?: import('./ledger-read.js').TurnFeedForward;
 }
 
 export type ObjectionTopic =

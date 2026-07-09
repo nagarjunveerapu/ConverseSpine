@@ -375,7 +375,17 @@ export class NayaDeskClient {
   }
 
   turnLedgerContext(conversation_id: string): Promise<{
-    prior: { turn_index: number; composer: string; reply_text: string; offered_project_ids?: string[] } | null;
+    prior: {
+      turn_index: number;
+      composer: string;
+      reply_text: string;
+      offered_project_ids?: string[];
+      disclosed_facts?: Array<Record<string, unknown>>;
+      awaiting_response?: boolean;
+      action_plan?: Record<string, unknown>;
+      resolved_intent?: Record<string, unknown>;
+      snapshot_in?: Record<string, unknown>;
+    } | null;
     rejected_project_ids: string[];
     next_turn_index: number;
   }> {

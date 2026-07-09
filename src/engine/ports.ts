@@ -132,13 +132,15 @@ export interface EngineData {
     ids: { ndConversationId: string; buyerPhone: string; builderId: string },
     visit: { projectId: string; projectName: string; iso: string; label: string },
   ): Promise<boolean>;
-  /** Turn-start bundle — returning buyer, builder persona, recent messages. */
+  /** Turn-start bundle — returning buyer, builder persona, recent messages, ledger prior. */
   bootstrapContext(ndConversationId: string): Promise<{
     returningBuyer?: { buyerName: string; daysSinceLastSeen: number; lastProjectId?: string };
     builderPersona?: { botName?: string; preferredTone?: string };
     recentMessages: Array<{ role: 'buyer' | 'bot'; text: string; atMs: number }>;
     rejectedProjectIds: string[];
     turnIndex: number;
+    /** P2b — raw Desk prior row (mapped in turn bootstrap). */
+    ledgerPrior?: import('./ledger-read.js').LedgerPriorRow | null;
   }>;
   geoAreasInRegion(region: string, builderId: string): Promise<Array<{ name: string; distanceKm: number }>>;
   resolveGeo(text: string): Promise<{ lat: number; lng: number } | null>;
