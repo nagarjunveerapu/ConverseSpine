@@ -11,6 +11,7 @@ import * as handoff from './phases/handoff.js';
 import { buildTurnLogSnapshot } from '../observability/turn-log-snapshot.js';
 import { extractTurnAuthority } from './extract-authority.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
+import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
 import { buildLedgerWritePayload } from './ledger-write.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
@@ -61,6 +62,7 @@ import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
 import { constraintsSnapshot } from './recovery-planner.js';
 import type {
   CatalogEnvelope,
+  ComposeRequest,
   ConversationState,
   EvidenceSet,
   Extracted,
@@ -142,6 +144,13 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       }
       // P2b — gap-fill RTI / focus from ledger prior (live KV wins).
       state = hydrateStateFromFeedForward(state, mapLedgerPrior(boot.ledgerPrior));
+      // P2c — merge ledger disclosed into session accum.
+      if (state.feedForward?.disclosedFacts?.length) {
+        state = {
+          ...state,
+          disclosedFacts: mergeDisclosedFacts(state.disclosedFacts, state.feedForward.disclosedFacts),
+        };
+      }
     }
   }
 
@@ -538,6 +547,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const alreadyShownSameSet = evidence.matches ? isSameAsLast(state, evidence.matches) : false;
+  const ff = state.feedForward;
+  const disclosedForCompose = [
+    ...(ff?.disclosedFacts ?? []),
+    ...(state.disclosedFacts ?? []),
+  ];
   const req = buildComposeRequest(goal, evidence, {
     buyerName: state.buyerName,
     constraints: state.constraints,
@@ -546,6 +560,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     buyerText: input.text,
     ...(state.focus ? { focusProjectName: state.focus.projectName } : {}),
     returningBuyer: state.returningBuyer,
+    ...(ff?.priorTopics?.length ? { priorTopics: ff.priorTopics } : {}),
+    ...(ff?.priorReplyExcerpt ? { priorReplyExcerpt: ff.priorReplyExcerpt } : {}),
+    ...(disclosedForCompose.length ? { disclosedFacts: disclosedForCompose } : {}),
   });
 
   const visitDeterministic =
@@ -562,6 +579,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const mediaDeterministic = goal.kind === 'answer' && goal.topic === 'media' && !!evidence.media;
   // SA-3: availability always uses units evidence template (not LLM paraphrase).
   const availabilityDeterministic = goal.kind === 'answer' && goal.topic === 'availability';
+  // P2c: legal uses focused facet templates (banks/EC/RERA skip) — not LLM paraphrase.
+  const legalDeterministic = goal.kind === 'answer' && goal.topic === 'legal';
   const visitRecallDeterministic = goal.kind === 'visit_recall' && !!evidence.visits;
   const warmAckDeterministic = goal.kind === 'warm_ack';
   const propertyTypeDeterministic =
@@ -577,6 +596,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     locationDeterministic ||
     mediaDeterministic ||
     availabilityDeterministic ||
+    legalDeterministic ||
     visitRecallDeterministic ||
     warmAckDeterministic ||
     propertyTypeDeterministic
@@ -596,7 +616,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (!checkGrounding(reply, evidence, input.text).grounded) {
     reply = fallbackReply(req);
     grounding = 'repaired';
-  } else if (needsStructuredRepair(goal, evidence, reply)) {
+  } else if (needsStructuredRepair(goal, evidence, reply, disclosedForCompose, input.text)) {
     reply = fallbackReply(req);
     grounding = 'repaired';
   }
@@ -614,6 +634,13 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = {
       ...state,
       projectCache: { ...(state.projectCache ?? {}), [goal.projectId]: evidence.detail },
+    };
+  }
+  const newlyDisclosed = extractDisclosedFacts({ goal, evidence });
+  if (newlyDisclosed.length) {
+    state = {
+      ...state,
+      disclosedFacts: mergeDisclosedFacts(state.disclosedFacts, newlyDisclosed),
     };
   }
   if (nd) {
@@ -1407,10 +1434,24 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
   }
 }
 
-function needsStructuredRepair(goal: TurnGoal, ev: EvidenceSet, reply: string): boolean {
+function needsStructuredRepair(
+  goal: TurnGoal,
+  ev: EvidenceSet,
+  reply: string,
+  disclosedFacts?: ComposeRequest['context']['disclosedFacts'],
+  buyerText?: string,
+): boolean {
   if (goal.kind !== 'answer') return false;
   const topics = goal.topics?.length ? goal.topics : [goal.topic];
-  if (topics.includes('legal') && ev.detail?.reraNumber && !/rera/i.test(reply)) return true;
+  if (topics.includes('legal') && ev.detail?.reraNumber && !/rera/i.test(reply)) {
+    // P2c: facet follow-ups (banks/EC) or already-disclosed RERA must not force a RERA dump.
+    const t = (buyerText ?? '').toLowerCase();
+    const facetAsk =
+      /\b(?:ec|encumbrance)\b/i.test(t) ||
+      /\b(?:banks?|loans?|approv\w*|lenders?|financ(?:e|ing))\b/i.test(t);
+    if (facetAsk || hasDisclosedRera(disclosedFacts, goal.projectId)) return false;
+    return true;
+  }
   if (topics.includes('price') && ev.pricing) {
     const hasComponent = ev.pricing.components.some((c) => reply.includes(c.value));
     const hasStart = ev.pricing.startingDisplay ? reply.includes(ev.pricing.startingDisplay) : false;
@@ -1540,6 +1581,7 @@ async function syncTelemetry(
           verify: ledger.verify,
           composer: ledger.composer,
           toolRuns: ledger.tool_runs,
+          disclosedFacts: ledger.disclosed_facts,
         }
       : {}),
   });

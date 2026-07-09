@@ -1,8 +1,9 @@
 /**
  * P2a / SA-5 — map end-of-turn engine state → NayaDesk turn_ledger columns.
- * Write-only for this slice; P2b reads `prior` later.
+ * P2c adds disclosed_facts from structured evidence.
  */
 import type { ExtractProvenance } from '../engine/ingress.js';
+import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
 import type {
   ConversationState,
   EvidenceSet,
@@ -15,6 +16,7 @@ export interface LedgerWritePayload {
   resolved_intent: Record<string, unknown>;
   action_plan: Record<string, unknown>;
   offered_project_ids: string[];
+  disclosed_facts: DisclosedFact[];
   tool_runs: Array<{ name: string; args_summary: string; success: boolean; latency_ms: number }>;
   verify: Record<string, unknown>;
   composer: string;
@@ -84,6 +86,7 @@ export function buildLedgerWritePayload(input: {
     resolved_intent,
     action_plan,
     offered_project_ids,
+    disclosed_facts: extractDisclosedFacts({ goal, evidence }),
     tool_runs: (evidence.tools ?? []).map((name) => ({
       name,
       args_summary: '',

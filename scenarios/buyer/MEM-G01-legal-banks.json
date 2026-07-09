@@ -1,0 +1,31 @@
+{
+  "id": "MEM-G01",
+  "title": "Legal → what banks? uses facet (not generic snapshot)",
+  "builder_id": "lokations",
+  "tags": ["p2c", "memory", "legal", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    {
+      "text": "are there any legal issues?",
+      "assert": {
+        "reply_excludes": ["i hear you", "let me get you specifics"],
+        "reply_includes": ["ayana"]
+      }
+    },
+    {
+      "text": "what banks approved?",
+      "assert": {
+        "reply_includes": ["ayana", "home loan"],
+        "reply_excludes": [
+          "want pricing, legal details",
+          "from 25-50l",
+          "i hear you",
+          "regulatory snapshot",
+          "khata:"
+        ]
+      }
+    }
+  ]
+}

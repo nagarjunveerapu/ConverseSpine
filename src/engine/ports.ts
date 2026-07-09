@@ -177,6 +177,13 @@ export interface EngineCrm {
     verify?: Record<string, unknown>;
     composer?: string;
     toolRuns?: Array<{ name: string; args_summary: string; success: boolean; latency_ms: number }>;
+    /** P2c — claims made this turn (Desk DisclosedFactSchema). */
+    disclosedFacts?: Array<{
+      kind: string;
+      project_id: string | null;
+      statement: string;
+      source_tool: string;
+    }>;
   }): Promise<void>;
   postJourneySignals(
     builderId: string,

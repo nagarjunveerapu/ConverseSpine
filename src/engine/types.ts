@@ -108,6 +108,11 @@ export interface ConversationState {
   rti?: import('./turn-intent/types.js').RtiState;
   /** P2b — structured prior from turn_ledger (gap-fill source; live KV wins). */
   feedForward?: import('./ledger-read.js').TurnFeedForward;
+  /**
+   * P2c — session-local disclosed facts (merged into compose + ledger write).
+   * Survives within KV even before Desk prior round-trip.
+   */
+  disclosedFacts?: import('./disclosed-facts.js').DisclosedFact[];
 }
 
 export type ObjectionTopic =
@@ -396,6 +401,10 @@ export interface ComposeContext {
   buyerText?: string;
   focusProjectName?: string;
   returningBuyer?: { buyerName: string; daysSinceLastSeen: number };
+  /** P2c — from TurnFeedForward / ledger prior. */
+  priorTopics?: string[];
+  priorReplyExcerpt?: string;
+  disclosedFacts?: Array<Record<string, unknown>>;
 }
 
 export interface ComposeRequest {

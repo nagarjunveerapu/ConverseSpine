@@ -1,3 +1,7 @@
+import {
+  formatDisclosedForPrompt,
+  hasDisclosedRera,
+} from './disclosed-facts.js';
 import type { ComposeRequest, EvidenceSet, Match, ProbeKind, TurnGoal } from './types.js';
 import { formatUnitConfigLine } from './unit-config.js';
 
@@ -21,6 +25,12 @@ export function renderComposePrompt(req: ComposeRequest): string {
   lines.push('EVIDENCE — the ONLY facts you may state:');
   lines.push(renderEvidence(evidence));
   lines.push('');
+  const priorBlock = renderPriorContext(context);
+  if (priorBlock) {
+    lines.push('PRIOR CONTEXT — already established (do not re-open as if new):');
+    lines.push(priorBlock);
+    lines.push('');
+  }
   if (context.buyerName) lines.push(`Buyer's name: ${context.buyerName}.`);
   const c = context.constraints;
   const known = [
@@ -39,9 +49,16 @@ export function renderComposePrompt(req: ComposeRequest): string {
     );
   }
   if (goal.kind === 'answer' && goal.topic === 'legal' && evidence.detail?.reraNumber) {
-    lines.push(
-      `Lead with RERA registration (${evidence.detail.reraNumber}) — do NOT give a generic location/price recap.`,
-    );
+    const skipRera = hasDisclosedRera(context.disclosedFacts, goal.projectId);
+    if (skipRera) {
+      lines.push(
+        `RERA was already shared — answer the buyer's specific legal facet (banks / EC / title) from EVIDENCE; do NOT re-lead with the full RERA dump or a location/price recap.`,
+      );
+    } else {
+      lines.push(
+        `Lead with RERA registration (${evidence.detail.reraNumber}) — do NOT give a generic location/price recap.`,
+      );
+    }
   }
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
     lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
@@ -49,6 +66,19 @@ export function renderComposePrompt(req: ComposeRequest): string {
   lines.push('');
   lines.push('RULES: State ONLY facts in EVIDENCE. One natural next-step question. No filler closers.');
   return lines.join('\n');
+}
+
+function renderPriorContext(context: ComposeRequest['context']): string {
+  const bits: string[] = [];
+  if (context.priorTopics?.length) {
+    bits.push(`Prior topics: ${context.priorTopics.join(', ')}.`);
+  }
+  if (context.priorReplyExcerpt) {
+    bits.push(`Last bot reply (excerpt): ${context.priorReplyExcerpt}`);
+  }
+  const facts = formatDisclosedForPrompt(context.disclosedFacts);
+  if (facts) bits.push(`Already disclosed:\n${facts}`);
+  return bits.join('\n');
 }
 
 function describeGoal(g: TurnGoal): string {
@@ -271,7 +301,10 @@ export function fallbackReply(req: ComposeRequest): string {
         chunks.push(projectTypeLine(ev.detail));
       }
       if (topics.includes('legal') && ev.detail) {
-        chunks.push(legalSnapshotLine(ev.detail, false));
+        // Prefer facet line (banks/EC) when buyer text asks; else snapshot.
+        chunks.push(
+          focusedLegalLine(ev.detail, context.buyerText, context.disclosedFacts),
+        );
       }
       if (topics.includes('location') && ev.location) {
         chunks.push(locationSnapshotLine(ev.location));
@@ -302,7 +335,7 @@ export function fallbackReply(req: ComposeRequest): string {
         return advice ? `${advice}\n\n${ev.compare.tableText.trim()}` : ev.compare.tableText.trim();
       }
       if (goal.topic === 'legal' && ev.detail) {
-        return `${focusedLegalLine(ev.detail, context.buyerText)}. I can share the full approval checklist on a call or at your site visit.`;
+        return `${focusedLegalLine(ev.detail, context.buyerText, context.disclosedFacts)}. I can share the full approval checklist on a call or at your site visit.`;
       }
       if (goal.topic === 'location' && ev.location) {
         return `${locationSnapshotLine(ev.location)}. Want pricing, legal details, or a visit?`;
@@ -366,20 +399,29 @@ export function fallbackReply(req: ComposeRequest): string {
   }
 }
 
-function focusedLegalLine(d: import('./types.js').ProjectDetail, buyerText?: string): string {
+function focusedLegalLine(
+  d: import('./types.js').ProjectDetail,
+  buyerText?: string,
+  disclosedFacts?: ComposeRequest['context']['disclosedFacts'],
+): string {
   const t = (buyerText ?? '').toLowerCase();
-  if (/\b(?:ec|encumbrance)\b/.test(t) && d.ecStatus) {
+  if (/\b(?:ec|encumbrance)\b/i.test(t) && d.ecStatus) {
     return `For *${d.name}*, EC: ${d.ecStatus}`;
   }
-  if (/\b(?:bank|loan|approv|lender|finance)\b/.test(t) && d.loanEligibility) {
+  // banks / approved / loan — plurals and stems (not bare \bbank\b)
+  if (/\b(?:banks?|loans?|approv\w*|lenders?|financ(?:e|ing))\b/i.test(t) && d.loanEligibility) {
     return `For *${d.name}*, home loan: ${d.loanEligibility}`;
   }
-  return legalSnapshotLine(d);
+  return legalSnapshotLine(d, true, hasDisclosedRera(disclosedFacts, d.projectId));
 }
 
-function legalSnapshotLine(d: import('./types.js').ProjectDetail, includeConfigs = true): string {
+function legalSnapshotLine(
+  d: import('./types.js').ProjectDetail,
+  includeConfigs = true,
+  skipRera = false,
+): string {
   const bits: string[] = [];
-  if (d.reraNumber) bits.push(`RERA: ${d.reraNumber}`);
+  if (d.reraNumber && !skipRera) bits.push(`RERA: ${d.reraNumber}`);
   if (d.khata) bits.push(`Khata: ${d.khata}`);
   if (d.naStatus) bits.push(`NA: ${d.naStatus}`);
   if (d.ecStatus) bits.push(`EC: ${d.ecStatus}`);

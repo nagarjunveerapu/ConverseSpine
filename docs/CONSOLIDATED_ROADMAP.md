@@ -68,7 +68,7 @@ Kernel (always code):
 | **P1** | Extract authority & ingress flags | 🟡 P1a + P1b implemented locally; PR TBD |
 | **P1c** | PROJECT_VECTORS + discussedProjects | 🟡 Local (switch/compare); deploy TBD |
 | **SA** | Speech-act contract (slim) | ✅ SA-0…3 · ✅ SA-5 with P2a · SA-4=P5 next |
-| **P2** | Turn ledger memory loop | ✅ **P2a** · 🟡 **P2b read** in progress · P2c not started |
+| **P2** | Turn ledger memory loop | ✅ **P2a** · ✅ **P2b** · 🟡 **P2c** in progress |
 | **P3** | Focused facet depth | ⏸️ Paused — **after SA** (act=answer stable first) |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** ([#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24)); BAML RTI not wired |
 | **P5** | Routing → goal enforcement | 🔴 **= SA-4** (routing ≡ speech act; not a second classifier) |
@@ -338,9 +338,11 @@ SA-0 ✅ → SA-1 ✅ → SA-2 ✅ → SA-3 ✅
   ↓
 SA-5 + P2a (ledger write incl. speech_act) ✅
   ↓
-P2b (ledger prior read)  ← NEXT
+P2b (ledger prior read) ✅
   ↓
-P2c → SA-4 = P5 → P3 → P4/P6 → P7
+P2c (compose + disclosed_facts)  ← NEXT
+  ↓
+SA-4 = P5 → P3 → P4/P6 → P7
   ↓
 Desk Phase 2 — WhatsApp cutover (after SA + P2a + P4-CTA green)
 ```
