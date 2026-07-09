@@ -541,20 +541,22 @@ export function nayadeskCrm(crm: NayaDeskClient): EngineCrm {
         buyer_phone: entry.buyerPhone,
         created_at: Date.now(),
         buyer_text: entry.buyerText,
-        composer: 'converse_engine',
+        composer: entry.composer ?? 'converse_engine',
         reply_text: entry.reply,
-        snapshot_in: { phase: entry.phase, goal: entry.goal },
-        resolved_intent: { goal: entry.goal },
-        action_plan: {},
+        snapshot_in: entry.snapshotIn ?? { phase: entry.phase, goal: entry.goal },
+        resolved_intent: entry.resolvedIntent ?? { goal: entry.goal },
+        action_plan: entry.actionPlan ?? {},
         offered_project_ids: entry.offeredProjectIds ?? [],
         disclosed_facts: [],
-        verify: { grounding: 'pass' },
-        tool_runs: entry.tools.map((name) => ({
-          name,
-          args_summary: '',
-          success: true,
-          latency_ms: 0,
-        })),
+        verify: entry.verify ?? { grounding: 'pass' },
+        tool_runs:
+          entry.toolRuns ??
+          entry.tools.map((name) => ({
+            name,
+            args_summary: '',
+            success: true,
+            latency_ms: 0,
+          })),
       });
     },
     async postJourneySignals(builderId, buyerPhone, conversationId, signals, extras) {
