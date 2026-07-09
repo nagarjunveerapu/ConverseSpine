@@ -21,7 +21,8 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 | Desk location expand (North Bangalore graph) | ✅ | NayaDesk [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185) |
 | Units enrichment / BHK-scoped list | ✅ | Spine #23; Desk #182 |
 | **Focused CTA → bare `yes`** | ✅ **P4-CTA** | Merged [#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24); RTI-G02 green |
-| **SA-2 visit book ≠ recall** | 🟡 | Discussed multi-seed + chip seeds + SA-G02 |
+| **SA-2 visit book ≠ recall** | ✅ | Merged [#25](https://github.com/nagarjunveerapu/ConverseSpine/pull/25) |
+| **SA-3 availability → units** | 🟡 | offer_pricing must not swallow size asks; deterministic units compose |
 | Empty Neo pricing copy | ⏸️ DATA | `price_min_paise=0` — honest “not published” later; not a routing bug |
 
 **Do not** keep stacking playground patches outside the phase table. File the symptom under the owning phase, then implement that slice.
@@ -66,7 +67,7 @@ Kernel (always code):
 | **P0** | Focus stability & depth gates | ✅ Shipped (PR [#19](https://github.com/nagarjunveerapu/ConverseSpine/pull/19)) |
 | **P1** | Extract authority & ingress flags | 🟡 P1a + P1b implemented locally; PR TBD |
 | **P1c** | PROJECT_VECTORS + discussedProjects | 🟡 Local (switch/compare); deploy TBD |
-| **SA** | Speech-act contract (slim) | 🟡 SA-0/1 ✅ · **SA-2 PR** · SA-3 next |
+| **SA** | Speech-act contract (slim) | 🟡 SA-0/1/2 ✅ · **SA-3 PR** · SA-4=P5 next |
 | **P2** | Turn ledger memory loop | 🔴 Designed (D1 table exists); not wired in loop |
 | **P3** | Focused facet depth | ⏸️ Paused — **after SA** (act=answer stable first) |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** ([#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24)); BAML RTI not wired |
