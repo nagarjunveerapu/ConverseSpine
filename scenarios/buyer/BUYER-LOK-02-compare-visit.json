@@ -19,8 +19,12 @@
     {
       "text": "come for the visit",
       "assert": {
-        "reply_excludes": ["don't see a confirmed visit", "my visits"],
-        "reply_includes": ["visit"]
+        "reply_excludes": [
+          "don't see a confirmed visit",
+          "my visits",
+          "Which project should I set up the visit for"
+        ],
+        "reply_includes": ["coming from"]
       }
     }
   ]

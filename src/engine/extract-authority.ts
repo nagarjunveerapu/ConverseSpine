@@ -61,10 +61,12 @@ export async function extractTurnAuthority(
   });
 
   if (options.inputSource === 'chip') {
-    const extracted = stampSpeechAct(
+    // SA-2: chip taps must get the same visit_book / visit_recall seeds as free text.
+    const seeded = applyChipPathSeeds(
       await extractFacts(text, state, deps.llm, { inputSource: 'chip' }),
       chipResolution,
     );
+    const extracted = stampSpeechAct(seeded, chipResolution);
     return {
       extracted,
       provenance: {

@@ -146,6 +146,29 @@ describe('applyChipPathSeeds', () => {
     expect(stamped.speechAct).toBe('compare');
     expect(stamped.chipPathIds).toEqual(['chip.compare']);
   });
+
+  it('SA-2: chip action_id visit_book seeds want_visit', () => {
+    const r = classifySpeechAct({ text: '', actionId: 'visit_book' });
+    expect(r.speechAct).toBe('visit_book');
+    const seeded = applyChipPathSeeds({ constraints: {}, transition: 'none' }, r);
+    expect(seeded.transition).toBe('want_visit');
+    expect(seeded.recall).toBeUndefined();
+  });
+
+  it('SA-2: chip action_id my_visits seeds recall', () => {
+    const r = classifySpeechAct({ text: '', actionId: 'my_visits' });
+    expect(r.speechAct).toBe('visit_recall');
+    const seeded = applyChipPathSeeds({ constraints: {}, transition: 'none' }, r);
+    expect(seeded.recall).toBe(true);
+  });
+
+  it('SA-2: bare "the visit" is not recall (booking deixis only)', async () => {
+    const { extractFactsSync } = await import('../src/engine/facts.js');
+    const { initState } = await import('../src/engine/state.js');
+    const ex = extractFactsSync('come for the visit', initState('c1', 'lokations'));
+    // Chip resolve owns visit_book; facts must not stamp recall on "the visit".
+    expect(ex.recall).toBeFalsy();
+  });
 });
 
 describe('SA-1 permissions', () => {
