@@ -9,7 +9,9 @@ import type { ConversationState, Extracted, OfferedProject, AnswerTopic, Objecti
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 
-const AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|theek|done|confirm(?:ed)?|go ahead|sounds good|perfect|great)\b/i;
+/** Keep aligned with turn-intent AFFIRM_ONLY (dialogue acts, not localities). */
+const AFFIRM =
+  /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|haaji|theek(?:\s+hai)?|done|confirm(?:ed)?|go ahead|sounds good|perfect|great|yeah\s+sure|yes\s+please|ok\s+sure|sure\s+yes)\b/i;
 const REJECT =
   /\b(?:not (?:that|this|those|these)|don'?t want|too (?:far|expensive|costly|pricey|much|high)|skip (?:that|this)|nah|no,? not|something (?:else|cheaper))\b/i;
 const NAME_RE = /\b(?:[Ii]\s*am|[Ii]'?m|[Mm]y name is|[Tt]his is|[Nn]ame'?s)\s+([A-Z][a-zA-Z]{1,30})\b/;
@@ -503,7 +505,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   {
     // Keep aligned with chip.answer.availability aliases — novel asks → INTENT embedder.
     topic: 'availability',
-    re: /\b(?:possession|ready|available|when.*ready|units?|configurations?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b)\b/i,
+    re: /\b(?:possession|ready|available|when.*ready|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
   { topic: 'media', re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|share (?:the )?(?:brochure|plan))\b/i },
 ];
@@ -710,10 +712,13 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&
-    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?)$/i.test(bare) &&
+    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?|haan?|haaji|yeah\s+sure|yes\s+please)$/i.test(
+      bare,
+    ) &&
     !/\b(?:compare|both|projects|options|show|visit|pricing|refining|refine|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|floor plan)\b/i.test(bare) &&
     !isAdvisorBriefChipPhrase(bare) &&
-    !looksLikeOfferedProjectName(bare, hints)
+    !looksLikeOfferedProjectName(bare, hints) &&
+    !AFFIRM.test(bare)
   ) {
     return bare;
   }

@@ -1,0 +1,23 @@
+{
+  "id": "V01",
+  "title": "what about Eldorado configurations → availability answer (not visit day)",
+  "builder_id": "brigade-group",
+  "tags": ["sa4", "p5", "routing", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Cornerstone Utopia",
+      "assert": { "reply_includes": ["cornerstone"] }
+    },
+    {
+      "text": "what about the unit configurations of Eldorado?",
+      "assert": {
+        "goal_kind": "answer",
+        "goal_topic": "availability",
+        "reply_includes": ["sqft"],
+        "reply_excludes": ["which day", "what time"]
+      }
+    }
+  ]
+}

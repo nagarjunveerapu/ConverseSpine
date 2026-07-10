@@ -40,6 +40,8 @@ export interface TurnRoutingInput {
   ask_topics?: AnswerTopic[];
   named_project_ids: string[];
   transition?: Extracted['transition'];
+  /** SA-4: resolved speech act — routing projects from this when known. */
+  speech_act?: Extracted['speechAct'];
 }
 
 export function buildTurnRoutingInput(
@@ -69,5 +71,6 @@ export function buildTurnRoutingInput(
     ...(ex.askTopic ? { ask_topic: ex.askTopic } : {}),
     ...(ex.askTopics?.length ? { ask_topics: ex.askTopics } : {}),
     named_project_ids: (ex.namedProjects ?? []).map((p) => p.projectId),
+    ...(ex.speechAct ? { speech_act: ex.speechAct } : {}),
   };
 }

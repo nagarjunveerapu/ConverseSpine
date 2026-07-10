@@ -1,0 +1,21 @@
+{
+  "id": "ADV-H05",
+  "title": "Named Eldorado then any 3 bhk options left → units not budget probe",
+  "builder_id": "brigade-group",
+  "tags": ["harden", "availability", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "any 3 bhk options left?",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["sqft", "3"],
+        "reply_excludes": ["budget range", "what budget", "no exact match"]
+      }
+    }
+  ]
+}

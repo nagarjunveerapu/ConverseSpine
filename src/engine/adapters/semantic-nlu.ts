@@ -41,6 +41,8 @@ export interface SemanticContext {
   microMarkets: readonly string[];
   /** Shortlist names — enables PROJECT_VECTORS on chip-miss when buyer names a match. */
   offeredProjectNames?: readonly string[];
+  /** L2 pending offer_pricing — block PROJECT_VECTORS on affirm/decline. */
+  pendingOfferPricing?: boolean;
 }
 
 export interface ProjectVectorMatch {
@@ -174,8 +176,17 @@ export function shouldQueryProjectVectors(
   ctx: SemanticContext,
 ): boolean {
   if (ex.namedProjects?.length || text.trim().length < 3) return false;
-  // Bare affirm is a dialogue act — never invent a project from catalog noise.
-  if (ex.affirm && !PROJECT_REF_RE.test(text) && text.trim().split(/\s+/).length <= 3) {
+  // Dialogue affirm (incl. Hinglish / multi-word) — never invent a project from catalog noise.
+  if (ex.affirm && !PROJECT_REF_RE.test(text) && text.trim().split(/\s+/).length <= 4) {
+    return false;
+  }
+  // Pending CTA affirm/decline even if extract.affirm missed (e.g. "haan" edge).
+  if (
+    ctx.pendingOfferPricing &&
+    /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|haaji|theek(?:\s+hai)?|yeah\s+sure|yes\s+please|no|nope|no\s+thanks)(?:[.!?]|\s)*$/i.test(
+      text.trim(),
+    )
+  ) {
     return false;
   }
   // "visit them" / "compare both" — do not invent Desire Spaces from catalog noise.

@@ -1,0 +1,46 @@
+{
+  "id": "ADV-F01",
+  "title": "Orchards focused facet depth — banks, EC, price (not generic snapshot)",
+  "builder_id": "brigade-group",
+  "tags": ["p3", "facet", "orchards", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Orchards",
+      "assert": { "reply_includes": ["orchards"] }
+    },
+    {
+      "text": "legal details?",
+      "assert": {
+        "goal_topic": "legal",
+        "reply_includes": ["orchards"],
+        "reply_excludes": ["i hear you", "let me get you specifics"]
+      }
+    },
+    {
+      "text": "what banks approved?",
+      "assert": {
+        "goal_topic": "legal",
+        "reply_includes": ["home loan"],
+        "reply_excludes": ["want pricing, legal details", "i hear you", "khata:"]
+      }
+    },
+    {
+      "text": "is EC clear?",
+      "assert": {
+        "goal_topic": "legal",
+        "reply_includes": ["ec"],
+        "reply_excludes": ["want pricing, legal details", "i hear you"]
+      }
+    },
+    {
+      "text": "price break-up",
+      "assert": {
+        "goal_topic": "price",
+        "reply_includes": ["orchards"],
+        "reply_excludes": ["no exact match", "i hear you"]
+      }
+    }
+  ]
+}

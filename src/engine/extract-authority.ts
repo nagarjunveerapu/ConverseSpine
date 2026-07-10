@@ -113,6 +113,7 @@ export async function extractTurnAuthority(
       ...state.discover.lastOffered.map((o) => o.name),
       ...(state.focus?.projectName ? [state.focus.projectName] : []),
     ],
+    pendingOfferPricing: state.rti?.pendingPrompt?.kind === 'offer_pricing',
   });
 
   const mergedRaw = mergeExtractedAuthority(base, enriched);

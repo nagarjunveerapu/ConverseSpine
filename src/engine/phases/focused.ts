@@ -1,5 +1,17 @@
 import type { AnswerTopic, ConversationState, Extracted, TurnGoal } from '../types.js';
 
+/** Facet topics — P3-B: never collapse these to overview when already extracted. */
+const FACET_TOPICS: ReadonlySet<AnswerTopic> = new Set([
+  'price',
+  'legal',
+  'emi',
+  'amenities',
+  'availability',
+  'location',
+  'media',
+  'property_type',
+]);
+
 function answerTopics(ex: Extracted): AnswerTopic[] {
   const raw = ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : [];
   const filtered = raw.filter((t) => t !== 'compare');
@@ -40,7 +52,14 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   }
 
   const topics = answerTopics(ex);
-  const primary = topics[0] ?? 'overview';
+  let primary = topics[0] ?? 'overview';
+  // P3-B: if extract already set a facet topic, never fall through to overview.
+  if (primary === 'overview') {
+    const facet =
+      (ex.askTopic && FACET_TOPICS.has(ex.askTopic) ? ex.askTopic : undefined) ??
+      topics.find((t) => FACET_TOPICS.has(t));
+    if (facet) primary = facet;
+  }
   return {
     kind: 'answer',
     topic: primary,

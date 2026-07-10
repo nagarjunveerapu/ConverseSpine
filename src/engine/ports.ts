@@ -241,7 +241,12 @@ export interface SemanticNluPort {
     text: string,
     builderId: string,
     ex: import('./types.js').Extracted,
-    ctx: { phase: import('./types.js').Phase; microMarkets: readonly string[] },
+    ctx: {
+      phase: import('./types.js').Phase;
+      microMarkets: readonly string[];
+      offeredProjectNames?: readonly string[];
+      pendingOfferPricing?: boolean;
+    },
   ): Promise<import('./types.js').Extracted>;
 }
 

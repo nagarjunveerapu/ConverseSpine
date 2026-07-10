@@ -1,0 +1,28 @@
+{
+  "id": "ADV-H02",
+  "title": "2 BHK configs → yeah sure → Eldorado pricing",
+  "builder_id": "brigade-group",
+  "tags": ["harden", "p4-cta", "lexicon", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Brigade Eldorado" },
+    {
+      "text": "2 BHK configs",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["sqft"],
+        "reply_excludes": ["tap a button", "no exact match"]
+      }
+    },
+    {
+      "text": "yeah sure",
+      "assert": {
+        "goal_kind": "answer",
+        "goal_topic": "price",
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["buena vista", "no exact match", "yeah sure apartment"]
+      }
+    }
+  ]
+}

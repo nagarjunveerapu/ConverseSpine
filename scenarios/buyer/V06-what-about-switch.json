@@ -1,0 +1,21 @@
+{
+  "id": "V06",
+  "title": "Focused Ayana → what about Krishnaja → switch overview",
+  "builder_id": "lokations",
+  "tags": ["sa4", "p5", "switch", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    {
+      "text": "Ayana",
+      "assert": { "reply_includes": ["ayana"] }
+    },
+    {
+      "text": "what about Krishnaja?",
+      "assert": {
+        "reply_includes": ["krishnaja"],
+        "reply_excludes": ["which day", "what time", "coming from"]
+      }
+    }
+  ]
+}

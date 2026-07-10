@@ -1443,14 +1443,23 @@ function needsStructuredRepair(
 ): boolean {
   if (goal.kind !== 'answer') return false;
   const topics = goal.topics?.length ? goal.topics : [goal.topic];
+  const t = (buyerText ?? '').toLowerCase();
   if (topics.includes('legal') && ev.detail?.reraNumber && !/rera/i.test(reply)) {
     // P2c: facet follow-ups (banks/EC) or already-disclosed RERA must not force a RERA dump.
-    const t = (buyerText ?? '').toLowerCase();
     const facetAsk =
       /\b(?:ec|encumbrance)\b/i.test(t) ||
       /\b(?:banks?|loans?|approv\w*|lenders?|financ(?:e|ing))\b/i.test(t);
     if (facetAsk || hasDisclosedRera(disclosedFacts, goal.projectId)) return false;
     return true;
+  }
+  // P3-D: banks / EC facet replies must mention the facet (not generic overview dump).
+  if (topics.includes('legal')) {
+    if (/\b(?:banks?|loans?|approv\w*|lenders?|financ(?:e|ing))\b/i.test(t) && ev.detail?.loanEligibility) {
+      if (!/loan|bank|hdfc|icici|sbi|lender|financ/i.test(reply)) return true;
+    }
+    if (/\b(?:ec|encumbrance)\b/i.test(t) && ev.detail?.ecStatus) {
+      if (!/\bec\b|encumbrance/i.test(reply)) return true;
+    }
   }
   if (topics.includes('price') && ev.pricing) {
     const hasComponent = ev.pricing.components.some((c) => reply.includes(c.value));
