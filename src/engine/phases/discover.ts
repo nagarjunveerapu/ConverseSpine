@@ -1,4 +1,5 @@
 import type { CatalogEnvelope, Constraints, ConversationState, EvidenceSet, Extracted, Match, ProbeKind, SearchFilters, TurnGoal } from '../types.js';
+import { nameMentioned } from '../project_references.js';
 import { resolvePick } from '../state.js';
 import { formatInr } from '../compose.js';
 
@@ -285,7 +286,7 @@ export function buildConstraintGapEvidence(
   };
 }
 
-/** After a shortlist, route legal/EMI/price asks to a project instead of re-searching. */
+/** After a shortlist, route legal/EMI/price/availability asks to a project instead of re-searching. */
 function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null {
   if (ex.budgetFitQuestion || ex.budgetPickQuestion) return null;
   const topics = (ex.askTopics ?? []).filter((t) => t !== 'compare');
@@ -294,12 +295,37 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
   if (!hasTopic) return null;
 
   const pick =
-    resolvePick(ex, s.discover.lastOffered) ??
+    resolvePick(ex, s.discover.lastOffered, s) ??
+    recentBuyerNamedPick(s, s.discover.lastOffered) ??
     (s.focus ? { projectId: s.focus.projectId, name: s.focus.projectName } : undefined) ??
-    (s.discover.lastOffered.length === 1 ? s.discover.lastOffered[0]! : undefined);
+    (s.discover.lastOffered.length === 1 ? s.discover.lastOffered[0]! : undefined) ??
+    (s.discover.discussedProjects?.length
+      ? s.discover.discussedProjects[s.discover.discussedProjects.length - 1]
+      : undefined);
   if (!pick) return null;
 
   return commitPickWithFollowUp(pick, ex);
+}
+
+/** Prior buyer turn named a shortlisted project — use for facet asks without re-naming. */
+function recentBuyerNamedPick(
+  s: ConversationState,
+  offered: readonly import('../types.js').OfferedProject[],
+): import('../types.js').OfferedProject | undefined {
+  if (!offered.length) return undefined;
+  const msgs = s.discover.recentMessages ?? [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (!m || m.role !== 'buyer') continue;
+    const t = m.text.toLowerCase();
+    // Builder-agnostic: nameMentioned drops a leading brand token when present
+    // (e.g. "Brigade Eldorado" → "eldorado"), not a hardcoded builder list.
+    for (const o of offered) {
+      if (nameMentioned(o.name, t) || t.includes(o.name.toLowerCase())) return o;
+    }
+    break;
+  }
+  return undefined;
 }
 
 function commitPickWithFollowUp(

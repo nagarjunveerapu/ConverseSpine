@@ -412,7 +412,10 @@ function focusedLegalLine(
   if (/\b(?:banks?|loans?|approv\w*|lenders?|financ(?:e|ing))\b/i.test(t) && d.loanEligibility) {
     return `For *${d.name}*, home loan: ${d.loanEligibility}`;
   }
-  return legalSnapshotLine(d, true, hasDisclosedRera(disclosedFacts, d.projectId));
+  // Skip repeat RERA only on banks/EC follow-ups — not broad "legal status".
+  const facetFollowUp =
+    /\b(?:ec|encumbrance|banks?|loans?|approv\w*|lenders?|financ(?:e|ing))\b/i.test(t);
+  return legalSnapshotLine(d, true, facetFollowUp && hasDisclosedRera(disclosedFacts, d.projectId));
 }
 
 function legalSnapshotLine(

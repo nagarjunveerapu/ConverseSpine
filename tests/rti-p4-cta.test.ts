@@ -77,6 +77,51 @@ describe('P4-CTA — offer_pricing pending', () => {
     expect(applied.probeReply).toBeUndefined();
     expect(applied.focusCommitted).toBeUndefined();
   });
+  it('haan / yeah sure after offer_pricing → focused_question price', async () => {
+    let state = commitTo(initState('c1', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_pricing',
+          project_id: 'brigade-eldorado',
+          topic: 'price',
+          asked_at_turn: 3,
+        },
+        lastUiMode: 'focused',
+      },
+    };
+    for (const text of ['haan', 'yeah sure', 'yes please'] as const) {
+      const intent = await classifyTurnIntent(noopEnv, buildTurnIntentInput(state, text, 'whatsapp', 'focused'));
+      expect(intent.kind, text).toBe('focused_question');
+      expect(intent.ask_topic, text).toBe('price');
+    }
+  });
+
+  it('no thanks after offer_pricing stays focused (not reject_and_widen)', async () => {
+    let state = commitTo(initState('c1', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_pricing',
+          project_id: 'brigade-eldorado',
+          topic: 'price',
+          asked_at_turn: 3,
+        },
+        lastUiMode: 'focused',
+      },
+    };
+    const intent = await classifyTurnIntent(
+      noopEnv,
+      buildTurnIntentInput(state, 'no thanks', 'whatsapp', 'focused'),
+    );
+    expect(intent.kind).toBe('focused_question');
+    expect(intent.ask_topic).toBeUndefined();
+    const applied = applyTurnIntentResult(state, intent, []);
+    expect(applied.state.phase).toBe('focused');
+    expect(applied.state.rti?.pendingPrompt).toBeUndefined();
+  });
 });
 
 describe('P4-CTA — engine golden RTI-G02 (fake deps)', () => {

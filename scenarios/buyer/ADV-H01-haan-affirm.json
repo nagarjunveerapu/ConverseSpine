@@ -1,0 +1,27 @@
+{
+  "id": "ADV-H01",
+  "title": "CTA → haan stays on Eldorado pricing (not location Haan)",
+  "builder_id": "brigade-group",
+  "tags": ["harden", "p4-cta", "hinglish", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Give me more details on Brigade Eldorado" },
+    {
+      "text": "give me 2BHK configurations",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_excludes": ["buena vista"]
+      }
+    },
+    {
+      "text": "haan",
+      "assert": {
+        "goal_kind": "answer",
+        "goal_topic": "price",
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["buena vista", "in haan", "no exact match"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "ADV-H03",
+  "title": "CTA → no thanks stays focused (not no_fit apartment)",
+  "builder_id": "brigade-group",
+  "tags": ["harden", "p4-cta", "decline", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Brigade Eldorado" },
+    {
+      "text": "2bhk configurations",
+      "assert": { "goal_topic": "availability" }
+    },
+    {
+      "text": "no thanks",
+      "assert": {
+        "reply_excludes": [
+          "no exact match",
+          "no thanks apartment",
+          "buena vista",
+          "want to adjust budget"
+        ],
+        "reply_includes": ["eldorado"]
+      }
+    }
+  ]
+}

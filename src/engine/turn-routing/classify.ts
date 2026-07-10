@@ -3,20 +3,10 @@ import type { AnswerTopic } from '../types.js';
 import { isVisitFollowUpQuestion } from '../phases/visit.js';
 import { buildRoutingQuery } from './build-query.js';
 import { hasVisitRoutingContext, mapIntentToRouting, ROUTING_TAU_HIGH } from './embedder-map.js';
+import { DEFERRABLE_ANSWER_TOPICS, projectRoutingFromSpeechAct } from './from-speech-act.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
 
 const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
-
-const DEFERRABLE_TOPICS: AnswerTopic[] = [
-  'emi',
-  'legal',
-  'price',
-  'media',
-  'location',
-  'property_type',
-  'amenities',
-  'availability',
-];
 
 function primaryTopic(input: TurnRoutingInput): AnswerTopic | undefined {
   const topics = (input.ask_topics ?? []).filter((t) => t !== 'compare');
@@ -25,12 +15,12 @@ function primaryTopic(input: TurnRoutingInput): AnswerTopic | undefined {
   return undefined;
 }
 
-/** RTI-3A rule ladder — sync, always runs first. */
+/** RTI-3A rule ladder — sync; used when speech-act is unknown. */
 export function classifyTurnRoutingRules(input: TurnRoutingInput): TurnRoutingResult {
   const topic = primaryTopic(input);
   const pid = input.named_project_ids?.[0];
 
-  if (topic && DEFERRABLE_TOPICS.includes(topic)) {
+  if (topic && (DEFERRABLE_ANSWER_TOPICS as readonly AnswerTopic[]).includes(topic)) {
     return {
       routing: 'answer_on_project',
       confidence: 'rule',
@@ -106,13 +96,41 @@ async function embedderRouting(
   return mapIntentToRouting(bestKind, bestScore, input);
 }
 
-/** RTI-3B — rules first, then embedder enforce when corpus matches. */
+/**
+ * SA-4 = P5: speech-act projection first; rule ladder; embedder only when act=unknown + defer.
+ * Visit follow-up (bare "what about X" with visit context) beats speech-act overview (V02).
+ */
 export async function classifyTurnRouting(
   env: Pick<Env, 'AI' | 'INTENT_VECTORS'> | undefined,
   input: TurnRoutingInput,
 ): Promise<TurnRoutingResult> {
+  const pid = input.named_project_ids?.[0];
+
+  if (
+    isVisitFollowUpQuestion(input.text, {
+      askTopic: input.ask_topic,
+      askTopics: input.ask_topics,
+    }) &&
+    hasVisitRoutingContext(input)
+  ) {
+    return {
+      routing: 'visit_schedule_stop',
+      confidence: 'rule',
+      ...(pid ? { project_id: pid } : {}),
+    };
+  }
+
+  const fromAct = projectRoutingFromSpeechAct(input);
+  if (fromAct && fromAct.routing !== 'defer') return fromAct;
+
   const ruled = classifyTurnRoutingRules(input);
   if (ruled.routing !== 'defer') return ruled;
+
+  // Embedder gap-fill only when speech act is unknown (or absent).
+  const act = input.speech_act;
+  if (act && act !== 'unknown') {
+    return fromAct ?? ruled;
+  }
 
   if (!env) return ruled;
 

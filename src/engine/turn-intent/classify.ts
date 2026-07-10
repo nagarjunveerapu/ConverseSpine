@@ -16,8 +16,15 @@ import type {
   TurnIntentResult,
 } from './types.js';
 
-const AFFIRM_ONLY = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|theek|done|confirm(?:ed)?|go ahead|sounds good|perfect|great)\.?!?\s*$/i;
-const DECLINE = /^(?:no|nope|nah|not that|not this|something else)\.?!?\s*$/i;
+/**
+ * Closed dialogue affirm set (L2). Includes multi-word ("yeah sure") and Hinglish ("haan").
+ * Must stay in sync with facts.ts AFFIRM for extract.affirm.
+ */
+export const AFFIRM_ONLY =
+  /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|haaji|theek(?:\s+hai)?|done|confirm(?:ed)?|go ahead|sounds good|perfect|great|yeah\s+sure|yes\s+please|ok\s+sure|sure\s+yes)\.?!?\s*$/i;
+/** Decline after pending CTA — includes "no thanks" (must not fall through to no_fit). */
+export const DECLINE =
+  /^(?:no|nope|nah|no\s+thanks|no\s+thank\s+you|not\s+now|not\s+interested|not\s+that|not\s+this|something\s+else)\.?!?\s*$/i;
 const REFINE_CONTINUE =
   /\b(?:keep|continue)\s+refining(?:\s+(?:the|my))?\s+search\b|\brefine(?:\s+(?:the|my))?\s+search\b/i;
 const LIST_AT_BUDGET =
@@ -99,15 +106,30 @@ function resolveProjectId(
 }
 
 function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
+  const pending = input.pending_prompt;
+  const t = input.text.trim();
+
+  // L2: pending offer_pricing affirm/decline before focused-pivot (e.g. "no thanks" ≠ broaden).
+  if (pending?.kind === 'offer_pricing' && input.phase === 'focused') {
+    if (DECLINE.test(t)) {
+      return { kind: 'focused_question', confidence: 'rule' };
+    }
+    if (AFFIRM_ONLY.test(t)) {
+      return {
+        kind: 'focused_question',
+        confidence: 'rule',
+        ask_topic: pending.topic ?? 'price',
+        ...(pending.project_id ? { focus_project_id: pending.project_id } : {}),
+      };
+    }
+  }
+
   const focusedPivot = classifyFocusedPivot(input);
   if (focusedPivot) return focusedPivot;
 
   const actions = input.suggested_actions;
   const chip = matchAction(input.text, actions, input.action_id, input.constraints);
   if (chip) return patchFromAction(chip);
-
-  const pending = input.pending_prompt;
-  const t = input.text.trim();
 
   if (DECLINE.test(t)) {
     return { kind: 'reject_and_widen', confidence: 'rule' };
@@ -370,6 +392,7 @@ export function applyTurnIntentResult(
         pendingPrompt: undefined,
       },
     };
+    // Decline of offer_pricing: stay focused, no seed topic — overview/ack via normal decide.
     return {
       state: next,
       clearedKeys,

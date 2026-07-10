@@ -7,7 +7,7 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 
 **Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
 
-**Last updated:** 2026-07-09 (P4-CTA + Desk cutover track added)
+**Last updated:** 2026-07-10 (Harden ADV-H01–H05 + SA-4=P5 + P3-A..D; P6/P7/WA deferred)
 
 **Rule for live failures:** Classify against this doc + [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) **before** coding. Prefer the next open phase slice over a one-off patch that drifts the plan.
 
@@ -22,8 +22,11 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 | Units enrichment / BHK-scoped list | ✅ | Spine #23; Desk #182 |
 | **Focused CTA → bare `yes`** | ✅ **P4-CTA** | Merged [#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24); RTI-G02 green |
 | **SA-2 visit book ≠ recall** | ✅ | Merged [#25](https://github.com/nagarjunveerapu/ConverseSpine/pull/25) |
-| **SA-3 availability → units** | 🟡 | offer_pricing must not swallow size asks; deterministic units compose |
+| **SA-3 availability → units** | ✅ | Merged [#26](https://github.com/nagarjunveerapu/ConverseSpine/pull/26) |
+| **Harden ADV-H01–H05** | ✅ | Local branch `feat/harden-sa4-p3` — Hinglish affirm, configs lexicon, decline CTA, legal facet, BHK options |
+| **SA-4 = P5 + P3-A..D** | ✅ | Same branch — routing ≡ speech-act projection; facet decide/verify; ADV-F01 / V01+ |
 | Empty Neo pricing copy | ⏸️ DATA | `price_min_paise=0` — honest “not published” later; not a routing bug |
+| **P6 BAML / P7 Advisor UX / WA cutover** | ⏸️ Deferred | After harden + SA-4 adversarial green on Dev |
 
 **Do not** keep stacking playground patches outside the phase table. File the symptom under the owning phase, then implement that slice.
 
@@ -67,13 +70,13 @@ Kernel (always code):
 | **P0** | Focus stability & depth gates | ✅ Shipped (PR [#19](https://github.com/nagarjunveerapu/ConverseSpine/pull/19)) |
 | **P1** | Extract authority & ingress flags | 🟡 P1a + P1b implemented locally; PR TBD |
 | **P1c** | PROJECT_VECTORS + discussedProjects | 🟡 Local (switch/compare); deploy TBD |
-| **SA** | Speech-act contract (slim) | ✅ SA-0…3 · ✅ SA-5 with P2a · SA-4=P5 next |
-| **P2** | Turn ledger memory loop | ✅ **P2a** · ✅ **P2b** · 🟡 **P2c** in progress |
-| **P3** | Focused facet depth | ⏸️ Paused — **after SA** (act=answer stable first) |
-| **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** ([#24](https://github.com/nagarjunveerapu/ConverseSpine/pull/24)); BAML RTI not wired |
-| **P5** | Routing → goal enforcement | 🔴 **= SA-4** (routing ≡ speech act; not a second classifier) |
-| **P6** | BAML extract production | 🔴 Contract only; abstain-only — never act authority |
-| **P7** | Advisor UX parity | 🟡 API adapter exists; NBA / checklist_snapshot thin |
+| **SA** | Speech-act contract (slim) | ✅ SA-0…3 · ✅ SA-4=P5 · ✅ SA-5 with P2a |
+| **P2** | Turn ledger memory loop | ✅ **P2a** · ✅ **P2b** · ✅ **P2c** |
+| **P3** | Focused facet depth | ✅ **P3-A..D** (skip P3-E Advisor ingress) — ADV-F01 |
+| **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** + harden ADV-H01–H03; BAML RTI not wired |
+| **P5** | Routing → goal enforcement | ✅ **= SA-4** (routing ≡ speech-act projection; embedder gap-fill on unknown) |
+| **P6** | BAML extract production | ⏸️ Deferred — contract only; abstain-only — never act authority |
+| **P7** | Advisor UX parity | ⏸️ Deferred — API adapter exists; NBA / checklist_snapshot thin |
 | **P8** | Platform scale | ⏸️ Deferred (Redis, OpenSearch, Kafka, Postgres) |
 | **Desk** | Catalog search / cutover | ✅ Location expand [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185); WA cutover later |
 
@@ -340,11 +343,11 @@ SA-5 + P2a (ledger write incl. speech_act) ✅
   ↓
 P2b (ledger prior read) ✅
   ↓
-P2c (compose + disclosed_facts)  ← NEXT
+P2c (compose + disclosed_facts) ✅
   ↓
-SA-4 = P5 → P3 → P4/P6 → P7
+Harden ADV-H01–H05 ✅  →  SA-4 = P5 + P3-A..D ✅  (branch feat/harden-sa4-p3)
   ↓
-Desk Phase 2 — WhatsApp cutover (after SA + P2a + P4-CTA green)
+later: P6 BAML → P7 Advisor UX → Desk WhatsApp cutover
 ```
 
 **Parallel allowed:**
@@ -372,11 +375,12 @@ Desk Phase 2 — WhatsApp cutover (after SA + P2a + P4-CTA green)
 | **SA-G01** | SA | Focused → plot/unit sizes → availability answer (not no_fit / tap button) |
 | **SA-G02** | SA | “lets do a site visit” vs “my visits” — book ≠ recall |
 | **SA-G03** | SA | After discuss A+B → “compare both” uses discussed pair |
-| **ADV-F01** | P3 | Orchards 7 facet questions (banks, EC, price, …) |
+| **ADV-F01** | P3 | Orchards facet questions (banks, EC, price) |
+| **ADV-H01–H05** | Harden | Hinglish affirm / configs+yeah sure / decline CTA / EC facet / BHK options left |
 | **MEM-G01** | P2 | legal → `"what banks?"` — uses ledger prior, not generic snapshot |
 | **RTI-G01** | P4 | offer_project → `yes` commits; offer_widen → `yes` probes |
 | **RTI-G02** | P4-CTA | Focus Eldorado → 2BHK listUnits CTA → `yes` → `answer`/`price` on Eldorado (not Buena Vista / vector noise) |
-| **V01–V08** | P5/SA-4 | Visit vs explore routing |
+| **V01 / V04 / V06** | P5/SA-4 | Configs answer · pricing in discover · bare what-about switch (V02/V03/V05/V07/V08 later) |
 | **CHIP-G01** | P1b | `action_id` vs typed chip label same patch |
 | **LOC-G01** | Desk | “North Bangalore” search → Eldorado/Orchards/Neo identity ahead of geo-only (after #185) |
 

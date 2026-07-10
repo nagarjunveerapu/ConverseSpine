@@ -41,7 +41,7 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.visit_book',
-    re: /\b(?:come for (?:the |a )?visit|visit (?:them|it|the project|this)|schedule(?: a)? (?:site )?visit|plan a visit(?: day)?|book(?: a)? (?:site )?visit|(?:ok(?:ay)?|sure)[,.]?\s+(?:lets?|let'?s)\s+(?:do\s+)?(?:a\s+)?(?:site\s+)?visit|(?:lets?|let'?s)\s+(?:do\s+)?(?:a\s+)?(?:site\s+)?visit|want(?:\s+to)?\s+(?:do\s+)?(?:a\s+)?(?:site\s+)?visit|site visit)\b/i,
+    re: /\b(?:come for (?:the |a )?visit|visit (?:them|it|the project|this)|schedule(?: a)? (?:site )?visit|plan a visit(?: day)?|book(?: a)? (?:site )?visit|(?:ok(?:ay)?|sure)[,.]?\s+(?:lets?|let'?s)\s+(?:do\s+)?(?:a\s+)?(?:site\s+)?visit|(?:lets?|let'?s)\s+(?:do\s+)?(?:a\s+)?(?:site\s+)?visit|want(?:\s+to)?\s+(?:do\s+)?(?:a\s+)?(?:site\s+)?visit|site visit|what about visit(?:ing)?)\b/i,
     priority: 80,
   },
   {
@@ -73,7 +73,7 @@ const FREE_TEXT_RULES: ReadonlyArray<{
     // Closed chip aliases only — novel phrasings ("options for 2BHK…") stay unknown
     // and gap-fill via INTENT_VECTORS (see semantic-nlu), not unbounded regex.
     id: 'chip.answer.availability',
-    re: /\b(?:plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|configurations?|bhk options?|what\s+(?:sizes?|configs?|configurations?)\b|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|units?\s+(?:available|offered))\b/i,
+    re: /\b(?:plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|configurations?|configs?|bhk options?|what\s+(?:sizes?|configs?|configurations?)\b|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|units?\s+(?:available|offered)|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
     priority: 62,
   },
   {
@@ -95,6 +95,13 @@ const FREE_TEXT_RULES: ReadonlyArray<{
     id: 'chip.answer.overview',
     re: /\b(?:tell me (?:more |about )?(?:the )?project|project details?|overview|what(?:'s| is) (?:this|it) (?:about|like))\b/i,
     priority: 45,
+  },
+  // SA-4: bare "what about <project>?" → overview answer/switch (not visit) when no topic probe.
+  // Topic-bearing "what about … pricing/legal/configs" already hit higher-priority answer chips.
+  {
+    id: 'chip.answer.overview',
+    re: /\bwhat about\b(?!.*\b(?:visit(?:ing)?|pricing|price|legal|rera|configurations?|configs?|units?|bhk|brochure|amenities|location|emi|availability|possession|media|floor plans?)\b)/i,
+    priority: 44,
   },
   {
     id: 'chip.search',

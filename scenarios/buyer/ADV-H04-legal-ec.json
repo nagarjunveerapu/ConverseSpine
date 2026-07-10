@@ -1,0 +1,25 @@
+{
+  "id": "ADV-H04",
+  "title": "Legal → EC clear? facet (not generic essay)",
+  "builder_id": "lokations",
+  "tags": ["harden", "p2c", "legal", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    {
+      "text": "are there any legal issues?",
+      "assert": {
+        "reply_excludes": ["i hear you", "let me get you specifics"],
+        "reply_includes": ["ayana"]
+      }
+    },
+    {
+      "text": "is the EC clear?",
+      "assert": {
+        "reply_includes": ["ayana", "ec"],
+        "reply_excludes": ["want pricing, legal details", "from 25-50l", "i hear you"]
+      }
+    }
+  ]
+}

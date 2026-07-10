@@ -22,6 +22,7 @@ import {
 import { isSameDayPhrase, isDifferentDayPhrase, lastBookedVisit, resolveSameDayDate, addMinutesToIso } from '../visit-itinerary.js';
 import { buildProjectGeoMap, nearestProjectName, projectGeo, resolveOriginGeoCached } from '../project-geo.js';
 import { orderStopsByTravel, type TripStop } from '../trip-logistics.js';
+import { DEFERRABLE_ANSWER_TOPICS } from '../turn-routing/from-speech-act.js';
 
 const DECLINE = /\b(no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i;
 const BARE_AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|sounds good)\.?!?\s*$/i;
@@ -30,19 +31,11 @@ const INSTEAD_RE = /\binstead\b|\bki jagah\b/i;
 const MAX_VISIT_STOPS = 4;
 const ORIGIN_CUE = /\b(?:coming from|starting from|leave from|pickup from|i'?ll be in|from)\b/i;
 
-const VISIT_DEFERRABLE_TOPICS: import('../types.js').AnswerTopic[] = [
-  'emi',
-  'legal',
-  'price',
-  'media',
-  'location',
-  'property_type',
-  'amenities',
-  'availability',
-];
+/** SA-4: single shared list with L8 turn-routing (not a duplicate visit-only set). */
+const VISIT_DEFERRABLE_TOPICS = DEFERRABLE_ANSWER_TOPICS;
 
 const TOPIC_PROBE_IN_WHAT_ABOUT =
-  /\b(?:pricing|price|legal|rera|configurations?|unit types?|units?|bhk|floor plans?|brochure|amenities|location|emi|availability|possession|media|overview|details?)\b/i;
+  /\b(?:pricing|price|legal|rera|configurations?|unit types?|units?|bhk|floor plans?|brochure|amenities|location|emi|availability|possession|media|details?)\b/i;
 
 export interface VisitFollowUpExtract {
   askTopic?: import('../types.js').AnswerTopic;
@@ -53,8 +46,11 @@ export interface VisitFollowUpExtract {
 export function isVisitFollowUpQuestion(text: string, ex?: VisitFollowUpExtract): boolean {
   const t = text.trim();
   if (!/\bwhat about\b/i.test(t)) return false;
-  if (ex?.askTopic && ex.askTopic !== 'compare') return false;
-  if (ex?.askTopics?.some((topic) => topic !== 'compare')) return false;
+  // Facet topics block visit follow-up; overview from bare "what about X?" does not (SA-4 / V02).
+  const facetTopic = (topic: import('../types.js').AnswerTopic | undefined) =>
+    !!topic && topic !== 'compare' && topic !== 'overview';
+  if (facetTopic(ex?.askTopic)) return false;
+  if (ex?.askTopics?.some((topic) => facetTopic(topic))) return false;
   if (TOPIC_PROBE_IN_WHAT_ABOUT.test(t)) return false;
   return true;
 }

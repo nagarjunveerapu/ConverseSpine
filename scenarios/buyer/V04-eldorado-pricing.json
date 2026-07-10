@@ -1,0 +1,19 @@
+{
+  "id": "V04",
+  "title": "Discover what about Eldorado pricing → answer not visit",
+  "builder_id": "brigade-group",
+  "tags": ["sa4", "p5", "routing", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "what about Eldorado pricing?",
+      "assert": {
+        "goal_kind": "answer",
+        "goal_topic": "price",
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["which day", "what time", "coming from"]
+      }
+    }
+  ]
+}
