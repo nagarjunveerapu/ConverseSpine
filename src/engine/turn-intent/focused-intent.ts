@@ -13,13 +13,13 @@ const EXPLORE_MORE_RE =
   /\b(?:show me other|show me more|other projects|more projects|more options|back to (?:all )?matches|my matches|different projects|different area|change area|another area)\b/i;
 
 const MENU_TOPIC_ONLY =
-  /^(?:pricing|price|legal|rera|emi|visit|amenities|location|floor plans?|availability|media|overview)\.?$/i;
+  /^(?:pricing|prices?|starting\s+prices?|legal(?:\s+status)?|rera|emi|visit|amenities|location|floor plans?|availability|media|overview)\.?$/i;
 
 /** Focused-phase project Q&A — not a search pivot. */
 function isFocusedProjectQuestion(text: string): boolean {
   const t = text.trim();
   if (MENU_TOPIC_ONLY.test(t)) return true;
-  if (/^(?:legal|rera|pricing|price|emi|visit|amenities|availability|possession|floor plan)\b/i.test(t)) {
+  if (/^(?:legal|rera|pricing|prices?|starting\s+prices?|price|emi|visit|amenities|availability|possession|floor plan)\b/i.test(t)) {
     return true;
   }
   if (/^location(?:\s+details?)?\s*\.?\s*$/i.test(t) || /\blocation details?\b/i.test(t)) return true;

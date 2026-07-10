@@ -1,6 +1,10 @@
 /**
  * P7 — server-driven Advisor UX directives (nba + checklist_snapshot).
  * Deterministic from phase / goal / state — SPA must apply, not invent board/chips.
+ *
+ * Chip taxonomy (see NayaAdvisor docs/designs/p7-chip-taxonomy.html):
+ *   dimension (next facet/lens) + journey (progress) + escape rails.
+ * Cap 6. Board owns depth; chips never dump the full tree.
  */
 import type { ConversationState, TurnDebug, TurnGoal } from '../engine/types.js';
 
@@ -21,6 +25,8 @@ export interface AdvisorChecklistSnapshot {
   engaged_project_ids: string[];
 }
 
+const MAX_CHIPS = 6;
+
 function topicToTab(topic: string | undefined): AdvisorNbaBoardTab {
   switch (topic) {
     case 'price':
@@ -31,9 +37,11 @@ function topicToTab(topic: string | undefined): AdvisorNbaBoardTab {
     case 'property_type':
       return 'units';
     case 'legal':
+      return 'legal';
     case 'amenities':
     case 'location':
-      return 'legal';
+      // Board has no location tab yet — keep overview; chip still asks location.
+      return 'overview';
     default:
       return 'overview';
   }
@@ -64,7 +72,30 @@ export function engagedProjectIds(state: ConversationState): string[] {
   return ids;
 }
 
-function chipsForGoal(state: ConversationState, goal: TurnGoal, board: AdvisorNbaBoard): string[] {
+/** Escape rails — always offer a way back to search / redo brief. */
+function railsFor(board: AdvisorNbaBoard, goal: TurnGoal): string[] {
+  if (goal.kind === 'no_fit') {
+    return ['Widen my search', 'Change area', 'Adjust budget', 'Start over'];
+  }
+  switch (board) {
+    case 'matches':
+      return ['Refine my brief', 'Adjust budget'];
+    case 'project':
+      return ['Back to my matches', 'Refine my brief'];
+    case 'compare':
+      return ['Back to my matches', 'Refine my brief'];
+    case 'visit':
+      return ['Back to my matches'];
+    default:
+      return ['Refine my brief'];
+  }
+}
+
+function dimensionAndJourney(
+  state: ConversationState,
+  goal: TurnGoal,
+  board: AdvisorNbaBoard,
+): string[] {
   const chips: string[] = [];
   const offered = state.discover.lastOffered;
   const focusName = state.focus?.projectName;
@@ -79,66 +110,123 @@ function chipsForGoal(state: ConversationState, goal: TurnGoal, board: AdvisorNb
       } else if (offered.length === 1) {
         chips.push(`Tell me about ${offered[0]!.name}`);
       }
-      chips.push('Show me more projects');
-      chips.push('Plan a visit day');
+      chips.push('Show me more projects', 'Plan a visit day');
       break;
+
     case 'no_fit':
-      chips.push('Widen my search');
-      chips.push('Change area');
-      chips.push('Adjust budget');
+      // Rails are the product here — no extra dimension dump.
       break;
+
     case 'answer': {
       const topic = goal.topic;
-      if (topic === 'legal') chips.push('What banks?', 'Is EC clear?', 'Send brochure');
-      else if (topic === 'price' || topic === 'emi') chips.push('Unit configurations', 'Send brochure', 'Plan a visit day');
-      else if (topic === 'availability' || topic === 'property_type') chips.push('Starting prices', 'Send brochure', 'Plan a visit day');
-      else if (topic === 'amenities' || topic === 'location') chips.push('Legal status', 'Starting prices', 'Plan a visit day');
-      else chips.push('Starting prices', 'Legal status', 'Plan a visit day');
-      chips.push('Back to my matches');
-      if (offered.length >= 2) chips.push(`Compare all ${Math.min(offered.length, 3)}`);
+      if (topic === 'compare') {
+        chips.push('Budget fit', 'Possession timeline', 'Legal readiness');
+        if (offered[0]) chips.push(`Focus on ${offered[0].name}`);
+        chips.push('Plan a visit day');
+        break;
+      }
+      if (topic === 'legal') {
+        chips.push('What banks?', 'Is EC clear?', 'Send brochure', 'Plan a visit day');
+      } else if (topic === 'price' || topic === 'emi') {
+        chips.push('Unit configurations', 'Location & connectivity', 'Send brochure', 'Plan a visit day');
+      } else if (topic === 'availability' || topic === 'property_type') {
+        chips.push('Starting prices', 'Send brochure', 'Plan a visit day');
+      } else if (topic === 'location') {
+        chips.push('Starting prices', 'Legal status', 'Plan a visit day');
+      } else if (topic === 'amenities') {
+        chips.push('Location & connectivity', 'Starting prices', 'Plan a visit day');
+      } else if (topic === 'media') {
+        chips.push('Starting prices', 'Unit configurations', 'Plan a visit day');
+      } else {
+        // overview / default — sibling facets, not the whole tree
+        chips.push('Starting prices', 'Unit configurations', 'Location & connectivity', 'Legal status');
+        chips.push('Plan a visit day');
+      }
+      if (offered.length >= 2 && topic !== 'compare') {
+        chips.push(`Compare all ${Math.min(offered.length, 3)}`);
+      }
       break;
     }
+
     case 'commit':
-      chips.push('Starting prices', 'Legal status', 'Plan a visit day', 'Back to my matches');
+      chips.push('Starting prices', 'Legal status', 'Plan a visit day');
       break;
+
     case 'clarify_project_pick':
       for (const o of offered.slice(0, 3)) chips.push(o.name);
       break;
+
     case 'visit_ask':
     case 'visit_propose':
     case 'propose_visit':
-      chips.push('Saturday morning', 'Sunday', 'Back to my matches');
+      chips.push('Saturday morning', 'Sunday');
       break;
+
     case 'visit_booked':
-      chips.push('Add another stop', 'Back to my matches');
+      chips.push('Add another stop');
       break;
+
     case 'visit_recall':
-      chips.push('Plan a visit day', 'Back to my matches');
+      chips.push('Plan a visit day');
       break;
+
     case 'probe':
       chips.push('Show me options', 'I am still deciding');
       break;
+
     default:
-      if (board === 'visit') chips.push('Saturday morning', 'Back to my matches');
-      else if (board === 'compare') chips.push('Plan a visit day', 'Back to my matches');
-      else if (board === 'project' && focusName) {
-        chips.push('Starting prices', 'Legal status', 'Plan a visit day', 'Back to my matches');
+      if (board === 'visit') chips.push('Saturday morning');
+      else if (board === 'compare') {
+        chips.push('Budget fit', 'Possession timeline', 'Plan a visit day');
+        if (offered[0]) chips.push(`Focus on ${offered[0].name}`);
+      } else if (board === 'project' && focusName) {
+        chips.push('Starting prices', 'Unit configurations', 'Legal status', 'Plan a visit day');
       } else {
         chips.push('Show me more projects', 'Plan a visit day');
       }
   }
 
-  // Dedupe, cap 6
+  return chips;
+}
+
+/**
+ * Merge primary chips + rails. Prefer keeping ≥1 rail when rails exist;
+ * drop trailing primary chips if needed to stay ≤ MAX_CHIPS.
+ */
+export function mergeChipsWithRails(primary: string[], rails: string[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const c of chips) {
+  const push = (c: string) => {
     const key = c.toLowerCase();
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return false;
     seen.add(key);
     out.push(c);
-    if (out.length >= 6) break;
+    return true;
+  };
+
+  const railSlots = Math.min(rails.length, 2);
+  const primaryBudget = Math.max(0, MAX_CHIPS - railSlots);
+
+  for (const c of primary) {
+    if (out.length >= primaryBudget) break;
+    push(c);
+  }
+  for (const r of rails) {
+    if (out.length >= MAX_CHIPS) break;
+    push(r);
+  }
+  // If rails were skipped due to duplicates, fill remaining with primary
+  if (out.length < MAX_CHIPS) {
+    for (const c of primary) {
+      if (out.length >= MAX_CHIPS) break;
+      push(c);
+    }
   }
   return out;
+}
+
+function chipsForGoal(state: ConversationState, goal: TurnGoal, board: AdvisorNbaBoard): string[] {
+  return mergeChipsWithRails(dimensionAndJourney(state, goal, board), railsFor(board, goal));
 }
 
 export function buildAdvisorNba(state: ConversationState, debug: TurnDebug): AdvisorNba {
@@ -165,6 +253,8 @@ export function buildAdvisorNba(state: ConversationState, debug: TurnDebug): Adv
     board_tab = topicToTab(goalTopic(goal));
   } else if (goal.kind === 'visit_ask' || goal.kind === 'visit_propose' || goal.kind === 'propose_visit') {
     board = 'visit';
+  } else if (goal.kind === 'no_fit') {
+    board = 'matches';
   } else if (state.phase === 'focused' && state.focus) {
     board = 'project';
     board_project_id = state.focus.projectId;

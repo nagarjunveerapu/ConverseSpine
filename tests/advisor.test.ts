@@ -58,6 +58,7 @@ describe('mapAdvisorTurnResponse', () => {
     expect(resp.phase).toBe('discover');
     expect(resp.nba?.board).toBe('matches');
     expect(resp.nba?.chips.length).toBeGreaterThan(0);
+    expect(resp.nba?.chips).toContain('Refine my brief');
     expect(resp.checklist_snapshot?.phase).toBe('discover');
     expect(resp.checklist_snapshot?.engaged_project_ids).toContain('ayana');
   });
@@ -84,6 +85,8 @@ describe('mapAdvisorTurnResponse', () => {
       board_project_id: 'eldorado',
     });
     expect(resp.nba!.chips.some((c) => /banks/i.test(c))).toBe(true);
+    expect(resp.nba!.chips).toContain('Back to my matches');
+    expect(resp.nba!.chips).toContain('Refine my brief');
     expect(resp.checklist_snapshot?.focus_project_id).toBe('eldorado');
   });
 });
