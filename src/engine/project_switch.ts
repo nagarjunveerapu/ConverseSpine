@@ -9,12 +9,46 @@ export interface SwitchIntent {
   readonly followUpTopics?: AnswerTopic[];
 }
 
+/** Facets that stay on the current focus unless the buyer names another project. */
+const FOCUS_STICKY_FACETS: ReadonlySet<AnswerTopic> = new Set([
+  'price',
+  'legal',
+  'emi',
+  'amenities',
+  'availability',
+  'location',
+  'media',
+  'property_type',
+  'overview',
+]);
+
 function followUpTopics(ex: Extracted): { followUp?: AnswerTopic; followUpTopics?: AnswerTopic[] } {
   const topics = ex.askTopics?.length ? ex.askTopics.filter((t) => t !== 'compare') : [];
   if (topics.length) return { followUp: topics[0], followUpTopics: topics };
   if (ex.askTopic && ex.askTopic !== 'compare') return { followUp: ex.askTopic };
   if (ex.transition === 'want_details') return { followUp: 'overview' };
   return { followUp: 'overview' };
+}
+
+function isStickyFacetAsk(ex: Extracted): boolean {
+  if (ex.askTopic && FOCUS_STICKY_FACETS.has(ex.askTopic)) return true;
+  return (ex.askTopics ?? []).some((t) => FOCUS_STICKY_FACETS.has(t));
+}
+
+/**
+ * Tokens left after stripping facet / stop words.
+ * Empty residue ⇒ pure facet chip ("Send brochure") — do not switch on vector noise.
+ */
+export function facetNameResidue(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(
+      /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit)\b/gi,
+      ' ',
+    )
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function exactPoolPick(pool: readonly OfferedProject[], pickName: string): OfferedProject | null {
@@ -63,13 +97,21 @@ export function detectFocusedSwitchIntent(
   if (named && named.length >= 1) {
     const n = named[0];
     if (!n) return null;
-    if (n.projectId !== focus.projectId) return { commit: n, ...fu };
+    if (n.projectId !== focus.projectId) {
+      // "Send brochure" while focused — PROJECT_VECTORS often invents another project.
+      // Only switch when the buyer left a name-like residue (e.g. "brochure for Eldorado").
+      if (isStickyFacetAsk(ex) && facetNameResidue(_text).length < 3) return null;
+      return { commit: n, ...fu };
+    }
     return null;
   }
 
   if (ex.pickName) {
     const hit = exactPoolPick(poolOf(s), ex.pickName);
-    if (hit && hit.projectId !== focus.projectId) return { commit: hit, ...fu };
+    if (hit && hit.projectId !== focus.projectId) {
+      if (isStickyFacetAsk(ex) && facetNameResidue(_text).length < 3) return null;
+      return { commit: hit, ...fu };
+    }
   }
 
   return null;

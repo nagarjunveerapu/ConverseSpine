@@ -200,7 +200,26 @@ export function shouldQueryProjectVectors(
   ) {
     return false;
   }
-  if (ctx.phase === 'focused') return true;
+  // Focused pure-facet chips ("Send brochure", "Starting prices") — stay on focus;
+  // PROJECT_VECTORS otherwise invents catalog noise (Vanam → Buena Vista).
+  if (ctx.phase === 'focused') {
+    const facetAsk =
+      (ex.askTopic && ex.askTopic !== 'compare') ||
+      (ex.askTopics?.some((topic) => topic !== 'compare') ?? false);
+    if (facetAsk) {
+      const residue = text
+        .toLowerCase()
+        .replace(
+          /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit)\b/gi,
+          ' ',
+        )
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (residue.length < 3) return false;
+    }
+    return true;
+  }
   if (ex.affirm) return true;
   if (ex.transition === 'want_visit' || ex.transition === 'want_details') return true;
   if (ex.askTopic === 'compare' || ex.askTopic === 'media') return true;

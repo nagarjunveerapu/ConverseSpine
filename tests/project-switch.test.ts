@@ -57,4 +57,35 @@ describe('detectFocusedSwitchIntent — PROJECT_VECTORS namedProjects', () => {
     const intent = detectFocusedSwitchIntent(text, ex, s);
     expect(intent).toMatchObject({ commit: { projectId: 'krishnaja' } });
   });
+
+  it('Send brochure + vector noise Buena Vista → stay on focus (no switch)', () => {
+    const s = focusedAyana();
+    const text = 'Send brochure';
+    const ex: Extracted = {
+      constraints: {},
+      transition: 'none',
+      askTopic: 'media',
+      askTopics: ['media'],
+      speechAct: 'answer',
+      namedProjects: [{ projectId: 'brigade-buena-vista-naya-advisor', name: 'Brigade Buena Vista' }],
+    };
+    expect(detectFocusedSwitchIntent(text, ex, s)).toBeNull();
+  });
+
+  it('brochure for Eldorado while on Ayana → switch (name residue)', () => {
+    const s = focusedAyana();
+    const text = 'Send brochure for Eldorado';
+    const ex: Extracted = {
+      constraints: {},
+      transition: 'none',
+      askTopic: 'media',
+      askTopics: ['media'],
+      speechAct: 'answer',
+      namedProjects: [{ projectId: 'brigade-eldorado-naya-advisor', name: 'Brigade Eldorado' }],
+    };
+    expect(detectFocusedSwitchIntent(text, ex, s)).toMatchObject({
+      commit: { projectId: 'brigade-eldorado-naya-advisor' },
+      followUp: 'media',
+    });
+  });
 });
