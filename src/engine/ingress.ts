@@ -35,7 +35,8 @@ export type FieldProvenance =
   | 'ingress_blocked'
   | 'chip_skip'
   | 'override'
-  | 'chip_resolve';
+  | 'chip_resolve'
+  | 'baml';
 
 export interface ExtractProvenance {
   path: 'chip_skip' | 'free_text_funnel';
@@ -43,6 +44,8 @@ export interface ExtractProvenance {
   /** SA-0 speech-act stamp. */
   speech_act?: import('./speech-act/types.js').SpeechActKind;
   chip_path_ids?: import('./speech-act/types.js').ChipPathId[];
+  /** P6 — shadow/promote telemetry for ExtractTurnFacts. */
+  baml?: import('./extract-baml.js').BamlShadowReport;
 }
 
 export function markIngressBlocked(

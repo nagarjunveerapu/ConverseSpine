@@ -264,6 +264,11 @@ export interface EngineDeps {
   maps?: { apiKey?: string };
   /** Workers AI + Vectorize for RTI-3B turn routing. */
   routingEnv?: Pick<import('../env.js').Env, 'AI' | 'INTENT_VECTORS'>;
+  /** P6 ExtractTurnFacts — after embedder abstain. */
+  bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<
+    import('./extract-baml.js').BamlExtractResult | null
+  >;
+  bamlMode?: import('./extract-baml.js').BamlExtractMode;
   /** Local dev JSONL turn log (wrangler dev only). */
   emitTurnLog?: (entry: import('../observability/local-turn-log.js').LocalTurnLogEntry) => void;
 }

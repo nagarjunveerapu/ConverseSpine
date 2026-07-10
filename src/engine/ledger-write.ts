@@ -65,6 +65,7 @@ export function buildLedgerWritePayload(input: {
             ...(extractProvenance.speech_act
               ? { speech_act: extractProvenance.speech_act }
               : {}),
+            ...(extractProvenance.baml ? { baml: extractProvenance.baml } : {}),
           },
         }
       : {}),

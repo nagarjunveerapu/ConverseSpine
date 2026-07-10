@@ -3,6 +3,7 @@ import { NayaDeskClient } from '../crm/nayadesk-client.js';
 import { makeEngineLlm } from '../engine/adapters/llm.js';
 import { makeSemanticNlu } from '../engine/adapters/semantic-nlu.js';
 import { nayadeskCrm, nayadeskData } from '../engine/adapters/nayadesk.js';
+import { extractTurnFactsBaml, resolveBamlExtractMode } from '../engine/extract-baml.js';
 import { runEngineTurn } from '../engine/turn.js';
 import { kvStore } from '../engine/store-kv.js';
 import type { EngineDeps } from '../engine/ports.js';
@@ -19,6 +20,7 @@ export class ConverseRuntime {
   constructor(readonly env: Env) {
     this.crm = new NayaDeskClient(env);
     this.trace = new LangfuseTracer(env);
+    const bamlMode = resolveBamlExtractMode(env);
     this.engine = {
       data: nayadeskData(this.crm),
       llm: makeEngineLlm(env),
@@ -34,6 +36,12 @@ export class ConverseRuntime {
       },
       maps: env.GOOGLE_PLACES_API_KEY ? { apiKey: env.GOOGLE_PLACES_API_KEY } : undefined,
       routingEnv: env.AI || env.INTENT_VECTORS ? { AI: env.AI, INTENT_VECTORS: env.INTENT_VECTORS } : undefined,
+      ...(bamlMode !== 'off'
+        ? {
+            bamlMode,
+            bamlExtract: (input) => extractTurnFactsBaml(env, input),
+          }
+        : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),
