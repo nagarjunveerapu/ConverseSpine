@@ -1,0 +1,32 @@
+{
+  "id": "ADV-BAML-01",
+  "title": "Novel free-text gaps — BAML ExtractTurnFacts may fire (shadow/promote)",
+  "builder_id": "lokations",
+  "tags": ["p6", "baml", "gap-fill", "lokations"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "looking for something green near the hills for weekends",
+      "assert": {
+        "reply_excludes": ["internal"]
+      }
+    },
+    {
+      "text": "Ayana",
+      "assert": { "reply_includes": ["ayana"] }
+    },
+    {
+      "text": "is the paperwork okay for this one somehow",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["i hear you", "let me get you specifics"]
+      }
+    },
+    {
+      "text": "can we go see it sometime",
+      "assert": {
+        "reply_excludes": ["no exact match"]
+      }
+    }
+  ]
+}

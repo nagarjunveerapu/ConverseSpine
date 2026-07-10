@@ -60,6 +60,9 @@ export async function runTurn(
       tools: result.debug.tools,
       grounding: result.debug.grounding,
       ...(result.debug.speech_act ? { speech_act: result.debug.speech_act } : {}),
+      ...(result.debug.extract_provenance
+        ? { extract_provenance: result.debug.extract_provenance }
+        : {}),
     },
   };
 }

@@ -89,6 +89,9 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
       ...(tools.length ? { tools } : {}),
       ...(result.debug?.grounding ? { grounding: result.debug.grounding } : {}),
       ...(result.debug?.speech_act ? { speech_act: result.debug.speech_act } : {}),
+      ...(result.debug?.extract_provenance
+        ? { extract_provenance: result.debug.extract_provenance }
+        : {}),
     },
     ...(result.whatsapp_actions ? { whatsapp_actions: result.whatsapp_actions } : {}),
   };
