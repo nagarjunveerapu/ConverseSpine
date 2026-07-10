@@ -43,3 +43,17 @@ Call when after embedder: missing topics + act=unknown, or missing location on s
 
 - Unit: parse, gate, shadow vs promote merge  
 - No regression: ADV-H0*, SA-G0*, MEM-G01, RTI-G02 (BAML off or shadow must not change replies)
+
+## Off vs on A/B (2026-07-10 Dev)
+
+Clean segregation: deploy `BAML_EXTRACT_MODE=off` → run scenarios → deploy `promote` → same scenarios.
+
+- Script: `scripts/baml-quality-compare.ts` (`--before` / `--after` run dirs → HTML with GOOD/WEAK/BAD per turn).
+- Scenario report: `scripts/baml-scenario-report.ts` (per-turn BAML telemetry).
+
+**Result:** Promote did **not** degrade goldens and did **not** fix ADV-BAML-01 (hills brief → `no_fit`; bare `Ayana` → `no_fit`). Those failures are discover / project-pick / compose placeholders — not extract gap-fill.
+
+**Promote gate (P6d):** stay on `shadow` until (1) helpful `would_fill` turns improve reply quality offline, (2) `disagree` rate is low on fields you promote, (3) goldens quality ≥ off, (4) at least one novel-gap golden proves a buyer-visible win.
+
+Dev default after experiments: `shadow`.
+
