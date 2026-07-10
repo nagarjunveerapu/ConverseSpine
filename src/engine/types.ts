@@ -404,7 +404,7 @@ export interface ComposeContext {
   /** P2c — from TurnFeedForward / ledger prior. */
   priorTopics?: string[];
   priorReplyExcerpt?: string;
-  disclosedFacts?: Array<Record<string, unknown>>;
+  disclosedFacts?: Array<import('./disclosed-facts.js').DisclosedFact | Record<string, unknown>>;
 }
 
 export interface ComposeRequest {
