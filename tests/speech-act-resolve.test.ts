@@ -8,6 +8,19 @@ import { applyChipPathSeeds, stampSpeechAct } from '../src/engine/extract-author
 import type { Extracted } from '../src/engine/types.js';
 
 describe('resolveFreeTextToChipPaths — catalog examples', () => {
+  it('Starting prices → Price (P7 advisor chip)', () => {
+    const r = resolveFreeTextToChipPaths('Starting prices');
+    expect(r.speechAct).toBe('answer');
+    expect(r.primary?.id).toBe('chip.answer.price');
+    expect(r.primary?.topic).toBe('price');
+  });
+
+  it('Legal status → Legal', () => {
+    const r = resolveFreeTextToChipPaths('Legal status');
+    expect(r.speechAct).toBe('answer');
+    expect(r.primary?.id).toBe('chip.answer.legal');
+  });
+
   it('can you compare the projects → Compare', () => {
     const r = resolveFreeTextToChipPaths('can you compare the projects');
     expect(r.speechAct).toBe('compare');
@@ -194,6 +207,23 @@ describe('SA-1 permissions', () => {
   it('plot sizes is not a focused search pivot', async () => {
     const { isFocusedSearchPivot } = await import('../src/engine/turn-intent/focused-intent.js');
     expect(isFocusedSearchPivot('what plot sizes are offered?')).toBe(false);
+    expect(isFocusedSearchPivot('Starting prices')).toBe(false);
+    expect(isFocusedSearchPivot('Legal status')).toBe(false);
     expect(isFocusedSearchPivot('Bangalore projects')).toBe(true);
+  });
+});
+
+describe('P7 chip taxonomy labels', () => {
+  it('Location & connectivity → location answer', () => {
+    const r = resolveFreeTextToChipPaths('Location & connectivity');
+    expect(r.speechAct).toBe('answer');
+    expect(r.primary?.topic).toBe('location');
+  });
+
+  it('compare lenses → compare', () => {
+    for (const label of ['Budget fit', 'Possession timeline', 'Legal readiness', 'Growth corridor']) {
+      const r = resolveFreeTextToChipPaths(label);
+      expect(r.speechAct, label).toBe('compare');
+    }
   });
 });

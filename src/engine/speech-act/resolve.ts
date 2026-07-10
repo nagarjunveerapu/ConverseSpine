@@ -61,7 +61,7 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.answer.price',
-    re: /\b(?:price|pricing|cost|how much|pricing batao|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|per\s*(?:sq\.?\s*ft|sqft|sft))\b/i,
+    re: /\b(?:prices?|pricing|cost|how much|pricing batao|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|per\s*(?:sq\.?\s*ft|sqft|sft)|starting\s+prices?)\b/i,
     priority: 60,
   },
   {
@@ -88,8 +88,14 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.answer.location',
-    re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|how far|nearby|micro[- ]?market)\b|^location\s*\?$/i,
+    re: /\b(?:location details?|location\s*(?:&|and)\s*connectivity|where(?:'s| is)(?: it| this)?\s*\?|connectivity|how far|nearby|micro[- ]?market|growth\s*corridor)\b|^location\s*\?$/i,
     priority: 48,
+  },
+  // Compare lenses (P7 chips) — keep on compare path, not project search
+  {
+    id: 'chip.compare',
+    re: /^(?:budget fit|possession timeline|legal readiness|price per sqft|growth(?:\s*\/\s*|\s+)?corridor)$/i,
+    priority: 76,
   },
   {
     id: 'chip.answer.overview',
