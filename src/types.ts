@@ -144,5 +144,7 @@ export interface TurnResult {
     tools?: string[];
     grounding?: string;
     speech_act?: string;
+    /** P6 / extract funnel provenance (incl. baml shadow). */
+    extract_provenance?: unknown;
   };
 }
