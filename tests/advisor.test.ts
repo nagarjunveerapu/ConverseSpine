@@ -56,5 +56,34 @@ describe('mapAdvisorTurnResponse', () => {
     expect(resp.prefs_snapshot?.location).toBe('Sakleshpur');
     expect(resp.prefs_snapshot?.budget).toMatch(/80/);
     expect(resp.phase).toBe('discover');
+    expect(resp.nba?.board).toBe('matches');
+    expect(resp.nba?.chips.length).toBeGreaterThan(0);
+    expect(resp.checklist_snapshot?.phase).toBe('discover');
+    expect(resp.checklist_snapshot?.engaged_project_ids).toContain('ayana');
+  });
+
+  it('P7: legal answer routes nba to project + legal tab', () => {
+    const state = initState('advisor:legal', 'naya-advisor');
+    state.phase = 'focused';
+    state.focus = { projectId: 'eldorado', projectName: 'Brigade Eldorado' };
+    const debug: TurnDebug = {
+      phase: 'focused',
+      goal: { kind: 'answer', topic: 'legal', projectId: 'eldorado' },
+      tools: [],
+      grounding: 'pass',
+    };
+    const resp = mapAdvisorTurnResponse({
+      sessionId: 's',
+      state,
+      reply: 'RERA is on file.',
+      debug,
+    });
+    expect(resp.nba).toMatchObject({
+      board: 'project',
+      board_tab: 'legal',
+      board_project_id: 'eldorado',
+    });
+    expect(resp.nba!.chips.some((c) => /banks/i.test(c))).toBe(true);
+    expect(resp.checklist_snapshot?.focus_project_id).toBe('eldorado');
   });
 });
