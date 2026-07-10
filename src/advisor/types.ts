@@ -20,6 +20,8 @@ export interface AdvisorTurnRequest {
   /** Active project from the advisor board — sets focused phase before this turn. */
   project_id?: string;
   project_name?: string;
+  /** Active board tab (legal/units/price/…) — P7 ingress context. */
+  board_tab?: string;
   /** Recovery chip tap — deterministic RTI fast path. */
   action_id?: string;
 }
@@ -66,6 +68,10 @@ export interface AdvisorTurnResponse {
   ui_mode?: AdvisorUiMode;
   /** Catalog-backed recovery or widen actions (max 3 on WhatsApp). */
   search_recovery?: SearchRecoveryEnvelope;
+  /** P7 — server-owned board + chips (SPA must apply). */
+  nba?: import('./nba.js').AdvisorNba;
+  /** P7 — authoritative focus / engaged for board↔chat parity. */
+  checklist_snapshot?: import('./nba.js').AdvisorChecklistSnapshot;
   debug?: Pick<TurnDebug, 'goal' | 'tools' | 'phase' | 'grounding'>;
   error?: string;
 }

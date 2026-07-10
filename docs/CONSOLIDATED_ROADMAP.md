@@ -311,9 +311,9 @@ Kernel (always code):
 | `advisor/handle-turn` + map-response | ✅ |
 | `visit_queue` / `visit_itinerary` | ✅ |
 | `search_recovery` chips | ✅ |
-| `checklist_snapshot` authoritative in response | 🔴 |
-| Server-driven `nba[]` after facet answers | 🔴 (P3 + P2) |
-| Board tab sync (`board_tab` ingress) | 🔴 (P3-E) |
+| `checklist_snapshot` authoritative in response | 🟡 P7 — emitted on advisor turn |
+| Server-driven `nba[]` after facet answers | 🟡 P7 — `advisor/nba.ts` + SPA apply |
+| Board tab sync (`board_tab` ingress) | 🟡 P7 — accepted on request; SPA sends tab |
 
 **Exit criteria:** Chat and board never diverge on focus/phase; chips from server not client guess.
 

@@ -3,6 +3,7 @@ import { filterUnitsByBhk } from '../engine/unit-config.js';
 import { mapProjectDetailDto } from './map-project-detail.js';
 import { mapVisitQueue } from './map-visit-queue.js';
 import { mapVisitItinerary } from './map-visit-itinerary.js';
+import { buildAdvisorNba, buildChecklistSnapshot } from './nba.js';
 import type { AdvisorMapInput, AdvisorProjectCard, AdvisorTurnResponse } from './types.js';
 
 export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnResponse {
@@ -26,6 +27,15 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
   const visitQueue = mapVisitQueue(state);
   const visitItinerary = mapVisitItinerary(state);
 
+  let nba = buildAdvisorNba(state, debug);
+  if (compareMatrix) {
+    nba = {
+      chips: nba.chips.length ? nba.chips : ['Plan a visit day', 'Back to my matches'],
+      board: 'compare',
+    };
+  }
+  const checklist_snapshot = buildChecklistSnapshot(state);
+
   return {
     status: 'ok',
     session_id: sessionId,
@@ -45,6 +55,8 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     phase: state.phase,
     ...(uiMode ? { ui_mode: uiMode } : {}),
     ...(searchRecovery ? { search_recovery: searchRecovery } : {}),
+    nba,
+    checklist_snapshot,
     debug: {
       phase: debug.phase,
       goal: debug.goal,
