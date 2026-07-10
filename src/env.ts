@@ -30,6 +30,12 @@ export interface Env {
   OLLAMA_BASE_URL?: string;
   OLLAMA_MODEL?: string;
 
+  /**
+   * P6 ExtractTurnFacts mode: off | shadow | promote.
+   * Default: shadow when DEEPSEEK_API_KEY set, else off.
+   */
+  BAML_EXTRACT_MODE?: string;
+
   /** Langfuse observability (optional). */
   LANGFUSE_PUBLIC_KEY?: string;
   LANGFUSE_SECRET_KEY?: string;

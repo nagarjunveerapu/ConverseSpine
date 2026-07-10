@@ -298,6 +298,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     llm: deps.llm,
     semantic: deps.semantic,
     microMarkets: catalogForNlu?.microMarkets ?? [],
+    ...(deps.bamlExtract ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' } : {}),
   }, {
     inputSource,
     ingressFilledSlots: ingressFilled,

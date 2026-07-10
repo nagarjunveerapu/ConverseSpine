@@ -8,6 +8,14 @@
  */
 import type { SemanticNluPort } from './adapters/semantic-nlu.js';
 import type { EngineLlm } from './ports.js';
+import {
+  buildBamlExtractInput,
+  buildBamlShadowReport,
+  mergeBamlGapFill,
+  needsBamlGapFill,
+  type BamlExtractMode,
+  type BamlExtractResult,
+} from './extract-baml.js';
 import { extractFacts, isDetailAskTurn, looksLikeConfigAsk } from './facts.js';
 import type {
   ExtractProvenance,
@@ -28,6 +36,9 @@ export interface ExtractTurnDeps {
   llm: EngineLlm;
   semantic: SemanticNluPort;
   microMarkets: readonly string[];
+  /** P6 — optional ExtractTurnFacts caller (tests inject fakes). */
+  bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<BamlExtractResult | null>;
+  bamlMode?: BamlExtractMode;
 }
 
 export interface ExtractTurnOptions {
@@ -143,6 +154,26 @@ export async function extractTurnAuthority(
   }
   if (merged.namedProjects?.length && !base.namedProjects?.length) {
     provenance.fields.namedProjects = 'embedder';
+  }
+
+  // P6: typed ExtractTurnFacts after embedder abstain — shadow by default.
+  const bamlMode = deps.bamlMode ?? 'off';
+  if (bamlMode !== 'off' && needsBamlGapFill(merged, text, chipResolution) && deps.bamlExtract) {
+    const proposal = await deps.bamlExtract(
+      buildBamlExtractInput(text, state.phase, merged, state.focus?.projectName),
+    ).catch(() => null);
+    const report = buildBamlShadowReport(bamlMode, merged, proposal);
+    provenance.baml = report;
+    if (bamlMode === 'promote' && proposal?.confidence === 'llm') {
+      const promoted = stampSpeechAct(
+        applySpeechActPermissions(mergeBamlGapFill(merged, proposal), chipResolution),
+        chipResolution,
+      );
+      for (const field of report.would_fill) {
+        provenance.fields[field] = 'baml';
+      }
+      return { extracted: promoted, provenance, chipResolution };
+    }
   }
 
   return { extracted: merged, provenance, chipResolution };

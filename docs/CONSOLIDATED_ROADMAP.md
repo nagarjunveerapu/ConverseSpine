@@ -7,7 +7,7 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 
 **Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
 
-**Last updated:** 2026-07-10 (Harden ADV-H01–H05 + SA-4=P5 + P3-A..D; P6/P7/WA deferred)
+**Last updated:** 2026-07-10 (P6 BAML ExtractTurnFacts shadow; P7/WA still deferred)
 
 **Rule for live failures:** Classify against this doc + [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) **before** coding. Prefer the next open phase slice over a one-off patch that drifts the plan.
 
@@ -26,7 +26,7 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 | **Harden ADV-H01–H05** | ✅ | Local branch `feat/harden-sa4-p3` — Hinglish affirm, configs lexicon, decline CTA, legal facet, BHK options |
 | **SA-4 = P5 + P3-A..D** | ✅ | Same branch — routing ≡ speech-act projection; facet decide/verify; ADV-F01 / V01+ |
 | Empty Neo pricing copy | ⏸️ DATA | `price_min_paise=0` — honest “not published” later; not a routing bug |
-| **P6 BAML / P7 Advisor UX / WA cutover** | ⏸️ Deferred | After harden + SA-4 adversarial green on Dev |
+| **P6 BAML / P7 Advisor UX / WA cutover** | 🟡 P6 shadow | P6a–c on `feat/p6-baml-extract`; P7 + WA still deferred |
 
 **Do not** keep stacking playground patches outside the phase table. File the symptom under the owning phase, then implement that slice.
 
@@ -75,7 +75,7 @@ Kernel (always code):
 | **P3** | Focused facet depth | ✅ **P3-A..D** (skip P3-E Advisor ingress) — ADV-F01 |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** + harden ADV-H01–H03; BAML RTI not wired |
 | **P5** | Routing → goal enforcement | ✅ **= SA-4** (routing ≡ speech-act projection; embedder gap-fill on unknown) |
-| **P6** | BAML extract production | ⏸️ Deferred — contract only; abstain-only — never act authority |
+| **P6** | BAML extract production | 🟡 **P6a–c** shadow on Dev (`BAML_EXTRACT_MODE=shadow`); promote gated |
 | **P7** | Advisor UX parity | ⏸️ Deferred — API adapter exists; NBA / checklist_snapshot thin |
 | **P8** | Platform scale | ⏸️ Deferred (Redis, OpenSearch, Kafka, Postgres) |
 | **Desk** | Catalog search / cutover | ✅ Location expand [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185); WA cutover later |
@@ -281,20 +281,24 @@ Kernel (always code):
 
 ---
 
-## P6 — BAML extract production 🔴
+## P6 — BAML extract production 🟡
 
 **Problem:** Ad-hoc JSON prompts drift; no typed `ExtractTurnFacts`.
 
-| Step | Deliverable |
-|------|-------------|
-| P6a | `baml/extract_turn_facts.baml` → `Extracted` schema |
-| P6b | Wire after embedder abstain in `extract-authority.ts` |
-| P6c | Shadow mode: log BAML vs deterministic disagree rate |
-| P6d | Promote when regression green |
+**LLD:** [`docs/lld/P6_BAML_EXTRACT.md`](./lld/P6_BAML_EXTRACT.md)
+
+| Step | Deliverable | Status |
+|------|-------------|--------|
+| P6a | `baml/extract_turn_facts.baml` → typed schema | ✅ |
+| P6b | Wire after embedder abstain in `extract-authority.ts` | ✅ |
+| P6c | Shadow mode: log BAML vs deterministic disagree (`provenance.baml`) | ✅ default |
+| P6d | Promote when regression green (`BAML_EXTRACT_MODE=promote`) | 🔴 gated |
 
 **Depends on:** P1b funnel (clear abstain gates), P2a (persist BAML provenance in ledger)
 
-**Not:** Replace chip path or close-bound regex.
+**Not:** Replace chip path or close-bound regex. Never speech-act authority.
+
+**Runtime:** TS DeepSeek JSON implements the BAML contract (same pattern as `turn_intent.baml` / `llm-classifier.ts`) — not `@boundaryml/baml` NAPI in Workers.
 
 ---
 
@@ -345,9 +349,9 @@ P2b (ledger prior read) ✅
   ↓
 P2c (compose + disclosed_facts) ✅
   ↓
-Harden ADV-H01–H05 ✅  →  SA-4 = P5 + P3-A..D ✅  (branch feat/harden-sa4-p3)
+Harden ADV-H01–H05 ✅  →  SA-4 = P5 + P3-A..D ✅
   ↓
-later: P6 BAML → P7 Advisor UX → Desk WhatsApp cutover
+P6a–c ExtractTurnFacts shadow ✅  →  P6d promote (gated) → P7 Advisor UX → Desk WhatsApp cutover
 ```
 
 **Parallel allowed:**
@@ -424,7 +428,7 @@ Before each phase implementation, post:
 | P3 | exists: `Naya/docs/lld/ADVISOR_FOCUSED_DEPTH_LLD.md` |
 | P4 | exists: `Naya/docs/lld/ADVISOR_CONTEXTUAL_TURN_INTENT_LLD.md` |
 | P5 | exists: `Naya/docs/lld/RTI_3_VISIT_EXPLORE_INTENT_LLD.md` |
-| P6 | TBD: `ConverseSpine/docs/lld/P6_BAML_EXTRACT.md` |
+| P6 | [`docs/lld/P6_BAML_EXTRACT.md`](./lld/P6_BAML_EXTRACT.md) |
 
 ---
 
