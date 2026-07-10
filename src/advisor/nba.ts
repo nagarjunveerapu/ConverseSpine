@@ -142,7 +142,8 @@ function dimensionAndJourney(
         chips.push('Starting prices', 'Unit configurations', 'Location & connectivity', 'Legal status');
         chips.push('Plan a visit day');
       }
-      if (offered.length >= 2 && topic !== 'compare') {
+      // compare branch already returned above — topic is narrowed away from 'compare'
+      if (offered.length >= 2) {
         chips.push(`Compare all ${Math.min(offered.length, 3)}`);
       }
       break;
