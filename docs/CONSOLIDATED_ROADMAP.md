@@ -7,13 +7,13 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 
 **Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
 
-**Last updated:** 2026-07-10 (P6 BAML ExtractTurnFacts shadow; P7/WA still deferred)
+**Last updated:** 2026-07-10 (P7 Advisor UX shipped #34–#37; WA cutover still deferred; P6 shadow)
 
 **Rule for live failures:** Classify against this doc + [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) **before** coding. Prefer the next open phase slice over a one-off patch that drifts the plan.
 
 ---
 
-## Where we are (ops snapshot — 2026-07-09)
+## Where we are (ops snapshot — 2026-07-10)
 
 | Track | Status | Notes |
 |-------|--------|-------|
@@ -26,7 +26,9 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 | **Harden ADV-H01–H05** | ✅ | Local branch `feat/harden-sa4-p3` — Hinglish affirm, configs lexicon, decline CTA, legal facet, BHK options |
 | **SA-4 = P5 + P3-A..D** | ✅ | Same branch — routing ≡ speech-act projection; facet decide/verify; ADV-F01 / V01+ |
 | Empty Neo pricing copy | ⏸️ DATA | `price_min_paise=0` — honest “not published” later; not a routing bug |
-| **P6 BAML / P7 Advisor UX / WA cutover** | 🟡 P6 shadow | P6a–c on `feat/p6-baml-extract`; P7 + WA still deferred |
+| **P6 BAML** | 🟡 shadow | `BAML_EXTRACT_MODE=shadow` on Dev; **P6d promote gated** |
+| **P7 Advisor UX** | ✅ | [#34](https://github.com/nagarjunveerapu/ConverseSpine/pull/34)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37) — nba + taxonomy rails + Starting prices + brochure stickiness |
+| **WhatsApp buyer cutover** | ⏸️ Deferred | Phase 2 parked (Meta still on Naya); reopen when Desk is quieter |
 
 **Do not** keep stacking playground patches outside the phase table. File the symptom under the owning phase, then implement that slice.
 
@@ -68,17 +70,17 @@ Kernel (always code):
 | Phase | Name | Status |
 |-------|------|--------|
 | **P0** | Focus stability & depth gates | ✅ Shipped (PR [#19](https://github.com/nagarjunveerapu/ConverseSpine/pull/19)) |
-| **P1** | Extract authority & ingress flags | 🟡 P1a + P1b implemented locally; PR TBD |
-| **P1c** | PROJECT_VECTORS + discussedProjects | 🟡 Local (switch/compare); deploy TBD |
+| **P1** | Extract authority & ingress flags | ✅ On `main` (`extract-authority.ts`, `ingress.ts`) |
+| **P1c** | PROJECT_VECTORS + discussedProjects | ✅ On `main` (switch/compare + facet stickiness [#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37)) |
 | **SA** | Speech-act contract (slim) | ✅ SA-0…3 · ✅ SA-4=P5 · ✅ SA-5 with P2a |
 | **P2** | Turn ledger memory loop | ✅ **P2a** · ✅ **P2b** · ✅ **P2c** |
 | **P3** | Focused facet depth | ✅ **P3-A..D** (skip P3-E Advisor ingress) — ADV-F01 |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** + harden ADV-H01–H03; BAML RTI not wired |
 | **P5** | Routing → goal enforcement | ✅ **= SA-4** (routing ≡ speech-act projection; embedder gap-fill on unknown) |
 | **P6** | BAML extract production | 🟡 **P6a–c** shadow on Dev (`BAML_EXTRACT_MODE=shadow`); promote gated |
-| **P7** | Advisor UX parity | ⏸️ Deferred — API adapter exists; NBA / checklist_snapshot thin |
+| **P7** | Advisor UX parity | ✅ [#34](https://github.com/nagarjunveerapu/ConverseSpine/pull/34)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37) — nba taxonomy + rails + facet stickiness |
 | **P8** | Platform scale | ⏸️ Deferred (Redis, OpenSearch, Kafka, Postgres) |
-| **Desk** | Catalog search / cutover | ✅ Location expand [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185); WA cutover later |
+| **Desk** | Catalog search / cutover | ✅ Location expand [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185); **WA cutover deferred** |
 
 ---
 
@@ -104,7 +106,7 @@ Kernel (always code):
 
 **Problem:** Three extractors (regex, embedder, LLM) with implicit precedence; no chip vs free-text provenance; regex runs on already-filled UI slots.
 
-### P1a — Slice 1: merge precedence ✅ (local / PR TBD)
+### P1a — Slice 1: merge precedence ✅ (on `main`)
 
 | Touch | Why |
 |-------|-----|
@@ -115,7 +117,7 @@ Kernel (always code):
 
 **Not:** RTI, compose, turn-routing goal wiring.
 
-### P1b — Slice 2: unified funnel + `input_source` ✅ (local)
+### P1b — Slice 2: unified funnel + `input_source` ✅ (on `main`)
 
 | Deliverable | Detail |
 |-------------|--------|
@@ -302,20 +304,24 @@ Kernel (always code):
 
 ---
 
-## P7 — Advisor UX parity 🟡
+## P7 — Advisor UX parity ✅
 
-**Source:** [`ARCHITECTURE_VISION.md`](../../NayaAdvisor/docs/ARCHITECTURE_VISION.md) P0–P2
+**Source:** [`ARCHITECTURE_VISION.md`](../../NayaAdvisor/docs/ARCHITECTURE_VISION.md) P0–P2  
+**Shipped:** [#34](https://github.com/nagarjunveerapu/ConverseSpine/pull/34)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37)
 
 | Item | Status |
 |------|--------|
 | `advisor/handle-turn` + map-response | ✅ |
 | `visit_queue` / `visit_itinerary` | ✅ |
 | `search_recovery` chips | ✅ |
-| `checklist_snapshot` authoritative in response | 🟡 P7 — emitted on advisor turn |
-| Server-driven `nba[]` after facet answers | 🟡 P7 — `advisor/nba.ts` + SPA apply |
-| Board tab sync (`board_tab` ingress) | 🟡 P7 — accepted on request; SPA sends tab |
+| `checklist_snapshot` authoritative in response | ✅ |
+| Server-driven `nba[]` (mode×layer + escape rails) | ✅ `advisor/nba.ts` + SPA apply |
+| Board tab sync (`board_tab` ingress) | ✅ |
+| Focused facet stickiness (Starting prices / Send brochure) | ✅ [#35](https://github.com/nagarjunveerapu/ConverseSpine/pull/35)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37) |
 
-**Exit criteria:** Chat and board never diverge on focus/phase; chips from server not client guess.
+**Exit criteria:** Chat and board never diverge on focus/phase; chips from server not client guess — **met on Dev**.
+
+**Smoke:** `scripts/smoke-p7-focused-chips.sh` against local or `converse-spine-dev`.
 
 ---
 
@@ -337,9 +343,9 @@ Kernel (always code):
 ```text
 P0 ✅
   ↓
-P1a/b (extract authority + funnel) ✅ local
+P1a/b (extract authority + funnel) ✅ on main
   ↓
-P1c (PROJECT_VECTORS / discussed) 🟡 local
+P1c (PROJECT_VECTORS / discussed) ✅ on main
   ↓
 SA-0 ✅ → SA-1 ✅ → SA-2 ✅ → SA-3 ✅
   ↓
@@ -351,13 +357,13 @@ P2c (compose + disclosed_facts) ✅
   ↓
 Harden ADV-H01–H05 ✅  →  SA-4 = P5 + P3-A..D ✅
   ↓
-P6a–c ExtractTurnFacts shadow ✅  →  P6d promote (gated) → P7 Advisor UX → Desk WhatsApp cutover
+P6a–c ExtractTurnFacts shadow ✅  →  P6d promote (gated) → **P7 Advisor UX ✅** → Desk WhatsApp cutover (⏸️ deferred)
 ```
 
 **Parallel allowed:**
 
-- P1 PR ship while SA tests land
-- NayaAdvisor UI (P7) after P3-E contract frozen
+- NayaAdvisor SPA apply of `nba` (Advisor #12/#13) — independent of Desk WA
+- P1 status already on `main` — no further “PR TBD” for P1a/b
 
 **Serial gates (do not skip):**
 
@@ -368,6 +374,7 @@ P6a–c ExtractTurnFacts shadow ✅  →  P6d promote (gated) → P7 Advisor UX 
 5. **P2c before P3-D polish** — disclosed_facts still needed for “don’t repeat RERA”  
 6. **P4-CTA before WhatsApp cutover** — bare `yes` after focused CTAs must not invent projects  
 7. **Do not “fix playground” outside this table** — add a row / golden ID first  
+8. **WhatsApp cutover stays deferred** until explicitly reopened (no Desk churn)
 
 ---
 
@@ -386,6 +393,8 @@ P6a–c ExtractTurnFacts shadow ✅  →  P6d promote (gated) → P7 Advisor UX 
 | **RTI-G02** | P4-CTA | Focus Eldorado → 2BHK listUnits CTA → `yes` → `answer`/`price` on Eldorado (not Buena Vista / vector noise) |
 | **V01 / V04 / V06** | P5/SA-4 | Configs answer · pricing in discover · bare what-about switch (V02/V03/V05/V07/V08 later) |
 | **CHIP-G01** | P1b | `action_id` vs typed chip label same patch |
+| **P7-G01** | P7 | Focus Cornerstone → `Starting prices` → price answer, stay focused (not no_fit) |
+| **P7-G02** | P7 | Focus Vanam → `Send brochure` → stay Vanam (not Buena Vista vector noise) |
 | **LOC-G01** | Desk | “North Bangalore” search → Eldorado/Orchards/Neo identity ahead of geo-only (after #185) |
 
 ---
@@ -407,14 +416,14 @@ Before each phase implementation, post:
 
 | Item | Notes |
 |------|-------|
-| Project switch mid-focused ("what about Cornerstone?") | P1c vectors + SA `switch` — partially local |
+| Project switch mid-focused ("what about Cornerstone?") | P1c vectors + SA `switch` on main; keep golden coverage |
 | V02 visit follow-up after single stop booked | Visit LLD §11 — partial; SA-2 seeds discussed |
 | payment_plan / investment / builder topics | DEFER until EngineData tools (speech-act LLD) |
 | Prod soak / deploy ConverseSpine prod | After SA + P2a + **P4-CTA** on Dev golden |
-| Wire Slice 1 / P1c to main if not merged | PR follow-up |
+| Wire Slice 1 / P1c to main if not merged | ✅ P1a/b/c on `main` — remove from active backlog |
 | Empty / zero-price unit UX (“not published” vs “on file”) | DATA + compose honesty — not RTI |
 | Soft-match WA recovery | After P4-CTA |
-| WhatsApp full cutover (Desk Phase 2) | After P4-CTA + SA + P2a green |
+| WhatsApp full cutover (Desk Phase 2) | ⏸️ Deferred — reopen explicitly; Meta still on Naya |
 
 ---
 
