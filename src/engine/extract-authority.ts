@@ -412,6 +412,16 @@ export function scrubEmbedderIdentityNoise(
     const { namedProjects: _n, pickName: _p, ...rest } = extracted;
     return rest;
   }
+  // Focused/visit "I want to visit" — keep focus; drop off-pool embedder invent.
+  if (
+    (phase === 'focused' || phase === 'visit') &&
+    (extracted.speechAct === 'visit_book' || extracted.transition === 'want_visit') &&
+    extracted.namedProjects?.length &&
+    !buyerCuedOtherProject(text, sessionPool)
+  ) {
+    const { namedProjects: _n, pickName: _p, ...rest } = extracted;
+    return rest;
+  }
   if (phase !== 'focused' && phase !== 'visit') return extracted;
   if (!isDetailAskTurn(extracted)) return extracted;
   // Keep identity only on structural cue or session-pool name — never a global catalog list.

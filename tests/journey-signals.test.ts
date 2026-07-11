@@ -119,6 +119,35 @@ describe('hasExplicitProjectCue / sticky scrub (W1)', () => {
     ).toBe(false);
   });
 
+  it('focused bare visit_book does not query PROJECT_VECTORS (VIS-01)', () => {
+    expect(
+      shouldQueryProjectVectors(
+        'I want to visit',
+        {
+          constraints: {},
+          transition: 'want_visit',
+          speechAct: 'visit_book',
+        },
+        { phase: 'focused', offeredProjectNames: ['Ayana', 'Clarks Exotica'] },
+      ),
+    ).toBe(false);
+  });
+
+  it('scrub drops Desire Spaces invent on focused visit_book', () => {
+    const scrubbed = scrubEmbedderIdentityNoise(
+      'I want to visit',
+      'focused',
+      {
+        constraints: {},
+        transition: 'want_visit',
+        speechAct: 'visit_book',
+        namedProjects: [{ projectId: 'desire-spaces-lokations', name: 'Desire Spaces' }],
+      },
+      [{ name: 'Ayana' }, { name: 'Clarks Exotica' }],
+    );
+    expect(scrubbed.namedProjects).toBeUndefined();
+  });
+
   it('scrub drops Desire Spaces on expert price ask', () => {
     const ex: Extracted = {
       constraints: {},

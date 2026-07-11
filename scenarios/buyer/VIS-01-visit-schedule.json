@@ -9,12 +9,16 @@
     { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
     {
       "text": "I want to visit",
-      "assert": { "reply_excludes": ["buena vista"] }
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["buena vista", "desire spaces", "Desire Spaces"]
+      }
     },
     {
       "text": "Saturday morning",
       "assert": {
-        "reply_excludes": ["tap a button", "which project"]
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["tap a button", "which project", "desire spaces", "Desire Spaces"]
       }
     }
   ]
