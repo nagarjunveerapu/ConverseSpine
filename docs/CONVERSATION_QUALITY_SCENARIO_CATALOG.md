@@ -1,7 +1,7 @@
 # Conversation quality — scenario catalog (visible checklist)
 
 **Date:** 2026-07-11  
-**Honest status:** Closed-beta **must-have script is green** on local `:8789` (MED/PIV/SW/VIS/STY/HIN-01). Still **not** open-beta / full A–H (advisor MED-02, multi-visit origin route, broad Hinglish).
+**Honest status:** Closed-beta **must-have script is green** on local `:8789` (MED/PIV/SW/VIS/STY/HIN-01). **HIN-02..06 + multi-visit seed pack** (BUYER-LOK-02, SA-G02/G02b, VIS-03/04) verified on this branch. Still **not** open-beta (advisor MED-02, full origin-route UAT depth).
 
 This doc is the **list first**. Do not treat unchecked rows as green.
 
@@ -22,9 +22,9 @@ This doc is the **list first**. Do not treat unchecked rows as green.
 | **VIS-01 / VIS-02** | ✅ Ran 2026-07-11 | Ayana visit (no Desire Spaces); price interrupt mid-visit |
 | **STY-01 / STY-02** | ✅ Ran 2026-07-11 | Small talk; long dump North-only (no Meadows) |
 | **HIN-01** | ✅ Ran 2026-07-11 | Whitefield mein 3BHK dikhao → recommend |
-| Multi-visit route by origin / sequencing | ⚠️ Partial | SA-G02 / BUYER-LOK-02 seed 2-stop; full route UAT not re-soaked |
+| **HIN-02..06** | ✅ Fixed + soak | price kitna / brochure bhejo / visit karna / dono compare / nahi chahiye |
+| Multi-visit route by origin / sequencing | ✅ Seed green | BUYER-LOK-02, SA-G02/G02b, VIS-03/04 soak; deeper origin UAT optional |
 | Expert deep-probe vs novice minimal | ⚠️ Partial | ADV-F01 = expert-ish facets; no paired novice journey |
-| Broad Hinglish (HIN-02..06) | ❌ Not verified | Deferred past closed-beta must-have |
 | MED-02 advisor brochure | ❌ Not verified | Advisor channel — next wave |
 
 ---
@@ -93,12 +93,12 @@ Status legend: **HAVE** = JSON/script exists · **NEED** = write then run · **C
 
 | ID | Channel | Scenario | Pass if | Status |
 |----|---------|----------|---------|--------|
-| **HIN-01** | chat | CTA → `haan` | Stays on project pricing | HAVE ADV-H01 |
-| **HIN-02** | chat | CTA → `yeah sure` / `theek hai` | Same | HAVE ADV-H02 (yeah sure) — extend theek hai |
-| **HIN-03** | chat | `price batao` / `kitna padega` while focused | Price answer | NEED |
-| **HIN-04** | chat | `visit karna hai Saturday` | Visit book path | NEED |
-| **HIN-05** | chat | `dono compare karo` after A+B | Compare discussed pair | NEED |
-| **HIN-06** | chat | `nahi chahiye` after CTA | Stay focused — not no_fit apartment | HAVE-ish ADV-H03 — Hinglish variant NEED |
+| **HIN-01** | chat | CTA → `haan` | Stays on project pricing | HAVE |
+| **HIN-02** | chat | CTA → `yeah sure` / `theek hai` | Same | HAVE |
+| **HIN-03** | chat | `price batao` / `kitna padega` while focused | Price answer | HAVE (`price kitna hai`) |
+| **HIN-04** | chat | `visit karna hai Saturday` | Visit book path | HAVE |
+| **HIN-05** | chat | `dono compare karo` after A+B | Compare discussed pair | HAVE |
+| **HIN-06** | chat | `nahi chahiye` after CTA | Stay focused — not no_fit apartment | HAVE |
 
 ### H. Regression anchors (keep green)
 

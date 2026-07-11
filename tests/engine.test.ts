@@ -37,6 +37,9 @@ describe('ConverseEngine facts', () => {
     expect(extractLocation('Whitefield')).toBe('Whitefield');
     expect(extractLocation('Tuesday')).toBeUndefined();
     expect(extractLocation('Tuesday morning')).toBeUndefined();
+    expect(extractLocation('nahi chahiye')).toBeUndefined();
+    expect(extractLocation('nahin')).toBeUndefined();
+    expect(extractLocation('no thanks')).toBeUndefined();
   });
 
   it('detects legal topic from title question', () => {

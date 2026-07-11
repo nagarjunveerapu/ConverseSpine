@@ -9,6 +9,7 @@ import { isCompareAmongOfferedTurn } from './compare-intent.js';
 import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../phases/visit.js';
 import { classifyTurnIntentLlm } from './llm-classifier.js';
 import { defaultProbePrompt } from './pending-prompt.js';
+import { AFFIRM_ONLY, DECLINE } from './dialogue-acts.js';
 import type {
   PatchClearKey,
   TurnIntentApplyResult,
@@ -16,15 +17,12 @@ import type {
   TurnIntentResult,
 } from './types.js';
 
+export { AFFIRM_ONLY, DECLINE } from './dialogue-acts.js';
+
 /**
  * Closed dialogue affirm set (L2). Includes multi-word ("yeah sure") and Hinglish ("haan").
  * Must stay in sync with facts.ts AFFIRM for extract.affirm.
  */
-export const AFFIRM_ONLY =
-  /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|haaji|theek(?:\s+hai)?|done|confirm(?:ed)?|go ahead|sounds good|perfect|great|yeah\s+sure|yes\s+please|ok\s+sure|sure\s+yes)\.?!?\s*$/i;
-/** Decline after pending CTA — includes "no thanks" (must not fall through to no_fit). */
-export const DECLINE =
-  /^(?:no|nope|nah|no\s+thanks|no\s+thank\s+you|not\s+now|not\s+interested|not\s+that|not\s+this|something\s+else)\.?!?\s*$/i;
 const REFINE_CONTINUE =
   /\b(?:keep|continue)\s+refining(?:\s+(?:the|my))?\s+search\b|\brefine(?:\s+(?:the|my))?\s+search\b/i;
 const LIST_AT_BUDGET =
@@ -124,6 +122,12 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
     }
   }
 
+  // Focused soft decline (incl. Hinglish) — stay on project; never invent locality / no_fit.
+  // Must run before classifyFocusedPivot: extractLocation used to treat "nahi chahiye" as a place.
+  if (input.phase === 'focused' && DECLINE.test(t)) {
+    return { kind: 'focused_question', confidence: 'rule' };
+  }
+
   const focusedPivot = classifyFocusedPivot(input);
   if (focusedPivot) return focusedPivot;
 
@@ -217,6 +221,7 @@ export function shouldRunTurnIntent(state: ConversationState, actionId?: string,
     return false;
   }
   if (state.phase === 'focused') {
+    if (text && DECLINE.test(text.trim())) return true;
     if (state.rti?.pendingPrompt) {
       const pending = state.rti.pendingPrompt;
       // SA-3 / P4-CTA: offer_pricing only binds bare affirm/decline.

@@ -122,6 +122,23 @@ describe('P4-CTA — offer_pricing pending', () => {
     expect(applied.state.phase).toBe('focused');
     expect(applied.state.rti?.pendingPrompt).toBeUndefined();
   });
+
+  it('nahi chahiye while focused stays focused (not location invent / no_fit)', async () => {
+    let state = commitTo(initState('c1', 'lokations'), 'ayana-lokations', 'Ayana');
+    state = {
+      ...state,
+      constraints: { location: 'Sakleshpur', propertyType: 'plantation' },
+      rti: { lastUiMode: 'focused', lastGoalKind: 'answer' },
+    };
+    const intent = await classifyTurnIntent(
+      noopEnv,
+      buildTurnIntentInput(state, 'nahi chahiye', 'whatsapp', 'focused'),
+    );
+    expect(intent.kind).toBe('focused_question');
+    const applied = applyTurnIntentResult(state, intent, []);
+    expect(applied.state.phase).toBe('focused');
+    expect(applied.state.focus?.projectName).toBe('Ayana');
+  });
 });
 
 describe('P4-CTA — engine golden RTI-G02 (fake deps)', () => {
