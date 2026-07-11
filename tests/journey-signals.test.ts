@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { scrubEmbedderIdentityNoise, demoteVisitBookOnFreshSearch } from '../src/engine/extract-authority.js';
+import type { Extracted } from '../src/engine/types.js';
+import {
+  detectTopics,
+  extractFactsSync,
+  isConstraintRefinementTurn,
+  isLocationCorrectionTurn,
+} from '../src/engine/facts.js';
+import * as discover from '../src/engine/phases/discover.js';
 import { buildJourneySignalPost } from '../src/engine/journey-signals.js';
+import { describe, expect, it } from 'vitest';
 import { initState, commitTo, recordOffered, recordDiscussed, clearLastOffered, constraintsMateriallyChanged } from '../src/engine/state.js';
 import type { EvidenceSet, TurnGoal } from '../src/engine/types.js';
 import { hasExplicitProjectCue, facetNameResidue, detectFocusedSwitchIntent } from '../src/engine/project_switch.js';
 import { shouldQueryProjectVectors } from '../src/engine/adapters/semantic-nlu.js';
-import { scrubEmbedderIdentityNoise } from '../src/engine/extract-authority.js';
-import type { Extracted } from '../src/engine/types.js';
-import { isConstraintRefinementTurn, isLocationCorrectionTurn } from '../src/engine/facts.js';
 
 describe('buildJourneySignalPost (W5)', () => {
   it('maps recommend → recommendation_served + shortlist_add', () => {
@@ -127,6 +133,123 @@ describe('hasExplicitProjectCue / sticky scrub (W1)', () => {
       ex,
     );
     expect(scrubbed.namedProjects).toBeUndefined();
+  });
+});
+
+describe('P2 multi-act + P3 soft prefs', () => {
+  it('search + want_visit without named project → recommend first', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      constraints: { location: 'North Bangalore', budgetMaxInr: 15_000_000, propertyType: 'apartment' },
+      turnCount: 1,
+      discover: { ...initState('c1', 'brigade-group').discover, oriented: true },
+    };
+    const goal = discover.decide(s, {
+      constraints: s.constraints,
+      transition: 'want_visit',
+      speechAct: 'search',
+    });
+    expect(goal.kind).toBe('recommend');
+  });
+
+  it('search + want_visit with embedder namedProjects on empty board → recommend', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      constraints: { location: 'North Bangalore', budgetMaxInr: 15_000_000, propertyType: 'apartment' },
+      turnCount: 1,
+      discover: { ...initState('c1', 'brigade-group').discover, oriented: true },
+    };
+    const goal = discover.decide(s, {
+      constraints: s.constraints,
+      transition: 'want_visit',
+      speechAct: 'visit_book',
+      namedProjects: [
+        { projectId: 'oasis', name: 'Brigade Oasis' },
+        { projectId: 'meadows', name: 'Brigade Meadows' },
+      ],
+      askTopic: 'compare',
+      compareProjectIds: ['oasis', 'meadows'],
+    });
+    expect(goal.kind).toBe('recommend');
+  });
+
+  it('STY-02: ready to move is soft pref, not availability topic; location lands', () => {
+    const text =
+      'hi we are a family of 4 looking for 3BHK in North Bangalore under 1.2 Cr preferably ready to move near airport with good schools nearby';
+    expect(detectTopics(text)).not.toContain('availability');
+    expect(detectTopics(text)).not.toContain('location');
+    const ex = extractFactsSync(text, initState('c1', 'brigade-group'));
+    expect(ex.constraints.location).toMatch(/north bangalore/i);
+    expect(ex.constraints.readyToMove).toBe(true);
+    expect(ex.constraints.nearAirport).toBe(true);
+    expect(ex.askTopics ?? []).not.toContain('availability');
+  });
+
+  it('demoteVisitBookOnFreshSearch keeps search primary on empty board', () => {
+    const r = demoteVisitBookOnFreshSearch(
+      'Apartment in North Bangalore under 1.5 Cr and I want to visit',
+      initState('c1', 'brigade-group'),
+      {
+        primary: {
+          id: 'chip.visit_book',
+          act: 'visit_book',
+          source: 'free_text',
+          confidence: 'rule',
+        },
+        secondary: null,
+        speechAct: 'visit_book',
+        chipPathIds: ['chip.visit_book'],
+      },
+    );
+    expect(r.speechAct).toBe('search');
+    expect(r.primary).toBeNull();
+  });
+
+  it('searchFilters does not invent nearAirport localities or readyToMove searchText', () => {
+    const f = discover.searchFilters({
+      location: 'North Bangalore',
+      nearAirport: true,
+      readyToMove: true,
+    });
+    expect(f.locations).toBe('North Bangalore');
+    expect(f.searchText).toBeUndefined();
+  });
+
+  it('desk identity hit when match_reasons echo buyer location', () => {
+    const hit = discover.deskLocationIdentityHit(
+      {
+        projectId: 'eldorado',
+        name: 'Brigade Eldorado',
+        microMarket: 'Aerospace Park / Devanahalli Corridor',
+        startingPriceInr: 3_100_000,
+        startingPriceDisplay: '₹31 L',
+        matchReasons: ['North Bangalore ✓'],
+      },
+      ['North Bangalore'],
+    );
+    expect(hit).toBe(true);
+  });
+
+  it('matchMicroMarket is structural overlap only — no Spine place catalog', () => {
+    expect(discover.matchMicroMarket('North Bangalore', 'North Bangalore')).toBe(true);
+    expect(discover.matchMicroMarket('Aerospace Park / Devanahalli Corridor', 'North Bangalore')).toBe(false);
+    expect(discover.matchMicroMarket('Devanahalli', 'Devanahalli')).toBe(true);
+    expect(
+      discover.filterSearchMatches(
+        [
+          {
+            projectId: 'eldorado',
+            name: 'Brigade Eldorado',
+            microMarket: 'Aerospace Park / Devanahalli Corridor',
+            startingPriceInr: 3_100_000,
+            startingPriceDisplay: '₹31 L',
+          },
+        ],
+        { location: 'North Bangalore' },
+        [],
+        { locationAliases: ['Devanahalli', 'Aerospace Park'] },
+      ),
+    ).toHaveLength(1);
   });
 });
 

@@ -337,8 +337,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   ex = prepareCompareExtracted(trimmedText, state, ex);
-  // Named multi-project turns without the word "compare" still need compare IDs.
+  // Named multi-project turns without the word "compare" still need compare IDs —
+  // but not on a fresh search board (embedder names are not a shortlist).
+  const freshSearchBoard =
+    state.discover.lastOffered.length === 0 &&
+    !state.focus &&
+    (discover.hasNarrowingConstraint(state.constraints) ||
+      discover.hasNarrowingConstraint(ex.constraints) ||
+      Boolean(ex.speechAct === 'search'));
   if (
+    !freshSearchBoard &&
     !(ex.compareProjectIds && ex.compareProjectIds.length >= 2) &&
     (ex.namedProjects?.length ?? 0) >= 2
   ) {
@@ -437,8 +445,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (nd) await deps.crm.releaseProject(nd).catch(() => {});
     state = releaseToDiscover(state);
   }
+  // P2: search brief + visit with empty board → stay discover and recommend first.
+  // Do not enter visit on embedder-named noise before a shortlist exists.
   if (ex.transition === 'want_visit') {
-    state = { ...state, phase: 'visit' };
+    const freshSearchBrief =
+      (discover.hasNarrowingConstraint(state.constraints) ||
+        discover.hasNarrowingConstraint(ex.constraints)) &&
+      !state.focus &&
+      state.discover.lastOffered.length === 0;
+    if (!freshSearchBrief) {
+      state = { ...state, phase: 'visit' };
+    }
   }
 
   const visitDayTurn = isVisitDayUtterance(trimmedText);
@@ -897,7 +914,12 @@ async function fetchRecommend(
     .filter((m) => !s.discover.rejectedProjectIds.includes(m.projectId))
     .filter((m) => (ex.wantsMore ? !offeredIds.has(m.projectId) : true));
 
-  const matches = discover.filterSearchMatches(rawMatches, s.constraints, s.discover.rejectedProjectIds);
+  const matches = discover.filterSearchMatches(
+    rawMatches,
+    s.constraints,
+    s.discover.rejectedProjectIds,
+    { locationAliases: strictSearch.expandedLocations ?? [] },
+  );
 
   if (matches.length === 0 && base.kind === 'recommend' && s.discover.lastOffered.length === 0) {
     const broadened = await broadenInitialShortlist(
@@ -1112,7 +1134,19 @@ async function searchWithFilters(
   deps: EngineDeps,
   builderId: string,
   filters: import('./types.js').SearchFilters,
-): Promise<{ matches: Array<{ project_id: string; name: string; micro_market: string; starting_price_inr: number; starting_price_display: string; match_reasons?: string[]; project_type?: string }> }> {
+): Promise<{
+  matches: Array<{
+    project_id: string;
+    name: string;
+    micro_market: string;
+    starting_price_inr: number;
+    starting_price_display: string;
+    match_reasons?: string[];
+    project_type?: string;
+  }>;
+  expandedLocations?: string[];
+  noMatchReasoning?: string;
+}> {
   return deps.data.search(builderId, filters).catch(() => ({ matches: [] }));
 }
 

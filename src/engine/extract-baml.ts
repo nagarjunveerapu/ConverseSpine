@@ -3,7 +3,7 @@
  * Gap-fill only after regex + embedder abstain. Never owns speech act.
  * See baml/extract_turn_facts.baml and docs/lld/P6_BAML_EXTRACT.md
  */
-import { locationLooksPolluted } from './facts.js';
+import { locationLooksPolluted, looksLikeSearchBriefText } from './facts.js';
 import type { Env } from '../env.js';
 import { mayWriteSearchConstraints } from './speech-act/permissions.js';
 import type { ChipResolution, SpeechActKind } from './speech-act/types.js';
@@ -73,6 +73,11 @@ export function resolveBamlExtractMode(env: Pick<Env, 'BAML_EXTRACT_MODE' | 'DEE
   return env.DEEPSEEK_API_KEY ? 'shadow' : 'off';
 }
 
+/** Free-text search brief — multi-slot extract should run. */
+export function looksLikeSearchBrief(text: string): boolean {
+  return looksLikeSearchBriefText(text);
+}
+
 /** After regex+embedder — should we call ExtractTurnFacts? */
 export function needsBamlGapFill(
   ex: Extracted,
@@ -95,13 +100,6 @@ export function needsBamlGapFill(
     /\b(?:visit|site visit|tell me more|more about|show me others?|other options?)\b/i.test(text);
 
   return missingTopic || missingLoc || missingTransition || pollutedLoc;
-}
-
-function looksLikeSearchBrief(text: string): boolean {
-  return (
-    /\b(?:in|near|around|at)\s+[A-Za-z]/i.test(text) ||
-    /\b(?:plantation|villa|apartment|plot|flat|bhk|budget|crore|lakh)\b/i.test(text)
-  );
 }
 
 export function parseBamlExtractResult(raw: string): BamlExtractResult | null {

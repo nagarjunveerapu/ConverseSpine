@@ -7,6 +7,21 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   const d = s.discover;
   if (ex.recall) return { kind: 'visit_recall' };
 
+  // Fresh search board: narrowing + empty shortlist beats embedder compare/visit noise.
+  const freshSearchBoard =
+    d.lastOffered.length === 0 &&
+    !s.focus &&
+    (hasNarrowingConstraint(s.constraints) || hasNarrowingConstraint(ex.constraints));
+  if (
+    freshSearchBoard &&
+    (ex.speechAct === 'search' ||
+      ex.speechAct === 'visit_book' ||
+      ex.transition === 'want_visit' ||
+      ex.forceRecommendList)
+  ) {
+    return { kind: 'recommend' };
+  }
+
   if (
     (ex.budgetPickQuestion || ex.compareAdvice) &&
     d.lastOffered.length >= 2 &&
@@ -56,13 +71,31 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
     if (detailGoal) return detailGoal;
   }
 
-  if (ex.transition === 'want_visit' && !(ex.namedProjects?.length)) {
-    return { kind: 'propose_visit' };
+  // P2 multi-act: search brief + visit on empty board → shortlist first.
+  // Embedder namedProjects must not invent a visit/compare board here.
+  if (ex.transition === 'want_visit' || ex.speechAct === 'visit_book') {
+    const narrowing =
+      hasNarrowingConstraint(s.constraints) || hasNarrowingConstraint(ex.constraints);
+    if (narrowing && d.lastOffered.length === 0 && !s.focus) {
+      return { kind: 'recommend' };
+    }
+    if (!(ex.namedProjects?.length)) {
+      return narrowing ? { kind: 'recommend' } : { kind: 'propose_visit' };
+    }
   }
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom' };
 
   if (ex.rejected && hasNarrowingConstraint(s.constraints)) return { kind: 'ack_reject_recommend' };
   if (ex.wantsMore) return { kind: 'recommend' };
+  // P2: search + media/facet without a pick → recommend board (not clarify).
+  if (
+    hasNarrowingConstraint(s.constraints) &&
+    ((ex.askTopics ?? []).some((t) => t === 'media' || t === 'price' || t === 'legal') ||
+      ex.askTopic === 'media' ||
+      ex.askTopic === 'price')
+  ) {
+    return { kind: 'recommend' };
+  }
   if (hasNarrowingConstraint(s.constraints)) return { kind: 'recommend' };
 
   if (s.turnCount === 0) return { kind: 'greet' };
@@ -78,8 +111,11 @@ export function searchFilters(c: Constraints): SearchFilters {
     ...(c.budgetMaxInr !== undefined ? { budgetMaxInr: c.budgetMaxInr } : {}),
     ...(c.budgetMinInr !== undefined ? { budgetMinInr: c.budgetMinInr } : {}),
     ...(config ? { bhks: config } : {}),
-    ...(c.location ? { locations: c.location } : {}),
+    ...(c.location?.trim() ? { locations: c.location.trim() } : {}),
     ...(c.propertyType ? { projectTypes: mapProjectTypesForSearch(c.propertyType) } : {}),
+    ...(c.purpose ? { purpose: c.purpose } : {}),
+    // nearAirport / readyToMove stay on Constraints for provenance + compose —
+    // do NOT invent locality tokens or stuff free-text into Desk search_text.
     maxResults: 3,
   };
 }
@@ -172,6 +208,11 @@ export function hasNarrowingConstraint(c: Constraints): boolean {
   return Boolean(c.budgetMaxInr || c.bhk || c.location || c.propertyType);
 }
 
+/**
+ * Location vs project micro_market.
+ * Prefer Desk expanded_locations / identity reasons over Spine-invented place lists.
+ * Only structural string overlap here (buyer loc ↔ micro_market text).
+ */
 export function matchMicroMarket(microMarket: string, location: string): boolean {
   const m = microMarket.toLowerCase();
   const loc = location.toLowerCase();
@@ -187,6 +228,7 @@ export function filterSearchMatches(
   raw: Match[],
   c: Constraints,
   rejectedIds: readonly string[],
+  opts?: { locationAliases?: readonly string[] },
 ): Match[] {
   let ms = raw.filter((m) => !rejectedIds.includes(m.projectId));
   if (c.budgetMaxInr) {
@@ -194,9 +236,32 @@ export function filterSearchMatches(
     ms = ms.filter((m) => m.startingPriceInr > 0 && m.startingPriceInr <= budgetMax);
   }
   if (c.location) {
-    ms = ms.filter((m) => matchMicroMarket(m.microMarket, c.location!));
+    // Desk expand aliases (from NayaDesk, not Spine hardcodes) + buyer location.
+    const locs = [c.location, ...(opts?.locationAliases ?? [])].filter(Boolean);
+    ms = ms.filter(
+      (m) =>
+        locs.some((loc) => matchMicroMarket(m.microMarket, loc)) ||
+        deskLocationIdentityHit(m, locs),
+    );
   }
   return ms.slice(0, 3);
+}
+
+/**
+ * Trust Desk match_reasons when they echo the buyer's own location tokens.
+ * No Spine place-name catalog (no Devanahalli / Aerospace invent).
+ */
+export function deskLocationIdentityHit(m: Match, locs: readonly string[]): boolean {
+  const reasons = (m.matchReasons ?? []).join(' ').toLowerCase();
+  if (!reasons) return false;
+  for (const loc of locs) {
+    const lc = loc.toLowerCase().trim();
+    if (!lc) continue;
+    if (reasons.includes(lc)) return true;
+    const tokens = lc.split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+    if (tokens.some((t) => reasons.includes(t))) return true;
+  }
+  return false;
 }
 
 /** When search returns options but none fit budget (and optional location), build honest no-fit evidence. */

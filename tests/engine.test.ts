@@ -176,23 +176,49 @@ describe('ConverseEngine facts', () => {
         microMarket: 'Aerospace Park / Devanahalli Corridor',
         startingPriceInr: 3_100_000,
         startingPriceDisplay: '₹31 L',
-        matchReasons: [],
+        matchReasons: ['North Bangalore ✓'],
       },
     ];
+    // Exact micro_market / budget only — no Spine corridor invent.
     expect(
-      discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Devanahalli' }, []),
-    ).toHaveLength(0);
-    expect(
-      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Devanahalli' }, []),
+      discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Yelahanka' }, []),
     ).toHaveLength(1);
-    expect(
-      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Devanahalli' }, [])[0]
-        ?.name,
-    ).toBe('Brigade Eldorado');
     expect(
       discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Yelahanka' }, [])[0]
         ?.name,
     ).toBe('Brigade Northridge Neo');
+    expect(
+      discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Devanahalli' }, []),
+    ).toHaveLength(0);
+    expect(
+      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Devanahalli' }, [])[0]
+        ?.name,
+    ).toBe('Brigade Eldorado');
+    // Whitefield must not stretch to North projects.
+    expect(
+      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Whitefield' }, []),
+    ).toHaveLength(0);
+    // North Bangalore ↔ Aerospace only via Desk expand aliases or identity reasons.
+    expect(
+      discover
+        .filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'North Bangalore' }, [])
+        .map((m) => m.projectId),
+    ).toContain('eldorado');
+    expect(
+      discover.filterSearchMatches(
+        raw.map((m) => ({ ...m, matchReasons: [] })),
+        { budgetMaxInr: 4_000_000, location: 'North Bangalore' },
+        [],
+      ),
+    ).toHaveLength(0);
+    expect(
+      discover.filterSearchMatches(
+        raw.map((m) => ({ ...m, matchReasons: [] })),
+        { budgetMaxInr: 4_000_000, location: 'North Bangalore' },
+        [],
+        { locationAliases: ['Devanahalli', 'Aerospace Park'] },
+      ),
+    ).toContainEqual(expect.objectContaining({ projectId: 'eldorado' }));
     const gap = discover.buildBudgetNoFitEvidence(
       { budgetMaxInr: 2_000_000, location: 'Devanahalli' },
       raw,

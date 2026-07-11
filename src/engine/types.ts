@@ -9,6 +9,9 @@ export interface Constraints {
   location?: string;
   propertyType?: string;
   purpose?: 'self_use' | 'investment';
+  /** Soft prefs — provenance/compose only; not Desk locality invent. */
+  nearAirport?: boolean;
+  readyToMove?: boolean;
 }
 
 export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose';
