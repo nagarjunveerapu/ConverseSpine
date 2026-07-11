@@ -75,14 +75,9 @@ Kernel (always code):
 | **P3** | Focused facet depth | ✅ **P3-A..D** (skip P3-E Advisor ingress) — ADV-F01 |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** + harden ADV-H01–H03; BAML RTI not wired |
 | **P5** | Routing → goal enforcement | ✅ **= SA-4** (routing ≡ speech-act projection; embedder gap-fill on unknown) |
-<<<<<<< HEAD
-| **P6** | BAML extract production | 🟡 **P6a–c** shadow on Dev (`BAML_EXTRACT_MODE=shadow`); promote gated |
-| **P7** | Advisor UX parity | ✅ [#34](https://github.com/nagarjunveerapu/ConverseSpine/pull/34)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37) — nba taxonomy + rails + facet stickiness |
-=======
 | **P6** | BAML extract production | ✅ **P6a–d** Dev promote (`BAML_EXTRACT_MODE=promote`); prod shadow until soak |
-| **P7** | Advisor UX parity | ⏸️ Deferred — API adapter exists; NBA / checklist_snapshot thin |
->>>>>>> origin/main
-| **P8** | Platform scale | ⏸️ Deferred (Redis, OpenSearch, Kafka, Postgres) |
+| **P7** | Advisor UX parity | ✅ [#34](https://github.com/nagarjunveerapu/ConverseSpine/pull/34)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37) — nba taxonomy + rails + facet stickiness |
+| **P8** | Platform scale | ⏸️ Deferred — needs broader discussion (Redis, OpenSearch, Kafka, Postgres) |
 | **Desk** | Catalog search / cutover | ✅ Location expand [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185); **WA cutover deferred** |
 
 ---
@@ -360,13 +355,8 @@ P2c (compose + disclosed_facts) ✅
   ↓
 Harden ADV-H01–H05 ✅  →  SA-4 = P5 + P3-A..D ✅
   ↓
-<<<<<<< HEAD
-P6a–c ExtractTurnFacts shadow ✅  →  P6d promote (gated) → **P7 Advisor UX ✅** → Desk WhatsApp cutover (⏸️ deferred)
-=======
-P6a–c ExtractTurnFacts shadow ✅  →  **P6d promote ✅ Dev** → P7 Advisor UX → Desk WhatsApp cutover (⏸️ deferred)
->>>>>>> origin/main
+P6a–c ExtractTurnFacts shadow ✅  →  **P6d promote ✅ Dev** → **P7 Advisor UX ✅** → Desk WhatsApp cutover (⏸️ deferred)
 ```
-
 **Parallel allowed:**
 
 - NayaAdvisor SPA apply of `nba` (Advisor #12/#13) — independent of Desk WA
