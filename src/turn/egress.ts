@@ -28,7 +28,7 @@ export function postTurnEgress(
     observations.push({
       fact_key: 'visit_booked',
       value: { project_id: input.project_id, at: new Date().toISOString() },
-      provenance: 'turn_spine',
+      provenance: 'regex',
       confidence: 1,
     });
   }
