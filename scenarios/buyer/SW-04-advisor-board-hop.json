@@ -1,0 +1,18 @@
+{
+  "id": "SW-04",
+  "title": "Advisor board hops Cornerstone → Buena Vista via name",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["quality", "switch", "C", "advisor"],
+  "turns": [
+    { "text": "Whitefield" },
+    { "text": "Cornerstone Utopia", "assert": { "reply_includes": ["cornerstone"] } },
+    {
+      "text": "Buena Vista instead",
+      "assert": {
+        "reply_includes": ["buena"],
+        "reply_excludes": ["tap a button"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "VIS-04",
+  "title": "my visits with nothing booked → recall empty not book",
+  "builder_id": "lokations",
+  "tags": ["quality", "visit", "D"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "my visits",
+      "assert": {
+        "reply_excludes": ["which day", "what time", "saturday morning"]
+      }
+    }
+  ]
+}

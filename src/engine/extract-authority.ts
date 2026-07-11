@@ -16,7 +16,8 @@ import {
   type BamlExtractMode,
   type BamlExtractResult,
 } from './extract-baml.js';
-import { extractFacts, isDetailAskTurn, looksLikeConfigAsk } from './facts.js';
+import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk } from './facts.js';
+import { buyerCuedOtherProject } from './project_switch.js';
 import type {
   ExtractProvenance,
   FieldProvenance,
@@ -136,10 +137,19 @@ export async function extractTurnAuthority(
   const mergedRaw = mergeExtractedAuthority(base, enriched);
   const topicsBeforeBridge = mergedRaw.askTopics ?? (mergedRaw.askTopic ? [mergedRaw.askTopic] : []);
   const withTopicBridge = bridgeUnknownConfigAsk(mergedRaw, text, chipResolution);
-  const merged = stampSpeechAct(
+  let merged = stampSpeechAct(
     applySpeechActPermissions(withTopicBridge, chipResolution),
     chipResolution,
   );
+  merged = scrubEmbedderIdentityNoise(text, state.phase, merged, [
+    ...state.discover.lastOffered,
+    ...(state.discussedProjects ?? []),
+    ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
+  ]);
+  // PIV-03: "change to 2BHK under 70L" must recommend, not clarify_project_pick.
+  if (isConstraintRefinementTurn(text) && !merged.namedProjects?.length && !merged.pickName) {
+    merged = { ...merged, speechAct: 'search' };
+  }
 
   if (merged.askTopics?.length && !baseRaw.askTopics?.length) {
     const bridgedIn =
@@ -171,12 +181,35 @@ export async function extractTurnAuthority(
     const report = buildBamlShadowReport(bamlMode, merged, proposal);
     provenance.baml = report;
     if (bamlMode === 'promote' && proposal?.confidence === 'llm') {
-      const promoted = stampSpeechAct(
+      let promoted = stampSpeechAct(
         applySpeechActPermissions(mergeBamlGapFill(merged, proposal), chipResolution),
         chipResolution,
       );
+      promoted = scrubEmbedderIdentityNoise(text, state.phase, promoted, [
+        ...state.discover.lastOffered,
+        ...(state.discussedProjects ?? []),
+        ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
+      ]);
+      if (isConstraintRefinementTurn(text) && !promoted.namedProjects?.length && !promoted.pickName) {
+        promoted = { ...promoted, speechAct: 'search' };
+      }
+      // Location correction: prefer regex/extracted location over BAML inventing a project.
+      if (isLocationCorrectionTurn(text) && merged.constraints.location) {
+        promoted = {
+          ...promoted,
+          constraints: { ...promoted.constraints, location: merged.constraints.location },
+        };
+      }
       for (const field of report.would_fill) {
         provenance.fields[field] = 'baml';
+      }
+      // Free-text promote may overwrite disagreed locality (polluted regex → BAML).
+      if (
+        proposal.location &&
+        promoted.constraints.location?.toLowerCase() === proposal.location.toLowerCase() &&
+        merged.constraints.location?.toLowerCase() !== proposal.location.toLowerCase()
+      ) {
+        provenance.fields.location = 'baml';
       }
       return { extracted: promoted, provenance, chipResolution };
     }
@@ -298,12 +331,24 @@ function annotateConstraintProvenance(
   }
 }
 
-/** Explicit precedence — regex base wins per field; enrich is gap-fill only. */
+/**
+ * Explicit precedence for free text:
+ * - Clean regex locality wins over embedder.
+ * - Polluted regex locality ("… under 1.5 Cr") yields to clean embedder.
+ * - Detail asks never take embedder location.
+ * Chip path never reaches this merge.
+ */
 export function mergeExtractedAuthority(base: Extracted, enriched: Extracted): Extracted {
   const merged: Extracted = {
     ...base,
     constraints: { ...base.constraints },
   };
+
+  // Drop polluted regex location so gap-fill / BAML can own free-text locality.
+  if (locationLooksPolluted(merged.constraints.location)) {
+    const { location: _drop, ...rest } = merged.constraints;
+    merged.constraints = rest;
+  }
 
   const baseTopics = base.askTopics ?? (base.askTopic ? [base.askTopic] : []);
   if (baseTopics.length === 0) {
@@ -318,12 +363,13 @@ export function mergeExtractedAuthority(base: Extracted, enriched: Extracted): E
   }
 
   const detailAsk = isDetailAskTurn(merged);
-  const mayFillLocation =
-    !merged.constraints.location && !detailAsk && baseTopics.length === 0;
-  if (mayFillLocation && enriched.constraints.location) {
+  const enrichLoc = enriched.constraints.location;
+  const enrichLocClean = enrichLoc && !locationLooksPolluted(enrichLoc) ? enrichLoc : undefined;
+  const mayFillLocation = !detailAsk && baseTopics.length === 0 && enrichLocClean;
+  if (mayFillLocation && !merged.constraints.location) {
     merged.constraints = {
       ...merged.constraints,
-      location: enriched.constraints.location,
+      location: enrichLocClean,
     };
   }
 
@@ -332,4 +378,25 @@ export function mergeExtractedAuthority(base: Extracted, enriched: Extracted): E
   }
 
   return merged;
+}
+
+/** Drop embedder namedProjects on focused pure-facet / location-correction turns. */
+export function scrubEmbedderIdentityNoise(
+  text: string,
+  phase: ConversationState['phase'],
+  extracted: Extracted,
+  sessionPool?: ReadonlyArray<{ name: string }>,
+): Extracted {
+  if (isLocationCorrectionTurn(text)) {
+    if (!extracted.namedProjects?.length) return extracted;
+    const { namedProjects: _drop, ...rest } = extracted;
+    return rest;
+  }
+  if (phase !== 'focused' && phase !== 'visit') return extracted;
+  if (!isDetailAskTurn(extracted)) return extracted;
+  // Keep identity only on structural cue or session-pool name — never a global catalog list.
+  if (buyerCuedOtherProject(text, sessionPool)) return extracted;
+  if (!extracted.namedProjects?.length && !extracted.pickName) return extracted;
+  const { namedProjects: _n, pickName: _p, ...rest } = extracted;
+  return rest;
 }

@@ -3,6 +3,7 @@
  * Gap-fill only after regex + embedder abstain. Never owns speech act.
  * See baml/extract_turn_facts.baml and docs/lld/P6_BAML_EXTRACT.md
  */
+import { locationLooksPolluted } from './facts.js';
 import type { Env } from '../env.js';
 import { mayWriteSearchConstraints } from './speech-act/permissions.js';
 import type { ChipResolution, SpeechActKind } from './speech-act/types.js';
@@ -84,15 +85,16 @@ export function needsBamlGapFill(
 
   const topics = ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : []);
   const missingTopic = topics.length === 0 && (act === 'unknown' || !act);
+  const pollutedLoc = locationLooksPolluted(ex.constraints.location);
   const missingLoc =
-    !ex.constraints.location &&
-    mayWriteSearchConstraints(act ?? 'unknown') &&
-    looksLikeSearchBrief(text);
+    ((!ex.constraints.location || pollutedLoc) &&
+      mayWriteSearchConstraints(act ?? 'unknown') &&
+      looksLikeSearchBrief(text));
   const missingTransition =
     (!ex.transition || ex.transition === 'none') &&
     /\b(?:visit|site visit|tell me more|more about|show me others?|other options?)\b/i.test(text);
 
-  return missingTopic || missingLoc || missingTransition;
+  return missingTopic || missingLoc || missingTransition || pollutedLoc;
 }
 
 function looksLikeSearchBrief(text: string): boolean {
@@ -188,8 +190,9 @@ export function buildBamlShadowReport(
     else if (proposal.askTopics[0] !== curTopics[0]) disagree.push('askTopics');
   }
   if (proposal.location) {
-    if (!current.constraints.location) would_fill.push('location');
-    else if (current.constraints.location.toLowerCase() !== proposal.location.toLowerCase()) {
+    if (!current.constraints.location || locationLooksPolluted(current.constraints.location)) {
+      would_fill.push('location');
+    } else if (current.constraints.location.toLowerCase() !== proposal.location.toLowerCase()) {
       disagree.push('location');
     }
   }
@@ -209,7 +212,11 @@ export function buildBamlShadowReport(
   return { mode, called: true, would_fill, disagree, confidence: 'llm' };
 }
 
-/** Promote: fill empty fields only — never overwrite regex/embedder/chip. */
+/**
+ * Free-text promote: BAML may fill gaps AND overwrite polluted / disagreed locality.
+ * Never owns speech act. Chip path never calls this.
+ * Budget/BHK stay regex (closed formats) — not in the BAML schema.
+ */
 export function mergeBamlGapFill(current: Extracted, proposal: BamlExtractResult): Extracted {
   if (proposal.confidence !== 'llm') return current;
   let next = { ...current, constraints: { ...current.constraints } };
@@ -222,8 +229,14 @@ export function mergeBamlGapFill(current: Extracted, proposal: BamlExtractResult
       askTopics: proposal.askTopics,
     };
   }
-  if (!next.constraints.location && proposal.location) {
-    next.constraints = { ...next.constraints, location: proposal.location };
+
+  const detailAsk = (next.askTopics?.length ?? 0) > 0 || Boolean(next.askTopic);
+  if (proposal.location && !locationLooksPolluted(proposal.location) && !detailAsk) {
+    const curLoc = next.constraints.location;
+    // Promote over empty OR polluted regex — clean regex locality still wins.
+    if (!curLoc || locationLooksPolluted(curLoc)) {
+      next.constraints = { ...next.constraints, location: proposal.location };
+    }
   }
   if (!next.constraints.propertyType && proposal.propertyType) {
     next.constraints = { ...next.constraints, propertyType: proposal.propertyType };

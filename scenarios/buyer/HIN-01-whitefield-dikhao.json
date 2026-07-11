@@ -1,0 +1,15 @@
+{
+  "id": "HIN-01",
+  "title": "Hinglish: Whitefield mein 3BHK dikhao",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "hinglish", "H"],
+  "turns": [
+    {
+      "text": "Whitefield mein 3BHK dikhao under 1.5 Cr",
+      "assert": {
+        "goal_kind": "recommend",
+        "reply_excludes": ["tap a button"]
+      }
+    }
+  ]
+}

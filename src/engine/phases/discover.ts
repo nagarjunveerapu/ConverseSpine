@@ -193,6 +193,9 @@ export function filterSearchMatches(
     const budgetMax = c.budgetMaxInr;
     ms = ms.filter((m) => m.startingPriceInr > 0 && m.startingPriceInr <= budgetMax);
   }
+  if (c.location) {
+    ms = ms.filter((m) => matchMicroMarket(m.microMarket, c.location!));
+  }
   return ms.slice(0, 3);
 }
 
@@ -310,8 +313,13 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
       : undefined);
   // Facet ask ("Starting prices") with multi shortlist but no pick → clarify,
   // not fall through to recommend/no_fit with stale constraints.
+  // Exception: constraint refine without a named pick should re-search (PIV-03).
   if (!pick) {
-    if (topics.length > 0 && s.discover.lastOffered.length >= 2) {
+    if (
+      topics.length > 0 &&
+      s.discover.lastOffered.length >= 2 &&
+      !(ex.speechAct === 'search' && hasNarrowingConstraint(s.constraints))
+    ) {
       return { kind: 'clarify_project_pick' };
     }
     return null;

@@ -344,14 +344,24 @@ export function fallbackReply(req: ComposeRequest): string {
         if (ev.media.allowed && ev.media.cdnUrl) {
           return `Here's the ${ev.media.title ?? ev.media.assetKind ?? 'asset'} for *${ev.media.projectName}*: ${ev.media.cdnUrl}`;
         }
-        return ev.media.redirectHint ?? ev.media.reason ?? `I can share that after a site visit is confirmed for *${ev.media.projectName}*.`;
+        const pname = ev.media.projectName || context.focusProjectName || 'this project';
+        const hint = (ev.media.redirectHint ?? ev.media.reason ?? '').trim();
+        if (hint) {
+          const alreadyNamed = pname !== 'this project' && hint.toLowerCase().includes(pname.toLowerCase());
+          return alreadyNamed
+            ? hint
+            : `For *${pname}* — ${hint.replace(/^[—\-–]\s*/, '')}`;
+        }
+        return `I can share that after a site visit is confirmed for *${pname}*.`;
       }
       if (goal.topic === 'emi' && ev.emi) {
         return `${emiSnapshotLine(ev.emi)}. Want the full cost breakdown or a visit?`;
       }
       if (goal.topic === 'availability' && ev.units?.length) {
         const list = ev.units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
-        return `Available configurations: ${list}. Want pricing on a specific size?`;
+        const pname = ev.detail?.name ?? context.focusProjectName;
+        const lead = pname ? `For *${pname}*: ` : '';
+        return `${lead}Available configurations: ${list}. Want pricing on a specific size?`;
       }
       // SA-3: availability with empty units — honest empty, not generic overview.
       if (goal.topic === 'availability') {

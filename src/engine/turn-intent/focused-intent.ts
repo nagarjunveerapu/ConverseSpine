@@ -4,6 +4,7 @@ import {
   detectTopics,
   extractLocation,
   isLocationBroadenTurn,
+  isLocationCorrectionTurn,
   parseBudgetToInr,
 } from '../facts.js';
 import { classifySpeechAct, isNonSearchSpeechAct } from '../speech-act/index.js';
@@ -47,9 +48,10 @@ export function isFocusedSearchPivot(text: string): boolean {
   // SA-1: chip-canonical resolve wins — answer/compare/visit are not pivots
   const resolved = classifySpeechAct({ text: t });
   if (resolved.primary && isNonSearchSpeechAct(resolved.speechAct)) return false;
-  if (detectTopics(t).length > 0) return false;
+  if (detectTopics(t).length > 0 && !isLocationCorrectionTurn(t)) return false;
   if (EXPLORE_MORE_RE.test(t)) return true;
   if (isLocationBroadenTurn(t)) return true;
+  if (isLocationCorrectionTurn(t)) return true;
   if (extractLocation(t)) return true;
   if (detectPropertyTypes(t)) return true;
   if (parseBudgetToInr(t)) return true;

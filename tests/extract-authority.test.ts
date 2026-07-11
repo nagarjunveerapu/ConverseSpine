@@ -71,7 +71,7 @@ describe('mergeExtractedAuthority', () => {
     expect(merged.constraints.location).toBe('Whitefield');
   });
 
-  it('regex location wins over enriched location', () => {
+  it('clean regex location wins over enriched location', () => {
     const base: Extracted = {
       constraints: { location: 'Coorg' },
     };
@@ -80,6 +80,17 @@ describe('mergeExtractedAuthority', () => {
     };
     const merged = mergeExtractedAuthority(base, enriched);
     expect(merged.constraints.location).toBe('Coorg');
+  });
+
+  it('polluted regex location yields to clean embedder (free-text promote)', () => {
+    const base: Extracted = {
+      constraints: { location: 'North Bangalore under 1.5 Cr' },
+    };
+    const enriched: Extracted = {
+      constraints: { location: 'North Bangalore' },
+    };
+    const merged = mergeExtractedAuthority(base, enriched);
+    expect(merged.constraints.location).toBe('North Bangalore');
   });
 });
 

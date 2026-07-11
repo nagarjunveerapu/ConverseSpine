@@ -1,0 +1,14 @@
+{
+  "id": "NOV-02",
+  "title": "Novice: is 50L enough for Bangalore apartment",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "novice", "G"],
+  "turns": [
+    {
+      "text": "is 50 lakhs enough for a 3BHK apartment in Bangalore",
+      "assert": {
+        "reply_excludes": ["tap a button"]
+      }
+    }
+  ]
+}

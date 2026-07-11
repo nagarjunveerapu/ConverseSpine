@@ -27,9 +27,19 @@ import { DEFERRABLE_ANSWER_TOPICS } from '../turn-routing/from-speech-act.js';
 const DECLINE = /\b(no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i;
 const BARE_AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|sounds good)\.?!?\s*$/i;
 export const ALSO_RE = /\b(also|as well|too|bhi)\b/i;
-const INSTEAD_RE = /\binstead\b|\bki jagah\b/i;
+export const INSTEAD_RE = /\binstead\b|\bki jagah\b/i;
 const MAX_VISIT_STOPS = 4;
 const ORIGIN_CUE = /\b(?:coming from|starting from|leave from|pickup from|i'?ll be in|from)\b/i;
+
+/** Project swap during visit — must not be captured as pickup origin (W3). */
+export function isVisitProjectSwitchUtterance(
+  text: string,
+  namedCount: number,
+): boolean {
+  if (INSTEAD_RE.test(text)) return true;
+  if (namedCount >= 1 && ALSO_RE.test(text)) return true;
+  return false;
+}
 
 /** SA-4: single shared list with L8 turn-routing (not a duplicate visit-only set). */
 const VISIT_DEFERRABLE_TOPICS = DEFERRABLE_ANSWER_TOPICS;
@@ -236,8 +246,14 @@ function totalStops(prior: VisitState): number {
   return (prior.projectId ? 1 : 0) + (prior.queued?.length ?? 0);
 }
 
-function looksLikeOriginAnswer(text: string, prior: VisitState): boolean {
+function looksLikeOriginAnswer(
+  text: string,
+  prior: VisitState,
+  namedCount: number,
+): boolean {
   if (prior.lastAsk !== 'origin') return false;
+  if (isVisitProjectSwitchUtterance(text, namedCount)) return false;
+  if (namedCount >= 1) return false; // named project while origin ask → switch/add, not locality
   const t = text.trim();
   if (!t || BARE_AFFIRM.test(t)) return false;
   if (parseVisitSlot(t, new Date()) || parseDayAnchor(t, new Date())) return false;
@@ -377,9 +393,9 @@ function step(input: {
   }
 
   const originFromText = extractOriginFromText(input.text);
-  if (originFromText && !prior.originText) {
+  if (originFromText && !prior.originText && !isVisitProjectSwitchUtterance(input.text, input.named.length)) {
     prior = { ...prior, originText: originFromText, originAsked: true };
-  } else if (looksLikeOriginAnswer(input.text, prior)) {
+  } else if (looksLikeOriginAnswer(input.text, prior, input.named.length)) {
     prior = { ...prior, originText: normalizeOriginText(input.text), originAsked: true };
   }
 

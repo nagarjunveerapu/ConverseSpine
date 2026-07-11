@@ -1,0 +1,14 @@
+{
+  "id": "NOV-01",
+  "title": "Novice: what is BHK / how does buying work",
+  "builder_id": "lokations",
+  "tags": ["quality", "novice", "G"],
+  "turns": [
+    {
+      "text": "hi what is 3BHK and how does buying a flat work",
+      "assert": {
+        "reply_excludes": ["tap a button", "buena vista"]
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import type { Env } from '../../env.js';
 import type { AnswerTopic, ConversationState, Extracted, OfferedProject } from '../types.js';
-import { detectTopics, isDetailAskTurn, looksLikeConfigAsk } from '../facts.js';
+import { detectTopics, isDetailAskTurn, isLocationCorrectionTurn, looksLikeConfigAsk } from '../facts.js';
+import { buyerCuedOtherProject, facetNameResidue } from '../project_switch.js';
 
 const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 const TOPIC_THRESHOLD = 0.72;
@@ -211,6 +212,8 @@ export function shouldQueryProjectVectors(
   ) {
     return false;
   }
+  // Location correction ("meant Whitefield not Devanahalli") — filters, not catalog identity.
+  if (isLocationCorrectionTurn(text)) return false;
   const t = text.trim().toLowerCase();
   // Pure discovery constraint lines — location + budget without a project name.
   // Do not let "show me" (PROJECT_REF_RE) defeat this — that is a search verb, not a name.
@@ -225,30 +228,30 @@ export function shouldQueryProjectVectors(
   ) {
     return false;
   }
-  // Focused pure-facet chips ("Send brochure", "Starting prices") — stay on focus;
-  // PROJECT_VECTORS otherwise invents catalog noise (Vanam → Buena Vista).
-  if (ctx.phase === 'focused') {
+  // Focused/visit pure-facet asks — stay on focus unless structural cue or session-pool name.
+  // Never gate on a hardcoded catalog list; vectors resolve identity.
+  if (ctx.phase === 'focused' || ctx.phase === 'visit') {
     const facetAsk =
       (ex.askTopic && ex.askTopic !== 'compare') ||
       (ex.askTopics?.some((topic) => topic !== 'compare') ?? false);
-    if (facetAsk) {
-      const residue = text
-        .toLowerCase()
-        .replace(
-          /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one)\b/gi,
-          ' ',
-        )
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (residue.length < 3) return false;
-    }
+    const pool = (ctx.offeredProjectNames ?? []).map((name) => ({ name }));
+    if (facetAsk && !buyerCuedOtherProject(text, pool)) return false;
+    if (facetAsk && facetNameResidue(text).length < 3) return false;
     return true;
   }
   if (ex.affirm) return true;
   if (ex.transition === 'want_visit' || ex.transition === 'want_details') return true;
   if (ex.askTopic === 'compare' || ex.askTopic === 'media') return true;
   if (ex.askTopics?.some((t) => t === 'compare' || t === 'media')) return true;
+  // Facet ask + leftover name residue after facet strip → let vectors resolve (no catalog regex).
+  const facetTopics = ex.askTopics?.length
+    ? ex.askTopics
+    : ex.askTopic
+      ? [ex.askTopic]
+      : detectTopics(text);
+  if (facetTopics.some((topic) => topic !== 'compare') && facetNameResidue(text).length >= 3) {
+    return true;
+  }
   // Chip miss + shortlist on the board: resolve which offered project was named.
   // Do not vectorize bare discovery seeds (empty shortlist) — that broke Coorg funnel.
   // Allow short picks ("Neo", 3 chars) when a shortlist is already on the board.

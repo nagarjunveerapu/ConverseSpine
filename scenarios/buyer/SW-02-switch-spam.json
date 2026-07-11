@@ -1,0 +1,19 @@
+{
+  "id": "SW-02",
+  "title": "Rapid A→B→C switch spam",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "switch", "C"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    { "text": "Buena Vista", "assert": { "reply_includes": ["buena"] } },
+    {
+      "text": "Meadows",
+      "assert": {
+        "reply_includes": ["meadow"],
+        "reply_excludes": ["tap a button"]
+      }
+    }
+  ]
+}

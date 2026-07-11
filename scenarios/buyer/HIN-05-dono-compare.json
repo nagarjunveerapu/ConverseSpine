@@ -1,0 +1,18 @@
+{
+  "id": "HIN-05",
+  "title": "Hinglish: dono compare karo after A+B",
+  "builder_id": "lokations",
+  "tags": ["quality", "hinglish", "G"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    { "text": "also Krishnaja Greens" },
+    {
+      "text": "dono compare karo",
+      "assert": {
+        "reply_excludes": ["which project", "tap a button"]
+      }
+    }
+  ]
+}

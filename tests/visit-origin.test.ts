@@ -47,7 +47,7 @@ describe('visit origin intelligence', () => {
     }
   });
 
-  it('tells buyer nearer first stop after origin answer', () => {
+  it('does not treat project instead as origin (W3)', () => {
     const s = {
       ...initState('t', 'naya-advisor'),
       phase: 'visit' as const,
@@ -55,26 +55,30 @@ describe('visit origin intelligence', () => {
         projectId: 'eldorado',
         projectName: 'Brigade Eldorado',
         queued: [{ projectId: 'cornerstone', projectName: 'Brigade Cornerstone' }],
-        originText: 'Yelahanka',
-        originLat: 13.1007,
-        originLng: 77.5963,
+        lastAsk: 'origin' as const,
         originAsked: true,
       },
     };
     const goal = decide(
       s,
-      { constraints: {}, transition: 'none' },
       {
-        text: 'Thursday',
+        constraints: {},
+        transition: 'none',
+        namedProjects: [{ projectId: 'buena', name: 'Buena Vista' }],
+      },
+      {
+        text: 'Buena Vista instead',
         now,
-        originGeo: yelahanka,
+        originGeo: null,
         projectGeoCatalog: TEST_PROJECT_GEO,
       },
     );
-    expect(goal.kind).toBe('visit_ask');
-    if (goal.kind === 'visit_ask') {
-      expect(goal.copy.toLowerCase()).toContain('nearer');
-      expect(goal.copy).toContain('Yelahanka');
+    if (goal.kind === 'visit_ask' || goal.kind === 'visit_book') {
+      const st = 'state' in goal ? goal.state : null;
+      expect(st?.originText).toBeUndefined();
+      expect(st?.projectId).toBe('buena');
+    } else {
+      expect.fail(`unexpected goal ${goal.kind}`);
     }
   });
 });

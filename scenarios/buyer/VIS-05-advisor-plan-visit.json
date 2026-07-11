@@ -1,0 +1,18 @@
+{
+  "id": "VIS-05",
+  "title": "Advisor plan visit from board on Cornerstone",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["quality", "visit", "D", "advisor"],
+  "turns": [
+    { "text": "Whitefield" },
+    { "text": "Cornerstone Utopia", "assert": { "reply_includes": ["cornerstone"] } },
+    {
+      "text": "Plan a site visit",
+      "assert": {
+        "reply_includes": ["cornerstone"],
+        "reply_excludes": ["which project", "buena vista"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "SW-01",
+  "title": "Focused A → switch to B by name",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "switch", "C"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "actually show me Buena Vista instead",
+      "assert": {
+        "reply_includes": ["buena"],
+        "reply_excludes": ["eldorado"]
+      }
+    }
+  ]
+}

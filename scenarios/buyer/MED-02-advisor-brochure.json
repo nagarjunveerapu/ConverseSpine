@@ -1,0 +1,19 @@
+{
+  "id": "MED-02",
+  "title": "Advisor Cornerstone → Send brochure stays focused",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["quality", "media", "A", "advisor"],
+  "turns": [
+    { "text": "Whitefield" },
+    { "text": "Cornerstone Utopia looks good", "assert": { "reply_includes": ["cornerstone"] } },
+    {
+      "text": "Send brochure",
+      "assert": {
+        "reply_includes": ["cornerstone"],
+        "reply_excludes": ["buena"],
+        "expect_media": true
+      }
+    }
+  ]
+}

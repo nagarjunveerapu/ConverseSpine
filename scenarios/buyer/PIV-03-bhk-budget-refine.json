@@ -1,0 +1,17 @@
+{
+  "id": "PIV-03",
+  "title": "Mid-list change to 2BHK under 70L",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "pivot", "B"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "3 BHK in Devanahalli under 1.2 Cr" },
+    {
+      "text": "change to 2BHK under 70L",
+      "assert": {
+        "reply_excludes": ["which day", "what time", "tap a button"],
+        "goal_kind": "recommend"
+      }
+    }
+  ]
+}

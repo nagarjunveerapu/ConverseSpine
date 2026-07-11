@@ -100,7 +100,19 @@ describe('needsBamlGapFill', () => {
 });
 
 describe('mergeBamlGapFill / shadow', () => {
-  it('promote fills empty topics only', () => {
+  it('promote overwrites polluted regex location', () => {
+    const current: Extracted = {
+      constraints: { location: 'North Bangalore under 1.5 Cr' },
+      speechAct: 'unknown',
+    };
+    const merged = mergeBamlGapFill(current, {
+      confidence: 'llm',
+      location: 'North Bangalore',
+    });
+    expect(merged.constraints.location).toBe('North Bangalore');
+  });
+
+  it('promote fills empty topics; clean regex location still wins', () => {
     const current: Extracted = { constraints: { location: 'Coorg' }, speechAct: 'unknown' };
     const merged = mergeBamlGapFill(current, {
       confidence: 'llm',

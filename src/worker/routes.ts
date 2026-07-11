@@ -93,6 +93,12 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
       ...(result.debug?.extract_provenance
         ? { extract_provenance: result.debug.extract_provenance }
         : {}),
+      ...(typeof result.debug?.last_offered_count === 'number'
+        ? { last_offered_count: result.debug.last_offered_count }
+        : {}),
+      ...(result.debug?.last_offered_ids
+        ? { last_offered_ids: result.debug.last_offered_ids }
+        : {}),
     },
     ...(result.whatsapp_actions ? { whatsapp_actions: result.whatsapp_actions } : {}),
   };

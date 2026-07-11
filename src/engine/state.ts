@@ -176,6 +176,24 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
   return { ...s, discover: { ...s.discover, lastOffered, ignoredProbes: 0 } };
 }
 
+/** Drop stale shortlist — next successful recommend repopulates (W2). */
+export function clearLastOffered(s: ConversationState): ConversationState {
+  if (s.discover.lastOffered.length === 0) return s;
+  return { ...s, discover: { ...s.discover, lastOffered: [] } };
+}
+
+/** True when search-shaping constraints changed (not purpose/name). No locality hardcode. */
+export function constraintsMateriallyChanged(prev: Constraints, next: Constraints): boolean {
+  const norm = (v: string | undefined) => (v ?? '').trim().toLowerCase();
+  return (
+    norm(prev.location) !== norm(next.location) ||
+    prev.bhk !== next.bhk ||
+    prev.budgetMaxInr !== next.budgetMaxInr ||
+    prev.budgetMinInr !== next.budgetMinInr ||
+    norm(prev.propertyType) !== norm(next.propertyType)
+  );
+}
+
 export function appendTranscript(
   s: ConversationState,
   buyerText: string,
@@ -256,7 +274,17 @@ function isPlausibleLocation(loc: string): boolean {
   if (!lc || lc.length < 3) return false;
   if (extractDayWord(lc)) return false;
   if (isAdvisorBriefChipPhrase(loc)) return false;
+  if (/\bback\s+to\b/.test(lc)) return false;
+  if (/\b(?:switch\s+to|instead|what\s+about|tell\s+me\s+about)\b/.test(lc)) return false;
   if (/\b(compare|both|projects|options|show|visit|pricing|legal|plantation|properties|property|homes|flats|apartments|investment|preservation|appreciation|diversification|rental|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|about|tell)\b/.test(lc)) {
+    return false;
+  }
+  // Regex pollution: "North Bangalore under 1.5 Cr" must not stick as a locality.
+  if (
+    /\b(?:under|below|above|budget|crore|crs?\b|lakh|lakhs|lacs?|\d+\s*(?:cr|l)\b|\d(?:\.\d)?\s*bhk)\b/i.test(
+      lc,
+    )
+  ) {
     return false;
   }
   if (lc.split(/\s+/).length > 8) return false;
