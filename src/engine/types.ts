@@ -352,6 +352,8 @@ export interface EvidenceSet {
   landedCost?: LandedCostEvidence;
   visits?: VisitEvidence;
   units?: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string }>;
+  /** FAQ-shaped ask where Desk had no row for the resolved key(s). */
+  faqMiss?: { keys: string[] };
   searchRecovery?: import('./recovery-planner.js').SearchRecoveryEnvelope;
 }
 

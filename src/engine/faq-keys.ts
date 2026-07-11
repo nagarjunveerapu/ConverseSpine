@@ -39,7 +39,8 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:maintenance(?:\s+charges?)?|cam\s+charges?|upkeep\s+cost)\b/i,
   },
   {
-    key: 'water_power_supply',
+    // Desk question_key is `water_power` (brigade enrichment / live corpus).
+    key: 'water_power',
     re: /\b(?:water\s+(?:supply|connection)|power\s+supply|electricity|bescom|bwssb)\b/i,
   },
   {

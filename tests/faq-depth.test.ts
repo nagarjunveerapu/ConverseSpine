@@ -10,10 +10,11 @@ describe('resolveFaqQuestionKeys', () => {
     expect(isFaqShapedAsk('what is the rental yield on this?')).toBe(true);
   });
 
-  it('maps possession / payment / amenities', () => {
+  it('maps possession / payment / amenities / water', () => {
     expect(resolveFaqQuestionKeys('when is possession?')).toContain('possession');
     expect(resolveFaqQuestionKeys('payment plan?')).toContain('payment_plan');
     expect(resolveFaqQuestionKeys('what amenities?')).toContain('amenities');
+    expect(resolveFaqQuestionKeys('how is water and power supply?')).toContain('water_power');
   });
 
   it('falls back to topic hints when text is bare amenity chip', () => {
@@ -54,6 +55,19 @@ describe('compose FAQ-first answer', () => {
     expect(reply.toLowerCase()).not.toMatch(/want pricing, legal details/);
   });
 
+  it('fallback is honest on FAQ miss (no invent)', () => {
+    const reply = fallbackReply({
+      goal: { kind: 'answer', topic: 'overview', projectId: 'brigade-eldorado' },
+      evidence: {
+        tools: ['faqMiss'],
+        faqMiss: { keys: ['revenue_model'] },
+      },
+      context: baseCtx,
+    });
+    expect(reply.toLowerCase()).toMatch(/don't have that detail|on file/);
+    expect(reply.toLowerCase()).not.toMatch(/20:80|flexi-pay|clp/);
+  });
+
   it('compose prompt instructs FAQ-first when faqs present', () => {
     const prompt = renderComposePrompt({
       goal: { kind: 'answer', topic: 'overview', projectId: 'brigade-eldorado' },
@@ -76,5 +90,18 @@ describe('compose FAQ-first answer', () => {
     });
     expect(prompt).toMatch(/faqs \(use these/i);
     expect(prompt).toMatch(/specific FAQ/i);
+  });
+
+  it('compose prompt forbids inventing on FAQ miss', () => {
+    const prompt = renderComposePrompt({
+      goal: { kind: 'answer', topic: 'overview', projectId: 'brigade-eldorado' },
+      evidence: {
+        tools: ['faqMiss'],
+        faqMiss: { keys: ['payment_plan'] },
+      },
+      context: baseCtx,
+    });
+    expect(prompt).toMatch(/Do NOT invent/i);
+    expect(prompt).toMatch(/payment_plan/);
   });
 });

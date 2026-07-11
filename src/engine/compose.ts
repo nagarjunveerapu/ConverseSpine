@@ -65,6 +65,11 @@ export function renderComposePrompt(req: ComposeRequest): string {
       `The buyer asked a specific FAQ — answer from the faqs in EVIDENCE first. Do NOT fall back to a generic location/price overview.`,
     );
   }
+  if (goal.kind === 'answer' && evidence.faqMiss?.keys.length) {
+    lines.push(
+      `The buyer asked about ${evidence.faqMiss.keys.join(', ')} but there is NO FAQ answer in EVIDENCE. Say you don't have that detail on file yet — offer pricing, a site visit, or another facet. Do NOT invent payment plans, yields, loan terms, or possession dates.`,
+    );
+  }
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
     lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
   }
@@ -161,6 +166,9 @@ function renderEvidence(ev: EvidenceSet): string {
           .join('\n')}`,
       );
     }
+  }
+  if (ev.faqMiss?.keys.length) {
+    out.push(`faq miss (no Desk row): ${ev.faqMiss.keys.join(', ')}`);
   }
   if (ev.location) {
     const l = ev.location;
@@ -390,6 +398,10 @@ export function fallbackReply(req: ComposeRequest): string {
         if (body) {
           return `${body} Want anything else on *${pname}*, or a visit?`;
         }
+      }
+      if (ev.faqMiss?.keys.length) {
+        const pname = context.focusProjectName || 'this project';
+        return `I don't have that detail on file for *${pname}* yet — I can share pricing, legal status, or set up a visit instead.`;
       }
       if (ev.detail) {
         const d = ev.detail;

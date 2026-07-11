@@ -1380,11 +1380,21 @@ async function fetchAnswer(
         faqs: faqHits,
       },
     };
+  } else if (faqKeys.length > 0 && buyerText && isFaqShapedAsk(buyerText)) {
+    // Extractor bound a FAQ key but Desk has no row — honest miss, no overview invent.
+    tools.push('faqMiss');
+    evidence = {
+      ...evidence,
+      tools: [...new Set(tools)],
+      faqMiss: { keys: faqKeys },
+    };
   }
 
   const faqShapedHit = Boolean(buyerText && isFaqShapedAsk(buyerText) && faqHits.length > 0);
+  const faqShapedMiss = Boolean(evidence.faqMiss?.keys.length);
   const needsDetail =
     !faqShapedHit &&
+    !faqShapedMiss &&
     topics.some(
       (t) =>
         t === 'legal' ||

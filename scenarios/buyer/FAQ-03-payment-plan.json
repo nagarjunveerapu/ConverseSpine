@@ -1,0 +1,19 @@
+{
+  "id": "FAQ-03",
+  "title": "Focused payment plan ask uses Desk FAQ",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "faq", "closed-beta"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "what is the payment plan?",
+      "assert": {
+        "reply_includes": ["payment", "clp"],
+        "reply_excludes": ["want pricing, legal details"],
+        "tools_include": ["faqLookup"]
+      }
+    }
+  ]
+}
