@@ -1680,31 +1680,41 @@ async function syncTelemetry(
       })
     : null;
 
-  await deps.crm.appendTurnLedger({
-    conversationId: nd,
-    turnIndex: state.turnCount,
-    builderId: state.builderId,
-    buyerPhone,
-    buyerText: input.text,
-    reply,
-    goal: goal.kind,
-    tools: evidence.tools,
-    offeredProjectIds: ledger?.offered_project_ids ?? evidence.matches?.map((m) => m.projectId),
-    phase: state.phase,
-    ...(ledger
-      ? {
-          snapshotIn: ledger.snapshot_in,
-          resolvedIntent: ledger.resolved_intent,
-          actionPlan: ledger.action_plan,
-          verify: ledger.verify,
-          composer: ledger.composer,
-          toolRuns: ledger.tool_runs,
-          disclosedFacts: ledger.disclosed_facts,
-        }
-      : {}),
-  });
+  // Each Desk write is isolated — a profile/obs failure must not skip journey
+  // signals (dossier: Bot strategy present, Buyer profile + Journey empty).
+  await deps.crm
+    .appendTurnLedger({
+      conversationId: nd,
+      turnIndex: state.turnCount,
+      builderId: state.builderId,
+      buyerPhone,
+      buyerText: input.text,
+      reply,
+      goal: goal.kind,
+      tools: evidence.tools,
+      offeredProjectIds: ledger?.offered_project_ids ?? evidence.matches?.map((m) => m.projectId),
+      phase: state.phase,
+      ...(ledger
+        ? {
+            snapshotIn: ledger.snapshot_in,
+            resolvedIntent: ledger.resolved_intent,
+            actionPlan: ledger.action_plan,
+            verify: ledger.verify,
+            composer: ledger.composer,
+            toolRuns: ledger.tool_runs,
+            disclosedFacts: ledger.disclosed_facts,
+          }
+        : {}),
+    })
+    .catch((err) => {
+      console.error('[syncTelemetry] appendTurnLedger', nd, err);
+    });
 
-  await deps.crm.postJourneyTurnSnapshot(state.builderId, buyerPhone, nd, goal.kind, state.phase);
+  await deps.crm
+    .postJourneyTurnSnapshot(state.builderId, buyerPhone, nd, goal.kind, state.phase)
+    .catch((err) => {
+      console.error('[syncTelemetry] postJourneyTurnSnapshot', nd, err);
+    });
 
   const observations: Array<{ fact_key: string; value: unknown; provenance: string }> = [];
   const prov = deskFactProvenance('regex');
@@ -1738,16 +1748,32 @@ async function syncTelemetry(
     });
   }
   if (observations.length) {
-    await deps.crm.postProfileObservations(state.builderId, buyerPhone, nd, observations);
+    await deps.crm
+      .postProfileObservations(state.builderId, buyerPhone, nd, observations)
+      .catch((err) => {
+        console.error(
+          '[syncTelemetry] postProfileObservations',
+          nd,
+          buyerPhone,
+          observations.map((o) => o.fact_key),
+          err,
+        );
+      });
   }
 
   const journeyPost = buildJourneySignalPost(goal, state, evidence);
-  await deps.crm.postJourneySignals(state.builderId, buyerPhone, nd, journeyPost.signals, {
-    ...(journeyPost.shortlistAdd ? { shortlistAdd: journeyPost.shortlistAdd } : {}),
-    ...(journeyPost.rejectedAdd ? { rejectedAdd: journeyPost.rejectedAdd } : {}),
-  });
+  await deps.crm
+    .postJourneySignals(state.builderId, buyerPhone, nd, journeyPost.signals, {
+      ...(journeyPost.shortlistAdd ? { shortlistAdd: journeyPost.shortlistAdd } : {}),
+      ...(journeyPost.rejectedAdd ? { rejectedAdd: journeyPost.rejectedAdd } : {}),
+    })
+    .catch((err) => {
+      console.error('[syncTelemetry] postJourneySignals', nd, err);
+    });
 
-  await deps.crm.mirrorMemory(nd);
+  await deps.crm.mirrorMemory(nd).catch((err) => {
+    console.error('[syncTelemetry] mirrorMemory', nd, err);
+  });
 }
 
 function ackFor(topic: ObjectionTopic): string {
