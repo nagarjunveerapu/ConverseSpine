@@ -231,10 +231,17 @@ export function shouldQueryProjectVectors(
   // Focused/visit pure-facet asks — stay on focus unless structural cue or session-pool name.
   // Never gate on a hardcoded catalog list; vectors resolve identity.
   if (ctx.phase === 'focused' || ctx.phase === 'visit') {
+    const pool = (ctx.offeredProjectNames ?? []).map((name) => ({ name }));
+    // Bare "I want to visit" / visit_book — stay on focus; do not invent Desire Spaces.
+    if (
+      (ex.speechAct === 'visit_book' || ex.transition === 'want_visit') &&
+      !buyerCuedOtherProject(text, pool)
+    ) {
+      return false;
+    }
     const facetAsk =
       (ex.askTopic && ex.askTopic !== 'compare') ||
       (ex.askTopics?.some((topic) => topic !== 'compare') ?? false);
-    const pool = (ctx.offeredProjectNames ?? []).map((name) => ({ name }));
     if (facetAsk && !buyerCuedOtherProject(text, pool)) return false;
     if (facetAsk && facetNameResidue(text).length < 3) return false;
     return true;
