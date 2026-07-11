@@ -16,7 +16,8 @@ import {
   type BamlExtractMode,
   type BamlExtractResult,
 } from './extract-baml.js';
-import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk } from './facts.js';
+import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
+import { hasNarrowingConstraint } from './phases/discover.js';
 import { buyerCuedOtherProject } from './project_switch.js';
 import type {
   ExtractProvenance,
@@ -67,10 +68,13 @@ export async function extractTurnAuthority(
 ): Promise<ExtractTurnResult> {
   const filled = options.ingressFilledSlots ?? new Set<IngressSlotKey>();
   const override = hasTextOverride(text);
-  const chipResolution = classifySpeechAct({
+  let chipResolution = classifySpeechAct({
     text,
     actionId: options.actionId,
   });
+  // Multi-act / soft-pref search brief: primary act is search.
+  // visit_book or facet answer chips must not strip constraints or own the turn on an empty board.
+  chipResolution = demoteNonSearchOnFreshSearch(text, state, chipResolution);
 
   if (options.inputSource === 'chip') {
     // SA-2: chip taps must get the same visit_book / visit_recall seeds as free text.
@@ -210,6 +214,11 @@ export async function extractTurnAuthority(
         merged.constraints.location?.toLowerCase() !== proposal.location.toLowerCase()
       ) {
         provenance.fields.location = 'baml';
+      }
+      // P2: search briefs are search acts so discover recommends (not facet clarify).
+      if (searchBrief && (promoted.speechAct === 'unknown' || !promoted.speechAct)) {
+        promoted = { ...promoted, speechAct: 'search' };
+        provenance.fields.speechAct = 'baml';
       }
       return { extracted: promoted, provenance, chipResolution };
     }
@@ -392,6 +401,17 @@ export function scrubEmbedderIdentityNoise(
     const { namedProjects: _drop, ...rest } = extracted;
     return rest;
   }
+  // Fresh search brief on empty session pool: PROJECT_VECTORS names are not a shortlist.
+  if (
+    phase === 'discover' &&
+    looksLikeSearchBriefText(text) &&
+    hasNarrowingConstraint(extracted.constraints) &&
+    extracted.namedProjects?.length &&
+    !(sessionPool?.length)
+  ) {
+    const { namedProjects: _n, pickName: _p, ...rest } = extracted;
+    return rest;
+  }
   if (phase !== 'focused' && phase !== 'visit') return extracted;
   if (!isDetailAskTurn(extracted)) return extracted;
   // Keep identity only on structural cue or session-pool name — never a global catalog list.
@@ -399,4 +419,34 @@ export function scrubEmbedderIdentityNoise(
   if (!extracted.namedProjects?.length && !extracted.pickName) return extracted;
   const { namedProjects: _n, pickName: _p, ...rest } = extracted;
   return rest;
+}
+
+/**
+ * Search brief on empty board → primary act is search.
+ * visit_book and facet answer chips (e.g. "nearby" → location) must not strip
+ * constraints or own goal routing.
+ */
+export function demoteNonSearchOnFreshSearch(
+  text: string,
+  state: ConversationState,
+  resolution: ChipResolution,
+): ChipResolution {
+  if (state.focus || state.discover.lastOffered.length > 0) return resolution;
+  if (!looksLikeSearchBriefText(text)) return resolution;
+  if (resolution.speechAct === 'visit_book') {
+    return { primary: null, secondary: null, speechAct: 'search', chipPathIds: [] };
+  }
+  if (resolution.speechAct === 'answer' && resolution.primary?.topic) {
+    return { primary: null, secondary: null, speechAct: 'search', chipPathIds: [] };
+  }
+  return resolution;
+}
+
+/** @deprecated use demoteNonSearchOnFreshSearch */
+export function demoteVisitBookOnFreshSearch(
+  text: string,
+  state: ConversationState,
+  resolution: ChipResolution,
+): ChipResolution {
+  return demoteNonSearchOnFreshSearch(text, state, resolution);
 }

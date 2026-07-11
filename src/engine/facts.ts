@@ -135,10 +135,11 @@ export async function extractFacts(
     !isVisitDayUtterance(text) &&
     isSlotWritable('location', filled, text)
   ) {
-    constraints.location = extractLocation(text, locationExtractCtx(s, askTopics));
+    constraints.location = extractLocation(text, locationExtractCtx(s, askTopics, text));
   }
   if (propertyTypeKw) constraints.propertyType = propertyTypeKw;
   if (purposeKw) constraints.purpose = purposeKw;
+  Object.assign(constraints, detectSoftPrefs(text));
 
   const needLlm: Array<'location' | 'property_type' | 'purpose' | 'transition'> = [];
   if (
@@ -233,7 +234,7 @@ export function extractFactsSync(
   const askTopics = detectTopics(text);
   const loc =
     isSlotWritable('location', filled, text)
-      ? extractLocation(text, locationExtractCtx(s, askTopics))
+      ? extractLocation(text, locationExtractCtx(s, askTopics, text))
       : undefined;
   if (loc) constraints.location = loc;
   const bhk = isSlotWritable('bhk', filled, text) ? extractConfigurationFilters(text) : undefined;
@@ -242,6 +243,7 @@ export function extractFactsSync(
   if (propertyType) constraints.propertyType = propertyType;
   const purpose = isSlotWritable('purpose', filled, text) ? detectPurpose(text) : undefined;
   if (purpose) constraints.purpose = purpose;
+  Object.assign(constraints, detectSoftPrefs(text));
   const askTopic = askTopics[0];
   const transitionKw = detectTransition(text);
   const namedProjects = resolveNamed(text, s);
@@ -529,16 +531,18 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     re: /\b(?:is this (?:a |an )?(?:apartment|plot|villa|flat|plantation)|is it (?:a |an )?(?:apartment|plot|villa|flat)|(?:apartment|plot|villa|flat)s?\s+or\s+(?:apartment|plot|villa|flat)s?|what type of (?:property|project)|property type|what kind of (?:property|project))\b/i,
   },
   {
+    // Asking about a project's location/connectivity — not "schools nearby" soft amenity.
     topic: 'location',
-    re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|nearby|map|directions?|micro[- ]?market)\b|^location\s*\?$/i,
+    re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|map|directions?|micro[- ]?market)\b|^location\s*\?$/i,
   },
   { topic: 'emi', re: /\b(?:emi|loan|monthly payment|installment)\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
   {
-    // Keep aligned with chip.answer.availability aliases — novel asks → INTENT embedder.
-    // Bare "possession date" is priced/timeline (price topic); config "possession" still matches ready/units.
+    // Config / unit asks only. Preference "ready to move" is a Constraint soft pref
+    // (detectSoftPrefs) — never askTopics:availability on search briefs.
+    // Focused readiness asks: "is it ready", "when … ready".
     topic: 'availability',
-    re: /\b(?:ready(?:\s+to\s+move)?|available|when.*ready|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
+    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
   {
     topic: 'media',
@@ -553,6 +557,24 @@ export function detectTopics(text: string): AnswerTopic[] {
     if (re.test(text)) found.add(topic);
   }
   return TOPIC_ORDER.filter((t) => found.has(t));
+}
+
+/** Soft prefs on Constraints — not answer topics / not Desk search_text. */
+export function detectSoftPrefs(text: string): Pick<Extracted['constraints'], 'readyToMove' | 'nearAirport'> {
+  const out: Pick<Extracted['constraints'], 'readyToMove' | 'nearAirport'> = {};
+  if (/\bready\s+to\s+move\b|\bpreferably\s+ready\b/i.test(text)) out.readyToMove = true;
+  if (/\bnear(?:\s+the)?\s+airport\b|\bairport\s+(?:side|corridor|road)\b/i.test(text)) {
+    out.nearAirport = true;
+  }
+  return out;
+}
+
+/** Search-shaped free text — location extract must not die on soft-pref noise. */
+export function looksLikeSearchBriefText(text: string): boolean {
+  return (
+    /\b(?:in|near|around|at)\s+[A-Za-z]/i.test(text) ||
+    /\b(?:plantation|villa|apartment|plot|flat|bhk|budget|crore|lakh)\b/i.test(text)
+  );
 }
 
 function detectTopic(text: string): AnswerTopic | undefined {
@@ -625,10 +647,21 @@ function projectNameHints(s: ConversationState): string[] {
 function locationExtractCtx(
   s: ConversationState,
   askTopics: AnswerTopic[],
+  text?: string,
 ): ExtractLocationContext {
+  // Soft-pref / search briefs: availability alone must not block locality extract.
+  let topics = askTopics;
+  if (
+    text &&
+    looksLikeSearchBriefText(text) &&
+    topics.length > 0 &&
+    topics.every((t) => t === 'availability')
+  ) {
+    topics = [];
+  }
   return {
     phase: s.phase,
-    askTopics,
+    askTopics: topics,
     projectNameHints: projectNameHints(s),
   };
 }

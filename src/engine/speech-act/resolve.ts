@@ -88,7 +88,8 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.answer.location',
-    re: /\b(?:location details?|location\s*(?:&|and)\s*connectivity|where(?:'s| is)(?: it| this)?\s*\?|connectivity|how far|nearby|micro[- ]?market|growth\s*corridor)\b|^location\s*\?$/i,
+    // Not bare "nearby" — that fires on search soft prefs ("schools nearby").
+    re: /\b(?:location details?|location\s*(?:&|and)\s*connectivity|where(?:'s| is)(?: it| this)?\s*\?|connectivity|how far|micro[- ]?market|growth\s*corridor)\b|^location\s*\?$/i,
     priority: 48,
   },
   // Compare lenses (P7 chips) — keep on compare path, not project search

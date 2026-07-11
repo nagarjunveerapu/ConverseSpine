@@ -263,6 +263,8 @@ function pruneUndefined(c: Partial<Constraints>): Partial<Constraints> {
   if (c.location !== undefined) out.location = c.location;
   if (c.propertyType !== undefined) out.propertyType = c.propertyType;
   if (c.purpose !== undefined) out.purpose = c.purpose;
+  if (c.nearAirport !== undefined) out.nearAirport = c.nearAirport;
+  if (c.readyToMove !== undefined) out.readyToMove = c.readyToMove;
   return out;
 }
 

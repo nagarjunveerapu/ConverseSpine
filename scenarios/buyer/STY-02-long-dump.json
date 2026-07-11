@@ -8,7 +8,7 @@
       "text": "hi we are a family of 4 looking for 3BHK in North Bangalore under 1.2 Cr preferably ready to move near airport with good schools nearby",
       "assert": {
         "goal_kind": "recommend",
-        "reply_excludes": ["tap a button"]
+        "reply_excludes": ["tap a button", "Kanakapura", "Meadows"]
       }
     }
   ]
