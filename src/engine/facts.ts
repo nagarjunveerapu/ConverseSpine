@@ -545,7 +545,8 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   },
   {
     topic: 'legal',
-    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan\s+approv|is\s+(?:the\s+)?ec\s+clear)\b/i,
+    // Loan eligibility / banks stay legal+FAQ — not EMI calculator.
+    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan(?:\s+approv|\s+eligib)?|(?:can\s+i\s+(?:get|take)\s+(?:a\s+)?(?:home\s+)?loan)|loan\s+eligib|is\s+(?:the\s+)?ec\s+clear)\b/i,
   },
   {
     topic: 'property_type',
@@ -556,7 +557,8 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     topic: 'location',
     re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|map|directions?|micro[- ]?market)\b|^location\s*\?$/i,
   },
-  { topic: 'emi', re: /\b(?:emi|loan|monthly payment|installment)\b/i },
+  // EMI amount / installment only — bare "loan" / "home loan" is legal+FAQ above.
+  { topic: 'emi', re: /\b(?:\bemi\b|monthly\s+payment|installment|loan\s+emi|emi\s+(?:kitna|amount|calc(?:ulate)?))\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
   {
     // Config / unit asks only. Preference "ready to move" is a Constraint soft pref

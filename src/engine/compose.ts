@@ -320,8 +320,9 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('property_type') && ev.detail?.projectType) {
         chunks.push(projectTypeLine(ev.detail));
       }
-      if (topics.includes('legal') && ev.detail) {
+      if (topics.includes('legal') && ev.detail && !ev.detail.faqs?.length) {
         // Prefer facet line (banks/EC) when buyer text asks; else snapshot.
+        // When Desk FAQ hit exists, FAQ body below owns the answer (loan eligibility, etc.).
         chunks.push(
           focusedLegalLine(ev.detail, context.buyerText, context.disclosedFacts),
         );
@@ -329,7 +330,14 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('location') && ev.location) {
         chunks.push(locationSnapshotLine(ev.location));
       }
-      if (topics.includes('emi') && ev.emi) {
+      // Desk FAQ (loan eligibility, yield, …) beats EMI snapshot when both present.
+      if (ev.detail?.faqs?.length) {
+        const body = ev.detail.faqs
+          .map((f) => f.answer.trim())
+          .filter(Boolean)
+          .join(' ');
+        if (body) chunks.push(body);
+      } else if (topics.includes('emi') && ev.emi) {
         chunks.push(emiSnapshotLine(ev.emi));
       }
       if (chunks.length > 1) {
@@ -374,6 +382,17 @@ export function fallbackReply(req: ComposeRequest): string {
         }
         return `I can share that after a site visit is confirmed for *${pname}*.`;
       }
+      // Closed-beta: Desk FAQ (loan eligibility, yield, …) before EMI snapshot.
+      if (ev.detail?.faqs?.length) {
+        const pname = ev.detail.name || context.focusProjectName || 'this project';
+        const body = ev.detail.faqs
+          .map((f) => f.answer.trim())
+          .filter(Boolean)
+          .join(' ');
+        if (body) {
+          return `${body} Want anything else on *${pname}*, or a visit?`;
+        }
+      }
       if (goal.topic === 'emi' && ev.emi) {
         return `${emiSnapshotLine(ev.emi)}. Want the full cost breakdown or a visit?`;
       }
@@ -387,17 +406,6 @@ export function fallbackReply(req: ComposeRequest): string {
       if (goal.topic === 'availability') {
         const pname = ev.detail?.name ?? context.focusProjectName ?? 'this project';
         return `Configuration details for *${pname}* aren't published yet — I can share pricing or book a visit to see options on site.`;
-      }
-      // Closed-beta: Desk FAQ answers beat generic overview dumps (rental yield, possession, …).
-      if (ev.detail?.faqs?.length) {
-        const pname = ev.detail.name || context.focusProjectName || 'this project';
-        const body = ev.detail.faqs
-          .map((f) => f.answer.trim())
-          .filter(Boolean)
-          .join(' ');
-        if (body) {
-          return `${body} Want anything else on *${pname}*, or a visit?`;
-        }
       }
       if (ev.faqMiss?.keys.length) {
         const pname = context.focusProjectName || 'this project';

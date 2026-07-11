@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isFaqShapedAsk, resolveFaqQuestionKeys } from '../src/engine/faq-keys.js';
 import { fallbackReply, renderComposePrompt } from '../src/engine/compose.js';
+import { detectTopics } from '../src/engine/facts.js';
 import type { ComposeRequest } from '../src/engine/types.js';
 
 describe('resolveFaqQuestionKeys', () => {
@@ -19,6 +20,19 @@ describe('resolveFaqQuestionKeys', () => {
 
   it('falls back to topic hints when text is bare amenity chip', () => {
     expect(resolveFaqQuestionKeys('', ['amenities'])).toContain('amenities');
+  });
+});
+
+describe('loan eligibility vs EMI topic', () => {
+  it('routes home-loan eligibility to legal, not emi', () => {
+    expect(detectTopics('can I get a home loan?')).toContain('legal');
+    expect(detectTopics('can I get a home loan?')).not.toContain('emi');
+    expect(detectTopics('home loan eligibility')).toContain('legal');
+  });
+
+  it('keeps EMI amount asks on emi', () => {
+    expect(detectTopics('what is the EMI?')).toEqual(['emi']);
+    expect(detectTopics('monthly payment kitna')).toContain('emi');
   });
 });
 
