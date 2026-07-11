@@ -130,7 +130,7 @@ function exactPoolPick(pool: readonly OfferedProject[], pickName: string): Offer
 
 function poolOf(s: ConversationState): OfferedProject[] {
   const pool = [...s.discover.lastOffered];
-  for (const d of s.discussedProjects ?? []) {
+  for (const d of s.discover.discussedProjects ?? []) {
     if (!pool.some((p) => p.projectId === d.projectId)) pool.push(d);
   }
   if (s.focus && !pool.some((p) => p.projectId === s.focus!.projectId)) {
