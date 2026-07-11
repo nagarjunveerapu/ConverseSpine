@@ -125,6 +125,12 @@ export async function extractTurnAuthority(
       ...(state.focus?.projectName ? [state.focus.projectName] : []),
     ],
     pendingOfferPricing: state.rti?.pendingPrompt?.kind === 'offer_pricing',
+    hasPriorConstraints: Boolean(
+      state.constraints.location ||
+        state.constraints.propertyType ||
+        state.constraints.budgetMaxInr ||
+        state.constraints.bhk,
+    ),
   });
 
   const mergedRaw = mergeExtractedAuthority(base, enriched);

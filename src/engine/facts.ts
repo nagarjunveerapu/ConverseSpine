@@ -324,33 +324,45 @@ function detectPropertyType(text: string): string | undefined {
 /** Distinctive tokens for shortlist identity ("Krishnaja Greens" → krishnaja, greens). */
 function offeredNameTokens(name: string): string[] {
   const distinctive = name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
-  const tokens = distinctive.split(/\s+/).filter((t) => t.length >= 4);
-  return tokens.length ? tokens : distinctive.length >= 4 ? [distinctive] : [];
+  const parts = distinctive.split(/\s+/).filter(Boolean);
+  // Prefer tokens ≥4; keep a short final token (Neo, Ayana edge) when it is the
+  // distinctive last word of a multi-word name.
+  const tokens = parts.filter((t) => t.length >= 4);
+  const last = parts[parts.length - 1];
+  if (last && last.length >= 3 && last.length < 4 && !tokens.includes(last)) {
+    tokens.push(last);
+  }
+  return tokens.length ? tokens : distinctive.length >= 3 ? [distinctive] : [];
 }
 
 function resolveNamed(text: string, s: ConversationState): OfferedProject[] {
-  // Closed shortlist identity only — full catalog names come from PROJECT_VECTORS.
-  // Collect *all* shortlist hits (visit/compare multi-name), matching full name or tokens.
+  // Shortlist + discussed discourse — full catalog names still come from PROJECT_VECTORS.
+  // Discussed lets "compare ayana and krishnaja" resolve when Krishnaja is not in lastOffered.
   const offered = s.discover.lastOffered;
-  if (!offered.length) return [];
+  const discussed = s.discover.discussedProjects ?? [];
+  const pool: OfferedProject[] = [...offered];
+  for (const d of discussed) {
+    if (!pool.some((p) => p.projectId === d.projectId)) pool.push(d);
+  }
+  if (!pool.length) return [];
   const t = text.trim().toLowerCase();
   const hits: OfferedProject[] = [];
-  for (const o of offered) {
+  for (const o of pool) {
     const name = o.name.toLowerCase();
     const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
     const tokens = offeredNameTokens(o.name);
     if (
       t.includes(name) ||
-      (distinctive.length >= 4 && t.includes(distinctive)) ||
+      (distinctive.length >= 3 && t.includes(distinctive)) ||
       tokens.some((tok) => t.includes(tok))
     ) {
       hits.push(o);
     }
   }
   if (hits.length) return hits;
-  const hit = matchOfferedName(text, offered);
+  const hit = matchOfferedName(text, pool);
   if (!hit) return [];
-  const row = offered.find((o) => o.name === hit);
+  const row = pool.find((o) => o.name === hit);
   return row ? [row] : [{ projectId: hit, name: hit }];
 }
 
@@ -490,7 +502,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   },
   {
     topic: 'legal',
-    re: /\b(?:rera|legal|khata|title|approval|documents?|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan\s+approv|is\s+(?:the\s+)?ec\s+clear)\b/i,
+    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan\s+approv|is\s+(?:the\s+)?ec\s+clear)\b/i,
   },
   {
     topic: 'property_type',
@@ -788,8 +800,16 @@ export function matchOfferedName(
     else if (name.startsWith(t) || distinctive.startsWith(t)) score = 80;
     else if (t.includes(name) || t.includes(distinctive)) score = 70;
     else if (tokens.some((tok) => t.includes(tok))) score = 68;
-    else if (!hasEmbeddedName && name.includes(t) && t.length >= 4) score = 60;
-    else if (!hasEmbeddedName && distinctive.includes(t) && t.length >= 4) score = 55;
+    else if (!hasEmbeddedName && name.includes(t) && t.length >= 3) score = 60;
+    else if (!hasEmbeddedName && distinctive.includes(t) && t.length >= 3) score = 55;
+    else if (
+      !hasEmbeddedName &&
+      wordCount === 1 &&
+      t.length >= 3 &&
+      distinctive.split(/\s+/).pop() === t
+    ) {
+      score = 58; // bare "Neo" → Brigade Northridge Neo
+    }
     if (score > 0 && (!best || score > best.score)) best = { name: o.name, score };
   }
   return best && best.score >= 55 ? best.name : undefined;

@@ -157,6 +157,14 @@ describe('matchOfferedName — embedded shortlist in longer config asks', () => 
     expect(matchOfferedName('what options are there for 2BHK near the airport', offered)).toBeUndefined();
   });
 
+  it('bare Neo matches Brigade Northridge Neo (3-char last token)', () => {
+    const neoOffered = [
+      { projectId: 'neo', name: 'Brigade Northridge Neo' },
+      { projectId: 'eldorado', name: 'Brigade Eldorado' },
+    ];
+    expect(matchOfferedName('Neo', neoOffered)).toBe('Brigade Northridge Neo');
+  });
+
   it('resolveNamed collects multi shortlist names for visit lines', () => {
     let s = initState('c1', 'brigade-group');
     s = {

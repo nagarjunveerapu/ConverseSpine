@@ -15,6 +15,21 @@ describe('resolveFreeTextToChipPaths — catalog examples', () => {
     expect(r.primary?.topic).toBe('price');
   });
 
+  it('paperwork okay for this one → Legal', () => {
+    const r = resolveFreeTextToChipPaths('is the paperwork okay for this one somehow');
+    expect(r.speechAct).toBe('answer');
+    expect(r.primary?.id).toBe('chip.answer.legal');
+    expect(r.primary?.topic).toBe('legal');
+  });
+
+  it('North Bangalore show-me → search', () => {
+    const r = resolveFreeTextToChipPaths(
+      'show me projects in North Bangalore under 1.5 Cr 3BHK',
+    );
+    expect(r.speechAct).toBe('search');
+    expect(r.primary?.id).toBe('chip.search');
+  });
+
   it('Legal status → Legal', () => {
     const r = resolveFreeTextToChipPaths('Legal status');
     expect(r.speechAct).toBe('answer');

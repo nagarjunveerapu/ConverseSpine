@@ -43,7 +43,7 @@ export function facetNameResidue(text: string): string {
   return text
     .toLowerCase()
     .replace(
-      /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit)\b/gi,
+      /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one)\b/gi,
       ' ',
     )
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -92,6 +92,11 @@ export function detectFocusedSwitchIntent(
 
   const focus = s.focus;
   const fu = followUpTopics(ex);
+
+  // Deictic "this one" / "for this" stays on focus — vectors must not invent a switch.
+  if (/\b(?:this\s+one|this\s+project|for\s+this|about\s+this)\b/i.test(_text) && !ex.pickName) {
+    return null;
+  }
 
   const named = ex.namedProjects;
   if (named && named.length >= 1) {

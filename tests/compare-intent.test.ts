@@ -53,6 +53,34 @@ describe('prepareCompareExtracted', () => {
     });
     expect(ex.compareProjectIds).toEqual(['ayana-lokations', 'krishnaja-greens-lokations']);
   });
+
+  it('does not bind stale shortlist on explicit "compare A and B"', () => {
+    let state = {
+      ...initState('c1', 'lokations'),
+      discover: {
+        ...initState('c1', 'lokations').discover,
+        lastOffered: [
+          { projectId: 'ayana-lokations', name: 'Ayana' },
+          { projectId: 'clarks-exotica-lokations', name: 'Clarks Exotica' },
+        ],
+      },
+    };
+    state = recordDiscussed(state, [
+      { projectId: 'ayana-lokations', name: 'Ayana' },
+      { projectId: 'krishnaja-greens-lokations', name: 'Krishnaja Greens' },
+    ]);
+    const prepared = prepareCompareExtracted('compare ayana and krishnaja greens', state, {
+      constraints: {},
+      transition: 'none',
+      askTopic: 'compare',
+      namedProjects: [{ projectId: 'ayana-lokations', name: 'Ayana' }],
+    });
+    // Leave unset so resolveCompareProjectIds can use discussed + name refs.
+    expect(prepared.compareProjectIds).toBeUndefined();
+    const ids = resolveCompareProjectIds('compare ayana and krishnaja greens', prepared, state);
+    expect(ids).toEqual(['ayana-lokations', 'krishnaja-greens-lokations']);
+    expect(ids).not.toContain('clarks-exotica-lokations');
+  });
 });
 
 describe('resolveCompareProjectIds discourse', () => {
@@ -94,6 +122,60 @@ describe('anaphoric project vector gate', () => {
         { phase: 'focused', microMarkets: [] },
       ),
     ).toBe(false);
+  });
+
+  it('allows vectors when only one namedProject (complete compare pair)', () => {
+    expect(
+      shouldQueryProjectVectors(
+        'compare ayana and krishnaja greens',
+        {
+          constraints: {},
+          askTopic: 'compare',
+          namedProjects: [{ projectId: 'ayana-lokations', name: 'Ayana' }],
+        },
+        { phase: 'discover', microMarkets: [] },
+      ),
+    ).toBe(true);
+  });
+
+  it('skips vectors after single named hit without multi-name cue', () => {
+    expect(
+      shouldQueryProjectVectors(
+        'tell me about Brigade Eldorado',
+        {
+          constraints: {},
+          namedProjects: [{ projectId: 'eldorado', name: 'Brigade Eldorado' }],
+        },
+        { phase: 'discover', microMarkets: [] },
+      ),
+    ).toBe(false);
+  });
+
+  it('skips PROJECT_VECTORS on search + narrowing constraints (LOC-G01)', () => {
+    expect(
+      shouldQueryProjectVectors(
+        'show me projects in North Bangalore under 1.5 Cr 3BHK',
+        {
+          constraints: {
+            location: 'North Bangalore',
+            budgetMaxInr: 15_000_000,
+            bhk: '3 BHK',
+          },
+          speechAct: 'search',
+        },
+        { phase: 'discover', microMarkets: ['North Bangalore'] },
+      ),
+    ).toBe(false);
+  });
+
+  it('allows bare Ayana after prior constraints (ADV-BAML no_fit recovery)', () => {
+    expect(
+      shouldQueryProjectVectors(
+        'Ayana',
+        { constraints: {}, speechAct: 'unknown' },
+        { phase: 'discover', microMarkets: [], hasPriorConstraints: true },
+      ),
+    ).toBe(true);
   });
 });
 

@@ -58,7 +58,11 @@ function matchProjectsFromCatalog(text: string): OfferedProject[] {
     const lc = clause.toLowerCase();
     for (const p of LOKATIONS) {
       const name = p.name.toLowerCase();
-      const tokens = name.split(/\s+/).filter((t) => t.length >= 4);
+      // Skip brand-only tokens (brigade/lokations) — they match every sibling project.
+      const tokens = name
+        .replace(/^(brigade|lokations)\s+/i, '')
+        .split(/\s+/)
+        .filter((t) => t.length >= 4);
       if (lc.includes(name) || tokens.some((t) => lc.includes(t))) {
         byId.set(p.id, { projectId: p.id, name: p.name });
       }
@@ -70,7 +74,8 @@ function matchProjectsFromCatalog(text: string): OfferedProject[] {
 function fakeSemanticNlu(): SemanticNluPort {
   return {
     async enrich(text, _builderId, ex, ctx) {
-      if (ex.namedProjects?.length) return ex;
+      // Mirror production: partial namedProjects (1 of 2) still allows vector completion.
+      if ((ex.namedProjects?.length ?? 0) >= 2) return ex;
       if (!shouldQueryProjectVectors(text, ex, ctx)) return ex;
       const named = matchProjectsFromCatalog(text);
       return named.length ? { ...ex, namedProjects: named } : ex;

@@ -56,7 +56,7 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.answer.legal',
-    re: /\b(?:rera|legal(?:\s+issues?)?|khata|title|approval|documents?|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv)|approved\s+banks?|home\s+loan\s+approv|is\s+(?:the\s+)?ec\s+clear)\b/i,
+    re: /\b(?:rera|legal(?:\s+issues?)?|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv)|approved\s+banks?|home\s+loan\s+approv|is\s+(?:the\s+)?ec\s+clear)\b/i,
     priority: 65,
   },
   {
