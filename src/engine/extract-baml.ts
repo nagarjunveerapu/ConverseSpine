@@ -1,9 +1,11 @@
 /**
- * P6 — ExtractTurnFacts (BAML contract → DeepSeek JSON).
- * Gap-fill only after regex + embedder abstain. Never owns speech act.
+ * P6/P1 — ExtractTurnFacts (BAML contract → DeepSeek JSON).
+ * Free-text search briefs: multi-slot LLM authority for location/type/purpose (+ soft prefs).
+ * Budget/BHK: LLM fills when regex left empty; regex wins when present (closed formats).
+ * Chips / speech-act never owned here.
  * See baml/extract_turn_facts.baml and docs/lld/P6_BAML_EXTRACT.md
  */
-import { locationLooksPolluted } from './facts.js';
+import { locationLooksPolluted, parseBudgetToInr } from './facts.js';
 import type { Env } from '../env.js';
 import { mayWriteSearchConstraints } from './speech-act/permissions.js';
 import type { ChipResolution, SpeechActKind } from './speech-act/types.js';
@@ -27,6 +29,10 @@ export interface BamlExtractResult {
   propertyType?: string;
   purpose?: 'self_use' | 'investment';
   transition?: 'want_details' | 'see_others' | 'want_visit';
+  bhk?: string;
+  budgetMaxInr?: number;
+  nearAirport?: boolean;
+  readyToMove?: boolean;
   confidence: 'llm' | 'abstain';
   abstainReason?: string;
 }
@@ -55,16 +61,20 @@ const VALID_TOPICS = new Set<AnswerTopic>([
 
 const SKIP_ACTS = new Set<SpeechActKind>(['greet', 'stop', 'handoff']);
 
-const SYSTEM = `You extract ONLY gap fields from a real-estate buyer WhatsApp message.
+const SYSTEM = `You extract search constraints and topics from a real-estate buyer WhatsApp message.
 Return STRICT JSON only — no markdown.
-Schema: {"ask_topics": string[]|null, "location": string|null, "property_type": string|null, "purpose": "self_use"|"investment"|null, "transition": "want_details"|"see_others"|"want_visit"|null, "confidence": "llm"|"abstain", "abstain_reason": string|null}
+Pack EVERY clearly stated requirement into one object (multi-slot), e.g. 3BHK + North Bangalore + 1.2 Cr + near airport.
+Schema: {"ask_topics": string[]|null, "location": string|null, "property_type": string|null, "purpose": "self_use"|"investment"|null, "transition": "want_details"|"see_others"|"want_visit"|null, "bhk": string|null, "budget_max_inr": number|null, "near_airport": boolean|null, "ready_to_move": boolean|null, "confidence": "llm"|"abstain", "abstain_reason": string|null}
 
 Rules:
-- Do NOT invent projects, prices, or localities not clearly in the message.
-- ask_topics must be from: price, legal, emi, amenities, availability, location, media, overview, property_type, compare
-- property_type must be plantation|villa|apartment|plot when clear
+- location = locality/corridor ONLY (e.g. "North Bangalore", "Whitefield"). NEVER append budget words (under/crore/lakh).
+- budget_max_inr = integer INR when clear (1.2 Cr → 12000000, 50L → 5000000).
+- bhk like "2 BHK" / "3 BHK" when clear.
+- property_type: plantation|villa|apartment|plot when clear.
+- ask_topics from: price, legal, emi, amenities, availability, location, media, overview, property_type, compare
+- Do NOT invent projects or localities not in the message.
 - If unsure about a field, leave it null. If unsure overall, confidence=abstain.
-- Never classify speech act. Never return fields already filled in the input pack.`;
+- Never classify speech act.`;
 
 /** Resolve mode from env — shadow when key present unless explicitly set. */
 export function resolveBamlExtractMode(env: Pick<Env, 'BAML_EXTRACT_MODE' | 'DEEPSEEK_API_KEY'>): BamlExtractMode {
@@ -73,7 +83,15 @@ export function resolveBamlExtractMode(env: Pick<Env, 'BAML_EXTRACT_MODE' | 'DEE
   return env.DEEPSEEK_API_KEY ? 'shadow' : 'off';
 }
 
-/** After regex+embedder — should we call ExtractTurnFacts? */
+/** Free-text search brief — multi-slot extract should run. */
+export function looksLikeSearchBrief(text: string): boolean {
+  return (
+    /\b(?:in|near|around|at)\s+[A-Za-z]/i.test(text) ||
+    /\b(?:plantation|villa|apartment|plot|flat|bhk|budget|crore|lakh)\b/i.test(text)
+  );
+}
+
+/** Call ExtractTurnFacts on free-text search briefs or classic gaps. */
 export function needsBamlGapFill(
   ex: Extracted,
   text: string,
@@ -83,13 +101,16 @@ export function needsBamlGapFill(
   const act = ex.speechAct ?? resolution.speechAct;
   if (act && SKIP_ACTS.has(act)) return false;
 
+  // P1: always run multi-slot extract on search briefs (LLM packs requirements).
+  if (looksLikeSearchBrief(text) && mayWriteSearchConstraints(act ?? 'unknown')) return true;
+
   const topics = ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : []);
   const missingTopic = topics.length === 0 && (act === 'unknown' || !act);
   const pollutedLoc = locationLooksPolluted(ex.constraints.location);
   const missingLoc =
-    ((!ex.constraints.location || pollutedLoc) &&
-      mayWriteSearchConstraints(act ?? 'unknown') &&
-      looksLikeSearchBrief(text));
+    (!ex.constraints.location || pollutedLoc) &&
+    mayWriteSearchConstraints(act ?? 'unknown') &&
+    looksLikeSearchBrief(text);
   const missingTransition =
     (!ex.transition || ex.transition === 'none') &&
     /\b(?:visit|site visit|tell me more|more about|show me others?|other options?)\b/i.test(text);
@@ -97,14 +118,24 @@ export function needsBamlGapFill(
   return missingTopic || missingLoc || missingTransition || pollutedLoc;
 }
 
-function looksLikeSearchBrief(text: string): boolean {
-  return (
-    /\b(?:in|near|around|at)\s+[A-Za-z]/i.test(text) ||
-    /\b(?:plantation|villa|apartment|plot|flat|bhk|budget|crore|lakh)\b/i.test(text)
-  );
+function normalizeBhk(raw: string): string | undefined {
+  const m = raw.trim().match(/(\d(?:\.\d)?)\s*bhk/i);
+  if (!m?.[1]) return undefined;
+  return `${m[1]} BHK`;
 }
 
-export function parseBamlExtractResult(raw: string): BamlExtractResult | null {
+function parseBudgetField(o: Record<string, unknown>, fullText: string): number | undefined {
+  if (typeof o.budget_max_inr === 'number' && o.budget_max_inr > 100_000) {
+    return Math.round(o.budget_max_inr);
+  }
+  if (typeof o.budget_max_inr === 'string') {
+    const fromStr = parseBudgetToInr(o.budget_max_inr);
+    if (fromStr?.max) return fromStr.max;
+  }
+  return parseBudgetToInr(fullText)?.max;
+}
+
+export function parseBamlExtractResult(raw: string, sourceText = ''): BamlExtractResult | null {
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) return null;
   try {
@@ -139,13 +170,27 @@ export function parseBamlExtractResult(raw: string): BamlExtractResult | null {
         ? o.transition
         : undefined;
 
-    const location =
+    let location =
       typeof o.location === 'string' && o.location.trim().length >= 2
         ? o.location.trim().slice(0, 48)
         : undefined;
+    if (locationLooksPolluted(location)) location = undefined;
+
+    const bhk = typeof o.bhk === 'string' ? normalizeBhk(o.bhk) : undefined;
+    const budgetMaxInr = parseBudgetField(o, sourceText);
+    const nearAirport = typeof o.near_airport === 'boolean' ? o.near_airport : undefined;
+    const readyToMove = typeof o.ready_to_move === 'boolean' ? o.ready_to_move : undefined;
 
     const hasAny = Boolean(
-      (askTopics && askTopics.length) || location || propertyType || purpose || transition,
+      (askTopics && askTopics.length) ||
+        location ||
+        propertyType ||
+        purpose ||
+        transition ||
+        bhk ||
+        budgetMaxInr ||
+        nearAirport === true ||
+        readyToMove === true,
     );
     if (!hasAny) {
       return { confidence: 'abstain', abstainReason: 'empty_llm_payload' };
@@ -158,6 +203,10 @@ export function parseBamlExtractResult(raw: string): BamlExtractResult | null {
       ...(propertyType ? { propertyType } : {}),
       ...(purpose ? { purpose } : {}),
       ...(transition ? { transition } : {}),
+      ...(bhk ? { bhk } : {}),
+      ...(budgetMaxInr ? { budgetMaxInr } : {}),
+      ...(nearAirport !== undefined ? { nearAirport } : {}),
+      ...(readyToMove !== undefined ? { readyToMove } : {}),
     };
   } catch {
     return null;
@@ -208,18 +257,38 @@ export function buildBamlShadowReport(
     if (!current.transition || current.transition === 'none') would_fill.push('transition');
     else if (current.transition !== proposal.transition) disagree.push('transition');
   }
+  if (proposal.bhk) {
+    if (!current.constraints.bhk) would_fill.push('bhk');
+    else if (current.constraints.bhk !== proposal.bhk) disagree.push('bhk');
+  }
+  if (proposal.budgetMaxInr) {
+    if (!current.constraints.budgetMaxInr) would_fill.push('budget');
+    else if (current.constraints.budgetMaxInr !== proposal.budgetMaxInr) disagree.push('budget');
+  }
+  if (proposal.nearAirport === true && !current.constraints.nearAirport) would_fill.push('nearAirport');
+  if (proposal.readyToMove === true && !current.constraints.readyToMove) would_fill.push('readyToMove');
 
   return { mode, called: true, would_fill, disagree, confidence: 'llm' };
 }
 
+export interface MergeBamlOptions {
+  /** Free-text search brief — LLM owns location/type/purpose. */
+  searchBrief?: boolean;
+}
+
 /**
- * Free-text promote: BAML may fill gaps AND overwrite polluted / disagreed locality.
- * Never owns speech act. Chip path never calls this.
- * Budget/BHK stay regex (closed formats) — not in the BAML schema.
+ * Merge ExtractTurnFacts into extract.
+ * Search brief: LLM owns location/type/purpose; regex keeps BHK/budget when already set.
+ * Non-brief: gap-fill + polluted location overwrite only.
  */
-export function mergeBamlGapFill(current: Extracted, proposal: BamlExtractResult): Extracted {
+export function mergeBamlGapFill(
+  current: Extracted,
+  proposal: BamlExtractResult,
+  opts?: MergeBamlOptions,
+): Extracted {
   if (proposal.confidence !== 'llm') return current;
   let next = { ...current, constraints: { ...current.constraints } };
+  const searchBrief = Boolean(opts?.searchBrief);
 
   const curTopics = next.askTopics ?? (next.askTopic ? [next.askTopic] : []);
   if (curTopics.length === 0 && proposal.askTopics?.length) {
@@ -230,20 +299,41 @@ export function mergeBamlGapFill(current: Extracted, proposal: BamlExtractResult
     };
   }
 
-  const detailAsk = (next.askTopics?.length ?? 0) > 0 || Boolean(next.askTopic);
+  const detailAsk =
+    !searchBrief && ((next.askTopics?.length ?? 0) > 0 || Boolean(next.askTopic));
+
   if (proposal.location && !locationLooksPolluted(proposal.location) && !detailAsk) {
     const curLoc = next.constraints.location;
-    // Promote over empty OR polluted regex — clean regex locality still wins.
-    if (!curLoc || locationLooksPolluted(curLoc)) {
+    if (searchBrief || !curLoc || locationLooksPolluted(curLoc)) {
       next.constraints = { ...next.constraints, location: proposal.location };
     }
   }
-  if (!next.constraints.propertyType && proposal.propertyType) {
-    next.constraints = { ...next.constraints, propertyType: proposal.propertyType };
+
+  if (proposal.propertyType) {
+    if (searchBrief || !next.constraints.propertyType) {
+      next.constraints = { ...next.constraints, propertyType: proposal.propertyType };
+    }
   }
-  if (!next.constraints.purpose && proposal.purpose) {
-    next.constraints = { ...next.constraints, purpose: proposal.purpose };
+  if (proposal.purpose) {
+    if (searchBrief || !next.constraints.purpose) {
+      next.constraints = { ...next.constraints, purpose: proposal.purpose };
+    }
   }
+
+  // Closed formats: regex wins when present; LLM fills gaps.
+  if (!next.constraints.bhk && proposal.bhk) {
+    next.constraints = { ...next.constraints, bhk: proposal.bhk };
+  }
+  if (!next.constraints.budgetMaxInr && proposal.budgetMaxInr) {
+    next.constraints = { ...next.constraints, budgetMaxInr: proposal.budgetMaxInr };
+  }
+  if (proposal.nearAirport !== undefined) {
+    next.constraints = { ...next.constraints, nearAirport: proposal.nearAirport };
+  }
+  if (proposal.readyToMove !== undefined) {
+    next.constraints = { ...next.constraints, readyToMove: proposal.readyToMove };
+  }
+
   if ((!next.transition || next.transition === 'none') && proposal.transition) {
     next = { ...next, transition: proposal.transition };
   }
@@ -287,7 +377,7 @@ async function chatJson(
         { role: 'system', content: SYSTEM },
         { role: 'user', content: user },
       ],
-      max_tokens: 180,
+      max_tokens: 280,
       response_format: { type: 'json_object' },
     }),
   });
@@ -298,7 +388,10 @@ async function chatJson(
 
 /** Live ExtractTurnFacts call — returns null on network/parse failure. */
 export async function extractTurnFactsBaml(
-  env: Pick<Env, 'DEEPSEEK_API_KEY' | 'DEEPSEEK_BASE_URL' | 'DEEPSEEK_MODEL' | 'OLLAMA_BASE_URL' | 'OLLAMA_MODEL'>,
+  env: Pick<
+    Env,
+    'DEEPSEEK_API_KEY' | 'DEEPSEEK_BASE_URL' | 'DEEPSEEK_MODEL' | 'OLLAMA_BASE_URL' | 'OLLAMA_MODEL'
+  >,
   input: BamlExtractInput,
 ): Promise<BamlExtractResult | null> {
   const pack = {
@@ -331,5 +424,5 @@ export async function extractTurnFactsBaml(
     );
   }
   if (!raw) return null;
-  return parseBamlExtractResult(raw);
+  return parseBamlExtractResult(raw, input.text);
 }

@@ -11,6 +11,7 @@ import type { EngineLlm } from './ports.js';
 import {
   buildBamlExtractInput,
   buildBamlShadowReport,
+  looksLikeSearchBrief,
   mergeBamlGapFill,
   needsBamlGapFill,
   type BamlExtractMode,
@@ -181,8 +182,12 @@ export async function extractTurnAuthority(
     const report = buildBamlShadowReport(bamlMode, merged, proposal);
     provenance.baml = report;
     if (bamlMode === 'promote' && proposal?.confidence === 'llm') {
+      const searchBrief = looksLikeSearchBrief(text);
       let promoted = stampSpeechAct(
-        applySpeechActPermissions(mergeBamlGapFill(merged, proposal), chipResolution),
+        applySpeechActPermissions(
+          mergeBamlGapFill(merged, proposal, { searchBrief }),
+          chipResolution,
+        ),
         chipResolution,
       );
       promoted = scrubEmbedderIdentityNoise(text, state.phase, promoted, [

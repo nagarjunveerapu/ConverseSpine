@@ -172,13 +172,52 @@ export function hasNarrowingConstraint(c: Constraints): boolean {
   return Boolean(c.budgetMaxInr || c.bhk || c.location || c.propertyType);
 }
 
+/**
+ * Location vs project micro_market — region/corridor aliases, not project catalog names.
+ * "North Bangalore" must match Devanahalli / Aerospace / Yelahanka / airport belt.
+ */
+const REGION_ALIASES: ReadonlyArray<{ readonly label: RegExp; readonly tokens: readonly string[] }> = [
+  {
+    label: /\bnorth\s+bangalore\b|\bnorth\s+bengaluru\b|\bairport\s+side\b|\bnear\s+airport\b/i,
+    tokens: [
+      'north bangalore',
+      'north bengaluru',
+      'devanahalli',
+      'yelahanka',
+      'aerospace',
+      'bagalur',
+      'hebbal',
+      'kogilu',
+      'thanisandra',
+      'airport',
+      'huvinayakanahalli',
+    ],
+  },
+  {
+    label: /\beast\s+bangalore\b|\beast\s+bengaluru\b/i,
+    tokens: ['east bangalore', 'whitefield', 'marathahalli', 'varthur', 'kadugodi', 'hoodi'],
+  },
+  {
+    label: /\bsouth\s+bangalore\b|\bsouth\s+bengaluru\b/i,
+    tokens: ['south bangalore', 'kanakapura', 'jp nagar', 'banashankari', 'jayanagar', 'bannerghatta'],
+  },
+];
+
 export function matchMicroMarket(microMarket: string, location: string): boolean {
-  const m = microMarket.toLowerCase();
-  const loc = location.toLowerCase();
+  const m = microMarket.toLowerCase().trim();
+  const loc = location.toLowerCase().trim();
+  if (!m || !loc) return false;
   if (m.includes(loc) || loc.includes(m)) return true;
-  for (const part of loc.split('/')) {
+  for (const part of loc.split(/[/,|]/)) {
     const p = part.trim();
     if (p.length >= 3 && (m.includes(p) || p.includes(m))) return true;
+  }
+  for (const region of REGION_ALIASES) {
+    if (!region.label.test(loc) && !region.tokens.some((t) => loc === t || loc.includes(t))) {
+      continue;
+    }
+    // Buyer asked a region/corridor — accept micro-markets in the same alias set.
+    if (region.tokens.some((t) => m.includes(t) || t.includes(m))) return true;
   }
   return false;
 }

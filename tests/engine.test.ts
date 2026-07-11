@@ -179,27 +179,42 @@ describe('ConverseEngine facts', () => {
         matchReasons: [],
       },
     ];
+    // Same North corridor: Devanahalli ask can include Yelahanka under budget.
     expect(
       discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Devanahalli' }, []),
-    ).toHaveLength(0);
-    expect(
-      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Devanahalli' }, []),
     ).toHaveLength(1);
     expect(
-      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Devanahalli' }, [])[0]
+      discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Devanahalli' }, [])[0]
         ?.name,
-    ).toBe('Brigade Eldorado');
+    ).toBe('Brigade Northridge Neo');
+    // Whitefield is East — must not stretch to North projects.
+    expect(
+      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Whitefield' }, []),
+    ).toHaveLength(0);
+    // Regional North Bangalore includes Aerospace / Devanahalli Eldorado.
+    expect(
+      discover
+        .filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'North Bangalore' }, [])
+        .map((m) => m.projectId),
+    ).toContain('eldorado');
     expect(
       discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Yelahanka' }, [])[0]
         ?.name,
     ).toBe('Brigade Northridge Neo');
     const gap = discover.buildBudgetNoFitEvidence(
-      { budgetMaxInr: 2_000_000, location: 'Devanahalli' },
+      { budgetMaxInr: 2_000_000, location: 'Whitefield' },
       raw,
       [],
     );
-    expect(gap?.budgetGap?.closestName).toBe('Brigade Eldorado');
-    expect(gap?.noMatch?.reasoning).toMatch(/Nothing in Devanahalli starts within/i);
+    expect(gap).toBeNull();
+    // Under Devanahalli+2L Neo still fits — no budget-gap evidence.
+    expect(
+      discover.buildBudgetNoFitEvidence(
+        { budgetMaxInr: 2_000_000, location: 'Devanahalli' },
+        raw,
+        [],
+      ),
+    ).toBeNull();
   });
 
   it('builds constraint gap evidence for missing BHK at budget', () => {

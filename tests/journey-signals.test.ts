@@ -130,6 +130,16 @@ describe('hasExplicitProjectCue / sticky scrub (W1)', () => {
   });
 });
 
+describe('matchMicroMarket region aliases (P3)', () => {
+  it('North Bangalore matches Devanahalli / Aerospace corridor', async () => {
+    const { matchMicroMarket } = await import('../src/engine/phases/discover.js');
+    expect(matchMicroMarket('Aerospace Park / Devanahalli Corridor', 'North Bangalore')).toBe(true);
+    expect(matchMicroMarket('Yelahanka', 'North Bangalore')).toBe(true);
+    expect(matchMicroMarket('Kanakapura Road', 'North Bangalore')).toBe(false);
+    expect(matchMicroMarket('Whitefield', 'North Bangalore')).toBe(false);
+  });
+});
+
 describe('W2 lastOffered invalidation (no catalog hardcode)', () => {
   it('detects material constraint deltas', () => {
     expect(

@@ -9,6 +9,9 @@ export interface Constraints {
   location?: string;
   propertyType?: string;
   purpose?: 'self_use' | 'investment';
+  /** Soft prefs from free-text multi-slot extract (not hard search filters yet). */
+  nearAirport?: boolean;
+  readyToMove?: boolean;
 }
 
 export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose';

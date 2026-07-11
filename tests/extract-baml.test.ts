@@ -112,7 +112,34 @@ describe('mergeBamlGapFill / shadow', () => {
     expect(merged.constraints.location).toBe('North Bangalore');
   });
 
-  it('promote fills empty topics; clean regex location still wins', () => {
+  it('search brief: LLM owns location even over clean regex', () => {
+    const current: Extracted = { constraints: { location: 'Coorg' }, speechAct: 'unknown' };
+    const merged = mergeBamlGapFill(
+      current,
+      { confidence: 'llm', location: 'North Bangalore', bhk: '3 BHK', budgetMaxInr: 12_000_000 },
+      { searchBrief: true },
+    );
+    expect(merged.constraints.location).toBe('North Bangalore');
+    expect(merged.constraints.bhk).toBe('3 BHK');
+    expect(merged.constraints.budgetMaxInr).toBe(12_000_000);
+  });
+
+  it('search brief: regex BHK/budget win when already set', () => {
+    const current: Extracted = {
+      constraints: { bhk: '2 BHK', budgetMaxInr: 8_000_000 },
+      speechAct: 'unknown',
+    };
+    const merged = mergeBamlGapFill(
+      current,
+      { confidence: 'llm', bhk: '3 BHK', budgetMaxInr: 12_000_000, location: 'Whitefield' },
+      { searchBrief: true },
+    );
+    expect(merged.constraints.bhk).toBe('2 BHK');
+    expect(merged.constraints.budgetMaxInr).toBe(8_000_000);
+    expect(merged.constraints.location).toBe('Whitefield');
+  });
+
+  it('promote fills empty topics; clean regex location still wins (non-brief)', () => {
     const current: Extracted = { constraints: { location: 'Coorg' }, speechAct: 'unknown' };
     const merged = mergeBamlGapFill(current, {
       confidence: 'llm',
@@ -121,6 +148,24 @@ describe('mergeBamlGapFill / shadow', () => {
     });
     expect(merged.askTopics).toEqual(['legal']);
     expect(merged.constraints.location).toBe('Coorg');
+  });
+
+  it('parses multi-slot bhk + budget + near_airport', () => {
+    const r = parseBamlExtractResult(
+      JSON.stringify({
+        location: 'North Bangalore',
+        bhk: '3BHK',
+        budget_max_inr: 12_000_000,
+        near_airport: true,
+        property_type: 'apartment',
+        confidence: 'llm',
+      }),
+    );
+    expect(r?.location).toBe('North Bangalore');
+    expect(r?.bhk).toBe('3 BHK');
+    expect(r?.budgetMaxInr).toBe(12_000_000);
+    expect(r?.nearAirport).toBe(true);
+    expect(r?.propertyType).toBe('apartment');
   });
 
   it('shadow report marks would_fill vs disagree', () => {
