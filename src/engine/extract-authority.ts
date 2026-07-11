@@ -11,6 +11,7 @@ import type { EngineLlm } from './ports.js';
 import {
   buildBamlExtractInput,
   buildBamlShadowReport,
+  looksLikeSearchBrief,
   mergeBamlGapFill,
   needsBamlGapFill,
   type BamlExtractMode,
@@ -147,7 +148,7 @@ export async function extractTurnAuthority(
   );
   merged = scrubEmbedderIdentityNoise(text, state.phase, merged, [
     ...state.discover.lastOffered,
-    ...(state.discussedProjects ?? []),
+    ...(state.discover.discussedProjects ?? []),
     ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
   ]);
   // PIV-03: "change to 2BHK under 70L" must recommend, not clarify_project_pick.
@@ -185,13 +186,14 @@ export async function extractTurnAuthority(
     const report = buildBamlShadowReport(bamlMode, merged, proposal);
     provenance.baml = report;
     if (bamlMode === 'promote' && proposal?.confidence === 'llm') {
+      const searchBrief = looksLikeSearchBrief(text);
       let promoted = stampSpeechAct(
         applySpeechActPermissions(mergeBamlGapFill(merged, proposal), chipResolution),
         chipResolution,
       );
       promoted = scrubEmbedderIdentityNoise(text, state.phase, promoted, [
         ...state.discover.lastOffered,
-        ...(state.discussedProjects ?? []),
+        ...(state.discover.discussedProjects ?? []),
         ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
       ]);
       if (isConstraintRefinementTurn(text) && !promoted.namedProjects?.length && !promoted.pickName) {

@@ -39,6 +39,8 @@ export interface DeskChatResponse {
     grounding?: string;
     speech_act?: string;
     extract_provenance?: unknown;
+    last_offered_count?: number;
+    last_offered_ids?: string[];
   };
   whatsapp_actions?: TurnResult['whatsapp_actions'];
 }
