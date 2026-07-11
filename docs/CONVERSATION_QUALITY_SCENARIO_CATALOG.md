@@ -1,7 +1,7 @@
 # Conversation quality — scenario catalog (visible checklist)
 
 **Date:** 2026-07-11  
-**Honest status:** Conversation quality is **strong on the golden paths we fixed and re-ran** (compare pair, North Bangalore list, Neo prices, paperwork, P7 chips, RTI-G02, ADV-H01–H05). It is **not** proven “top-notch” across the full buyer surface below.
+**Honest status:** Closed-beta **must-have script is green** on local `:8789` (MED/PIV/SW/VIS/STY/HIN-01). Still **not** open-beta / full A–H (advisor MED-02, multi-visit origin route, broad Hinglish).
 
 This doc is the **list first**. Do not treat unchecked rows as green.
 
@@ -16,13 +16,16 @@ This doc is the **list first**. Do not treat unchecked rows as green.
 | Named compare (Ayana vs Krishnaja) | ✅ Fixed + ran | Was Clarks; now correct |
 | LOC-G01 North Bangalore list | ✅ Fixed + ran | Was silent Eldorado commit |
 | ADV-H01 `haan` | ✅ Existing golden | Narrow Hinglish affirm only |
-| Media / brochure **emit** (CDN / WhatsApp actions) | ❌ Not verified | Stickiness only — not “did media send” |
-| Sudden budget / location pivot mid-journey | ⚠️ Partial | BUYER-BRG-02 exists; not re-soaked this week |
-| Rapid multi-project switch spam | ❌ Not verified | One switch path (V06) only |
-| Multi-visit route by origin / sequencing | ⚠️ Partial | SA-G02 / BUYER-LOK-02 seed 2-stop; full route UAT scripts exist, not full soak |
-| Small talk / oversharing | ❌ Not verified | |
+| **MED-01 / MED-03 / MED-04** | ✅ Ran 2026-07-11 | CDN brochure emit + honest floor_plan miss; `expect_media` wired in runner |
+| **PIV-01 / PIV-02 / PIV-03** | ✅ Ran 2026-07-11 | Budget crash, Whitefield correction, 2BHK refine |
+| **SW-01 / SW-02 / SW-03** | ✅ Ran 2026-07-11 | Named switch, A→B→C spam, paperwork stickiness |
+| **VIS-01 / VIS-02** | ✅ Ran 2026-07-11 | Ayana visit (no Desire Spaces); price interrupt mid-visit |
+| **STY-01 / STY-02** | ✅ Ran 2026-07-11 | Small talk; long dump North-only (no Meadows) |
+| **HIN-01** | ✅ Ran 2026-07-11 | Whitefield mein 3BHK dikhao → recommend |
+| Multi-visit route by origin / sequencing | ⚠️ Partial | SA-G02 / BUYER-LOK-02 seed 2-stop; full route UAT not re-soaked |
 | Expert deep-probe vs novice minimal | ⚠️ Partial | ADV-F01 = expert-ish facets; no paired novice journey |
-| Broad Hinglish (beyond `haan` / `yeah sure`) | ❌ Not verified | |
+| Broad Hinglish (HIN-02..06) | ❌ Not verified | Deferred past closed-beta must-have |
+| MED-02 advisor brochure | ❌ Not verified | Advisor channel — next wave |
 
 ---
 

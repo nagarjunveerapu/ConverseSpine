@@ -27,6 +27,11 @@ interface AssertSpec {
   goal_kind?: string;
   /** Optional debug.goal.topic */
   goal_topic?: string;
+  /**
+   * Media emit or honest miss: tools include mediaShare, reply has CDN URL,
+   * whatsapp_actions present, or honest "no brochure / after visit" copy.
+   */
+  expect_media?: boolean;
 }
 
 interface ScenarioTurn {
@@ -80,7 +85,13 @@ async function chat(
   phone: string,
   text: string,
   convId?: string,
-): Promise<{ reply_text: string; conversation_id: string; debug?: Record<string, unknown>; error?: string }> {
+): Promise<{
+  reply_text: string;
+  conversation_id: string;
+  debug?: Record<string, unknown>;
+  whatsapp_actions?: unknown[];
+  error?: string;
+}> {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -96,6 +107,7 @@ async function chat(
     reply?: string;
     conversation_id?: string;
     debug?: Record<string, unknown>;
+    whatsapp_actions?: unknown[];
     error?: string;
   };
   if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
@@ -103,10 +115,36 @@ async function chat(
     reply_text: body.reply_text ?? body.reply ?? '',
     conversation_id: body.conversation_id ?? '',
     debug: body.debug,
+    whatsapp_actions: body.whatsapp_actions,
   };
 }
 
-function checkAssert(reply: string, debug: Record<string, unknown> | undefined, a: AssertSpec): string[] {
+function hasMediaSignal(
+  reply: string,
+  debug: Record<string, unknown> | undefined,
+  whatsappActions?: unknown[],
+): boolean {
+  const tools = (debug?.tools as string[] | undefined) ?? [];
+  if (tools.some((t) => /media/i.test(t))) return true;
+  if (whatsappActions && whatsappActions.length > 0) return true;
+  if (/https?:\/\/\S+/i.test(reply)) return true;
+  // Honest miss — media tool path answered without inventing a file.
+  if (
+    /\b(?:no brochure|don'?t have|do not have|aren'?t published|after (?:a )?site visit|not (?:yet )?available|share that after)\b/i.test(
+      reply,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function checkAssert(
+  reply: string,
+  debug: Record<string, unknown> | undefined,
+  a: AssertSpec,
+  whatsappActions?: unknown[],
+): string[] {
   const fails: string[] = [];
   const lower = reply.toLowerCase();
   for (const needle of a.reply_includes ?? []) {
@@ -128,6 +166,9 @@ function checkAssert(reply: string, debug: Record<string, unknown> | undefined, 
   }
   if (a.goal_topic && goal.topic && goal.topic !== a.goal_topic) {
     fails.push(`goal.topic=${goal.topic} want ${a.goal_topic}`);
+  }
+  if (a.expect_media && !hasMediaSignal(reply, debug, whatsappActions)) {
+    fails.push('expected media emit (CDN/tools/whatsapp_actions) or honest media miss');
   }
   return fails;
 }
@@ -174,7 +215,9 @@ async function main(): Promise<void> {
       try {
         const resp = await chat(sc.builder_id, phone, turn.text, convId);
         convId = resp.conversation_id || convId;
-        const failures = turn.assert ? checkAssert(resp.reply_text, resp.debug, turn.assert) : [];
+        const failures = turn.assert
+          ? checkAssert(resp.reply_text, resp.debug, turn.assert, resp.whatsapp_actions)
+          : [];
         const pass = failures.length === 0;
         if (!pass) ok = false;
         turns.push({
@@ -182,7 +225,10 @@ async function main(): Promise<void> {
           buyer: turn.text,
           reply: resp.reply_text,
           conversation_id: convId ?? '',
-          debug: resp.debug,
+          debug: {
+            ...(resp.debug ?? {}),
+            ...(resp.whatsapp_actions ? { whatsapp_actions: resp.whatsapp_actions } : {}),
+          },
           pass,
           failures,
         });
