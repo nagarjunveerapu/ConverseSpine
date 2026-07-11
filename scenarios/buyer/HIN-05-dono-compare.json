@@ -11,7 +11,8 @@
     {
       "text": "dono compare karo",
       "assert": {
-        "reply_excludes": ["which project", "tap a button"]
+        "reply_includes": ["ayana", "krishnaja"],
+        "reply_excludes": ["which project", "tap a button", "clarks"]
       }
     }
   ]

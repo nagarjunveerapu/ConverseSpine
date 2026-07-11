@@ -34,11 +34,14 @@ export function prepareCompareExtracted(
     ids = ex.namedProjects.slice(0, 3).map((p) => p.projectId);
   } else if (ex.compareProjectIds && ex.compareProjectIds.length >= 2) {
     ids = ex.compareProjectIds;
-  } else if (discussed.length >= 2 && /\b(?:both|these|those|them|the\s+two)\b/i.test(text)) {
+  } else if (
+    discussed.length >= 2 &&
+    /\b(?:both|these|those|them|the\s+two|dono)\b/i.test(text)
+  ) {
     ids = discussed.slice(0, 3).map((p) => p.projectId);
   } else if (
     offered.length >= 2 &&
-    !/\b(?:both|these|those|them|the\s+two)\b/i.test(text) &&
+    !/\b(?:both|these|those|them|the\s+two|dono)\b/i.test(text) &&
     // Explicit "compare A and B" — leave unset so resolveCompareProjectIds can
     // match names against discussed+shortlist (stale lastOffered often has Clarks).
     !/\band\b/i.test(text) &&

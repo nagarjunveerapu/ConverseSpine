@@ -12,7 +12,12 @@
       "text": "nahi chahiye",
       "assert": {
         "reply_includes": ["ayana"],
-        "reply_excludes": ["no apartment", "no projects match"]
+        "reply_excludes": [
+          "no apartment",
+          "no projects match",
+          "no exact match",
+          "nahi chahiye plantation"
+        ]
       }
     }
   ]

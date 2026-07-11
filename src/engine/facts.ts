@@ -12,8 +12,11 @@ import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 /** Keep aligned with turn-intent AFFIRM_ONLY (dialogue acts, not localities). */
 const AFFIRM =
   /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|haan?|haaji|theek(?:\s+hai)?|done|confirm(?:ed)?|go ahead|sounds good|perfect|great|yeah\s+sure|yes\s+please|ok\s+sure|sure\s+yes)\b/i;
+/** Keep aligned with turn-intent DECLINE (dialogue acts, not localities). */
+const DECLINE_UTTERANCE =
+  /^(?:no|nope|nah|nahi(?:n)?(?:\s+chahiye)?|no\s+thanks|no\s+thank\s+you|not\s+now|not\s+interested|not\s+that|not\s+this|something\s+else)\.?!?\s*$/i;
 const REJECT =
-  /\b(?:not (?:that|this|those|these)|don'?t want|too (?:far|expensive|costly|pricey|much|high)|skip (?:that|this)|nah|no,? not|something (?:else|cheaper))\b/i;
+  /\b(?:not (?:that|this|those|these)|don'?t want|nahi(?:n)?\s+chahiye|too (?:far|expensive|costly|pricey|much|high)|skip (?:that|this)|nah|no,? not|something (?:else|cheaper))\b/i;
 const NAME_RE = /\b(?:[Ii]\s*am|[Ii]'?m|[Mm]y name is|[Tt]his is|[Nn]ame'?s)\s+([A-Z][a-zA-Z]{1,30})\b/;
 const WANTS_MORE_RE =
   /\b(?:other options?|show me (?:the )?(?:o?ptions?|otpions?|other projects?)|show options|more options?|more projects?|anything else|what else|see others?|alternatives?|options dikhao|list (?:the )?options?|some other)\b/i;
@@ -45,7 +48,10 @@ export function extractFactsChip(text: string): Extracted {
   const t = text.trim();
   const affirm = AFFIRM.test(t);
   const decline =
-    /\b(?:no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i.test(t) &&
+    (DECLINE_UTTERANCE.test(t) ||
+      /\b(?:no|nope|nah|nahi(?:n)?(?:\s+chahiye)?|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i.test(
+        t,
+      )) &&
     !affirm;
   return {
     constraints: {},
@@ -78,7 +84,10 @@ export async function extractFacts(
   const ordinal = detectOrdinal(text);
   const affirm = AFFIRM.test(t);
   const decline =
-    /\b(?:no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i.test(t) &&
+    (DECLINE_UTTERANCE.test(t) ||
+      /\b(?:no|nope|nah|nahi(?:n)?(?:\s+chahiye)?|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i.test(
+        t,
+      )) &&
     !affirm;
   const nameM = NAME_RE.exec(text);
   const isQuestion = text.includes('?');
@@ -761,6 +770,8 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   const trimmed = text.trim();
   if (ctx?.askTopics?.length) return undefined;
   if (isVisitDayUtterance(trimmed)) return undefined;
+  // Dialogue acts — never invent a locality (HIN-06: "nahi chahiye" ≠ place).
+  if (DECLINE_UTTERANCE.test(trimmed) || AFFIRM.test(trimmed)) return undefined;
   // Project re-focus / switch — not a locality (W1: "back to Ayana").
   if (/\bback\s+to\b/i.test(trimmed)) return undefined;
   if (
@@ -847,13 +858,14 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&
-    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?|haan?|haaji|yeah\s+sure|yes\s+please)$/i.test(
+    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?|haan?|haaji|yeah\s+sure|yes\s+please|nahi(?:n)?(?:\s+chahiye)?)$/i.test(
       bare,
     ) &&
-    !/\b(?:compare|both|projects|options|show|visit|pricing|refining|refine|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|floor plan)\b/i.test(bare) &&
+    !/\b(?:compare|both|dono|projects|options|show|visit|pricing|refining|refine|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|floor plan|chahiye)\b/i.test(bare) &&
     !isAdvisorBriefChipPhrase(bare) &&
     !looksLikeOfferedProjectName(bare, hints) &&
-    !AFFIRM.test(bare)
+    !AFFIRM.test(bare) &&
+    !DECLINE_UTTERANCE.test(bare)
   ) {
     return bare;
   }

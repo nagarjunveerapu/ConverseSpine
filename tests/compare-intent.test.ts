@@ -31,6 +31,29 @@ describe('prepareCompareExtracted', () => {
     expect(ex.compareProjectIds).toEqual(['krishnaja-greens-lokations', 'ayana-lokations']);
   });
 
+  it('uses discussedProjects for "dono compare karo" (Hinglish both)', () => {
+    let state = {
+      ...initState('c1', 'lokations'),
+      discover: {
+        ...initState('c1', 'lokations').discover,
+        lastOffered: [
+          { projectId: 'ayana-lokations', name: 'Ayana' },
+          { projectId: 'clarks-exotica-lokations', name: 'Clarks Exotica' },
+        ],
+      },
+    };
+    state = recordDiscussed(state, [
+      { projectId: 'ayana-lokations', name: 'Ayana' },
+      { projectId: 'krishnaja-greens-lokations', name: 'Krishnaja Greens' },
+    ]);
+    const ex = prepareCompareExtracted('dono compare karo', state, {
+      constraints: {},
+      transition: 'none',
+      askTopic: 'compare',
+    });
+    expect(ex.compareProjectIds).toEqual(['ayana-lokations', 'krishnaja-greens-lokations']);
+  });
+
   it('uses discussedProjects for "compare both" instead of stale shortlist', () => {
     let state = {
       ...initState('c1', 'lokations'),
