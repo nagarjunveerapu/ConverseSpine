@@ -194,6 +194,18 @@ export async function extractFacts(
     shortlistPick ??
     (shownName && !reject && askTopic !== 'compare' && namedProjects.length <= 1 ? shownName : undefined);
 
+  // Project identity ≠ locality (STY / dossier: "Meadows" must not become location_pref).
+  if (constraints.location) {
+    const locHints = [
+      ...locationExtractCtx(s, askTopics, text).projectNameHints ?? [],
+      ...namedProjects.map((p) => p.name),
+      ...(pickName ? [pickName] : []),
+    ];
+    if (looksLikeOfferedProjectName(constraints.location, locHints)) {
+      delete constraints.location;
+    }
+  }
+
   return {
     constraints,
     ...(reject ? { rejected: true, ...(shownName ? { rejectedName: shownName } : {}) } : {}),
@@ -529,11 +541,12 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'compare', re: /\b(?:compare|vs|versus|side by side|difference between|both projects?)\b/i },
   {
     topic: 'price',
-    re: /\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\s+sale\s+price|carpet(?:\s+area)?|sba|super\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\s+prices?|possession\s+date|when(?:'s| is)?\s+possession)\b/i,
+    re: /\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\s+sale\s+price|carpet(?:\s+area)?|sba|super\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\s+prices?)\b/i,
   },
   {
     topic: 'legal',
-    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan\s+approv|is\s+(?:the\s+)?ec\s+clear)\b/i,
+    // Loan eligibility / banks stay legal+FAQ — not EMI calculator.
+    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan(?:\s+approv|\s+eligib)?|(?:can\s+i\s+(?:get|take)\s+(?:a\s+)?(?:home\s+)?loan)|loan\s+eligib|is\s+(?:the\s+)?ec\s+clear)\b/i,
   },
   {
     topic: 'property_type',
@@ -544,7 +557,8 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     topic: 'location',
     re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|map|directions?|micro[- ]?market)\b|^location\s*\?$/i,
   },
-  { topic: 'emi', re: /\b(?:emi|loan|monthly payment|installment)\b/i },
+  // EMI amount / installment only — bare "loan" / "home loan" is legal+FAQ above.
+  { topic: 'emi', re: /\b(?:\bemi\b|monthly\s+payment|installment|loan\s+emi|emi\s+(?:kitna|amount|calc(?:ulate)?))\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
   {
     // Config / unit asks only. Preference "ready to move" is a Constraint soft pref
@@ -649,6 +663,7 @@ export type ExtractLocationContext = {
 
 function projectNameHints(s: ConversationState): string[] {
   const names = s.discover.lastOffered.map((o) => o.name);
+  for (const d of s.discover.discussedProjects ?? []) names.push(d.name);
   if (s.focus?.projectName) names.push(s.focus.projectName);
   return names;
 }

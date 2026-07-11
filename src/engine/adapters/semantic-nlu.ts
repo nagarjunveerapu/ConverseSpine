@@ -29,7 +29,7 @@ const INTENT_TO_TOPIC: Record<string, AnswerTopic> = {
   compute_emi: 'emi',
   get_payment_plan: 'price',
   negotiate_price: 'price',
-  ask_investment_return: 'price',
+  ask_investment_return: 'overview',
   compare_projects: 'compare',
 };
 

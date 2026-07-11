@@ -60,6 +60,16 @@ export function renderComposePrompt(req: ComposeRequest): string {
       );
     }
   }
+  if (goal.kind === 'answer' && evidence.detail?.faqs?.length) {
+    lines.push(
+      `The buyer asked a specific FAQ — answer from the faqs in EVIDENCE first. Do NOT fall back to a generic location/price overview.`,
+    );
+  }
+  if (goal.kind === 'answer' && evidence.faqMiss?.keys.length) {
+    lines.push(
+      `The buyer asked about ${evidence.faqMiss.keys.join(', ')} but there is NO FAQ answer in EVIDENCE. Say you don't have that detail on file yet — offer pricing, a site visit, or another facet. Do NOT invent payment plans, yields, loan terms, or possession dates.`,
+    );
+  }
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
     lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
   }
@@ -149,6 +159,16 @@ function renderEvidence(ev: EvidenceSet): string {
     out.push(
       `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, from ${ev.detail.startingPriceDisplay}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
     );
+    if (ev.detail.faqs?.length) {
+      out.push(
+        `faqs (use these to answer the buyer's question — prefer over generic summary):\n${ev.detail.faqs
+          .map((f) => `  - [${f.questionKey}] Q: ${f.question}\n    A: ${f.answer}`)
+          .join('\n')}`,
+      );
+    }
+  }
+  if (ev.faqMiss?.keys.length) {
+    out.push(`faq miss (no Desk row): ${ev.faqMiss.keys.join(', ')}`);
   }
   if (ev.location) {
     const l = ev.location;
@@ -300,8 +320,9 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('property_type') && ev.detail?.projectType) {
         chunks.push(projectTypeLine(ev.detail));
       }
-      if (topics.includes('legal') && ev.detail) {
+      if (topics.includes('legal') && ev.detail && !ev.detail.faqs?.length) {
         // Prefer facet line (banks/EC) when buyer text asks; else snapshot.
+        // When Desk FAQ hit exists, FAQ body below owns the answer (loan eligibility, etc.).
         chunks.push(
           focusedLegalLine(ev.detail, context.buyerText, context.disclosedFacts),
         );
@@ -309,7 +330,14 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('location') && ev.location) {
         chunks.push(locationSnapshotLine(ev.location));
       }
-      if (topics.includes('emi') && ev.emi) {
+      // Desk FAQ (loan eligibility, yield, …) beats EMI snapshot when both present.
+      if (ev.detail?.faqs?.length) {
+        const body = ev.detail.faqs
+          .map((f) => f.answer.trim())
+          .filter(Boolean)
+          .join(' ');
+        if (body) chunks.push(body);
+      } else if (topics.includes('emi') && ev.emi) {
         chunks.push(emiSnapshotLine(ev.emi));
       }
       if (chunks.length > 1) {
@@ -354,6 +382,17 @@ export function fallbackReply(req: ComposeRequest): string {
         }
         return `I can share that after a site visit is confirmed for *${pname}*.`;
       }
+      // Closed-beta: Desk FAQ (loan eligibility, yield, …) before EMI snapshot.
+      if (ev.detail?.faqs?.length) {
+        const pname = ev.detail.name || context.focusProjectName || 'this project';
+        const body = ev.detail.faqs
+          .map((f) => f.answer.trim())
+          .filter(Boolean)
+          .join(' ');
+        if (body) {
+          return `${body} Want anything else on *${pname}*, or a visit?`;
+        }
+      }
       if (goal.topic === 'emi' && ev.emi) {
         return `${emiSnapshotLine(ev.emi)}. Want the full cost breakdown or a visit?`;
       }
@@ -367,6 +406,10 @@ export function fallbackReply(req: ComposeRequest): string {
       if (goal.topic === 'availability') {
         const pname = ev.detail?.name ?? context.focusProjectName ?? 'this project';
         return `Configuration details for *${pname}* aren't published yet — I can share pricing or book a visit to see options on site.`;
+      }
+      if (ev.faqMiss?.keys.length) {
+        const pname = context.focusProjectName || 'this project';
+        return `I don't have that detail on file for *${pname}* yet — I can share pricing, legal status, or set up a visit instead.`;
       }
       if (ev.detail) {
         const d = ev.detail;

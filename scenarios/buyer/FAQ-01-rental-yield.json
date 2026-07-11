@@ -1,0 +1,19 @@
+{
+  "id": "FAQ-01",
+  "title": "Focused rental yield uses Desk FAQ (not overview dump)",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "faq", "closed-beta"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "what is the rental yield?",
+      "assert": {
+        "reply_includes": ["yield"],
+        "reply_excludes": ["want pricing, legal details"],
+        "tools_include": ["faqLookup"]
+      }
+    }
+  ]
+}

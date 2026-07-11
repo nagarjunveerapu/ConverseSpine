@@ -40,6 +40,11 @@ describe('ConverseEngine facts', () => {
     expect(extractLocation('nahi chahiye')).toBeUndefined();
     expect(extractLocation('nahin')).toBeUndefined();
     expect(extractLocation('no thanks')).toBeUndefined();
+    expect(
+      extractLocation('Meadows', {
+        projectNameHints: ['Brigade Meadows', 'Brigade Eldorado'],
+      }),
+    ).toBeUndefined();
   });
 
   it('detects legal topic from title question', () => {

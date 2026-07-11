@@ -1,0 +1,19 @@
+{
+  "id": "FAQ-06",
+  "title": "Focused amenities ask uses Desk FAQ",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "faq", "closed-beta"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "what amenities does it have?",
+      "assert": {
+        "reply_includes": ["clubhouse"],
+        "reply_excludes": ["want pricing, legal details"],
+        "tools_include": ["faqLookup"]
+      }
+    }
+  ]
+}
