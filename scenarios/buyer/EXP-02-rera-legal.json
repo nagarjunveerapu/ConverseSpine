@@ -1,0 +1,18 @@
+{
+  "id": "EXP-02",
+  "title": "Expert: RERA / legal on focused project",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "expert", "F"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "is it RERA registered and what about the legal paperwork",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["which project"]
+      }
+    }
+  ]
+}

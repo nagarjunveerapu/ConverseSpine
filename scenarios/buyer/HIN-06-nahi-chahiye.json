@@ -1,0 +1,19 @@
+{
+  "id": "HIN-06",
+  "title": "Hinglish: nahi chahiye after CTA stays focused",
+  "builder_id": "lokations",
+  "tags": ["quality", "hinglish", "G"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    { "text": "Starting prices" },
+    {
+      "text": "nahi chahiye",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["no apartment", "no projects match"]
+      }
+    }
+  ]
+}

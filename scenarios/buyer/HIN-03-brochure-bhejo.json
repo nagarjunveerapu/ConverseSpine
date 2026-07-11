@@ -1,0 +1,19 @@
+{
+  "id": "HIN-03",
+  "title": "Hinglish: brochure bhejo focused",
+  "builder_id": "lokations",
+  "tags": ["quality", "hinglish", "H", "corpus"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "brochure bhejo",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["which project"],
+        "expect_media": true
+      }
+    }
+  ]
+}

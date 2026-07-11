@@ -1,0 +1,18 @@
+{
+  "id": "EXP-01",
+  "title": "Expert: BSP / carpet / possession on Eldorado",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "expert", "F"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "what's the BSP and carpet area and possession date",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["which project", "buena vista"]
+      }
+    }
+  ]
+}

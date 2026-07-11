@@ -1,0 +1,17 @@
+{
+  "id": "STY-04",
+  "title": "Off-topic then Eldorado price recovery",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "style", "E"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "why is the sky blue lol" },
+    {
+      "text": "anyway Eldorado price",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["which project"]
+      }
+    }
+  ]
+}

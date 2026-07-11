@@ -1,0 +1,18 @@
+{
+  "id": "VIS-03",
+  "title": "Corpus: Can we visit the site this weekend?",
+  "builder_id": "lokations",
+  "tags": ["quality", "visit", "D", "corpus"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "Can we visit the site this weekend?",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["buena vista", "which project"]
+      }
+    }
+  ]
+}

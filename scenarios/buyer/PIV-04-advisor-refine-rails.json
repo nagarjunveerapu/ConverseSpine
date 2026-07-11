@@ -1,0 +1,18 @@
+{
+  "id": "PIV-04",
+  "title": "Advisor Adjust budget / Change area escape rails",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["quality", "pivot", "B", "advisor"],
+  "turns": [
+    { "text": "Whitefield" },
+    {
+      "text": "Adjust budget",
+      "assert": { "reply_excludes": ["buena vista"] }
+    },
+    {
+      "text": "Change area",
+      "assert": { "reply_excludes": ["buena vista"] }
+    }
+  ]
+}

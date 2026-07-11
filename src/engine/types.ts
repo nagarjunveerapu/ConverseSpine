@@ -426,4 +426,7 @@ export interface TurnDebug {
   speech_act?: import('./speech-act/types.js').SpeechActKind;
   /** SA-0: resolved chip path ids (primary first). */
   chip_path_ids?: import('./speech-act/types.js').ChipPathId[];
+  /** W2/W6: shortlist size after turn (stale-board asserts). */
+  last_offered_count?: number;
+  last_offered_ids?: string[];
 }

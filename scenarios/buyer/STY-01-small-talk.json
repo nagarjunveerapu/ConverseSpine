@@ -1,0 +1,18 @@
+{
+  "id": "STY-01",
+  "title": "Small talk hi then preference (no overshare)",
+  "builder_id": "lokations",
+  "tags": ["quality", "style", "E"],
+  "turns": [
+    {
+      "text": "hi",
+      "assert": {
+        "reply_excludes": ["rera", "possession", "sqft", "amenities"]
+      }
+    },
+    {
+      "text": "looking for plantation near sakleshpur",
+      "assert": { "goal_kind": "recommend" }
+    }
+  ]
+}

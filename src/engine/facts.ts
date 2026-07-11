@@ -395,6 +395,9 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
   const s = raw
     .toLowerCase()
     .replace(/₹|\brs\.?|\binr\b/g, ' ')
+    // Family size / household count — not a price (STY-02: "family of 4" → ₹4L).
+    .replace(/\b(?:family|household|group)\s+of\s+\d+\b/g, ' ')
+    .replace(/\b\d+\s*(?:people|persons?|members?|adults?|kids?|children)\b/g, ' ')
     .replace(/\b\d+(?:\.\d+)?\s*(?:bhk|bedrooms?)\b/g, ' ')
     .replace(/\d+(?:\.\d+)?\s*(?:%|percent)/g, ' ')
     .replace(/\d+(?:\.\d+)?\s*(?:years?|yrs?|months?)\b/g, ' ');
@@ -407,6 +410,23 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
     if (lo !== null && hi !== null && hi > 0) {
       return hi >= lo ? { min: lo, max: hi } : { min: hi, max: lo };
     }
+  }
+  // Prefer unit-bearing / budget-anchored amounts over bare digits.
+  const anchored = [
+    ...s.matchAll(
+      /(?:under|within|upto|up\s+to|below|budget(?:\s+is|\s+of)?|max(?:imum)?)\s+(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?/g,
+    ),
+  ];
+  if (anchored.length) {
+    const last = anchored[anchored.length - 1]!;
+    const v = toInr(parseFloat(last[1]!), last[2] ?? '');
+    if (v !== null && v > 0) return { max: v };
+  }
+  const withUnit = [...s.matchAll(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)(?=\s|$|[^\w])/g)];
+  if (withUnit.length) {
+    const last = withUnit[withUnit.length - 1]!;
+    const v = toInr(parseFloat(last[1]!), last[2] ?? '');
+    if (v !== null && v > 0) return { max: v };
   }
   const single = s.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?(?=\s|$|[^\w])/);
   if (!single) return null;
@@ -498,7 +518,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'compare', re: /\b(?:compare|vs|versus|side by side|difference between|both projects?)\b/i },
   {
     topic: 'price',
-    re: /\b(?:prices?|pricing|cost|how much|pricing batao|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\s+prices?)\b/i,
+    re: /\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\s+sale\s+price|carpet(?:\s+area)?|sba|super\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\s+prices?|possession\s+date|when(?:'s| is)?\s+possession)\b/i,
   },
   {
     topic: 'legal',
@@ -516,10 +536,14 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
   {
     // Keep aligned with chip.answer.availability aliases — novel asks → INTENT embedder.
+    // Bare "possession date" is priced/timeline (price topic); config "possession" still matches ready/units.
     topic: 'availability',
-    re: /\b(?:possession|ready|available|when.*ready|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
+    re: /\b(?:ready(?:\s+to\s+move)?|available|when.*ready|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
-  { topic: 'media', re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|share (?:the )?(?:brochure|plan))\b/i },
+  {
+    topic: 'media',
+    re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|share (?:the )?(?:brochure|plan)|(?:brochure|floor\s*plan|layout|pdf|photos?)\s*(?:bhejo|bhej|bhejna|bhej\s*do)|(?:bhejo|bhej)\s*(?:brochure|pdf|photos?|floor\s*plan)?)\b/i,
+  },
 ];
 
 /** All answer topics mentioned this turn (multi-intent). */
@@ -640,13 +664,63 @@ export function isLocationBroadenTurn(text: string): boolean {
   );
 }
 
+/** "wait I meant Whitefield not Devanahalli" — correction, not project switch (PIV-02). */
+export function isLocationCorrectionTurn(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return (
+    /\b(?:i\s+)?meant\b.+\bnot\b/i.test(t) ||
+    /\bnot\s+[A-Za-z][\w\s-]{2,30}\s*[,—-]?\s*(?:i\s+)?meant\b/i.test(t) ||
+    /\b(?:wrong|change(?:d)?)\s+(?:area|location|locality|micro[- ]?market)\b/i.test(t) ||
+    /\b(?:looking|want|prefer)\s+(?:in|at|near)\s+[A-Za-z].{0,20}\bnot\b/i.test(t)
+  );
+}
+
+/** Mid-list BHK/budget/location refine — re-search, don't clarify pick (PIV-03). */
+export function isConstraintRefinementTurn(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (
+    !/\b(?:change|switch|update|actually|instead|rather|refine|adjust|make\s+it|now)\b/i.test(t)
+  ) {
+    return false;
+  }
+  return Boolean(
+    parseBudgetToInr(t) ||
+      /\b\d(?:\.\d)?\s*bhk\b/i.test(t) ||
+      extractLocation(t) ||
+      detectPropertyTypes(t),
+  );
+}
+
 /** Strip trailing broaden words from a captured locality fragment. */
 function cleanLocalityFragment(raw: string): string {
   return raw
     .trim()
     .replace(/[?!.,;:]+$/, '')
     .replace(/\s+(?:too|also|as well)\.?\s*$/i, '')
+    // Budget / BHK glued by greedy `in …` capture — not part of locality.
+    .replace(
+      /\s+(?:under|below|above|upto|up\s+to|around|about|within)\s+[\d.,]+\s*(?:cr|crore|crs|lakh|lakhs|lacs?|l)\b.*$/i,
+      '',
+    )
+    .replace(/\s+(?:under|below|above)\s+[\d.,]+\s*(?:crore|cr|lakh|lakhs|lacs?)\b.*$/i, '')
+    .replace(/\s+(?:preferably|\d(?:\.\d)?\s*bhk|preferably|ready\s+to\s+move|near\s+airport).*$/i, '')
     .trim();
+}
+
+/**
+ * True when regex "location" still carries budget/config noise
+ * ("North Bangalore under 1.5 Cr") — treat as empty so embedder/BAML can own free text.
+ */
+export function locationLooksPolluted(loc: string | undefined): boolean {
+  if (!loc) return false;
+  const lc = loc.toLowerCase().trim();
+  if (!lc) return false;
+  if (lc.split(/\s+/).length > 6) return true;
+  return /\b(?:under|below|above|upto|up\s+to|budget|crore|crs?\b|lakh|lakhs|lacs?|\d+\s*(?:cr|l)\b|\d(?:\.\d)?\s*bhk|preferably|ready\s+to\s+move)\b/i.test(
+    lc,
+  );
 }
 
 /** "coorg, 50L", "looking in Sakleshpur", bare locality. */
@@ -654,6 +728,8 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   const trimmed = text.trim();
   if (ctx?.askTopics?.length) return undefined;
   if (isVisitDayUtterance(trimmed)) return undefined;
+  // Project re-focus / switch — not a locality (W1: "back to Ayana").
+  if (/\bback\s+to\b/i.test(trimmed)) return undefined;
   if (
     /\b(?:keep|continue)\s+refining\b/i.test(trimmed) ||
     /\brefine(?:\s+(?:the|my))?\s+search\b/i.test(trimmed)
@@ -671,6 +747,20 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     if (looksLikeOfferedProjectName(cleaned, hints)) return undefined;
     return cleaned;
   };
+
+  // "I meant Whitefield not Devanahalli" — take the corrected locality.
+  const meantNot = /\b(?:i\s+)?meant\s+([A-Za-z][A-Za-z\s-]{2,40}?)\s+not\b/i.exec(trimmed);
+  if (meantNot?.[1]) {
+    const loc = acceptLocality(meantNot[1]);
+    if (loc) return loc;
+  }
+  const notMeant = /\bnot\s+[A-Za-z][\w\s-]{2,30}\s*[,—-]?\s*(?:i\s+)?meant\s+([A-Za-z][A-Za-z\s-]{2,40})/i.exec(
+    trimmed,
+  );
+  if (notMeant?.[1]) {
+    const loc = acceptLocality(notMeant[1]);
+    if (loc) return loc;
+  }
 
   const inTail = /\bin\s+(.+?)\s*$/i.exec(text.trim());
   if (inTail?.[1]) {

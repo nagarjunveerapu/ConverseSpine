@@ -15,7 +15,17 @@ import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './
 import { buildLedgerWritePayload } from './ledger-write.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
-import { isDetailAskTurn, isLocationBroadenTurn, isMinimumBudgetForTypeQuestion, detectPropertyTypes, wantsCostBreakdown } from './facts.js';
+import {
+  isConstraintRefinementTurn,
+  isDetailAskTurn,
+  isLocationBroadenTurn,
+  isLocationCorrectionTurn,
+  isMinimumBudgetForTypeQuestion,
+  detectPropertyTypes,
+  wantsCostBreakdown,
+} from './facts.js';
+import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
+import { buyerCuedOtherProject } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
   isCompareAmongOfferedTurn,
@@ -30,7 +40,9 @@ import {
   applyExtracted,
   applyVisitBooked,
   appendTranscript,
+  clearLastOffered,
   commitTo,
+  constraintsMateriallyChanged,
   incObjection,
   initState,
   isSameAsLast,
@@ -359,8 +371,28 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       ...(focusPivotTurn ? { wantsMore: true } : {}),
     };
   }
+  // W2: location/budget/BHK correction must re-search, not stay on focused facet path.
+  if (isLocationCorrectionTurn(trimmedText) || isConstraintRefinementTurn(trimmedText)) {
+    ex = {
+      ...ex,
+      speechAct: 'search',
+      forceRecommendList: true,
+      askTopic: undefined,
+      askTopics: [],
+      transition: 'none',
+    };
+  }
+  const prevConstraints = state.constraints;
   const prevLoc = state.constraints.location;
   state = applyExtracted(state, ex, clearedKeys);
+
+  // W2: constraint pivot invalidates stale shortlist — no catalog names; delta-driven.
+  if (
+    state.discover.lastOffered.length > 0 &&
+    shouldInvalidateLastOffered(prevConstraints, state.constraints, trimmedText, ex)
+  ) {
+    state = clearLastOffered(state);
+  }
 
   const routing = await classifyTurnRouting(deps.routingEnv, buildTurnRoutingInput(state, ex, trimmedText));
   state = {
@@ -374,6 +406,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const locationBroaden =
     !isDetailAskTurn(ex) &&
     (isLocationBroadenTurn(trimmedText) ||
+      isLocationCorrectionTurn(trimmedText) ||
       Boolean(state.constraints.location && state.constraints.location !== prevLoc));
   if (state.phase === 'focused' && locationBroaden && !state.postVisitAckPending) {
     if (nd) await deps.crm.releaseProject(nd).catch(() => {});
@@ -445,7 +478,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const projectGeoCatalog = catalogFromProjectCoords(coordRows);
 
     const originCandidate =
-      visitState?.lastAsk === 'origin' && !visitState.originText
+      visitState?.lastAsk === 'origin' &&
+      !visitState.originText &&
+      !visit.isVisitProjectSwitchUtterance(trimmedText, ex.namedProjects?.length ?? 0) &&
+      !(ex.namedProjects?.length ?? 0)
         ? visit.normalizeOriginText(trimmedText)
         : visitState?.originText
           ? visit.normalizeOriginText(visitState.originText)
@@ -521,6 +557,26 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
   let goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
 
+  // W1 focus bind: answer goals must not silently drift to embedder-invented projects.
+  if (
+    goal.kind === 'answer' &&
+    goal.topic !== 'compare' &&
+    state.focus &&
+    goal.projectId !== state.focus.projectId
+  ) {
+    const pool = [
+      ...state.discover.lastOffered,
+      ...(state.discussedProjects ?? []),
+      { projectId: state.focus.projectId, name: state.focus.projectName },
+    ];
+    const namedOk =
+      (ex.namedProjects?.some((p) => p.projectId === goal.projectId) ?? false) &&
+      buyerCuedOtherProject(trimmedText, pool);
+    if (!namedOk) {
+      goal = { ...goal, projectId: state.focus.projectId };
+    }
+  }
+
   let evidence: EvidenceSet = { tools: [] };
   if (goal.kind === 'commit' && nd) {
     await deps.crm.commitProject(nd, goal.projectId).catch(() => {});
@@ -586,6 +642,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const warmAckDeterministic = goal.kind === 'warm_ack';
   const propertyTypeDeterministic =
     goal.kind === 'answer' && goal.topic === 'property_type' && !!evidence.detail?.projectType;
+  // Named commit / overview after switch — always say the project name (SW-01/02).
+  const commitDeterministic = goal.kind === 'commit';
+  const overviewDeterministic =
+    goal.kind === 'answer' && goal.topic === 'overview' && !!evidence.detail;
 
   let draft: string;
   if (
@@ -600,7 +660,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     legalDeterministic ||
     visitRecallDeterministic ||
     warmAckDeterministic ||
-    propertyTypeDeterministic
+    propertyTypeDeterministic ||
+    commitDeterministic ||
+    overviewDeterministic
   ) {
     draft = fallbackReply(req);
   } else {
@@ -735,7 +797,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
 
   const debugOut = withIngressDebug(
-    { phase: state.phase, goal, tools: evidence.tools, grounding },
+    {
+      phase: state.phase,
+      goal,
+      tools: evidence.tools,
+      grounding,
+      last_offered_count: state.discover.lastOffered.length,
+      last_offered_ids: state.discover.lastOffered.map((o) => o.projectId),
+    },
     inputSource,
     extractProvenance,
   );
@@ -1199,10 +1268,15 @@ async function fetchAnswer(
     const media = await deps.data.mediaShare(nd, goal.projectId, assetKind, unitType).catch(() => null);
     if (media) {
       tools.push('mediaShare');
+      const mediaName =
+        media.projectName ||
+        (s.focus?.projectId === goal.projectId ? focusName : '') ||
+        s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
+        focusName;
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
-        media: { projectName: focusName, ...media },
+        media: { ...media, projectName: mediaName || focusName || 'this project' },
       };
     }
   }
@@ -1599,19 +1673,45 @@ async function syncTelemetry(
   await deps.crm.postJourneyTurnSnapshot(state.builderId, buyerPhone, nd, goal.kind, state.phase);
 
   const observations: Array<{ fact_key: string; value: unknown; provenance: string }> = [];
-  if (state.constraints.location) observations.push({ fact_key: 'location_pref', value: state.constraints.location, provenance: 'extractor' });
-  if (state.constraints.budgetMaxInr) observations.push({ fact_key: 'budget_inr', value: state.constraints.budgetMaxInr, provenance: 'extractor' });
-  if (state.constraints.bhk) observations.push({ fact_key: 'bhk_preference', value: state.constraints.bhk, provenance: 'extractor' });
-  if (state.constraints.purpose) observations.push({ fact_key: 'purpose', value: state.constraints.purpose, provenance: 'extractor' });
+  const prov = deskFactProvenance('regex');
+  if (state.constraints.location) {
+    observations.push({ fact_key: 'location_pref', value: state.constraints.location, provenance: prov });
+  }
+  if (state.constraints.budgetMaxInr) {
+    observations.push({ fact_key: 'budget_inr', value: state.constraints.budgetMaxInr, provenance: prov });
+  }
+  if (state.constraints.bhk) {
+    observations.push({ fact_key: 'bhk_preference', value: state.constraints.bhk, provenance: prov });
+  }
+  if (state.constraints.purpose) {
+    observations.push({ fact_key: 'purpose', value: state.constraints.purpose, provenance: prov });
+  }
+  if (state.constraints.propertyType) {
+    observations.push({ fact_key: 'property_interest', value: [state.constraints.propertyType], provenance: prov });
+  }
+  if (state.focus) {
+    observations.push({
+      fact_key: 'focused_project',
+      value: { project_id: state.focus.projectId, name: state.focus.projectName },
+      provenance: prov,
+    });
+  }
+  if (goal.kind === 'visit_booked') {
+    observations.push({
+      fact_key: 'visit_booked',
+      value: { project_id: goal.projectId, label: goal.label, iso: goal.iso },
+      provenance: prov,
+    });
+  }
   if (observations.length) {
     await deps.crm.postProfileObservations(state.builderId, buyerPhone, nd, observations);
   }
 
-  const signals: Record<string, unknown> = { phase: state.phase, goal: goal.kind };
-  if (goal.kind === 'commit') signals.committed_project_id = goal.projectId;
-  if (goal.kind === 'visit_booked') signals.visit_booked = true;
-  if (goal.kind === 'handoff') signals.escalated = true;
-  await deps.crm.postJourneySignals(state.builderId, buyerPhone, nd, signals);
+  const journeyPost = buildJourneySignalPost(goal, state, evidence);
+  await deps.crm.postJourneySignals(state.builderId, buyerPhone, nd, journeyPost.signals, {
+    ...(journeyPost.shortlistAdd ? { shortlistAdd: journeyPost.shortlistAdd } : {}),
+    ...(journeyPost.rejectedAdd ? { rejectedAdd: journeyPost.rejectedAdd } : {}),
+  });
 
   await deps.crm.mirrorMemory(nd);
 }
@@ -1808,6 +1908,24 @@ function whatsAppButtons(
 }
 
 type CompareEvidence = import('./types.js').CompareEvidence;
+
+/**
+ * W2 — wipe lastOffered when search-shaping constraints moved and this turn is a re-search.
+ * Not on pure facet asks (stay on current board / focus). No locality hardcode.
+ */
+function shouldInvalidateLastOffered(
+  prev: ConversationState['constraints'],
+  next: ConversationState['constraints'],
+  text: string,
+  ex: Extracted,
+): boolean {
+  // Explicit correction/refine phrasing always invalidates — even if extract missed a delta.
+  if (isConstraintRefinementTurn(text) || isLocationCorrectionTurn(text)) return true;
+  if (!constraintsMateriallyChanged(prev, next)) return false;
+  if (ex.speechAct === 'search' || ex.forceRecommendList) return true;
+  if (isDetailAskTurn(ex)) return false;
+  return discover.hasNarrowingConstraint(next);
+}
 
 function withIngressDebug(
   base: TurnDebug,

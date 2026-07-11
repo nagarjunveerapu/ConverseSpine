@@ -1,0 +1,19 @@
+{
+  "id": "MED-04",
+  "title": "Floor plan? while focused Ayana",
+  "builder_id": "lokations",
+  "tags": ["quality", "media", "A", "corpus"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "Floor plan?",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["buena vista", "which project"],
+        "expect_media": true
+      }
+    }
+  ]
+}

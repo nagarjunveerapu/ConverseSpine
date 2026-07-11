@@ -1,0 +1,20 @@
+{
+  "id": "PIV-01",
+  "title": "North Bangalore shortlist → budget crash to 50L",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "pivot", "B"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "show me projects in North Bangalore under 1.5 Cr 3BHK",
+      "assert": { "goal_kind": "recommend", "reply_excludes": ["buena vista"] }
+    },
+    {
+      "text": "actually my budget is only 50L",
+      "assert": {
+        "reply_excludes": ["buena vista", "tap a button"],
+        "goal_kind": "recommend"
+      }
+    }
+  ]
+}

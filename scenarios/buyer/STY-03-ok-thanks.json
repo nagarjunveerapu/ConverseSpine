@@ -1,0 +1,17 @@
+{
+  "id": "STY-03",
+  "title": "ok thanks mid-focused stays on Ayana",
+  "builder_id": "lokations",
+  "tags": ["quality", "style", "E"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "ok thanks",
+      "assert": {
+        "reply_excludes": ["buena vista", "which project", "no_fit"]
+      }
+    }
+  ]
+}

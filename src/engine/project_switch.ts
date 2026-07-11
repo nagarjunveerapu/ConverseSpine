@@ -37,18 +37,87 @@ function isStickyFacetAsk(ex: Extracted): boolean {
 
 /**
  * Tokens left after stripping facet / stop words.
- * Empty residue ⇒ pure facet chip ("Send brochure") — do not switch on vector noise.
+ * Empty residue ⇒ pure facet chip ("Send brochure" / "brochure bhejo") — do not switch on vector noise.
  */
 export function facetNameResidue(text: string): string {
   return text
     .toLowerCase()
     .replace(
-      /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one)\b/gi,
+      /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one|bhejo|bhej|bhejna|bhej\s*do|batao|dikhao|dikha|do|karo|please|thanks|thank\s*you|bsp|carpet|sba|possession|date|area|break(?:\s|-)?up|breakdown|how|much|kitna|padega|and|or|with|from|also|any|there)\b/gi,
       ' ',
     )
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Buyer pointed at another project via dialogue structure — not a catalog name list.
+ * Identity still resolves via PROJECT_VECTORS / shortlist / discussed.
+ *
+ * W4: do not grow this with brand/project hardcodes — structural cues + session pool only.
+ *
+ * True when: switch/re-focus phrasing + non-empty name residue after facet strip,
+ * or sticky media/ask "for|about <residue>" with residue ≥ 3.
+ */
+export function hasExplicitProjectCue(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  const residue = facetNameResidue(t);
+  if (residue.length < 3) return false;
+
+  // Re-focus / switch / deixis toward a named other project.
+  if (
+    /\b(?:back\s+to|switch\s+to|instead|what\s+about|tell\s+me\s+about|more\s+about|also\s+(?:about\s+)?|interested\s+in|know\s+more\s+about)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  // "brochure for X" / "pricing on X" — residue is the name cue; vectors resolve which.
+  if (
+    /\b(?:brochure|floor\s*plans?|pricing|prices?|legal|details?|overview|visit)\b/i.test(t) &&
+    /\b(?:for|on|about)\b/i.test(t)
+  ) {
+    return true;
+  }
+  // "Krishnaja Greens pricing" — facet token + leftover name residue (not a brand list).
+  if (
+    /\b(?:brochure|floor\s*plans?|pricing|prices?|price|legal|details?|overview|emi|amenities|availability|bsp|carpet|possession)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Residue overlaps offered/discussed/focus names (session pool — never a global catalog). */
+export function residueMatchesPool(
+  text: string,
+  pool: ReadonlyArray<{ name: string }>,
+): boolean {
+  const residue = facetNameResidue(text);
+  if (residue.length < 3 || !pool.length) return false;
+  const r = residue.toLowerCase();
+  for (const o of pool) {
+    const name = o.name.trim().toLowerCase();
+    if (!name) continue;
+    const distinctive = name.replace(/^\S+\s+/, ''); // drop leading brand token if any
+    if (r.includes(name) || (distinctive.length >= 3 && r.includes(distinctive))) return true;
+    if (name.includes(r) || (distinctive.length >= 3 && distinctive.includes(r))) return true;
+  }
+  return false;
+}
+
+/** Structural cue OR session-pool name hit — identity still resolves via vectors. */
+export function buyerCuedOtherProject(
+  text: string,
+  pool?: ReadonlyArray<{ name: string }>,
+): boolean {
+  if (hasExplicitProjectCue(text)) return true;
+  if (pool?.length) return residueMatchesPool(text, pool);
+  return false;
 }
 
 function exactPoolPick(pool: readonly OfferedProject[], pickName: string): OfferedProject | null {
@@ -61,6 +130,9 @@ function exactPoolPick(pool: readonly OfferedProject[], pickName: string): Offer
 
 function poolOf(s: ConversationState): OfferedProject[] {
   const pool = [...s.discover.lastOffered];
+  for (const d of s.discussedProjects ?? []) {
+    if (!pool.some((p) => p.projectId === d.projectId)) pool.push(d);
+  }
   if (s.focus && !pool.some((p) => p.projectId === s.focus!.projectId)) {
     pool.push({ projectId: s.focus.projectId, name: s.focus.projectName });
   }
@@ -103,18 +175,18 @@ export function detectFocusedSwitchIntent(
     const n = named[0];
     if (!n) return null;
     if (n.projectId !== focus.projectId) {
-      // "Send brochure" while focused — PROJECT_VECTORS often invents another project.
-      // Only switch when the buyer left a name-like residue (e.g. "brochure for Eldorado").
-      if (isStickyFacetAsk(ex) && facetNameResidue(_text).length < 3) return null;
+      // Sticky facet without structural/pool cue → stay on focus (vector noise).
+      if (isStickyFacetAsk(ex) && !buyerCuedOtherProject(_text, poolOf(s))) return null;
       return { commit: n, ...fu };
     }
     return null;
   }
 
   if (ex.pickName) {
-    const hit = exactPoolPick(poolOf(s), ex.pickName);
+    const pool = poolOf(s);
+    const hit = exactPoolPick(pool, ex.pickName);
     if (hit && hit.projectId !== focus.projectId) {
-      if (isStickyFacetAsk(ex) && facetNameResidue(_text).length < 3) return null;
+      if (isStickyFacetAsk(ex) && !buyerCuedOtherProject(_text, pool)) return null;
       return { commit: hit, ...fu };
     }
   }

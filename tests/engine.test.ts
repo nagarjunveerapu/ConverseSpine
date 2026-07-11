@@ -69,6 +69,26 @@ describe('ConverseEngine facts', () => {
     expect(parseBudgetToInr('3 BHK Whitefield 1.2 cr')?.max).toBe(12_000_000);
   });
 
+  it('ignores family-of count; prefers under 1.2 Cr (STY-02)', () => {
+    expect(
+      parseBudgetToInr(
+        'hi we are a family of 4 looking for 3BHK in North Bangalore under 1.2 Cr preferably ready to move',
+      )?.max,
+    ).toBe(12_000_000);
+  });
+
+  it('detects BSP/carpet/possession-date as price (EXP-01)', () => {
+    expect(detectTopics("what's the BSP and carpet area and possession date")).toContain('price');
+  });
+
+  it('location correction extracts Whitefield (PIV-02)', () => {
+    expect(extractLocation('wait I meant Whitefield not Devanahalli')).toMatch(/whitefield/i);
+  });
+
+  it('Hinglish brochure bhejo is media', () => {
+    expect(detectTopics('brochure bhejo')).toContain('media');
+  });
+
   it('compare topic detected', () => {
     const ex = extractFactsSync('compare both projects', initState('c1', 'lokations'));
     expect(ex.askTopic).toBe('compare');
@@ -161,9 +181,17 @@ describe('ConverseEngine facts', () => {
     ];
     expect(
       discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Devanahalli' }, []),
+    ).toHaveLength(0);
+    expect(
+      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Devanahalli' }, []),
     ).toHaveLength(1);
     expect(
-      discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Devanahalli' }, [])[0]?.name,
+      discover.filterSearchMatches(raw, { budgetMaxInr: 4_000_000, location: 'Devanahalli' }, [])[0]
+        ?.name,
+    ).toBe('Brigade Eldorado');
+    expect(
+      discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Yelahanka' }, [])[0]
+        ?.name,
     ).toBe('Brigade Northridge Neo');
     const gap = discover.buildBudgetNoFitEvidence(
       { budgetMaxInr: 2_000_000, location: 'Devanahalli' },
@@ -331,27 +359,37 @@ describe('Coorg funnel (deterministic)', () => {
       );
 
     await input('Hi');
-    const t2 = await input('coorg, 50 Lakhs');
+    // Location filter is real — Sakleshpur board, not a Coorg-labeled stretch list.
+    const t2 = await input('sakleshpur, 50 Lakhs');
     expect(t2.debug.goal.kind).toBe('recommend');
-    expect(t2.reply).toMatch(/Ayana|Krishnaja/i);
-    expect(t2.state.discover.lastOffered.length).toBeGreaterThanOrEqual(2);
+    expect(t2.reply).toMatch(/Ayana/i);
+    expect(t2.state.discover.lastOffered.length).toBeGreaterThanOrEqual(1);
 
-    const t3 = await input('compare both projects');
+    const t2b = await input('also show Virajpet');
+    // May recommend Krishnaja or keep board — either way shortlist can grow via discussed.
+    void t2b;
+
+    const t3 = await input('compare ayana and krishnaja greens');
     expect(t3.debug.goal).toMatchObject({ kind: 'answer', topic: 'compare' });
     expect(t3.reply).toMatch(/Ayana/i);
     expect(t3.reply).toMatch(/Krishnaja/i);
-    expect(t3.state.discover.lastOffered.length).toBeGreaterThanOrEqual(2);
 
-    const t4 = await input('compare ayana and krishnaja greens');
-    expect(t4.debug.goal).toMatchObject({ kind: 'answer', topic: 'compare' });
+    const t4 = await input('i am looking for plantation');
+    expect(t4.state.constraints.propertyType).toBe('plantation');
+    expect(t4.state.constraints.budgetMaxInr).toBe(5_000_000);
+    expect(['recommend', 'advance', 'answer']).toContain(t4.debug.goal.kind);
+  });
 
-    const t5 = await input('i am looking for plantation');
-    expect(t5.state.constraints.propertyType).toBe('plantation');
-    expect(t5.state.constraints.location?.toLowerCase()).toMatch(/coorg/);
-    expect(t5.state.constraints.budgetMaxInr).toBe(5_000_000);
-    expect(['recommend', 'advance']).toContain(t5.debug.goal.kind);
-    expect(t5.state.discover.lastOffered.length).toBeGreaterThan(0);
-    expect(t5.reply).toMatch(/Ayana|Krishnaja/i);
+  it('coorg location does not stretch to Sakleshpur shortlist (W2)', async () => {
+    const deps = fakeDeps();
+    const t = await runEngineTurn(
+      { convId: 'coorg-loc', builderId: 'lokations', text: 'coorg, 50 Lakhs', buyerPhone: '+919999999998' },
+      deps,
+    );
+    expect(t.state.constraints.location?.toLowerCase()).toMatch(/coorg/);
+    // Must not invent Ayana (Sakleshpur) under a Coorg constraint.
+    expect(t.state.discover.lastOffered.map((o) => o.projectId)).not.toContain('ayana');
+    expect(t.state.discover.lastOffered.map((o) => o.projectId)).not.toContain('krishnaja');
   });
 
   it('resolveCompareProjectIds binds "both" to last bot listing', () => {

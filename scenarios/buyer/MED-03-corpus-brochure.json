@@ -1,0 +1,19 @@
+{
+  "id": "MED-03",
+  "title": "Thanks please share the brochure (real corpus phrasing) on Ayana",
+  "builder_id": "lokations",
+  "tags": ["quality", "media", "A", "corpus"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "Thanks please share the brochure",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["which project", "buena vista"],
+        "expect_media": true
+      }
+    }
+  ]
+}

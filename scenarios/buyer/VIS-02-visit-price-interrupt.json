@@ -1,0 +1,19 @@
+{
+  "id": "VIS-02",
+  "title": "Visit then ask pricing mid-flow (interrupt)",
+  "builder_id": "lokations",
+  "tags": ["quality", "visit", "D"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    { "text": "I want to visit this weekend" },
+    {
+      "text": "actually what is the price first",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_excludes": ["which day", "what time"]
+      }
+    }
+  ]
+}

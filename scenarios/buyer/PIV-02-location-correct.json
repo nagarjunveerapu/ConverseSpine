@@ -1,0 +1,18 @@
+{
+  "id": "PIV-02",
+  "title": "Focused Eldorado → meant Whitefield not Devanahalli",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "pivot", "B"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "wait I meant Whitefield not Devanahalli",
+      "assert": {
+        "reply_excludes": ["tap a button"],
+        "reply_includes": ["whitefield"]
+      }
+    }
+  ]
+}

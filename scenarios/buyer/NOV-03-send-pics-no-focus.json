@@ -1,0 +1,14 @@
+{
+  "id": "NOV-03",
+  "title": "Novice send pics with no focus → clarify",
+  "builder_id": "lokations",
+  "tags": ["quality", "novice", "F"],
+  "turns": [
+    {
+      "text": "send pics",
+      "assert": {
+        "reply_excludes": ["buena vista"]
+      }
+    }
+  ]
+}

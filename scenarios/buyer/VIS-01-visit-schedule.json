@@ -1,0 +1,21 @@
+{
+  "id": "VIS-01",
+  "title": "Visit explore → schedule → confirm slot",
+  "builder_id": "lokations",
+  "tags": ["quality", "visit", "D"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "I want to visit",
+      "assert": { "reply_excludes": ["buena vista"] }
+    },
+    {
+      "text": "Saturday morning",
+      "assert": {
+        "reply_excludes": ["tap a button", "which project"]
+      }
+    }
+  ]
+}

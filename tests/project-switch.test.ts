@@ -72,6 +72,20 @@ describe('detectFocusedSwitchIntent — PROJECT_VECTORS namedProjects', () => {
     expect(detectFocusedSwitchIntent(text, ex, s)).toBeNull();
   });
 
+  it('brochure bhejo + vector noise Century Breeze → stay on focus (HIN-03)', () => {
+    const s = focusedAyana();
+    const text = 'brochure bhejo';
+    const ex: Extracted = {
+      constraints: {},
+      transition: 'none',
+      askTopic: 'media',
+      askTopics: ['media'],
+      speechAct: 'answer',
+      namedProjects: [{ projectId: 'century-breeze-lokations', name: 'Century Breeze' }],
+    };
+    expect(detectFocusedSwitchIntent(text, ex, s)).toBeNull();
+  });
+
   it('paperwork for this one + vector noise → stay on focus', () => {
     const s = focusedAyana();
     const text = 'is the paperwork okay for this one somehow';
