@@ -323,7 +323,9 @@ Kernel (always code):
 
 ---
 
-## P8 — Platform scale ⏸️ DEFERRED
+## P8 — Platform scale ⏸️ DEFERRED (discussion needed)
+
+Infra when Cloudflare limits bite — **not** the next bot-quality slice. Sequence only after a broader product/ops discussion (MAU, RAG failure modes, analytics flywheel, D1 ceiling).
 
 | Item | When |
 |------|------|
@@ -332,7 +334,7 @@ Kernel (always code):
 | Kafka turn.completed | Analytics flywheel |
 | Postgres NayaDesk | D1 limits hit |
 
-**Do not** invert P0–P3 for infra experiments.
+**Do not** invert P0–P7 conversation work for infra experiments.
 
 ---
 
