@@ -25,7 +25,7 @@ This doc is the **list first**. Do not treat unchecked rows as green.
 | **HIN-02..06** | ✅ Fixed + soak | price kitna / brochure bhejo / visit karna / dono compare / nahi chahiye |
 | Multi-visit route by origin / sequencing | ✅ Seed green | BUYER-LOK-02, SA-G02/G02b, VIS-03/04 soak; deeper origin UAT optional |
 | **FAQ-01 rental yield** | ✅ Live soak 2026-07-11 | FAQ key→`faqLookup`→compose; tools=`faqLookup` |
-| **FAQ-02 possession / FAQ-03 payment** | ✅ Live soak | Eldorado Desk FAQs; no overview dump |
+| **FAQ-02 possession / FAQ-03 payment / FAQ-04 loan** | ✅ Live soak | Desk FAQs; home-loan ≠ EMI calculator |
 | Expert deep-probe vs novice minimal | ⚠️ Partial | ADV-F01 = expert-ish facets; no paired novice journey |
 | MED-02 advisor brochure | ❌ Not verified | Advisor channel — next wave |
 

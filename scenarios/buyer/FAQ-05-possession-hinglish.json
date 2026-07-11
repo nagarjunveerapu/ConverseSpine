@@ -1,0 +1,19 @@
+{
+  "id": "FAQ-05",
+  "title": "Hinglish possession ask uses Desk FAQ",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "faq", "hinglish", "closed-beta"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "possession kab hai?",
+      "assert": {
+        "reply_includes": ["possession"],
+        "reply_excludes": ["want pricing, legal details"],
+        "tools_include": ["faqLookup"]
+      }
+    }
+  ]
+}

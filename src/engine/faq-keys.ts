@@ -8,7 +8,7 @@ import type { AnswerTopic } from './types.js';
 const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   {
     key: 'rental_yield',
-    re: /\b(?:rental\s+yield|yield|roi|returns?|rental\s+income|how\s+much\s+rent|rent(?:al)?\s+(?:potential|income|return))\b/i,
+    re: /\b(?:rental\s+yield|yield(?:\s+kitna)?|roi|returns?|rental\s+income|how\s+much\s+rent|rent(?:al)?\s+(?:potential|income|return|kitna))\b/i,
   },
   {
     key: 'revenue_model',
@@ -28,7 +28,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'possession',
-    re: /\b(?:possession(?:\s+date)?|when(?:'s| is)?\s+(?:possession|handover)|delivery\s+(?:date|timeline)|ready\s+to\s+move\s+in)\b/i,
+    re: /\b(?:possession(?:\s+date)?|possession\s+kab|when(?:'s| is)?\s+(?:possession|handover)|delivery\s+(?:date|timeline)|ready\s+to\s+move\s+in|kab\s+(?:possession|handover))\b/i,
   },
   {
     key: 'amenities',

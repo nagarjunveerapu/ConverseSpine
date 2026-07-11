@@ -21,6 +21,10 @@ describe('resolveFaqQuestionKeys', () => {
   it('falls back to topic hints when text is bare amenity chip', () => {
     expect(resolveFaqQuestionKeys('', ['amenities'])).toContain('amenities');
   });
+  it('maps Hinglish possession / yield', () => {
+    expect(resolveFaqQuestionKeys('possession kab hai?')).toContain('possession');
+    expect(resolveFaqQuestionKeys('yield kitna?')).toContain('rental_yield');
+  });
 });
 
 describe('loan eligibility vs EMI topic', () => {
