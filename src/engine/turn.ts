@@ -581,16 +581,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state.focus &&
     goal.projectId !== state.focus.projectId
   ) {
+    const answerGoal = goal;
     const pool = [
       ...state.discover.lastOffered,
-      ...(state.discussedProjects ?? []),
+      ...(state.discover.discussedProjects ?? []),
       { projectId: state.focus.projectId, name: state.focus.projectName },
     ];
     const namedOk =
-      (ex.namedProjects?.some((p) => p.projectId === goal.projectId) ?? false) &&
+      (ex.namedProjects?.some((p) => p.projectId === answerGoal.projectId) ?? false) &&
       buyerCuedOtherProject(trimmedText, pool);
     if (!namedOk) {
-      goal = { ...goal, projectId: state.focus.projectId };
+      goal = { ...answerGoal, projectId: state.focus.projectId };
     }
   }
 
@@ -1303,7 +1304,6 @@ async function fetchAnswer(
     if (media) {
       tools.push('mediaShare');
       const mediaName =
-        media.projectName ||
         (s.focus?.projectId === goal.projectId ? focusName : '') ||
         s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
         focusName;
