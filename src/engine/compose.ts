@@ -60,6 +60,11 @@ export function renderComposePrompt(req: ComposeRequest): string {
       );
     }
   }
+  if (goal.kind === 'answer' && evidence.detail?.faqs?.length) {
+    lines.push(
+      `The buyer asked a specific FAQ — answer from the faqs in EVIDENCE first. Do NOT fall back to a generic location/price overview.`,
+    );
+  }
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
     lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
   }
@@ -149,6 +154,13 @@ function renderEvidence(ev: EvidenceSet): string {
     out.push(
       `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, from ${ev.detail.startingPriceDisplay}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
     );
+    if (ev.detail.faqs?.length) {
+      out.push(
+        `faqs (use these to answer the buyer's question — prefer over generic summary):\n${ev.detail.faqs
+          .map((f) => `  - [${f.questionKey}] Q: ${f.question}\n    A: ${f.answer}`)
+          .join('\n')}`,
+      );
+    }
   }
   if (ev.location) {
     const l = ev.location;
@@ -367,6 +379,17 @@ export function fallbackReply(req: ComposeRequest): string {
       if (goal.topic === 'availability') {
         const pname = ev.detail?.name ?? context.focusProjectName ?? 'this project';
         return `Configuration details for *${pname}* aren't published yet — I can share pricing or book a visit to see options on site.`;
+      }
+      // Closed-beta: Desk FAQ answers beat generic overview dumps (rental yield, possession, …).
+      if (ev.detail?.faqs?.length) {
+        const pname = ev.detail.name || context.focusProjectName || 'this project';
+        const body = ev.detail.faqs
+          .map((f) => f.answer.trim())
+          .filter(Boolean)
+          .join(' ');
+        if (body) {
+          return `${body} Want anything else on *${pname}*, or a visit?`;
+        }
       }
       if (ev.detail) {
         const d = ev.detail;

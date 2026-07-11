@@ -331,7 +331,17 @@ export function fakeData(): EngineData {
       ];
     },
     async faqLookup(_pid, key) {
-      return key === 'amenities' ? { question: 'Amenities?', answer: 'Clubhouse and pool on file.' } : null;
+      if (key === 'amenities') return { question: 'Amenities?', answer: 'Clubhouse and pool on file.' };
+      if (key === 'rental_yield') {
+        return {
+          question: 'What rental yield can I expect?',
+          answer: 'Estimated 3–4% net rental yield — estimate only, not a guarantee.',
+        };
+      }
+      if (key === 'possession') {
+        return { question: 'When is possession?', answer: 'Possession is phased through 2028.' };
+      }
+      return null;
     },
     async getProfile() {
       return {};

@@ -25,6 +25,7 @@ import {
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
+import { isFaqShapedAsk, resolveFaqQuestionKeys } from './faq-keys.js';
 import { buyerCuedOtherProject } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
@@ -1356,33 +1357,43 @@ async function fetchAnswer(
     }
   }
 
-  if (topics.includes('amenities')) {
-    const faq = await deps.data.faqLookup(goal.projectId, 'amenities').catch(() => null);
-    if (faq) {
-      tools.push('faqLookup');
-      evidence = {
-        ...evidence,
-        tools: [...new Set(tools)],
-        detail: {
-          ...(evidence.detail ?? {
-            projectId: goal.projectId,
-            name: focusName,
-            microMarket: '',
-          }),
-          faqs: [{ questionKey: 'amenities', question: faq.question, answer: faq.answer }],
-        },
-      };
+  // Closed-beta: Desk FAQ corpus — rental_yield, possession, loan, amenities, …
+  const faqKeys = resolveFaqQuestionKeys(buyerText ?? '', topics);
+  const faqHits: Array<{ questionKey: string; question: string; answer: string }> = [];
+  for (const key of faqKeys) {
+    const faq = await deps.data.faqLookup(goal.projectId, key).catch(() => null);
+    if (faq?.answer) {
+      faqHits.push({ questionKey: key, question: faq.question, answer: faq.answer });
     }
   }
+  if (faqHits.length) {
+    tools.push('faqLookup');
+    evidence = {
+      ...evidence,
+      tools: [...new Set(tools)],
+      detail: {
+        ...(evidence.detail ?? {
+          projectId: goal.projectId,
+          name: focusName,
+          microMarket: '',
+        }),
+        faqs: faqHits,
+      },
+    };
+  }
 
-  const needsDetail = topics.some((t) =>
-    t === 'legal' ||
-    t === 'overview' ||
-    t === 'amenities' ||
-    t === 'location' ||
-    t === 'availability' ||
-    t === 'property_type',
-  );
+  const faqShapedHit = Boolean(buyerText && isFaqShapedAsk(buyerText) && faqHits.length > 0);
+  const needsDetail =
+    !faqShapedHit &&
+    topics.some(
+      (t) =>
+        t === 'legal' ||
+        t === 'overview' ||
+        t === 'amenities' ||
+        t === 'location' ||
+        t === 'availability' ||
+        t === 'property_type',
+    );
   if (needsDetail) {
     let detail = await hydrateProjectDetail(deps, s, goal.projectId);
     if (detail && topics.includes('legal')) {

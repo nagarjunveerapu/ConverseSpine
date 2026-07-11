@@ -194,6 +194,18 @@ export async function extractFacts(
     shortlistPick ??
     (shownName && !reject && askTopic !== 'compare' && namedProjects.length <= 1 ? shownName : undefined);
 
+  // Project identity ≠ locality (STY / dossier: "Meadows" must not become location_pref).
+  if (constraints.location) {
+    const locHints = [
+      ...locationExtractCtx(s, askTopics, text).projectNameHints ?? [],
+      ...namedProjects.map((p) => p.name),
+      ...(pickName ? [pickName] : []),
+    ];
+    if (looksLikeOfferedProjectName(constraints.location, locHints)) {
+      delete constraints.location;
+    }
+  }
+
   return {
     constraints,
     ...(reject ? { rejected: true, ...(shownName ? { rejectedName: shownName } : {}) } : {}),
@@ -529,7 +541,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'compare', re: /\b(?:compare|vs|versus|side by side|difference between|both projects?)\b/i },
   {
     topic: 'price',
-    re: /\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\s+sale\s+price|carpet(?:\s+area)?|sba|super\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\s+prices?|possession\s+date|when(?:'s| is)?\s+possession)\b/i,
+    re: /\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\s+sale\s+price|carpet(?:\s+area)?|sba|super\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\s+prices?)\b/i,
   },
   {
     topic: 'legal',
@@ -649,6 +661,7 @@ export type ExtractLocationContext = {
 
 function projectNameHints(s: ConversationState): string[] {
   const names = s.discover.lastOffered.map((o) => o.name);
+  for (const d of s.discover.discussedProjects ?? []) names.push(d.name);
   if (s.focus?.projectName) names.push(s.focus.projectName);
   return names;
 }

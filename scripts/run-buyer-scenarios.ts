@@ -27,6 +27,8 @@ interface AssertSpec {
   goal_kind?: string;
   /** Optional debug.goal.topic */
   goal_topic?: string;
+  /** debug.tools must include each of these */
+  tools_include?: string[];
   /**
    * Media emit or honest miss: tools include mediaShare, reply has CDN URL,
    * whatsapp_actions present, or honest "no brochure / after visit" copy.
@@ -166,6 +168,12 @@ function checkAssert(
   }
   if (a.goal_topic && goal.topic && goal.topic !== a.goal_topic) {
     fails.push(`goal.topic=${goal.topic} want ${a.goal_topic}`);
+  }
+  if (a.tools_include?.length) {
+    const tools = Array.isArray(debug?.tools) ? (debug!.tools as string[]) : [];
+    for (const need of a.tools_include) {
+      if (!tools.includes(need)) fails.push(`expected tools to include "${need}" (got ${tools.join(',') || 'none'})`);
+    }
   }
   if (a.expect_media && !hasMediaSignal(reply, debug, whatsappActions)) {
     fails.push('expected media emit (CDN/tools/whatsapp_actions) or honest media miss');
