@@ -42,6 +42,12 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
     }
   }
 
+  // LOC-G01 belt: search + narrowing constraints must recommend, not commit on
+  // hallucinated PROJECT_VECTORS identity (empty shortlist / off-shortlist pick).
+  if (ex.speechAct === 'search' && hasNarrowingConstraint(s.constraints)) {
+    return { kind: 'recommend' };
+  }
+
   const pick = resolvePick(ex, d.lastOffered, s);
   if (pick) return commitPickWithFollowUp(pick, ex);
 
@@ -302,7 +308,14 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
     (s.discover.discussedProjects?.length
       ? s.discover.discussedProjects[s.discover.discussedProjects.length - 1]
       : undefined);
-  if (!pick) return null;
+  // Facet ask ("Starting prices") with multi shortlist but no pick → clarify,
+  // not fall through to recommend/no_fit with stale constraints.
+  if (!pick) {
+    if (topics.length > 0 && s.discover.lastOffered.length >= 2) {
+      return { kind: 'clarify_project_pick' };
+    }
+    return null;
+  }
 
   return commitPickWithFollowUp(pick, ex);
 }

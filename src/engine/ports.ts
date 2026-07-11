@@ -246,6 +246,7 @@ export interface SemanticNluPort {
       microMarkets: readonly string[];
       offeredProjectNames?: readonly string[];
       pendingOfferPricing?: boolean;
+      hasPriorConstraints?: boolean;
     },
   ): Promise<import('./types.js').Extracted>;
 }

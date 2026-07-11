@@ -43,6 +43,8 @@ export interface SemanticContext {
   offeredProjectNames?: readonly string[];
   /** L2 pending offer_pricing — block PROJECT_VECTORS on affirm/decline. */
   pendingOfferPricing?: boolean;
+  /** Session already has search constraints (location/type/budget) — bare name after no_fit. */
+  hasPriorConstraints?: boolean;
 }
 
 export interface ProjectVectorMatch {
@@ -175,7 +177,17 @@ export function shouldQueryProjectVectors(
   ex: Extracted,
   ctx: SemanticContext,
 ): boolean {
-  if (ex.namedProjects?.length || text.trim().length < 3) return false;
+  // Full pair already resolved — no vectors.
+  if ((ex.namedProjects?.length ?? 0) >= 2 || text.trim().length < 3) return false;
+  // Partial shortlist hit (1 name): only continue for multi-name compare/visit
+  // ("compare ayana and krishnaja"). Bare "tell me about Brigade Eldorado" must
+  // not re-embed — brand token "Brigade" otherwise invents sibling projects → false compare.
+  if (
+    (ex.namedProjects?.length ?? 0) === 1 &&
+    !/\b(?:and|compare|vs\.?|versus|both|also)\b/i.test(text)
+  ) {
+    return false;
+  }
   // Dialogue affirm (incl. Hinglish / multi-word) — never invent a project from catalog noise.
   if (ex.affirm && !PROJECT_REF_RE.test(text) && text.trim().split(/\s+/).length <= 4) {
     return false;
@@ -191,12 +203,25 @@ export function shouldQueryProjectVectors(
   }
   // "visit them" / "compare both" — do not invent Desire Spaces from catalog noise.
   if (isAnaphoricProjectRef(text)) return false;
+  // Search + narrowing constraints → identity from filters, not PROJECT_VECTORS
+  // (LOC-G01: "show me projects in North Bangalore…" must not invent Eldorado).
+  if (
+    ex.speechAct === 'search' &&
+    Boolean(ex.constraints.budgetMaxInr || ex.constraints.location || ex.constraints.bhk)
+  ) {
+    return false;
+  }
   const t = text.trim().toLowerCase();
   // Pure discovery constraint lines — location + budget without a project name.
+  // Do not let "show me" (PROJECT_REF_RE) defeat this — that is a search verb, not a name.
   if (
     /\b\d+\s*(?:lakh|lac|l|cr|crore)\b/.test(t) &&
-    !PROJECT_REF_RE.test(text) &&
-    !/\b(?:ayana|krishnaja|brigade|greens|eldorado|cornerstone|utopia|exotica|orchards)\b/i.test(text)
+    !/\b(?:about|compare|visit|brochure|switch\s+to|tell\s+me|interested\s+in|know\s+more|more\s+about|also\s+about|share|add|sounds\s+good|looks\s+good)\b/i.test(
+      text,
+    ) &&
+    !/\b(?:ayana|krishnaja|brigade|greens|eldorado|cornerstone|utopia|exotica|orchards|neo|vanam)\b/i.test(
+      text,
+    )
   ) {
     return false;
   }
@@ -210,7 +235,7 @@ export function shouldQueryProjectVectors(
       const residue = text
         .toLowerCase()
         .replace(
-          /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit)\b/gi,
+          /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one)\b/gi,
           ' ',
         )
         .replace(/[^a-z0-9\s]/g, ' ')
@@ -226,8 +251,25 @@ export function shouldQueryProjectVectors(
   if (ex.askTopics?.some((t) => t === 'compare' || t === 'media')) return true;
   // Chip miss + shortlist on the board: resolve which offered project was named.
   // Do not vectorize bare discovery seeds (empty shortlist) — that broke Coorg funnel.
+  // Allow short picks ("Neo", 3 chars) when a shortlist is already on the board.
   if (ex.speechAct === 'unknown' && (ctx.offeredProjectNames?.length ?? 0) > 0) {
-    return text.trim().length >= 6;
+    return text.trim().length >= 3;
+  }
+  // After a constraint-bearing session (incl. no_fit), bare project name ("Ayana")
+  // must still resolve via PROJECT_VECTORS — shortlist may be empty.
+  if (
+    ex.speechAct === 'unknown' &&
+    Boolean(
+      ctx.hasPriorConstraints ||
+        ex.constraints.location ||
+        ex.constraints.propertyType ||
+        ex.constraints.budgetMaxInr,
+    ) &&
+    text.trim().split(/\s+/).length <= 2 &&
+    text.trim().length >= 4 &&
+    !/\b(?:lakh|lac|cr|crore|bhk|apartment|villa|plot|plantation|budget|under|near|in)\b/i.test(text)
+  ) {
+    return true;
   }
   return PROJECT_REF_RE.test(text);
 }

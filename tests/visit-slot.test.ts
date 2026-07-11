@@ -43,7 +43,8 @@ describe('visit-slot', () => {
   });
 
   it('reparseVisitTime keeps day and changes time', () => {
-    const retimed = reparseVisitTime('2026-07-11T11:00:00+05:30', '12 AM');
+    // Use a fixed future Saturday so CI "now" cannot reject the slot as past.
+    const retimed = reparseVisitTime('2026-08-15T11:00:00+05:30', '12 AM');
     expect(retimed?.humanLabel).toMatch(/Saturday at 12:00 AM/);
     expect(retimed?.proposedIso).toContain('T00:00:00+05:30');
   });
