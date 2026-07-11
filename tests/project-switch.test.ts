@@ -72,6 +72,20 @@ describe('detectFocusedSwitchIntent — PROJECT_VECTORS namedProjects', () => {
     expect(detectFocusedSwitchIntent(text, ex, s)).toBeNull();
   });
 
+  it('paperwork for this one + vector noise → stay on focus', () => {
+    const s = focusedAyana();
+    const text = 'is the paperwork okay for this one somehow';
+    const ex: Extracted = {
+      constraints: {},
+      transition: 'none',
+      askTopic: 'legal',
+      askTopics: ['legal'],
+      speechAct: 'answer',
+      namedProjects: [{ projectId: 'clarks-exotica-lokations', name: 'Clarks Exotica' }],
+    };
+    expect(detectFocusedSwitchIntent(text, ex, s)).toBeNull();
+  });
+
   it('brochure for Eldorado while on Ayana → switch (name residue)', () => {
     const s = focusedAyana();
     const text = 'Send brochure for Eldorado';

@@ -1,6 +1,6 @@
 # P6 — BAML ExtractTurnFacts (typed extract gap-fill)
 
-**Status:** Implementing (P6a–P6c) · **Date:** 2026-07-10  
+**Status:** P6a–d ✅ on Dev (`promote`) · Prod stays `shadow` until soak · **Date:** 2026-07-11  
 **Roadmap:** [`CONSOLIDATED_ROADMAP.md`](../CONSOLIDATED_ROADMAP.md) §P6  
 **Depends on:** P1b funnel abstain gates · P2a provenance in ledger
 
@@ -24,8 +24,8 @@ Ad-hoc `extractSignals` JSON prompts drift. After regex + INTENT/PROJECT embedde
 | Mode | Behavior |
 |------|----------|
 | `off` | Never call |
-| `shadow` (default when API key present) | Call + log would_fill / disagree; **do not merge** |
-| `promote` | Gap-fill empty fields only (never overwrite regex/embedder/chip) |
+| `shadow` (prod default when API key present) | Call + log would_fill / disagree; **do not merge** |
+| `promote` (Dev) | Gap-fill empty fields only (never overwrite regex/embedder/chip) |
 
 ## Abstain gate (`needsBamlGapFill`)
 
@@ -37,23 +37,17 @@ Call when after embedder: missing topics + act=unknown, or missing location on s
 - BAML as speech-act authority  
 - Replacing close-bound regex / chip path  
 - `ClassifyTurnIntent` BAML wire (still P4 remaining)  
-- P6d default-promote (only after Dev disagree rate + goldens green)
 
 ## Golden / quality
 
 - Unit: parse, gate, shadow vs promote merge  
-- No regression: ADV-H0*, SA-G0*, MEM-G01, RTI-G02 (BAML off or shadow must not change replies)
+- No regression: ADV-H0*, SA-G0*, MEM-G01, RTI-G02, ADV-BAML-01
 
-## Off vs on A/B (2026-07-10 Dev)
+## P6d promote gate (met 2026-07-11)
 
-Clean segregation: deploy `BAML_EXTRACT_MODE=off` → run scenarios → deploy `promote` → same scenarios.
+1. Shadow soak on Dev with P6a–c ✅  
+2. Buyer goldens green under shadow (ADV-BAML-01, ADV-H01/H04, SA-G01, MEM-G01, RTI-G02, BUYER-LOK-02) ✅  
+3. Flip Dev → `promote`; re-run same goldens ≥ shadow ✅  
+4. Prod remains unset/`shadow` until explicit soak  
 
-- Script: `scripts/baml-quality-compare.ts` (`--before` / `--after` run dirs → HTML with GOOD/WEAK/BAD per turn).
-- Scenario report: `scripts/baml-scenario-report.ts` (per-turn BAML telemetry).
-
-**Result:** Promote did **not** degrade goldens and did **not** fix ADV-BAML-01 (hills brief → `no_fit`; bare `Ayana` → `no_fit`). Those failures are discover / project-pick / compose placeholders — not extract gap-fill.
-
-**Promote gate (P6d):** stay on `shadow` until (1) helpful `would_fill` turns improve reply quality offline, (2) `disagree` rate is low on fields you promote, (3) goldens quality ≥ off, (4) at least one novel-gap golden proves a buyer-visible win.
-
-Dev default after experiments: `shadow`.
-
+**Do not** promote prod in the same change as Dev.

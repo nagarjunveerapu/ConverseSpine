@@ -84,4 +84,48 @@ describe('discover implicit project pick', () => {
     const goal = discoverDecide(s, ex);
     expect(goal).toMatchObject({ kind: 'commit', projectId: 'ayana' });
   });
+
+  it('LOC-G01: search + constraints recommends despite hallucinated namedProjects', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      constraints: {
+        location: 'North Bangalore',
+        budgetMaxInr: 15_000_000,
+        bhk: '3 BHK',
+      },
+    };
+    const ex: Extracted = {
+      constraints: {
+        location: 'North Bangalore',
+        budgetMaxInr: 15_000_000,
+        bhk: '3 BHK',
+      },
+      speechAct: 'search',
+      namedProjects: [{ projectId: 'brigade-eldorado', name: 'Brigade Eldorado' }],
+    };
+    const goal = discoverDecide(s, ex);
+    expect(goal).toEqual({ kind: 'recommend' });
+  });
+
+  it('facet ask with multi shortlist and no pick → clarify (not recommend)', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      discover: {
+        ...initState('c1', 'brigade-group').discover,
+        lastOffered: [
+          { projectId: 'neo', name: 'Brigade Northridge Neo' },
+          { projectId: 'eldorado', name: 'Brigade Eldorado' },
+        ],
+      },
+      constraints: { location: 'North Bangalore', propertyType: 'apartment' },
+    };
+    const ex: Extracted = {
+      constraints: {},
+      askTopic: 'price',
+      askTopics: ['price'],
+      speechAct: 'answer',
+    };
+    const goal = discoverDecide(s, ex);
+    expect(goal).toEqual({ kind: 'clarify_project_pick' });
+  });
 });

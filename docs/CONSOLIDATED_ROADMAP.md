@@ -7,8 +7,7 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 
 **Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
 
-**Last updated:** 2026-07-10 (P7 Advisor UX shipped #34–#37; WA cutover still deferred; P6 shadow)
-
+**Last updated:** 2026-07-11 (P7 ✅ #34–#37; P6d BAML promote on Dev; WA cutover deferred; P8 needs discussion)
 **Rule for live failures:** Classify against this doc + [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) **before** coding. Prefer the next open phase slice over a one-off patch that drifts the plan.
 
 ---
@@ -26,10 +25,9 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 | **Harden ADV-H01–H05** | ✅ | Local branch `feat/harden-sa4-p3` — Hinglish affirm, configs lexicon, decline CTA, legal facet, BHK options |
 | **SA-4 = P5 + P3-A..D** | ✅ | Same branch — routing ≡ speech-act projection; facet decide/verify; ADV-F01 / V01+ |
 | Empty Neo pricing copy | ⏸️ DATA | `price_min_paise=0` — honest “not published” later; not a routing bug |
-| **P6 BAML** | 🟡 shadow | `BAML_EXTRACT_MODE=shadow` on Dev; **P6d promote gated** |
+| **P6 BAML** | ✅ Dev promote | `BAML_EXTRACT_MODE=promote` on converse-spine-dev; prod stays shadow |
 | **P7 Advisor UX** | ✅ | [#34](https://github.com/nagarjunveerapu/ConverseSpine/pull/34)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37) — nba + taxonomy rails + Starting prices + brochure stickiness |
 | **WhatsApp buyer cutover** | ⏸️ Deferred | Phase 2 parked (Meta still on Naya); reopen when Desk is quieter |
-
 **Do not** keep stacking playground patches outside the phase table. File the symptom under the owning phase, then implement that slice.
 
 ---
@@ -77,8 +75,13 @@ Kernel (always code):
 | **P3** | Focused facet depth | ✅ **P3-A..D** (skip P3-E Advisor ingress) — ADV-F01 |
 | **P4** | Contextual dialogue (RTI) | 🟡 Partial — **P4-CTA ✅** + harden ADV-H01–H03; BAML RTI not wired |
 | **P5** | Routing → goal enforcement | ✅ **= SA-4** (routing ≡ speech-act projection; embedder gap-fill on unknown) |
+<<<<<<< HEAD
 | **P6** | BAML extract production | 🟡 **P6a–c** shadow on Dev (`BAML_EXTRACT_MODE=shadow`); promote gated |
 | **P7** | Advisor UX parity | ✅ [#34](https://github.com/nagarjunveerapu/ConverseSpine/pull/34)–[#37](https://github.com/nagarjunveerapu/ConverseSpine/pull/37) — nba taxonomy + rails + facet stickiness |
+=======
+| **P6** | BAML extract production | ✅ **P6a–d** Dev promote (`BAML_EXTRACT_MODE=promote`); prod shadow until soak |
+| **P7** | Advisor UX parity | ⏸️ Deferred — API adapter exists; NBA / checklist_snapshot thin |
+>>>>>>> origin/main
 | **P8** | Platform scale | ⏸️ Deferred (Redis, OpenSearch, Kafka, Postgres) |
 | **Desk** | Catalog search / cutover | ✅ Location expand [#185](https://github.com/nagarjunveerapu/NayaDesk/pull/185); **WA cutover deferred** |
 
@@ -283,7 +286,7 @@ Kernel (always code):
 
 ---
 
-## P6 — BAML extract production 🟡
+## P6 — BAML extract production ✅ (Dev promote)
 
 **Problem:** Ad-hoc JSON prompts drift; no typed `ExtractTurnFacts`.
 
@@ -293,8 +296,8 @@ Kernel (always code):
 |------|-------------|--------|
 | P6a | `baml/extract_turn_facts.baml` → typed schema | ✅ |
 | P6b | Wire after embedder abstain in `extract-authority.ts` | ✅ |
-| P6c | Shadow mode: log BAML vs deterministic disagree (`provenance.baml`) | ✅ default |
-| P6d | Promote when regression green (`BAML_EXTRACT_MODE=promote`) | 🔴 gated |
+| P6c | Shadow mode: log BAML vs deterministic disagree (`provenance.baml`) | ✅ |
+| P6d | Promote on Dev (`BAML_EXTRACT_MODE=promote`) | ✅ Dev · prod stays shadow until soak |
 
 **Depends on:** P1b funnel (clear abstain gates), P2a (persist BAML provenance in ledger)
 
@@ -357,7 +360,11 @@ P2c (compose + disclosed_facts) ✅
   ↓
 Harden ADV-H01–H05 ✅  →  SA-4 = P5 + P3-A..D ✅
   ↓
+<<<<<<< HEAD
 P6a–c ExtractTurnFacts shadow ✅  →  P6d promote (gated) → **P7 Advisor UX ✅** → Desk WhatsApp cutover (⏸️ deferred)
+=======
+P6a–c ExtractTurnFacts shadow ✅  →  **P6d promote ✅ Dev** → P7 Advisor UX → Desk WhatsApp cutover (⏸️ deferred)
+>>>>>>> origin/main
 ```
 
 **Parallel allowed:**

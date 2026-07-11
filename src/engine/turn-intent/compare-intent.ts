@@ -36,7 +36,14 @@ export function prepareCompareExtracted(
     ids = ex.compareProjectIds;
   } else if (discussed.length >= 2 && /\b(?:both|these|those|them|the\s+two)\b/i.test(text)) {
     ids = discussed.slice(0, 3).map((p) => p.projectId);
-  } else if (offered.length >= 2 && !/\b(?:both|these|those|them|the\s+two)\b/i.test(text)) {
+  } else if (
+    offered.length >= 2 &&
+    !/\b(?:both|these|those|them|the\s+two)\b/i.test(text) &&
+    // Explicit "compare A and B" — leave unset so resolveCompareProjectIds can
+    // match names against discussed+shortlist (stale lastOffered often has Clarks).
+    !/\band\b/i.test(text) &&
+    (ex.namedProjects?.length ?? 0) !== 1
+  ) {
     // Bare "compare" / "compare all" without anaphora → shortlist is fine.
     ids = offered.slice(0, 3).map((o) => o.projectId);
   }

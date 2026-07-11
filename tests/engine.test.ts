@@ -86,6 +86,7 @@ describe('ConverseEngine facts', () => {
   it('detects banks and EC as legal topics', () => {
     expect(detectTopics('what banks approved?')).toContain('legal');
     expect(detectTopics('is EC clear?')).toContain('legal');
+    expect(detectTopics('is the paperwork okay for this one somehow')).toContain('legal');
   });
 
   it('detects price break-up', () => {
