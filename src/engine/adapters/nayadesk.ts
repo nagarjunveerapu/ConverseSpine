@@ -98,18 +98,18 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         const ctx = await crm.conversationContext(nd);
         const p = ctx.project;
         if (p && p.project_id === projectId) {
-          const faqs = (ctx.faqs ?? [])
-            .map((f) => ({
-              questionKey: f.question_key ?? '',
-              question: f.canonical_question ?? '',
-              answer: f.approved_answer ?? '',
-            }))
-            .filter((f) => f.answer);
+          // STRUCTURAL INVARIANT (over-answer fix): detail.faqs means "the FAQ
+          // answers matched to THIS question" and fetchAnswer is its ONLY
+          // writer (topic-keyed faqLookup hits). The adapter must never ship
+          // the whole catalog here — that's what turned "tell me about X"
+          // into a 600-word dump of every FAQ.
           const configurations = (ctx.units ?? [])
             .map((u) => ({
               unitType: u.unit_type ?? '',
               priceDisplay: u.price_display ?? (u.price_min_paise ? formatInr(Math.round(u.price_min_paise / 100)) : ''),
               priceMinInr: u.price_min_paise ? Math.round(u.price_min_paise / 100) : 0,
+              // Band high end for the overview card (low–high from configs).
+              ...(u.price_max_paise ? { priceMaxInr: Math.round(u.price_max_paise / 100) } : {}),
               // W7 — live holdable count per type (Desk #203); undefined = pre-#203 payload.
               ...(typeof u.holdable_units === 'number' ? { holdableUnits: u.holdable_units } : {}),
             }))
@@ -135,7 +135,6 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
               configurations.map((u) => u.priceMinInr),
               p.entry_price_band,
             ),
-            ...(faqs.length ? { faqs } : {}),
             ...(configurations.length ? { configurations } : {}),
             ...(phaseNote ? { phaseNote } : {}),
             ...(mapLocationIntel(ctx.location_intelligence) ? { location: mapLocationIntel(ctx.location_intelligence) } : {}),
