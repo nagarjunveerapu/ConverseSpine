@@ -37,6 +37,26 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
     };
   }
 
+  // Explicit ask to hold/reserve a unit — stamped as ex.holdAsk by the extract
+  // funnel (hold-intent.ts). MUST rank above recall/want_visit/objection: the
+  // real embedder mis-tags "hold a 2 bhk for me" as want_visit, which stole the
+  // turn on dev (HOLD-01/04/05 → visit_ask). holdIntent already excludes visit
+  // words, so a resolvable hold ask is unambiguous. Falls through only when the
+  // TYPE can't be resolved (then it answers availability normally).
+  if (ex.holdAsk) {
+    const unitType = holdUnitType(text, s.constraints.bhk);
+    if (unitType) {
+      return {
+        kind: 'hold_propose',
+        projectId: focus.projectId,
+        projectName: focus.projectName,
+        unitType,
+        copy: `Shall I hold a *${unitType}* at *${focus.projectName}* for you for 24 hours? Reply yes to confirm.`,
+        state: { awaitingConfirm: true, unitType, projectId: focus.projectId, projectName: focus.projectName },
+      };
+    }
+  }
+
   if (
     s.postVisitAckPending &&
     (ex.postVisitAck || (ex.affirm && !ex.askTopic && !ex.isQuestion) || ex.smalltalk)
@@ -45,7 +65,9 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   }
 
   if (ex.recall) return { kind: 'visit_recall' };
-  if (ex.transition === 'want_visit') return { kind: 'propose_visit', projectId: focus.projectId };
+  // !ex.holdAsk: a hold ask that couldn't resolve a type still must not become
+  // a visit — fall through to answer availability instead.
+  if (ex.transition === 'want_visit' && !ex.holdAsk) return { kind: 'propose_visit', projectId: focus.projectId };
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom', projectId: focus.projectId };
 
   // W2 — bare affirm handling. Precedence (review note 3): RTI/chip prompts
@@ -88,24 +110,6 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   // the previous topic (the verbatim-repeat failure mode caught on dev).
   if (bareAffirm) {
     return { kind: 'advance', reason: 'same_set' };
-  }
-
-  // Explicit ask to hold/reserve a unit — stamped as ex.holdAsk by the
-  // extract funnel (hold-intent.ts) so turn logs show why the gate fired.
-  // Proposes only when the TYPE resolves; otherwise falls through and
-  // answers availability normally.
-  if (ex.holdAsk) {
-    const unitType = holdUnitType(text, s.constraints.bhk);
-    if (unitType) {
-      return {
-        kind: 'hold_propose',
-        projectId: focus.projectId,
-        projectName: focus.projectName,
-        unitType,
-        copy: `Shall I hold a *${unitType}* at *${focus.projectName}* for you for 24 hours? Reply yes to confirm.`,
-        state: { awaitingConfirm: true, unitType, projectId: focus.projectId, projectName: focus.projectName },
-      };
-    }
   }
 
   if (ex.compareAdvice || ex.askTopic === 'compare' || ex.askTopics?.includes('compare')) {
