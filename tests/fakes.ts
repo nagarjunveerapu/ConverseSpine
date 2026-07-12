@@ -316,6 +316,8 @@ export function fakeData(): EngineData & {
     },
     async placeHold(_ids, hold) {
       holds.push({ projectId: hold.projectId, unitType: hold.unitType, buyerName: hold.buyerName ?? '' });
+      // W7 — queue:true lands on the waitlist (Desk 202) instead of a hold.
+      if (hold.queue) return { ok: true, waiting: true, position: 1 };
       // Fixed expiry keeps assertions deterministic (24h past the fake epoch).
       return { ok: true, expiresAt: 1_750_000_000_000 + 24 * 60 * 60 * 1000, unitNumber: 'A-101' };
     },

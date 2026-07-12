@@ -168,7 +168,7 @@ function renderEvidence(ev: EvidenceSet): string {
   }
   if (ev.detail) {
     out.push(
-      `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, from ${ev.detail.startingPriceDisplay}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
+      `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, from ${ev.detail.startingPriceDisplay}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.phaseNote ? `\n  phase status: ${ev.detail.phaseNote}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
     );
     if (ev.detail.faqs?.length) {
       out.push(
@@ -446,6 +446,10 @@ export function fallbackReply(req: ComposeRequest): string {
     case 'hold_propose':
       return goal.copy;
     case 'hold_booked':
+      // W7 — three honest outcomes: held, queued (waitlist confirmed), or gone.
+      if (goal.queued) {
+        return `Done — you're ${goal.position && goal.position > 1 ? `#${goal.position} in line` : 'first in line'} for the next *${goal.unitType}* at *${goal.projectName}*. The moment one frees up it's auto-held for you and our team will call.`;
+      }
       return goal.placed
         ? `Done — a *${goal.unitType}* at *${goal.projectName}* is held for you${goal.expiresLabel ? ` until ${goal.expiresLabel}` : ' for the next 24 hours'}. Our team will reach out to take it forward.`
         : `I'm sorry — the last *${goal.unitType}* at *${goal.projectName}* was just taken. Want me to check another configuration, or have our team call you about the waitlist?`;
@@ -671,6 +675,23 @@ export function formatPossession(raw: string): string {
     if (cut > 10) s = s.slice(0, cut);
   }
   return s.trim();
+}
+
+/**
+ * W7 — one buyer-ready phase caveat from the Desk journey composer's per-phase
+ * output. RERA registers PER PHASE: a pre-RERA phase may take holds/EOI but no
+ * booking money, and the bot must say so instead of being phase-blind. Only
+ * the caveat-worthy case renders — fully registered projects get ''.
+ */
+export function phaseNoteFrom(
+  journeys: Array<{ phase_label: string; money_allowed: boolean; primary?: string }> | undefined,
+): string {
+  if (!journeys?.length) return '';
+  const gated = journeys.filter((j) => !j.money_allowed);
+  if (gated.length === 0) return '';
+  const g = gated.find((j) => j.primary) ?? gated[0]!;
+  const scope = journeys.length === 1 ? 'This phase' : `${g.phase_label}`;
+  return `${scope} is pre-RERA — booking opens at registration; holds and expressions of interest are available now.`;
 }
 
 /**

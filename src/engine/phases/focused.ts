@@ -65,17 +65,21 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   ) {
     const unitType = s.hold.unitType;
     const projectName = s.hold.projectName ?? focus.projectName;
+    const asQueue = s.hold.queue === true; // W7 — a digressed waitlist offer re-offers as waitlist
     return {
       kind: 'hold_propose',
       projectId: s.hold.projectId ?? focus.projectId,
       projectName,
       unitType,
-      copy: `Just to confirm — hold a *${unitType}* at *${projectName}* for 24 hours? Reply yes.`,
+      copy: asQueue
+        ? `Just to confirm — join the waitlist for the next *${unitType}* at *${projectName}*? Reply yes.`
+        : `Just to confirm — hold a *${unitType}* at *${projectName}* for 24 hours? Reply yes.`,
       state: {
         awaitingConfirm: true,
         unitType,
         projectId: s.hold.projectId ?? focus.projectId,
         projectName,
+        ...(asQueue ? { queue: true } : {}),
       },
     };
   }

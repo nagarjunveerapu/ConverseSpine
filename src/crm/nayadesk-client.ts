@@ -47,8 +47,24 @@ export interface NdProjectSummary {
 export interface NdContextBundle {
   conversation: NdConversation;
   project: NdProjectSummary | null;
-  units?: Array<{ unit_type?: string; price_display?: string; price_min_paise?: number }>;
+  units?: Array<{
+    unit_type?: string;
+    price_display?: string;
+    price_min_paise?: number;
+    /** W7 — live count of available physical units of this type (Desk #203). */
+    holdable_units?: number;
+  }>;
   faqs?: Array<{ question_key?: string; canonical_question?: string; approved_answer?: string }>;
+  /** W7 — journey composer output per active phase (Desk Phase 1; was silently dropped). */
+  phase_journeys?: Array<{
+    phase_id: string;
+    phase_label: string;
+    stage: string;
+    possession_date?: string;
+    modules: string[];
+    money_allowed: boolean;
+    primary: string;
+  }>;
   location_intelligence?: {
     connectivity_summary?: string;
     nearby_pois_json?: string;
@@ -237,13 +253,19 @@ export class NayaDeskClient {
     buyer_name?: string;
     ttl_minutes?: number;
     note?: string;
+    /** W7 — type sold out of available units: join the waitlist instead (202 waiting). */
+    queue?: boolean;
   }): Promise<{
     ok: true;
-    hold_id: string;
+    /** 201 active hold */
+    hold_id?: string;
     unit_id: string;
     unit_number?: string;
-    expires_at: number;
-    status: 'active';
+    expires_at?: number;
+    status: 'active' | 'waiting';
+    /** 202 waitlist */
+    waitlist_id?: string;
+    position?: number;
   }> {
     const { project_id, ...body } = req;
     return this.call('POST', `/api/projects/${encodeURIComponent(project_id)}/holds`, body);

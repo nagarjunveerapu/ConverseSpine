@@ -35,6 +35,8 @@ export interface UnitConfig {
   sizeDisplay?: string;
   sizeMinSqft?: number;
   sizeMaxSqft?: number;
+  /** W7 — live count of holdable physical units of this type (Desk #203); absent = unknown. */
+  holdableUnits?: number;
 }
 
 export interface LocationIntel {
@@ -101,6 +103,8 @@ export interface EngineData {
     loanEligibility?: string;
     faqs?: ProjectFaq[];
     configurations?: UnitConfig[];
+    /** W7 — one buyer-ready phase caveat (journey composer; pre-RERA gating). */
+    phaseNote?: string;
     location?: LocationIntel;
   } | null>;
   pricing(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<{
@@ -140,8 +144,16 @@ export interface EngineData {
    */
   placeHold(
     ids: { ndConversationId: string; builderId: string },
-    hold: { projectId: string; unitType: string; buyerName?: string; ttlMinutes?: number },
-  ): Promise<{ ok: boolean; expiresAt?: number; unitNumber?: string; reason?: 'none_available' | 'error' }>;
+    hold: { projectId: string; unitType: string; buyerName?: string; ttlMinutes?: number; queue?: boolean },
+  ): Promise<{
+    ok: boolean;
+    expiresAt?: number;
+    unitNumber?: string;
+    /** W7 — queue:true joined the waitlist instead of holding (202). */
+    waiting?: boolean;
+    position?: number;
+    reason?: 'none_available' | 'error';
+  }>;
   /** Turn-start bundle — returning buyer, builder persona, recent messages, ledger prior. */
   bootstrapContext(ndConversationId: string): Promise<{
     returningBuyer?: { buyerName: string; daysSinceLastSeen: number; lastProjectId?: string };
