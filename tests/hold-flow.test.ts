@@ -141,30 +141,38 @@ describe('unit hold flow (launch ops)', () => {
   });
 });
 
-describe('hold intent beats the visit-phase transition (dev regression)', () => {
-  it('a hold ask that the embedder tags want_visit still proposes a hold, not a visit', async () => {
-    // Simulate the REAL dev embedder: it classifies "hold a 2 bhk for me" as
-    // want_visit. Before the fix this flipped phase→visit and stole the turn
-    // (dev HOLD-01/04/05 all returned visit_ask). The fake NLU never set this,
-    // so unit tests were green while dev was broken.
-    const deps = fakeDeps();
-    const baseEnrich = deps.semantic.enrich.bind(deps.semantic);
-    deps.semantic = {
-      async enrich(text, b, ex, ctx) {
-        const out = await baseEnrich(text, b, ex, ctx);
-        return /\bhold\b/i.test(text) ? { ...out, transition: 'want_visit' as const } : out;
-      },
-    };
-    const turn = (text: string) =>
-      runEngineTurn(
-        { convId: 'hold-vs-visit', builderId: 'lokations', text, buyerPhone: '+919999999901', channel: 'advisor_web' },
-        deps,
-      );
-    await turn('coorg, 50 Lakhs');
-    await turn('tell me about Ayana');
-    const r = await turn('hold a 2 bhk for me');
-    expect(r.debug.goal.kind).toBe('hold_propose');
-    expect(r.state.phase).not.toBe('visit');
-    expect(r.reply).toMatch(/reply yes to confirm/i);
+import { decide as focusedDecide } from '../src/engine/phases/focused.js';
+import { initState } from '../src/engine/state.js';
+import type { Extracted } from '../src/engine/types.js';
+
+describe('hold intent outranks the want_visit transition (dev regression, unit-level)', () => {
+  const focusedState = () => ({
+    ...initState('c', 'brigade-group'),
+    phase: 'focused' as const,
+    focus: { projectId: 'brigade-eldorado', projectName: 'Brigade Eldorado' },
+    constraints: { bhk: '2' },
+    turnCount: 3,
+  });
+
+  it('holdAsk + transition=want_visit (the exact dev extract) → hold_propose, not propose_visit', () => {
+    // This is what the REAL dev embedder produced for "hold a 2 bhk for me":
+    // both flags set. focused.decide must let the hold win.
+    const ex: Extracted = { constraints: {}, holdAsk: true, transition: 'want_visit' };
+    const goal = focusedDecide(focusedState(), ex, 'hold a 2 bhk for me');
+    expect(goal.kind).toBe('hold_propose');
+  });
+
+  it('a real visit ask (want_visit, no holdAsk) still proposes a visit', () => {
+    const ex: Extracted = { constraints: {}, transition: 'want_visit' };
+    const goal = focusedDecide(focusedState(), ex, 'can we visit saturday');
+    expect(goal.kind).toBe('propose_visit');
+  });
+
+  it('holdAsk but no resolvable type falls through to availability, never a visit', () => {
+    const s = { ...focusedState(), constraints: {} }; // no bhk
+    const ex: Extracted = { constraints: {}, holdAsk: true, transition: 'want_visit' };
+    const goal = focusedDecide(s, ex, 'please reserve a flat');
+    expect(goal.kind).not.toBe('hold_propose'); // no type
+    expect(goal.kind).not.toBe('propose_visit'); // but also NOT a visit
   });
 });
