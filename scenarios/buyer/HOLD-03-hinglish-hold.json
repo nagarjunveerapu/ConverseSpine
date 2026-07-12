@@ -1,0 +1,19 @@
+{
+  "id": "HOLD-03",
+  "title": "Hinglish hold ask — 2 BHK hold kar do → propose (not visit, not book)",
+  "builder_id": "brigade-group",
+  "tags": ["holds", "launch-ops", "phase4", "hinglish", "closed-beta"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "2 bhk hold kar do",
+      "assert": {
+        "goal_kind": "hold_propose",
+        "reply_includes": ["2 BHK", "reply yes to confirm"],
+        "reply_excludes": ["A-201", "A-101", "which day", "site visit"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "HOLD-05",
+  "title": "One-shot confirm window — amenities ask clears hold; stray yes cannot book",
+  "builder_id": "brigade-group",
+  "tags": ["holds", "launch-ops", "phase4", "closed-beta", "guard"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "hold a 2 bhk for me",
+      "assert": { "goal_kind": "hold_propose" }
+    },
+    {
+      "text": "what amenities does it have?",
+      "assert": {
+        "goal_kind_not": "hold_booked",
+        "reply_includes": ["clubhouse"],
+        "tools_include": ["faqLookup"]
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind_not": "hold_booked",
+        "reply_excludes": ["held for you"]
+      }
+    }
+  ]
+}

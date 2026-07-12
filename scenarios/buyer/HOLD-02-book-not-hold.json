@@ -1,0 +1,18 @@
+{
+  "id": "HOLD-02",
+  "title": "Purchase intent 'book a 2 BHK' is NOT a soft hold (Desk hold-by-type gate)",
+  "builder_id": "brigade-group",
+  "tags": ["holds", "launch-ops", "phase4", "closed-beta", "guard"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "can you book a 2 bhk for me?",
+      "assert": {
+        "goal_kind_not": "hold_propose",
+        "reply_excludes": ["reply yes to confirm", "held for you"]
+      }
+    }
+  ]
+}
