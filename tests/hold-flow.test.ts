@@ -37,18 +37,49 @@ describe('unit hold flow (launch ops)', () => {
     expect(deps.data.holdsPlaced[0]).toMatchObject({ projectId: 'ayana', unitType: '2 BHK' });
   });
 
-  it('a non-affirm reply clears the one-shot confirm window — a stray later "yes" cannot book', async () => {
+  it('digression downgrades the window; a later "yes" RE-PROPOSES (never books directly) — W2', async () => {
     const { deps, turn } = harness('hold-oneshot');
     await turn('coorg, 50 Lakhs');
     await turn('tell me about Ayana');
     await turn('hold a 2bhk for me');
 
     const other = await turn('what are the amenities?');
-    expect(other.state.hold).toBeUndefined();
+    expect(other.state.hold?.awaitingConfirm).toBe(false); // downgraded, offer lingers
 
     const strayYes = await turn('yes');
-    expect(strayYes.debug.goal.kind).not.toBe('hold_booked');
+    expect(strayYes.debug.goal.kind).toBe('hold_propose'); // re-confirm, not a booking
+    expect(strayYes.reply).toMatch(/just to confirm/i);
+    expect(deps.data.holdsPlaced).toHaveLength(0); // HOLD-05: stale yes never places
+
+    const realYes = await turn('yes');
+    expect(realYes.debug.goal).toMatchObject({ kind: 'hold_booked', placed: true });
+    expect(deps.data.holdsPlaced).toHaveLength(1);
+  });
+
+  it('the lingering offer expires after 6 turns — an old "yes" advances instead — W2', async () => {
+    const { deps, turn } = harness('hold-expiry');
+    await turn('coorg, 50 Lakhs');
+    await turn('tell me about Ayana');
+    await turn('hold a 2bhk for me');
+    for (const q of ['what are the amenities?', 'and the legal details?', 'how far is the airport?',
+                     'what about water supply?', 'is there a clubhouse?', 'possession when?', 'road access?']) {
+      await turn(q);
+    }
+    const oldYes = await turn('yes');
+    expect(oldYes.debug.goal.kind).not.toBe('hold_propose');
+    expect(oldYes.debug.goal.kind).not.toBe('hold_booked');
     expect(deps.data.holdsPlaced).toHaveLength(0);
+  });
+
+  it('bare affirm with nothing pending → advance (deal nudge), never a re-answer — W2', async () => {
+    const { turn } = harness('hold-advance');
+    await turn('coorg, 50 Lakhs');
+    await turn('tell me about Ayana');
+    const a1 = await turn('what are the amenities?');
+    const ok = await turn('ok');
+    expect(ok.debug.goal.kind).toBe('advance');
+    expect(ok.reply).not.toBe(a1.reply); // the dev failure mode: verbatim re-answer
+    expect(ok.reply).toMatch(/visit|hold/i); // focused advance nudges the deal
   });
 
   it('visit phrasing ("block saturday for a site visit") is not hijacked by the hold gate', async () => {

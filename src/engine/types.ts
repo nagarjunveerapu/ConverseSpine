@@ -93,6 +93,8 @@ export interface HoldState {
   unitType?: string;
   projectId?: string;
   projectName?: string;
+  /** W2 — turn the offer was made/downgraded; a bare affirm within 6 turns re-proposes. */
+  offeredAtTurn?: number;
 }
 
 export interface ConversationState {
@@ -110,6 +112,8 @@ export interface ConversationState {
   focusedTurns?: number;
   /** W5 — highest funnel rung already written to Desk (write-once, monotonic). */
   stageWritten?: 'engaged' | 'qualified';
+  /** W3 — previous outbound reply (repeat guard compares against this). */
+  lastReply?: string;
   objectionCount?: number;
   ndConversationId?: string;
   ndBuyerPhone?: string;
@@ -444,6 +448,8 @@ export interface ComposeRequest {
   goal: TurnGoal;
   evidence: EvidenceSet;
   context: ComposeContext;
+  /** W3 — anti-repeat retry: draft again with fresh wording (one bounded use). */
+  vary?: boolean;
 }
 
 export interface TurnDebug {
@@ -451,6 +457,8 @@ export interface TurnDebug {
   goal: TurnGoal;
   tools: string[];
   grounding: 'pass' | 'repaired';
+  /** W3 — repeat guard outcome, present only when the guard fired. */
+  repeat_guard?: 'recomposed' | 'template' | 'still_identical';
   /** Set at ingress — chip tap vs typed message. */
   input_source?: import('./ingress.js').TurnInputSource;
   /** Per-field extract provenance (free-text funnel). */
