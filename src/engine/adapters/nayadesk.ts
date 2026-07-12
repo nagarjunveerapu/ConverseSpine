@@ -547,8 +547,8 @@ export function nayadeskCrm(crm: NayaDeskClient): EngineCrm {
         { op: 'set_matching_project_ids', project_ids: projectIds.slice(0, 10) },
       ]);
     },
-    async setStage(conversationId, stage) {
-      await crm.patchStage(conversationId, stage);
+    async setStage(conversationId, stage, opts) {
+      await crm.patchStage(conversationId, stage, opts?.onlyForward);
     },
     async appendSharedFact(conversationId, factKind, projectId, turnIndex) {
       await crm.applyStateWrites(conversationId, [

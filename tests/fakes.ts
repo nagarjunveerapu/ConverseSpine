@@ -380,8 +380,8 @@ export function fakeCrm(): EngineCrm & { calls: string[] } {
     async syncMatching(_nd, ids) {
       calls.push(`matching:${ids.join(',')}`);
     },
-    async setStage(_nd, stage) {
-      calls.push(`stage:${stage}`);
+    async setStage(_nd, stage, opts) {
+      calls.push(`stage:${stage}${opts?.onlyForward ? ':fwd' : ''}`);
     },
     async appendSharedFact(_nd, kind, pid) {
       calls.push(`shared:${kind}:${pid}`);

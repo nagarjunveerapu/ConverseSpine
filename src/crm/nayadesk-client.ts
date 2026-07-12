@@ -206,8 +206,11 @@ export class NayaDeskClient {
     return this.call('PATCH', `/api/leads/${encodeURIComponent(conversation_id)}/facts`, facts);
   }
 
-  patchStage(conversation_id: string, stage: string): Promise<{ ok: true }> {
-    return this.call('PATCH', `/api/leads/${encodeURIComponent(conversation_id)}/stage`, { stage });
+  patchStage(conversation_id: string, stage: string, only_forward?: boolean): Promise<{ ok: true }> {
+    return this.call('PATCH', `/api/leads/${encodeURIComponent(conversation_id)}/stage`, {
+      stage,
+      ...(only_forward ? { only_forward: true } : {}),
+    });
   }
 
   commitProject(conversation_id: string, project_id: string): Promise<{ ok: true }> {

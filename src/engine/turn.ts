@@ -758,6 +758,22 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       disclosedFacts: mergeDisclosedFacts(state.disclosedFacts, newlyDisclosed),
     };
   }
+  // W5 — stage truth: climb Desk's funnel ladder as the conversation earns it.
+  // engaged = focused AND (a facet answer OR a second focused turn);
+  // qualified = focused AND budget AND (bhk OR property type). Write-once per
+  // rung (stageWritten) and only_forward on Desk, so the bot can never
+  // downgrade a lead an agent moved further. visit_booked/escalated stay
+  // event-driven in syncFacts, unchanged.
+  if (state.phase === 'focused') {
+    state = { ...state, focusedTurns: (state.focusedTurns ?? 0) + 1 };
+  }
+  if (nd) {
+    const rung = decideStageRung(state, goal);
+    if (rung) {
+      state = { ...state, stageWritten: rung };
+      await deps.crm.setStage(nd, rung, { onlyForward: true }).catch(() => {});
+    }
+  }
   if (nd) {
     if (goal.kind === 'commit') {
       state = await prefetchProjects(deps, state, [goal.projectId]);
@@ -894,6 +910,26 @@ function holdExpiryLabel(expiresAtMs: number): string {
   if (dayKey(expiresAtMs) === dayKey(now + 24 * 60 * 60 * 1000)) return `tomorrow ${time}`;
   const day = new Intl.DateTimeFormat('en-IN', { timeZone: tz, day: 'numeric', month: 'short' }).format(expiresAtMs);
   return `${day}, ${time}`;
+}
+
+/**
+ * W5 — which funnel rung this conversation has EARNED this turn (null = no new
+ * rung). qualified ⊃ engaged, so the higher rung is checked first; a buyer who
+ * arrives with budget+BHK jumps straight to qualified (only_forward makes the
+ * skipped 'engaged' write moot). Monotonic by construction — stageWritten only
+ * moves up, and lateral states (escalated etc.) are Desk-side protected.
+ */
+function decideStageRung(
+  s: ConversationState,
+  goal: TurnGoal,
+): 'engaged' | 'qualified' | null {
+  if (!s.focus) return null;
+  const qualified =
+    !!s.constraints.budgetMaxInr && !!(s.constraints.bhk || s.constraints.propertyType);
+  if (qualified && s.stageWritten !== 'qualified') return 'qualified';
+  if (s.stageWritten) return null; // already engaged; qualified not yet earned
+  if (goal.kind === 'answer' || (s.focusedTurns ?? 0) >= 2) return 'engaged';
+  return null;
 }
 
 function decideGoal(
