@@ -337,6 +337,14 @@ export function fallbackReply(req: ComposeRequest): string {
     }
     case 'answer': {
       const topics = goal.topics?.length ? goal.topics : [goal.topic];
+
+      // Over-answer fix — a primary "tell me about X" gets the compact card,
+      // never the chunk assembly (and never FAQ text): sizes, one price band,
+      // location, possession, one probing question. Facet asks fall through.
+      if (topics[0] === 'overview' && ev.detail && !ev.detail.faqs?.length) {
+        return overviewCard(ev.detail);
+      }
+
       const chunks: string[] = [];
 
       if (topics.includes('price') && ev.pricing) {
@@ -442,8 +450,9 @@ export function fallbackReply(req: ComposeRequest): string {
         return `I don't have that detail on file for *${pname}* yet — I can share pricing, legal status, or set up a visit instead.`;
       }
       if (ev.detail) {
-        const d = ev.detail;
-        return `*${d.name}* is in ${d.microMarket}${d.startingPriceDisplay ? `, from ${d.startingPriceDisplay}` : ''}${d.possession ? `, possession ${d.possession}` : ''}. Want pricing, legal details, or a visit?`;
+        // Overview fallthrough — the founder-spec card: sizes, one price
+        // band (from configs), location, possession, one probing question.
+        return overviewCard(ev.detail);
       }
       return `Let me get that confirmed and follow up shortly.`;
     }
@@ -705,6 +714,48 @@ export function phaseNoteFrom(
   const g = gated.find((j) => j.primary) ?? gated[0]!;
   const scope = journeys.length === 1 ? 'This phase' : `${g.phase_label}`;
   return `${scope} is pre-RERA — booking opens at registration; holds and expressions of interest are available now.`;
+}
+
+/**
+ * One price BAND truth (over-answer fix): low–high derived from the configs —
+ * the same rows the search rail's starting price comes from, so the overview
+ * card can never contradict the recommend line. Falls back to the configured
+ * band string only when no config carries a price.
+ */
+export function priceBandDisplayFrom(
+  configs: Array<{ priceMinInr: number; priceMaxInr?: number }>,
+  fallbackBand: string | undefined,
+): string {
+  const mins = configs.map((c) => c.priceMinInr).filter((n) => isFinite(n) && n > 0);
+  const maxs = configs.map((c) => c.priceMaxInr ?? 0).filter((n) => isFinite(n) && n > 0);
+  if (mins.length) {
+    const lo = formatInr(Math.min(...mins));
+    const hi = maxs.length ? formatInr(Math.max(...maxs, Math.max(...mins))) : '';
+    return hi && hi !== lo ? `${lo} – ${hi}` : `from ${lo}`;
+  }
+  return (fallbackBand ?? '').trim();
+}
+
+/**
+ * The founder-specified project overview card — what "tell me about X" says:
+ * name + location, the configuration types, ONE price band (low–high, from
+ * configs), possession — then exactly one probing question. Never the FAQ
+ * catalog; facet questions get facet answers on the next turn.
+ */
+export function overviewCard(d: NonNullable<EvidenceSet['detail']>): string {
+  const cfgs = d.configurations ?? [];
+  const types = cfgs.map((c) => c.unitType).filter(Boolean);
+  const typesLine = types.length
+    ? types.length > 1
+      ? `${types.slice(0, -1).join(', ')} & ${types[types.length - 1]}`
+      : types[0]!
+    : '';
+  const band = priceBandDisplayFrom(cfgs, d.startingPriceDisplay);
+  const bits = [typesLine, band, d.possession ? `possession ${d.possession}` : ''].filter(Boolean);
+  const where = d.microMarket ? ` — ${d.microMarket}` : '';
+  const facts = bits.length ? ` ${bits.join(' · ')}.` : '';
+  const phase = d.phaseNote ? ` ${d.phaseNote}.` : '';
+  return `*${d.name}*${where}.${facts}${phase} Want pricing details, unit configurations, or the legal & RERA picture?`;
 }
 
 /**

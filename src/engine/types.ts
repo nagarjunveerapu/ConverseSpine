@@ -288,6 +288,8 @@ export interface ProjectDetail {
     unitType: string;
     priceDisplay: string;
     priceMinInr: number;
+    /** Band high end — the overview card renders one low–high band from configs. */
+    priceMaxInr?: number;
     sizeDisplay?: string;
     /** W7 — live count of holdable physical units of this type (Desk #203). */
     holdableUnits?: number;

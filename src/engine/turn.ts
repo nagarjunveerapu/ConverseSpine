@@ -723,9 +723,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const overviewDeterministic =
     goal.kind === 'answer' && goal.topic === 'overview' && !!evidence.detail;
 
+  // no_fit is a hard honesty statement with a well-built template (constraint
+  // gap, catalog floor, alternate project) — LLM paraphrase of it produced
+  // literal prompt echoes on dev ("[real starting point]"). Lock it.
+  const noFitDeterministic = goal.kind === 'no_fit';
+
   // Template-locked goals: commitments and structured facts that must never be
   // LLM-paraphrased — and (W3) must never be "varied" by the repeat guard.
   const templateLocked =
+    noFitDeterministic ||
     visitDeterministic ||
     holdDeterministic ||
     firstShortlistTurn ||
@@ -760,7 +766,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let reply = stripBanned(draft);
   let grounding: TurnDebug['grounding'] = 'pass';
   const g1 = checkGrounding(reply, evidence, input.text);
-  if (!g1.grounded) {
+  // Placeholder-leak guard (dev: "[real starting point]" reached a buyer):
+  // an LLM draft containing bracketed template-speak is treated exactly like
+  // a grounding failure — one repair retry, then the template floor.
+  const placeholderLeak =
+    !templateLocked && /\[[a-z][^\]\n]{2,60}\]/i.test(reply);
+  if (!g1.grounded || placeholderLeak) {
     // W1 — repair without killing the thread: feed the checker's exact
     // rejections back for ONE re-compose before the template floor. This is
     // the 49%-of-answer-turns problem measured in Week 0. Template-locked
@@ -770,13 +781,22 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       retryUsed = true;
       try {
         repaired = stripBanned(
-          (await deps.llm.compose({ ...req, repair: { unbacked: g1.unbacked } })).trim(),
+          (await deps.llm.compose({
+            ...req,
+            repair: {
+              unbacked: [
+                ...g1.unbacked,
+                ...(placeholderLeak ? ['a bracketed placeholder like "[…]" instead of a real value'] : []),
+              ],
+            },
+          })).trim(),
         );
       } catch { /* template floor below */ }
     }
     if (
       repaired &&
       checkGrounding(repaired, evidence, input.text).grounded &&
+      !/\[[a-z][^\]\n]{2,60}\]/i.test(repaired) && // retry must not re-leak a placeholder
       !needsStructuredRepair(goal, evidence, repaired, disclosedForCompose, input.text)
     ) {
       reply = repaired;

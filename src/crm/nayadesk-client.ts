@@ -51,6 +51,8 @@ export interface NdContextBundle {
     unit_type?: string;
     price_display?: string;
     price_min_paise?: number;
+    /** Band high end (overview card renders low–high from configs). */
+    price_max_paise?: number;
     /** W7 — live count of available physical units of this type (Desk #203). */
     holdable_units?: number;
   }>;
