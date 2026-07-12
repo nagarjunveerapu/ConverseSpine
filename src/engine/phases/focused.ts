@@ -1,4 +1,5 @@
 import type { AnswerTopic, ConversationState, Extracted, TurnGoal } from '../types.js';
+import { holdUnitType } from '../hold-intent.js';
 
 /** Facet topics — P3-B: never collapse these to overview when already extracted. */
 const FACET_TOPICS: ReadonlySet<AnswerTopic> = new Set([
@@ -20,9 +21,21 @@ function answerTopics(ex: Extracted): AnswerTopic[] {
   return ['overview'];
 }
 
-export function decide(s: ConversationState, ex: Extracted): TurnGoal {
+export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal {
   const focus = s.focus;
   if (!focus) return { kind: 'orient' };
+
+  // Hold confirm gate — one-shot window opened by hold_propose last turn. A
+  // bare affirmation books it; anything else falls through (and the engine
+  // clears the window after the turn), mirroring the visit confirm gate.
+  if (s.hold?.awaitingConfirm && ex.affirm && !ex.decline) {
+    return {
+      kind: 'hold_booked',
+      projectId: s.hold.projectId ?? focus.projectId,
+      projectName: s.hold.projectName ?? focus.projectName,
+      unitType: s.hold.unitType ?? '',
+    };
+  }
 
   if (
     s.postVisitAckPending &&
@@ -34,6 +47,24 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   if (ex.recall) return { kind: 'visit_recall' };
   if (ex.transition === 'want_visit') return { kind: 'propose_visit', projectId: focus.projectId };
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom', projectId: focus.projectId };
+
+  // Explicit ask to hold/reserve a unit — stamped as ex.holdAsk by the
+  // extract funnel (hold-intent.ts) so turn logs show why the gate fired.
+  // Proposes only when the TYPE resolves; otherwise falls through and
+  // answers availability normally.
+  if (ex.holdAsk) {
+    const unitType = holdUnitType(text, s.constraints.bhk);
+    if (unitType) {
+      return {
+        kind: 'hold_propose',
+        projectId: focus.projectId,
+        projectName: focus.projectName,
+        unitType,
+        copy: `Shall I hold a *${unitType}* at *${focus.projectName}* for you for 24 hours? Reply yes to confirm.`,
+        state: { awaitingConfirm: true, unitType, projectId: focus.projectId, projectName: focus.projectName },
+      };
+    }
+  }
 
   if (ex.compareAdvice || ex.askTopic === 'compare' || ex.askTopics?.includes('compare')) {
     const pid =

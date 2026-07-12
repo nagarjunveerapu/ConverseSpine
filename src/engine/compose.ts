@@ -122,6 +122,10 @@ function describeGoal(g: TurnGoal): string {
       return 'continue visit setup using the exact copy in EVIDENCE';
     case 'visit_booked':
       return 'confirm the visit is booked';
+    case 'hold_propose':
+      return 'offer to hold a unit — use the exact proposed copy';
+    case 'hold_booked':
+      return 'confirm the unit hold outcome — use the exact template';
     case 'visit_recall':
       return 'recall visits from EVIDENCE only';
     case 'warm_ack':
@@ -426,6 +430,12 @@ export function fallbackReply(req: ComposeRequest): string {
       return goal.copy;
     case 'visit_booked':
       return `Done — your visit to *${goal.projectName}* is set for ${goal.label}. Our team will confirm details before the day.`;
+    case 'hold_propose':
+      return goal.copy;
+    case 'hold_booked':
+      return goal.placed
+        ? `Done — a *${goal.unitType}* at *${goal.projectName}* is held for you${goal.expiresLabel ? ` until ${goal.expiresLabel}` : ' for the next 24 hours'}. Our team will reach out to take it forward.`
+        : `I'm sorry — the last *${goal.unitType}* at *${goal.projectName}* was just taken. Want me to check another configuration, or have our team call you about the waitlist?`;
     case 'visit_recall': {
       const vs = ev.visits?.visits ?? [];
       if (!vs.length) {

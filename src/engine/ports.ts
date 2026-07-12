@@ -132,6 +132,16 @@ export interface EngineData {
     ids: { ndConversationId: string; buyerPhone: string; builderId: string },
     visit: { projectId: string; projectName: string; iso: string; label: string },
   ): Promise<boolean>;
+  /**
+   * Place a launch-ops hold on a unit of the given TYPE — Desk auto-picks the
+   * cheapest available unit atomically (one-active-hold enforced by its DB),
+   * so unit numbers never cross this port. reason 'none_available' = the type
+   * sold out (surface it honestly); 'error' = transport/unknown (also honest).
+   */
+  placeHold(
+    ids: { ndConversationId: string; builderId: string },
+    hold: { projectId: string; unitType: string; buyerName?: string; ttlMinutes?: number },
+  ): Promise<{ ok: boolean; expiresAt?: number; unitNumber?: string; reason?: 'none_available' | 'error' }>;
   /** Turn-start bundle — returning buyer, builder persona, recent messages, ledger prior. */
   bootstrapContext(ndConversationId: string): Promise<{
     returningBuyer?: { buyerName: string; daysSinceLastSeen: number; lastProjectId?: string };

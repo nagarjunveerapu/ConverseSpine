@@ -1,4 +1,4 @@
-import type { NayaDeskClient } from '../../crm/nayadesk-client.js';
+import { NayaDeskError, type NayaDeskClient } from '../../crm/nayadesk-client.js';
 import type { EngineCrm, EngineData, StoredVisit } from '../ports.js';
 import { formatInr } from '../compose.js';
 import {
@@ -395,6 +395,30 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         return true;
       } catch {
         return false;
+      }
+    },
+
+    async placeHold(ids, hold) {
+      try {
+        const r = await crm.placeHold({
+          project_id: hold.projectId,
+          unit_type: hold.unitType,
+          conversation_id: ids.ndConversationId,
+          ...(hold.buyerName ? { buyer_name: hold.buyerName } : {}),
+          ttl_minutes: hold.ttlMinutes ?? 24 * 60,
+        });
+        return {
+          ok: true,
+          expiresAt: r.expires_at,
+          ...(r.unit_number ? { unitNumber: r.unit_number } : {}),
+        };
+      } catch (err) {
+        // 409 = no_units_available (type sold out) — an expected outcome the
+        // copy must reflect; 404 = unknown type name for this project.
+        if (err instanceof NayaDeskError && (err.status === 409 || err.status === 404)) {
+          return { ok: false, reason: 'none_available' };
+        }
+        return { ok: false, reason: 'error' };
       }
     },
 

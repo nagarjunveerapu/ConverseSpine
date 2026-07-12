@@ -1,0 +1,27 @@
+{
+  "id": "HOLD-01",
+  "title": "Unit hold — focused buyer asks to hold a 2 BHK, confirms, Desk places the hold",
+  "builder_id": "brigade-group",
+  "tags": ["holds", "launch-ops", "phase4"],
+  "turns": [
+    {
+      "text": "tell me about Brigade Eldorado"
+    },
+    {
+      "text": "can you hold a 2 bhk for me?",
+      "assert": {
+        "goal_kind": "hold_propose",
+        "reply_includes": ["2 BHK", "reply yes to confirm"],
+        "reply_excludes": ["A-201", "A-101"]
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind": "hold_booked",
+        "reply_includes": ["2 BHK"],
+        "reply_excludes": ["A-201", "A-101"]
+      }
+    }
+  ]
+}
