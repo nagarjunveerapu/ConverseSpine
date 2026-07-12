@@ -182,6 +182,8 @@ export class NayaDeskClient {
     budget_inr?: string;
     visit_date_pref?: string;
     purpose?: string;
+    /** W6 — ingress door label; Desk stores it on conversations.channel. */
+    channel?: string;
     pending_action?: string;
     pending_action_payload?: unknown;
   }): Promise<{ ok: true; conversation_id: string; created: boolean }> {

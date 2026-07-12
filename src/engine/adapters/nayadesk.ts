@@ -509,8 +509,12 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
 
 export function nayadeskCrm(crm: NayaDeskClient): EngineCrm {
   return {
-    async ensureLead(builderId, buyerPhone) {
-      const resp = await crm.upsertLead({ builder_id: builderId, buyer_phone: buyerPhone });
+    async ensureLead(builderId, buyerPhone, channel) {
+      const resp = await crm.upsertLead({
+        builder_id: builderId,
+        buyer_phone: buyerPhone,
+        ...(channel ? { channel } : {}),
+      });
       return { conversationId: resp.conversation_id };
     },
     async appendMessage(conversationId, direction, content, meta) {

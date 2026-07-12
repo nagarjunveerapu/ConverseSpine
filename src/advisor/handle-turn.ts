@@ -55,7 +55,7 @@ export async function handleAdvisorTurn(
     ingressFilledSlots = ingressFilledSlotsFromPreferences(body.preferences);
     let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
     if (!existing.ndConversationId && buyer_phone) {
-      const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);
+      const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone, 'advisor_web').catch(() => null);
       if (lead) existing = withNdConversation(existing, lead.conversationId, buyer_phone);
     }
     const inRecovery =
@@ -75,7 +75,7 @@ export async function handleAdvisorTurn(
   if (projectId && !pivotTurn && !isVisitRouteExpand(text)) {
     let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
     if (!existing.ndConversationId && buyer_phone) {
-      const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);
+      const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone, 'advisor_web').catch(() => null);
       if (lead) existing = withNdConversation(existing, lead.conversationId, buyer_phone);
     }
     const skipStickyFocus =

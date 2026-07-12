@@ -11,6 +11,8 @@ export interface ChatRequest {
   text: string;
   conversation_id?: string;
   action_id?: string;
+  /** W6 — ingress door; webhook/debouncer send 'whatsapp', bare /chat defaults to 'api'. */
+  channel?: 'whatsapp' | 'advisor_web' | 'api';
 }
 
 export interface ChatResponse extends TurnResult {
@@ -56,6 +58,7 @@ export async function handleChat(
     const upsert = await rt.crm.upsertLead({
       builder_id: body.builder_id,
       buyer_phone: body.buyer_phone,
+      ...(body.channel ? { channel: body.channel } : {}),
     });
     conversationId = upsert.conversation_id;
   }
@@ -66,6 +69,7 @@ export async function handleChat(
     builder_id: body.builder_id,
     buyer_phone: body.buyer_phone,
     action_id: body.action_id,
+    ...(body.channel ? { channel: body.channel } : {}),
   };
 
   const result = await runTurn(rt, input, ctx);

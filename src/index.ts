@@ -4,6 +4,7 @@ import { handleAdvisorProjectDetail } from './advisor/handle-project-detail.js';
 import { handleAdvisorTurn } from './advisor/handle-turn.js';
 import { createWorkerRuntime } from './runtime/deps.js';
 import { handleAgentSend, handleChat, health, json, toDeskChatResponse } from './worker/routes.js';
+import { overRateLimit } from './channel/ingress-guard.js';
 import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 
@@ -100,10 +101,21 @@ export default {
           buyer_phone?: string;
           text?: string;
           conversation_id?: string;
+          channel?: 'whatsapp' | 'advisor_web' | 'api';
         };
 
         if (!parsed.builder_id || !parsed.buyer_phone || !parsed.text) {
           return json({ error: 'validation', required: ['builder_id', 'buyer_phone', 'text'] }, 400);
+        }
+
+        // W6 — /chat is unauthenticated buyer-shaped ingress: rate-limit it
+        // per buyer. Trusted callers (Desk playground over the service
+        // binding, eval harness) carry x-bot-secret and are exempt — staff
+        // and CI must never be throttled.
+        const botSecret = request.headers.get('x-bot-secret');
+        const trusted = !!botSecret && !!env.BOT_SHARED_SECRET && botSecret === env.BOT_SHARED_SECRET;
+        if (!trusted && (await overRateLimit(env.TURN_CACHE, `${parsed.builder_id}:${parsed.buyer_phone}`, Date.now()))) {
+          return json({ error: 'rate_limited', retry_after_s: 300 }, 429);
         }
 
         const rt = createWorkerRuntime(env);
@@ -114,6 +126,8 @@ export default {
             buyer_phone: parsed.buyer_phone,
             text: parsed.text,
             conversation_id: parsed.conversation_id,
+            // W6 — label the door; bare /chat callers are 'api'.
+            channel: parsed.channel ?? 'api',
           },
           ctx,
         );

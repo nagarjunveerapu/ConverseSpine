@@ -160,7 +160,7 @@ export interface EngineData {
 }
 
 export interface EngineCrm {
-  ensureLead(builderId: string, buyerPhone: string): Promise<{ conversationId: string } | null>;
+  ensureLead(builderId: string, buyerPhone: string, channel?: string): Promise<{ conversationId: string } | null>;
   appendMessage(conversationId: string, direction: 'inbound' | 'outbound', content: string, meta?: { replyKey?: string }): Promise<void>;
   updateFacts(conversationId: string, facts: Record<string, string | undefined>): Promise<void>;
   commitProject(conversationId: string, projectId: string): Promise<void>;
