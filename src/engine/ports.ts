@@ -167,7 +167,12 @@ export interface EngineCrm {
   releaseProject(conversationId: string): Promise<void>;
   syncShortlist(conversationId: string, projectIds: string[]): Promise<void>;
   syncMatching(conversationId: string, projectIds: string[]): Promise<void>;
-  setStage(conversationId: string, stage: 'new' | 'engaged' | 'qualified' | 'visit_booked' | 'escalated' | 'cold' | 'dropped'): Promise<void>;
+  setStage(
+    conversationId: string,
+    stage: 'new' | 'engaged' | 'qualified' | 'visit_booked' | 'escalated' | 'cold' | 'dropped',
+    /** W5 — onlyForward: Desk skips the write if the lead is already at/past the rung. */
+    opts?: { onlyForward?: boolean },
+  ): Promise<void>;
   appendSharedFact(conversationId: string, factKind: string, projectId: string, turnIndex: number): Promise<void>;
   appendTurnLedger(entry: {
     conversationId: string;

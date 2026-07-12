@@ -106,6 +106,10 @@ export interface ConversationState {
   visit?: VisitState;
   hold?: HoldState;
   turnCount: number;
+  /** W5 — turns spent in the focused phase (drives the 'engaged' rung). */
+  focusedTurns?: number;
+  /** W5 — highest funnel rung already written to Desk (write-once, monotonic). */
+  stageWritten?: 'engaged' | 'qualified';
   objectionCount?: number;
   ndConversationId?: string;
   ndBuyerPhone?: string;
