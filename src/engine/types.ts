@@ -466,13 +466,16 @@ export interface ComposeRequest {
   context: ComposeContext;
   /** W3 — anti-repeat retry: draft again with fresh wording (one bounded use). */
   vary?: boolean;
+  /** W1 — grounding retry: the previous draft stated these unbacked values; use EVIDENCE only. */
+  repair?: { unbacked: string[] };
 }
 
 export interface TurnDebug {
   phase: Phase;
   goal: TurnGoal;
   tools: string[];
-  grounding: 'pass' | 'repaired';
+  /** 'recomposed' (W1) = draft failed grounding, ONE retry with the violations fed back succeeded. */
+  grounding: 'pass' | 'repaired' | 'recomposed';
   /** W3 — repeat guard outcome, present only when the guard fired. */
   repeat_guard?: 'recomposed' | 'template' | 'still_identical';
   /** Set at ingress — chip tap vs typed message. */
