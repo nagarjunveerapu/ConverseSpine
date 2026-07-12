@@ -19,12 +19,16 @@ const SPINE = (process.env.CONVERSE_SPINE_URL ?? 'http://127.0.0.1:8789').replac
 interface AssertSpec {
   /** Reply must match (case-insensitive). */
   reply_includes?: string[];
+  /** At least one of these must appear (case-insensitive). */
+  reply_includes_any?: string[];
   /** Reply must NOT match. */
   reply_excludes?: string[];
   /** Optional debug.speech_act when API returns debug. */
   speech_act?: string;
   /** Optional debug.goal.kind */
   goal_kind?: string;
+  /** Optional: goal.kind must NOT equal this */
+  goal_kind_not?: string;
   /** Optional debug.goal.topic */
   goal_topic?: string;
   /** debug.tools must include each of these */
@@ -154,6 +158,12 @@ function checkAssert(
       fails.push(`expected reply to include "${needle}"`);
     }
   }
+  if (a.reply_includes_any?.length) {
+    const hit = a.reply_includes_any.some((n) => lower.includes(n.toLowerCase()));
+    if (!hit) {
+      fails.push(`expected reply to include one of: ${a.reply_includes_any.join(' | ')}`);
+    }
+  }
   for (const needle of a.reply_excludes ?? []) {
     if (lower.includes(needle.toLowerCase())) {
       fails.push(`expected reply to exclude "${needle}"`);
@@ -165,6 +175,9 @@ function checkAssert(
   const goal = (debug?.goal ?? {}) as { kind?: string; topic?: string };
   if (a.goal_kind && goal.kind && goal.kind !== a.goal_kind) {
     fails.push(`goal.kind=${goal.kind} want ${a.goal_kind}`);
+  }
+  if (a.goal_kind_not && goal.kind && goal.kind === a.goal_kind_not) {
+    fails.push(`goal.kind must not be ${a.goal_kind_not}`);
   }
   if (a.goal_topic && goal.topic && goal.topic !== a.goal_topic) {
     fails.push(`goal.topic=${goal.topic} want ${a.goal_topic}`);

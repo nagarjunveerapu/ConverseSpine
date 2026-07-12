@@ -1,0 +1,20 @@
+{
+  "id": "AVAIL-01",
+  "title": "Live config ask after Desk unit ingestion — any 2 BHK options left?",
+  "builder_id": "brigade-group",
+  "tags": ["availability", "phase4", "units", "closed-beta"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "any 2 bhk options left?",
+      "assert": {
+        "goal_topic": "availability",
+        "reply_includes": ["2"],
+        "reply_excludes": ["budget range", "what budget", "no exact match", "held for you"],
+        "tools_include": ["listUnits"]
+      }
+    }
+  ]
+}

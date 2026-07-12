@@ -1,0 +1,19 @@
+{
+  "id": "MED-05",
+  "title": "BHK-scoped floor plan — 2 BHK preference then floor plan (Desk unit_type_filter)",
+  "builder_id": "brigade-group",
+  "tags": ["quality", "media", "phase4", "closed-beta", "units"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 bhk apartment in North Bangalore" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "show me the 2 bhk floor plan",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["buena vista", "which project"],
+        "expect_media": true
+      }
+    }
+  ]
+}

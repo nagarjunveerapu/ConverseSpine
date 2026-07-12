@@ -26,8 +26,28 @@ This doc is the **list first**. Do not treat unchecked rows as green.
 | Multi-visit route by origin / sequencing | ✅ Seed green | BUYER-LOK-02, SA-G02/G02b, VIS-03/04 soak; deeper origin UAT optional |
 | **FAQ-01 rental yield** | ✅ Live soak 2026-07-11 | FAQ key→`faqLookup`→compose; tools=`faqLookup` |
 | **FAQ-02 possession / FAQ-03 payment / FAQ-04 loan** | ✅ Live soak | Desk FAQs; home-loan ≠ EMI calculator |
+| **HOLD-01** (unit hold) | ✅ Unit + claimed live | Desk hold-by-type; no unit numbers in chat |
 | Expert deep-probe vs novice minimal | ⚠️ Partial | ADV-F01 = expert-ish facets; no paired novice journey |
 | MED-02 advisor brochure | ❌ Not verified | Advisor channel — next wave |
+
+---
+
+## Phase 4 Desk surface → buyer scenarios (holds / units / media)
+
+NayaDesk Phase 4 added physical inventory, hold-by-type, waitlist, series floor plans, and `holdable_units` on conversation-context. Spine today: **hold propose/book wired**; waitlist queue + live “N left” counts **not** yet mapped — do not assert those until wired.
+
+| ID | Status | Pass if |
+|----|--------|---------|
+| **HOLD-01** | HAVE | Focus → hold 2 BHK → yes → `hold_booked`; `held` **or** honest `just taken` (live inventory); no unit numbers |
+| **HOLD-02** | ✅ Soak | `book a 2 bhk` ≠ `hold_propose` |
+| **HOLD-03** | ✅ Soak | Hinglish `2 bhk hold kar do` → propose |
+| **HOLD-04** | HAVE | Stated 2 BHK + `hold one for me` → propose → held/just-taken |
+| **HOLD-05** | ✅ Soak | One-shot window: amenities clears; stray `yes` cannot book |
+| **MED-05** | ⚠️ FAIL soak | Asked Eldorado 2BHK floor plan → reply named **Meadows** (focus leak) — keep as catcher |
+| **AVAIL-01** | ✅ Soak | `any 2 bhk options left?` → availability + configs |
+| **HOLD-WL / AVAIL-N** | DEFER | Waitlist position / `holdable_units` count — needs Spine map of Desk fields |
+
+**Not scenario’d (Desk UI only):** availability board, CSV import, `apply_to_series` plan attach, agent convert/release.
 
 ---
 
