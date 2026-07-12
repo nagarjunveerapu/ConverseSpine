@@ -140,3 +140,31 @@ describe('unit hold flow (launch ops)', () => {
     expect(booked.reply).not.toMatch(/held for you/i);
   });
 });
+
+describe('hold intent beats the visit-phase transition (dev regression)', () => {
+  it('a hold ask that the embedder tags want_visit still proposes a hold, not a visit', async () => {
+    // Simulate the REAL dev embedder: it classifies "hold a 2 bhk for me" as
+    // want_visit. Before the fix this flipped phase→visit and stole the turn
+    // (dev HOLD-01/04/05 all returned visit_ask). The fake NLU never set this,
+    // so unit tests were green while dev was broken.
+    const deps = fakeDeps();
+    const baseEnrich = deps.semantic.enrich.bind(deps.semantic);
+    deps.semantic = {
+      async enrich(text, b, ex, ctx) {
+        const out = await baseEnrich(text, b, ex, ctx);
+        return /\bhold\b/i.test(text) ? { ...out, transition: 'want_visit' as const } : out;
+      },
+    };
+    const turn = (text: string) =>
+      runEngineTurn(
+        { convId: 'hold-vs-visit', builderId: 'lokations', text, buyerPhone: '+919999999901', channel: 'advisor_web' },
+        deps,
+      );
+    await turn('coorg, 50 Lakhs');
+    await turn('tell me about Ayana');
+    const r = await turn('hold a 2 bhk for me');
+    expect(r.debug.goal.kind).toBe('hold_propose');
+    expect(r.state.phase).not.toBe('visit');
+    expect(r.reply).toMatch(/reply yes to confirm/i);
+  });
+});
