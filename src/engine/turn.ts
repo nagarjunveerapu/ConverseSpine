@@ -693,8 +693,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const overviewDeterministic =
     goal.kind === 'answer' && goal.topic === 'overview' && !!evidence.detail;
 
-  let draft: string;
-  if (
+  // Template-locked goals: commitments and structured facts that must never be
+  // LLM-paraphrased — and (W3) must never be "varied" by the repeat guard.
+  const templateLocked =
     visitDeterministic ||
     holdDeterministic ||
     firstShortlistTurn ||
@@ -709,8 +710,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     warmAckDeterministic ||
     propertyTypeDeterministic ||
     commitDeterministic ||
-    overviewDeterministic
-  ) {
+    overviewDeterministic;
+
+  let draft: string;
+  if (templateLocked) {
     draft = fallbackReply(req);
   } else {
     try {
@@ -732,6 +735,39 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
   if (!reply.trim()) reply = "Let me pull those details together and follow up shortly.";
 
+  // W3 — repeat guard: never send the previous line verbatim. One bounded
+  // re-compose with fresh-wording instructions (shares the "max 1 retry,
+  // template-locked skip" budget with W1's grounding retry when that lands);
+  // if the varied draft is empty/ungrounded/still identical, fall to the
+  // template — and if even THAT matches, keep it (deterministic content is
+  // allowed to repeat; only LLM drafts are guarded).
+  let repeat_guard: TurnDebug['repeat_guard'];
+  if (!templateLocked && state.lastReply && sameLine(reply, state.lastReply)) {
+    let varied = '';
+    try {
+      varied = stripBanned(
+        (await deps.llm.compose({
+          ...req,
+          vary: true,
+          context: { ...req.context, priorReplyExcerpt: state.lastReply.slice(0, 220) },
+        })).trim(),
+      );
+    } catch { /* fall through to template */ }
+    if (
+      varied &&
+      !sameLine(varied, state.lastReply) &&
+      checkGrounding(varied, evidence, input.text).grounded &&
+      !needsStructuredRepair(goal, evidence, varied, disclosedForCompose, input.text)
+    ) {
+      reply = varied;
+      repeat_guard = 'recomposed';
+    } else {
+      const floor = fallbackReply(req);
+      repeat_guard = sameLine(floor, state.lastReply) ? 'still_identical' : 'template';
+      if (repeat_guard === 'template') reply = floor;
+    }
+  }
+
   if (goal.kind === 'visit_booked') {
     const next = goal.nextQueuedStop ?? state.visit?.queued?.[0];
     if (next) {
@@ -740,11 +776,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   state = applyGoalToState(state, goal, evidence);
-  // The hold-confirm window is one-shot: any turn that didn't re-propose
-  // clears it, so a stray "yes" three turns later can't book a unit.
+  // W2 — the hold-confirm window is one-shot for BOOKING: any turn that didn't
+  // re-propose downgrades it (awaitingConfirm off), so a stray "yes" can never
+  // book directly. The offer itself lingers for 6 turns — a bare affirm inside
+  // that window RE-PROPOSES (explicit re-confirm), which is the recovery for
+  // "hold it → (digression) → yes".
   if (goal.kind !== 'hold_propose' && state.hold?.awaitingConfirm) {
-    state = { ...state, hold: undefined };
+    state = {
+      ...state,
+      hold: { ...state.hold, awaitingConfirm: false, offeredAtTurn: state.turnCount },
+    };
   }
+  // W3 — remember the outbound line for the repeat guard.
+  state = { ...state, lastReply: reply };
   if (evidence.detail && goal.kind === 'answer') {
     state = {
       ...state,
@@ -870,6 +914,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       goal,
       tools: evidence.tools,
       grounding,
+      ...(repeat_guard ? { repeat_guard } : {}),
       last_offered_count: state.discover.lastOffered.length,
       last_offered_ids: state.discover.lastOffered.map((o) => o.projectId),
     },
@@ -898,6 +943,13 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     uiMode,
     whatsappActions: whatsAppButtons(searchRecovery, channel),
   };
+}
+
+/** W3 — verbatim-repeat comparison: case/whitespace-insensitive. */
+function sameLine(a: string, b: string | undefined): boolean {
+  if (!b) return false;
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  return norm(a) === norm(b);
 }
 
 /** "today 5:30 pm" / "tomorrow 5:30 pm" / "14 Jul, 5:30 pm" — IST, for hold-confirm copy. */

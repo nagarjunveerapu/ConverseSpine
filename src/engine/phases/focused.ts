@@ -27,7 +27,7 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
 
   // Hold confirm gate — one-shot window opened by hold_propose last turn. A
   // bare affirmation books it; anything else falls through (and the engine
-  // clears the window after the turn), mirroring the visit confirm gate.
+  // downgrades the window after the turn), mirroring the visit confirm gate.
   if (s.hold?.awaitingConfirm && ex.affirm && !ex.decline) {
     return {
       kind: 'hold_booked',
@@ -47,6 +47,44 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   if (ex.recall) return { kind: 'visit_recall' };
   if (ex.transition === 'want_visit') return { kind: 'propose_visit', projectId: focus.projectId };
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom', projectId: focus.projectId };
+
+  // W2 — bare affirm handling. Precedence (review note 3): RTI/chip prompts
+  // outrank everything here (an advisor chip's yes belongs to RTI — guarded
+  // inside bareAffirm); the just-asked hold window ranked above (hold_booked);
+  // warm_ack/recall/visit/objection keep their existing priority above this.
+  const bareAffirm =
+    !!ex.affirm && !ex.decline && !ex.isQuestion && !ex.askTopic && !ex.askTopics?.length &&
+    !ex.objection && !ex.recall && !(ex.namedProjects?.length) && !s.rti?.pendingPrompt;
+
+  // (a) Downgraded hold offer still fresh (≤6 turns): RE-PROPOSE — never book
+  // off a stale yes ("hold it → digression → yes"), per HOLD-05.
+  if (
+    bareAffirm &&
+    s.hold && !s.hold.awaitingConfirm && s.hold.unitType &&
+    s.turnCount - (s.hold.offeredAtTurn ?? 0) <= 6
+  ) {
+    const unitType = s.hold.unitType;
+    const projectName = s.hold.projectName ?? focus.projectName;
+    return {
+      kind: 'hold_propose',
+      projectId: s.hold.projectId ?? focus.projectId,
+      projectName,
+      unitType,
+      copy: `Just to confirm — hold a *${unitType}* at *${projectName}* for 24 hours? Reply yes.`,
+      state: {
+        awaitingConfirm: true,
+        unitType,
+        projectId: s.hold.projectId ?? focus.projectId,
+        projectName,
+      },
+    };
+  }
+
+  // (b) Bare affirm with NOTHING pending: advance the deal — never re-answer
+  // the previous topic (the verbatim-repeat failure mode caught on dev).
+  if (bareAffirm) {
+    return { kind: 'advance', reason: 'same_set' };
+  }
 
   // Explicit ask to hold/reserve a unit — stamped as ex.holdAsk by the
   // extract funnel (hold-intent.ts) so turn logs show why the gate fired.
