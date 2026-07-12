@@ -1,6 +1,6 @@
 import { NayaDeskError, type NayaDeskClient } from '../../crm/nayadesk-client.js';
 import type { EngineCrm, EngineData, StoredVisit } from '../ports.js';
-import { formatInr } from '../compose.js';
+import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom } from '../compose.js';
 import {
   mapEnrichmentSummaryToUnitConfigs,
   mapLegacyUnitsToUnitConfigs,
@@ -118,12 +118,18 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
             microMarket: p.micro_market,
             ...(p.summary ? { summary: p.summary } : {}),
             ...(p.rera_number ? { reraNumber: p.rera_number } : {}),
-            ...(p.possession_date ? { possession: formatYearMonth(p.possession_date) } : {}),
+            // W4 — free-text possession normalised (no double periods/run-ons).
+            ...(p.possession_date ? { possession: formatPossession(formatYearMonth(p.possession_date)) } : {}),
             ...(p.khata_type ? { khata: p.khata_type } : {}),
             ...(p.na_status ? { naStatus: p.na_status } : {}),
             ...(p.ec_status ? { ecStatus: p.ec_status } : {}),
             ...(p.loan_eligibility ? { loanEligibility: p.loan_eligibility } : {}),
-            startingPriceDisplay: p.entry_price_band,
+            // W4 — ONE starting-price truth: min config price (same number the
+            // search rail shows); the configured band is only the fallback.
+            startingPriceDisplay: startingPriceDisplayFrom(
+              configurations.map((u) => u.priceMinInr),
+              p.entry_price_band,
+            ),
             ...(faqs.length ? { faqs } : {}),
             ...(configurations.length ? { configurations } : {}),
             ...(mapLocationIntel(ctx.location_intelligence) ? { location: mapLocationIntel(ctx.location_intelligence) } : {}),
@@ -140,7 +146,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           microMarket: p.micro_market,
           summary: p.summary,
           reraNumber: p.rera_number,
-          possession: p.possession_date ? formatYearMonth(p.possession_date) : undefined,
+          possession: p.possession_date ? formatPossession(formatYearMonth(p.possession_date)) : undefined,
           projectType: p.project_type,
           startingPriceDisplay: p.entry_price_band,
           khata: p.khata_type,
@@ -162,9 +168,11 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         });
         const ctx = await crm.conversationContext(nd).catch(() => null);
         const name = ctx?.project?.name ?? projectId;
+        // W4 — format once, here: raw cost-sheet values ("499", "5") become
+        // buyer-ready ("₹499", "5%") before any template sees them.
         const components = (q.components_quoted ?? []).map((c) => ({
           label: c.label,
-          value: c.value,
+          value: formatCostValue(c.label, c.value),
         }));
         const withheld = (q.components_withheld ?? []).map((c) => ({
           label: c.label,

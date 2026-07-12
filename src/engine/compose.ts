@@ -616,6 +616,66 @@ export function formatInr(inr: number): string {
   return `₹${(inr / 100_000).toFixed(2).replace(/\.?0+$/, '')} L`;
 }
 
+// ── W4 — format once, at the adapter (templates stay dumb) ──────────────────
+// Desk cost-sheet values arrive raw ("499", "5", "15000") and were dumped into
+// replies verbatim ("Base land price 499, Stamp Duty 5"). Everything the
+// adapter maps into evidence goes through these; no template formats anything.
+
+const PERCENT_LABEL = /\b(?:duty|tax|gst|interest|charge[s]? \(%|percent|%)/i;
+
+/**
+ * Render a raw cost-sheet value for buyer copy.
+ *   already formatted ("5% of land value", "Included", "₹39 L") → passthrough
+ *   bare small number on a %-ish label ("Stamp Duty", "5")       → "5%"
+ *   bare number ("15000", "499")                                 → "₹15,000" / "₹499"
+ * Never invents units it can't infer (no /sqft guessing — honesty first).
+ */
+export function formatCostValue(label: string, raw: string): string {
+  const v = (raw ?? '').trim();
+  if (!v) return v;
+  const bare = v.replace(/,/g, '');
+  if (!/^\d+(?:\.\d+)?$/.test(bare)) return v; // has words/symbols → already display-ready
+  const n = Number(bare);
+  if (!isFinite(n)) return v;
+  if (n > 0 && n <= 30 && PERCENT_LABEL.test(label)) return `${v}%`;
+  if (n >= 100_000) return formatInr(n);
+  return `₹${n.toLocaleString('en-IN')}`;
+}
+
+/**
+ * Possession strings are builder free text ("Ready to register", "Phase-wise;
+ * Dioro & Beryl: June 2028. Earlier phases ready for possession..") and were
+ * shoved into "possession {x}" sentences with double periods and run-ons.
+ * Normalise: collapse repeated periods, strip the trailing one, and keep only
+ * the first clause when the note runs long (the full text lives in FAQs).
+ */
+export function formatPossession(raw: string): string {
+  let s = (raw ?? '').trim().replace(/\.{2,}/g, '.').replace(/\.$/, '');
+  if (s.length > 60) {
+    // Keep the first SENTENCE — "Phase-wise; Dioro & Beryl: June 2028" holds
+    // the date a buyer needs; the trailing prose lives in FAQs.
+    const cut = s.indexOf('.');
+    if (cut > 10) s = s.slice(0, cut);
+  }
+  return s.trim();
+}
+
+/**
+ * ONE starting-price truth (LLD W4): the minimum configuration price, same
+ * number the search rail shows — so "from ₹31 L" on the recommend line and
+ * the detail line can never disagree. The configured band is the fallback
+ * when no config carries a price, prefixed so it reads as a range.
+ */
+export function startingPriceDisplayFrom(
+  configMinsInr: number[],
+  entryPriceBand: string | undefined,
+): string {
+  const mins = configMinsInr.filter((n) => isFinite(n) && n > 0);
+  if (mins.length) return formatInr(Math.min(...mins));
+  const band = (entryPriceBand ?? '').trim();
+  return band;
+}
+
 export function minimumBudgetReply(
   typeLabel: string,
   floor: { name: string; display: string },
