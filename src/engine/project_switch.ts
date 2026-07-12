@@ -36,16 +36,21 @@ function isStickyFacetAsk(ex: Extracted): boolean {
 }
 
 /**
- * Tokens left after stripping facet / stop words.
- * Empty residue ⇒ pure facet chip ("Send brochure" / "brochure bhejo") — do not switch on vector noise.
+ * Tokens left after stripping facet / stop words / config scaffolding.
+ * Empty residue ⇒ pure facet chip ("Send brochure" / "show me the 2 bhk floor plan")
+ * — do not switch on vector noise.
  */
 export function facetNameResidue(text: string): string {
   return text
     .toLowerCase()
+    // Config / size scaffolding first (BHK-scoped media asks leave "2 bhk" otherwise).
+    .replace(/\b\d+(?:\.\d+)?\s*(?:bhk|bed(?:room)?s?)\b/gi, ' ')
+    .replace(/\b(?:bhk|bed(?:room)?s?|sq\.?\s*ft|sqft)\b/gi, ' ')
     .replace(
-      /\b(?:send|share|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one|bhejo|bhej|bhejna|bhej\s*do|batao|dikhao|dikha|do|karo|please|thanks|thank\s*you|bsp|carpet|sba|possession|date|area|break(?:\s|-)?up|breakdown|how|much|kitna|padega|and|or|with|from|also|any|there)\b/gi,
+      /\b(?:send|share|show|see|give|get|want|need|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|layout|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one|bhejo|bhej|bhejna|bhej\s*do|batao|dikhao|dikha|do|karo|please|thanks|thank\s*you|bsp|carpet|sba|possession|date|area|break(?:\s|-)?up|breakdown|how|much|kitna|padega|and|or|with|from|also|any|there)\b/gi,
       ' ',
     )
+    .replace(/\b\d+(?:\.\d+)?\b/g, ' ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

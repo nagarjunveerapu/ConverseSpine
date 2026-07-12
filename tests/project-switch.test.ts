@@ -116,4 +116,19 @@ describe('detectFocusedSwitchIntent — PROJECT_VECTORS namedProjects', () => {
       followUp: 'media',
     });
   });
+
+  it('MED-05: 2 BHK floor plan + vector Meadows noise → stay on Eldorado focus', () => {
+    const s = commitTo(initState('c-med05', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
+    const text = 'show me the 2 bhk floor plan';
+    const ex: Extracted = {
+      constraints: { bhk: '2 BHK' },
+      transition: 'none',
+      askTopic: 'media',
+      askTopics: ['media'],
+      mediaAssetKind: 'floor_plan',
+      speechAct: 'answer',
+      namedProjects: [{ projectId: 'brigade-meadows', name: 'Brigade Meadows' }],
+    };
+    expect(detectFocusedSwitchIntent(text, ex, s)).toBeNull();
+  });
 });

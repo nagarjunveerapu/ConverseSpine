@@ -91,6 +91,12 @@ describe('hasExplicitProjectCue / sticky scrub (W1)', () => {
     expect(hasExplicitProjectCue('Krishnaja Greens pricing')).toBe(true);
   });
 
+  it('MED-05: BHK-scoped floor plan is not a project cue (config residue only)', () => {
+    expect(hasExplicitProjectCue('show me the 2 bhk floor plan')).toBe(false);
+    expect(facetNameResidue('show me the 2 bhk floor plan').length).toBeLessThan(3);
+    expect(hasExplicitProjectCue('floor plan for Meadows')).toBe(true);
+  });
+
   it('brochure bhejo does not switch on vector noise', () => {
     const s = commitTo(initState('c1', 'lokations'), 'ayana-lokations', 'Ayana');
     const ex: Extracted = {
