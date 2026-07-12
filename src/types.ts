@@ -129,6 +129,8 @@ export interface TurnInput {
   builder_id?: string;
   buyer_phone?: string;
   action_id?: string;
+  /** W6 — ingress door. Every door sets it explicitly; absent = legacy caller (treated as whatsapp). */
+  channel?: 'whatsapp' | 'advisor_web' | 'api';
 }
 
 export interface TurnResult {

@@ -19,7 +19,12 @@ export async function runTurn(
       builderId: builder_id ?? rt.defaultBuilderId(),
       text: buyer_text,
       buyerPhone: buyer_phone ?? `web:${conversation_id}`,
-      channel: 'whatsapp',
+      // W6 — the engine's channel is TurnIntentChannel (chip/action budgets
+      // only — advisor gets wider menus). 'api' callers keep the tight
+      // whatsapp budgets they always had; the CRM door label ('api', 'whatsapp',
+      // 'advisor_web') flows independently via upsertLead → Desk. Zero
+      // behavior change for existing doors.
+      channel: input.channel === 'advisor_web' ? 'advisor_web' : 'whatsapp',
       action_id: input.action_id,
     },
     rt.engine,

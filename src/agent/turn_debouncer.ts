@@ -65,7 +65,8 @@ export class TurnDebouncer implements DurableObject {
     const token = creds.access_token;
     if (lastWamid && token) await sendTyping(phone_number_id, lastWamid, token);
 
-    const result = await handleChat(rt, { builder_id, buyer_phone, text });
+    // W6 — the debouncer is only ever fed by the WhatsApp webhook.
+    const result = await handleChat(rt, { builder_id, buyer_phone, text, channel: 'whatsapp' });
 
     if (token) {
       const labels = result.whatsapp_actions?.map((a) => a.label) ?? [];

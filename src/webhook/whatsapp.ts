@@ -2,6 +2,7 @@ import type { Env } from '../env.js';
 import { resolveBuilderByPhoneNumberId } from '../channel/phone-resolve.js';
 import { getMetaAppSecret, verifyMetaWebhookSignature } from '../channel/meta-secrets.js';
 import { sendText, sendTyping, sendInteractiveButtons, appendNumberedMenu } from '../channel/whatsapp-client.js';
+import { seenWebhookMessage, overRateLimit } from '../channel/ingress-guard.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
 import { handleChat } from '../worker/routes.js';
 
@@ -88,6 +89,12 @@ export async function handleWhatsAppWebhook(
         }
         if (!buyerText) continue;
 
+        // W6 — Meta delivers at-least-once: drop retries of an already-seen
+        // message id, and stop spending LLM turns on a flooding number. Both
+        // ack 200 (a retry storm must not be encouraged by non-200s).
+        if (await seenWebhookMessage(env.TURN_CACHE, msg.id)) continue;
+        if (await overRateLimit(env.TURN_CACHE, `${builderId}:${msg.from}`, Date.now())) continue;
+
         const job = async () => {
           if (env.TURN_DEBOUNCER) {
             const id = env.TURN_DEBOUNCER.idFromName(`${builderId}:${msg.from}`);
@@ -115,6 +122,7 @@ export async function handleWhatsAppWebhook(
             buyer_phone: buyerPhone,
             text: buyerText,
             action_id: actionId,
+            channel: 'whatsapp',
           });
 
           if (creds.access_token) {
