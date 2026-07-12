@@ -218,6 +218,32 @@ export class NayaDeskClient {
     );
   }
 
+  /**
+   * Place a launch-ops unit hold (Phase 4). Pass unit_type ("2 BHK") and Desk
+   * auto-picks the cheapest available unit of that type atomically — or a
+   * specific unit_id. Throws NayaDeskError 409 when the type has no available
+   * units (or the unit is already held) and 404 for an unknown type.
+   */
+  placeHold(req: {
+    project_id: string;
+    unit_id?: string;
+    unit_type?: string;
+    conversation_id?: string;
+    buyer_name?: string;
+    ttl_minutes?: number;
+    note?: string;
+  }): Promise<{
+    ok: true;
+    hold_id: string;
+    unit_id: string;
+    unit_number?: string;
+    expires_at: number;
+    status: 'active';
+  }> {
+    const { project_id, ...body } = req;
+    return this.call('POST', `/api/projects/${encodeURIComponent(project_id)}/holds`, body);
+  }
+
   conversationContext(conversation_id: string, recent_message_limit?: number): Promise<NdContextBundle> {
     return this.call('POST', '/api/conversation-context', {
       conversation_id,

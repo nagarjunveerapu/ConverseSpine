@@ -155,9 +155,13 @@ function projectDetailFor(id: string) {
     : null;
 }
 
-export function fakeData(): EngineData {
+export function fakeData(): EngineData & {
+  holdsPlaced: Array<{ projectId: string; unitType: string; buyerName: string }>;
+} {
   const visits: Array<{ projectId: string; projectName: string; iso: string; label: string; confirmed: boolean }> = [];
+  const holds: Array<{ projectId: string; unitType: string; buyerName: string }> = [];
   return {
+    holdsPlaced: holds,
     async search(_b, f) {
       return { matches: filterCatalog(f).map((p) => ({
         project_id: p.id,
@@ -309,6 +313,11 @@ export function fakeData(): EngineData {
     async recordVisit(_ids, v) {
       visits.push({ ...v, confirmed: true });
       return true;
+    },
+    async placeHold(_ids, hold) {
+      holds.push({ projectId: hold.projectId, unitType: hold.unitType, buyerName: hold.buyerName ?? '' });
+      // Fixed expiry keeps assertions deterministic (24h past the fake epoch).
+      return { ok: true, expiresAt: 1_750_000_000_000 + 24 * 60 * 60 * 1000, unitNumber: 'A-101' };
     },
     async bootstrapContext() {
       return { recentMessages: [], rejectedProjectIds: [], turnIndex: 1 };

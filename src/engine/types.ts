@@ -81,6 +81,20 @@ export interface VisitState {
   driveSource?: 'distance_matrix' | 'haversine' | 'none';
 }
 
+/**
+ * Unit-hold sub-flow (Phase 4 launch ops) — the inventory twin of VisitState.
+ * A hold_propose turn sets awaitingConfirm; a bare affirmation on the NEXT
+ * turn converts it to hold_booked (Desk auto-picks the cheapest available
+ * unit of the type — unit numbers never surface in chat). Any other reply
+ * clears the window (one-shot, like the visit confirm gate).
+ */
+export interface HoldState {
+  awaitingConfirm?: boolean;
+  unitType?: string;
+  projectId?: string;
+  projectName?: string;
+}
+
 export interface ConversationState {
   convId: string;
   builderId: string;
@@ -90,6 +104,7 @@ export interface ConversationState {
   discover: DiscoverState;
   focus?: FocusState;
   visit?: VisitState;
+  hold?: HoldState;
   turnCount: number;
   objectionCount?: number;
   ndConversationId?: string;
@@ -171,6 +186,13 @@ export type TurnGoal =
       nextQueuedStop?: { projectId: string; projectName: string; slotText?: string };
     }
   | { kind: 'visit_recall' }
+  /** Offer to hold a unit of a TYPE — copy is deterministic; sets hold.awaitingConfirm. */
+  | { kind: 'hold_propose'; projectId: string; projectName: string; unitType: string; copy: string; state: HoldState }
+  /**
+   * Confirmed — the evidence stage places the hold via Desk (auto-picked unit)
+   * and stamps the outcome onto the goal for the deterministic confirmation copy.
+   */
+  | { kind: 'hold_booked'; projectId: string; projectName: string; unitType: string; placed?: boolean; expiresLabel?: string }
   | { kind: 'handoff' }
   | { kind: 'warm_ack' }
   | { kind: 'smalltalk' };

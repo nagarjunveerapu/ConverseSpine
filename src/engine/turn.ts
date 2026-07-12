@@ -597,7 +597,32 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   let evidence: EvidenceSet = { tools: [] };
-  if (goal.kind === 'commit' && nd) {
+  if (goal.kind === 'hold_booked') {
+    // Place the hold NOW (evidence stage — commitProject precedent) so the
+    // deterministic confirmation copy can reflect the real outcome: held
+    // until <time>, or the type just sold out. Desk auto-picks the unit; the
+    // one-active-hold invariant lives in its DB, not here.
+    const res = nd
+      ? await deps.data
+          .placeHold(
+            { ndConversationId: nd, builderId: state.builderId },
+            {
+              projectId: goal.projectId,
+              unitType: goal.unitType,
+              ...(state.buyerName ? { buyerName: state.buyerName } : {}),
+              ttlMinutes: 24 * 60,
+            },
+          )
+          .catch(() => ({ ok: false as const }))
+      : { ok: false as const };
+    goal = {
+      ...goal,
+      placed: res.ok,
+      ...(res.ok && 'expiresAt' in res && res.expiresAt
+        ? { expiresLabel: holdExpiryLabel(res.expiresAt) }
+        : {}),
+    };
+  } else if (goal.kind === 'commit' && nd) {
     await deps.crm.commitProject(nd, goal.projectId).catch(() => {});
     if (goal.followUp || goal.followUpTopics?.length) {
       state = commitTo(state, goal.projectId, goal.projectName);
@@ -643,6 +668,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const visitDeterministic =
     goal.kind === 'visit_ask' || goal.kind === 'visit_propose' || goal.kind === 'visit_booked';
+  // Hold copy is a commitment ("held until 5:30 pm") — never LLM-paraphrased.
+  const holdDeterministic = goal.kind === 'hold_propose' || goal.kind === 'hold_booked';
   const firstShortlistTurn =
     state.discover.lastOffered.length === 0 &&
     (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
@@ -669,6 +696,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let draft: string;
   if (
     visitDeterministic ||
+    holdDeterministic ||
     firstShortlistTurn ||
     clarifyPickDeterministic ||
     compareDeterministic ||
@@ -712,6 +740,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   state = applyGoalToState(state, goal, evidence);
+  // The hold-confirm window is one-shot: any turn that didn't re-propose
+  // clears it, so a stray "yes" three turns later can't book a unit.
+  if (goal.kind !== 'hold_propose' && state.hold?.awaitingConfirm) {
+    state = { ...state, hold: undefined };
+  }
   if (evidence.detail && goal.kind === 'answer') {
     state = {
       ...state,
@@ -851,17 +884,31 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   };
 }
 
+/** "today 5:30 pm" / "tomorrow 5:30 pm" / "14 Jul, 5:30 pm" — IST, for hold-confirm copy. */
+function holdExpiryLabel(expiresAtMs: number): string {
+  const tz = 'Asia/Kolkata';
+  const time = new Intl.DateTimeFormat('en-IN', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(expiresAtMs);
+  const dayKey = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, dateStyle: 'short' }).format(ms);
+  const now = Date.now();
+  if (dayKey(expiresAtMs) === dayKey(now)) return `today ${time}`;
+  if (dayKey(expiresAtMs) === dayKey(now + 24 * 60 * 60 * 1000)) return `tomorrow ${time}`;
+  const day = new Intl.DateTimeFormat('en-IN', { timeZone: tz, day: 'numeric', month: 'short' }).format(expiresAtMs);
+  return `${day}, ${time}`;
+}
+
 function decideGoal(
   s: ConversationState,
   ex: Extracted,
   visitCtx: visit.VisitCtx | null,
+  text = '',
 ): TurnGoal {
   if (ex.recall) return { kind: 'visit_recall' };
   switch (s.phase) {
     case 'discover':
       return discover.decide(s, ex);
     case 'focused':
-      return focused.decide(s, ex);
+      // text feeds the deterministic hold-intent gate (visit-style regex).
+      return focused.decide(s, ex, text);
     case 'visit':
       return visit.decide(s, ex, visitCtx!);
     case 'handoff':
@@ -882,7 +929,7 @@ async function decideGoalAsync(
     const switchGoal = await resolveFocusedSwitchGoal(text, ex, s, deps);
     if (switchGoal) return switchGoal;
   }
-  return decideGoal(s, ex, visitCtx);
+  return decideGoal(s, ex, visitCtx, text);
 }
 
 async function fetchRecommend(
@@ -1541,6 +1588,10 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
     }
     case 'propose_visit':
       return { ...s, phase: 'visit' };
+    case 'hold_propose':
+      return { ...s, hold: goal.state };
+    case 'hold_booked':
+      return { ...s, hold: undefined };
     case 'visit_ask':
     case 'visit_propose':
       return { ...s, phase: 'visit', visit: goal.state };
