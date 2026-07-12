@@ -87,6 +87,12 @@ export function renderComposePrompt(req: ComposeRequest): string {
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
     lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
   }
+  if (goal.kind === 'answer' && evidence.detail?.name) {
+    // W8 — facet answers must anchor WHICH project they're about (dev
+    // re-baseline: correct pricing content that never said "Eldorado" reads
+    // as unanchored, and multi-project chats lose the thread).
+    lines.push(`Name the project (*${evidence.detail.name}*) once, naturally, in your reply.`);
+  }
   lines.push('');
   lines.push('RULES: State ONLY facts in EVIDENCE. One natural next-step question. No filler closers.');
   return lines.join('\n');
