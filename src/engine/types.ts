@@ -397,6 +397,8 @@ export interface Extracted {
   objectionTopic?: ObjectionTopic;
   wantsMore?: boolean;
   recall?: boolean;
+  /** Deterministic hold-intent gate (hold-intent.ts) — stamped by the extract funnel. */
+  holdAsk?: boolean;
   visitSlotText?: string;
   emiRatePercent?: number;
   emiTenureYears?: number;

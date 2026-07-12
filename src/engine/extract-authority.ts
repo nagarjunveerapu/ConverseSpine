@@ -18,6 +18,7 @@ import {
   type BamlExtractResult,
 } from './extract-baml.js';
 import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
+import { holdIntent } from './hold-intent.js';
 import { hasNarrowingConstraint } from './phases/discover.js';
 import { buyerCuedOtherProject } from './project_switch.js';
 import type {
@@ -154,6 +155,12 @@ export async function extractTurnAuthority(
   // PIV-03: "change to 2BHK under 70L" must recommend, not clarify_project_pick.
   if (isConstraintRefinementTurn(text) && !merged.namedProjects?.length && !merged.pickName) {
     merged = { ...merged, speechAct: 'search' };
+  }
+  // Phase 4: deterministic hold-intent gate ("hold/reserve a 2 bhk") — closed
+  // set, regex-only, so turn logs show exactly why the hold sub-flow fired.
+  if (holdIntent(text)) {
+    merged = { ...merged, holdAsk: true };
+    provenance.fields.holdAsk = 'regex';
   }
 
   if (merged.askTopics?.length && !baseRaw.askTopics?.length) {

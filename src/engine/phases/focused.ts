@@ -1,27 +1,5 @@
 import type { AnswerTopic, ConversationState, Extracted, TurnGoal } from '../types.js';
-
-// ── Unit-hold trigger (Phase 4 launch ops) ───────────────────────────────────
-// Deterministic lexical gate, same family as visit.ts's BARE_AFFIRM: an
-// explicit ask to hold/reserve/block a unit. "book"-family words are excluded
-// when the sentence is about a visit ("book a visit Saturday").
-const HOLD_VERB = /\b(?:hold|reserve|block|book)\b/i;
-const HOLD_OBJECT = /\b(?:[1-9]\s*(?:bhk|bed)|unit|flat|apartment|villa|plot|home|house|one|it)\b/i;
-const VISIT_WORDS = /\b(?:visit|site|tour|appointment|slot|come|drop by)\b/i;
-const BHK_OF = /([1-9])\s*(?:bhk|bed)/i;
-
-function holdIntent(text: string): boolean {
-  return HOLD_VERB.test(text) && HOLD_OBJECT.test(text) && !VISIT_WORDS.test(text);
-}
-
-/** The unit TYPE to hold: named in the ask ("2 bhk"), else the buyer's stated preference. */
-function holdUnitType(text: string, s: ConversationState): string | null {
-  const m = text.match(BHK_OF);
-  if (m) return `${m[1]} BHK`;
-  const bhk = s.constraints.bhk;
-  if (bhk && /^[1-9]$/.test(bhk.trim())) return `${bhk.trim()} BHK`;
-  if (bhk?.trim()) return bhk.trim();
-  return null;
-}
+import { holdUnitType } from '../hold-intent.js';
 
 /** Facet topics — P3-B: never collapse these to overview when already extracted. */
 const FACET_TOPICS: ReadonlySet<AnswerTopic> = new Set([
@@ -70,10 +48,12 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   if (ex.transition === 'want_visit') return { kind: 'propose_visit', projectId: focus.projectId };
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom', projectId: focus.projectId };
 
-  // Explicit ask to hold/reserve a unit → propose (only when we can resolve
-  // the TYPE; otherwise fall through and answer availability normally).
-  if (text && holdIntent(text)) {
-    const unitType = holdUnitType(text, s);
+  // Explicit ask to hold/reserve a unit — stamped as ex.holdAsk by the
+  // extract funnel (hold-intent.ts) so turn logs show why the gate fired.
+  // Proposes only when the TYPE resolves; otherwise falls through and
+  // answers availability normally.
+  if (ex.holdAsk) {
+    const unitType = holdUnitType(text, s.constraints.bhk);
     if (unitType) {
       return {
         kind: 'hold_propose',

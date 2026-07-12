@@ -60,12 +60,52 @@ describe('unit hold flow (launch ops)', () => {
     expect(v.debug.goal.kind).not.toBe('hold_booked');
   });
 
+  it('"book a 2 bhk" is purchase intent, NOT a hold — falls through to a normal answer', async () => {
+    const { deps, turn } = harness('hold-book-guard');
+    await turn('coorg, 50 Lakhs');
+    await turn('tell me about Ayana');
+    const r = await turn('can you book a 2 bhk for me?');
+    expect(r.debug.goal.kind).not.toBe('hold_propose');
+    expect(deps.data.holdsPlaced).toHaveLength(0);
+  });
+
+  it('weak object ("hold one for me") works with a strong verb + stated BHK preference', async () => {
+    const { turn } = harness('hold-weak-object');
+    await turn('2 bhk in coorg, 50 Lakhs'); // constraints.bhk = 2
+    await turn('tell me about Ayana');
+    const r = await turn('please hold one for me');
+    expect(r.debug.goal.kind).toBe('hold_propose');
+    expect(r.reply).toMatch(/2 BHK/i);
+  });
+
+  it('weak object with a weak verb ("block it") does NOT fire', async () => {
+    const { turn } = harness('hold-weak-verb');
+    await turn('2 bhk in coorg, 50 Lakhs');
+    await turn('tell me about Ayana');
+    const r = await turn('block it for me');
+    expect(r.debug.goal.kind).not.toBe('hold_propose');
+  });
+
   it('no resolvable unit type → no hold proposal (falls through to a normal answer)', async () => {
     const { turn } = harness('hold-no-type');
     await turn('coorg plots around 50 Lakhs');
     await turn('tell me about Ayana');
-    const r = await turn('please reserve it for me');
-    // No BHK in the ask and none in constraints → the gate must not fire.
+    const r = await turn('please reserve a flat for me');
+    // Explicit object but no BHK anywhere → the proposal must not fire.
     expect(r.debug.goal.kind).not.toBe('hold_propose');
+  });
+
+  it('type sold out mid-conversation → honest "just taken" copy, no invented hold', async () => {
+    const { deps, turn } = harness('hold-sold-out');
+    deps.data.placeHold = async () => ({ ok: false, reason: 'none_available' as const });
+    await turn('coorg, 50 Lakhs');
+    await turn('tell me about Ayana');
+    const propose = await turn('hold a 2 bhk for me');
+    expect(propose.debug.goal.kind).toBe('hold_propose');
+
+    const booked = await turn('yes');
+    expect(booked.debug.goal).toMatchObject({ kind: 'hold_booked', placed: false });
+    expect(booked.reply).toMatch(/just taken/i);
+    expect(booked.reply).not.toMatch(/held for you/i);
   });
 });
