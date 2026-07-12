@@ -597,11 +597,32 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   let evidence: EvidenceSet = { tools: [] };
+  if (goal.kind === 'hold_propose' && nd) {
+    // W7 — pre-check live per-type availability (Desk #203 counts, KV-cached
+    // context) BEFORE proposing: a sold-out type gets the waitlist offer up
+    // front instead of propose→fail. Counts absent (pre-#203 payloads) →
+    // fail open and keep the honest propose→409 path.
+    const wantType = goal.unitType.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const detail = await deps.data
+      .projectDetail(state.builderId, nd, goal.projectId)
+      .catch(() => null);
+    const cfg = detail?.configurations?.find(
+      (u) => u.unitType.toLowerCase().replace(/[^a-z0-9]/g, '') === wantType,
+    );
+    if (cfg && cfg.holdableUnits === 0) {
+      goal = {
+        ...goal,
+        copy: `Every *${goal.unitType}* at *${goal.projectName}* is on hold right now. Shall I put you on the waitlist? The next one that frees up is auto-held for you — reply yes to confirm.`,
+        state: { ...goal.state, queue: true },
+      };
+    }
+  }
   if (goal.kind === 'hold_booked') {
     // Place the hold NOW (evidence stage — commitProject precedent) so the
     // deterministic confirmation copy can reflect the real outcome: held
-    // until <time>, or the type just sold out. Desk auto-picks the unit; the
-    // one-active-hold invariant lives in its DB, not here.
+    // until <time>, queued on the waitlist, or the type just sold out. Desk
+    // auto-picks the unit; the one-active-hold invariant lives in its DB.
+    const wantQueue = state.hold?.queue === true;
     const res = nd
       ? await deps.data
           .placeHold(
@@ -610,6 +631,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
               projectId: goal.projectId,
               unitType: goal.unitType,
               ...(state.buyerName ? { buyerName: state.buyerName } : {}),
+              ...(wantQueue ? { queue: true } : {}),
               ttlMinutes: 24 * 60,
             },
           )
@@ -618,6 +640,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     goal = {
       ...goal,
       placed: res.ok,
+      ...(res.ok && 'waiting' in res && res.waiting
+        ? { queued: true, ...('position' in res && res.position ? { position: res.position } : {}) }
+        : {}),
       ...(res.ok && 'expiresAt' in res && res.expiresAt
         ? { expiresLabel: holdExpiryLabel(res.expiresAt) }
         : {}),

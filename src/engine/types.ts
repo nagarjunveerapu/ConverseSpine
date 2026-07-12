@@ -95,6 +95,8 @@ export interface HoldState {
   projectName?: string;
   /** W2 — turn the offer was made/downgraded; a bare affirm within 6 turns re-proposes. */
   offeredAtTurn?: number;
+  /** W7 — the type is sold out of available units: a confirm JOINS THE WAITLIST instead of holding. */
+  queue?: boolean;
 }
 
 export interface ConversationState {
@@ -200,7 +202,17 @@ export type TurnGoal =
    * Confirmed — the evidence stage places the hold via Desk (auto-picked unit)
    * and stamps the outcome onto the goal for the deterministic confirmation copy.
    */
-  | { kind: 'hold_booked'; projectId: string; projectName: string; unitType: string; placed?: boolean; expiresLabel?: string }
+  | {
+      kind: 'hold_booked';
+      projectId: string;
+      projectName: string;
+      unitType: string;
+      placed?: boolean;
+      expiresLabel?: string;
+      /** W7 — the confirm joined the waitlist (type sold out): queued + position. */
+      queued?: boolean;
+      position?: number;
+    }
   | { kind: 'handoff' }
   | { kind: 'warm_ack' }
   | { kind: 'smalltalk' };
@@ -277,7 +289,11 @@ export interface ProjectDetail {
     priceDisplay: string;
     priceMinInr: number;
     sizeDisplay?: string;
+    /** W7 — live count of holdable physical units of this type (Desk #203). */
+    holdableUnits?: number;
   }>;
+  /** W7 — one buyer-ready phase caveat ("Phase 2 is pre-RERA — booking opens at registration"). */
+  phaseNote?: string;
   location?: {
     connectivitySummary?: string;
     microMarketOverview?: string;

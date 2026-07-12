@@ -1,6 +1,6 @@
 import { NayaDeskError, type NayaDeskClient } from '../../crm/nayadesk-client.js';
 import type { EngineCrm, EngineData, StoredVisit } from '../ports.js';
-import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom } from '../compose.js';
+import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom, phaseNoteFrom } from '../compose.js';
 import {
   mapEnrichmentSummaryToUnitConfigs,
   mapLegacyUnitsToUnitConfigs,
@@ -110,8 +110,13 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
               unitType: u.unit_type ?? '',
               priceDisplay: u.price_display ?? (u.price_min_paise ? formatInr(Math.round(u.price_min_paise / 100)) : ''),
               priceMinInr: u.price_min_paise ? Math.round(u.price_min_paise / 100) : 0,
+              // W7 — live holdable count per type (Desk #203); undefined = pre-#203 payload.
+              ...(typeof u.holdable_units === 'number' ? { holdableUnits: u.holdable_units } : {}),
             }))
             .filter((u) => u.unitType);
+          // W7 — one buyer-ready phase caveat from the journey composer output
+          // (pre-RERA phases can hold/EOI but not book).
+          const phaseNote = phaseNoteFrom(ctx.phase_journeys);
           return {
             projectId: p.project_id,
             name: p.name,
@@ -132,6 +137,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
             ),
             ...(faqs.length ? { faqs } : {}),
             ...(configurations.length ? { configurations } : {}),
+            ...(phaseNote ? { phaseNote } : {}),
             ...(mapLocationIntel(ctx.location_intelligence) ? { location: mapLocationIntel(ctx.location_intelligence) } : {}),
           };
         }
@@ -413,16 +419,22 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           unit_type: hold.unitType,
           conversation_id: ids.ndConversationId,
           ...(hold.buyerName ? { buyer_name: hold.buyerName } : {}),
+          ...(hold.queue ? { queue: true } : {}),
           ttl_minutes: hold.ttlMinutes ?? 24 * 60,
         });
+        // W7 — queue:true may land on the waitlist (202 waiting) instead of a
+        // hold; surface it so the confirmation copy is honest about which.
+        if (r.status === 'waiting') {
+          return { ok: true, waiting: true, ...(r.position ? { position: r.position } : {}) };
+        }
         return {
           ok: true,
-          expiresAt: r.expires_at,
+          ...(r.expires_at ? { expiresAt: r.expires_at } : {}),
           ...(r.unit_number ? { unitNumber: r.unit_number } : {}),
         };
       } catch (err) {
-        // 409 = no_units_available (type sold out) — an expected outcome the
-        // copy must reflect; 404 = unknown type name for this project.
+        // 409 = no_units_available (type fully sold, or already_waiting) — an
+        // expected outcome the copy must reflect; 404 = unknown type name.
         if (err instanceof NayaDeskError && (err.status === 409 || err.status === 404)) {
           return { ok: false, reason: 'none_available' };
         }
