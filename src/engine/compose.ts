@@ -21,6 +21,13 @@ export function renderComposePrompt(req: ComposeRequest): string {
   );
   lines.push(`Write ONE short reply (2-4 sentences, WhatsApp tone). No markdown headers or bullet dumps.`);
   lines.push(`This turn's GOAL: ${describeGoal(goal)}.`);
+  if (req.vary) {
+    // W3 — anti-repeat retry: the previous draft matched the last bot reply
+    // verbatim (see PRIOR CONTEXT's excerpt). Same facts, fresh wording.
+    lines.push(
+      'IMPORTANT: your previous draft repeated the last bot reply word-for-word. Say it DIFFERENTLY and advance the conversation one concrete step.',
+    );
+  }
   lines.push('');
   lines.push('EVIDENCE — the ONLY facts you may state:');
   lines.push(renderEvidence(evidence));
@@ -263,6 +270,12 @@ export function fallbackReply(req: ComposeRequest): string {
       return `Which one should I open for details — ${list}?`;
     }
     case 'advance': {
+      // W2 — a focused bare-affirm ("ok"/"yes" with nothing pending) lands
+      // here: nudge the DEAL forward, not the search. The search-flavored
+      // copy below stays for the discover flow it was written for.
+      if (context.focusProjectName) {
+        return `Shall I set up a visit to *${context.focusProjectName}*, or hold a unit for you while you decide?`;
+      }
       const lead = ev.matches?.[0]?.name;
       if (ev.nextSlot) return `Those are still the closest fits. ${probeCopy(ev.nextSlot)}`;
       return `Those are the ones that fit${lead ? ` — want full details on *${lead}*, or a site visit?` : '.'}`;
