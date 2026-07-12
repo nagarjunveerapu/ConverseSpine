@@ -448,7 +448,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
   // P2: search brief + visit with empty board → stay discover and recommend first.
   // Do not enter visit on embedder-named noise before a shortlist exists.
-  if (ex.transition === 'want_visit') {
+  // W8/holds: a hold ask ("hold a 2 bhk for me") must NEVER flip to the visit
+  // phase — the real embedder classifies "hold" as want_visit, which stole the
+  // turn from the hold gate on dev (unit tests missed it: the fake NLU doesn't
+  // set that transition). holdIntent already excludes visit words, so holdAsk
+  // is an unambiguous "hold, not visit".
+  if (ex.transition === 'want_visit' && !ex.holdAsk) {
     const freshSearchBrief =
       (discover.hasNarrowingConstraint(state.constraints) ||
         discover.hasNarrowingConstraint(ex.constraints)) &&
