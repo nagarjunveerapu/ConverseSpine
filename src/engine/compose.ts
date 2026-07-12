@@ -28,6 +28,13 @@ export function renderComposePrompt(req: ComposeRequest): string {
       'IMPORTANT: your previous draft repeated the last bot reply word-for-word. Say it DIFFERENTLY and advance the conversation one concrete step.',
     );
   }
+  if (req.repair?.unbacked.length) {
+    // W1 — grounding retry: the checker rejected these exact values as not
+    // present in EVIDENCE. One more draft, evidence-only.
+    lines.push(
+      `IMPORTANT: your previous draft was REJECTED — it stated ${req.repair.unbacked.join(', ')} which is NOT in EVIDENCE. Rewrite using ONLY values that appear verbatim in EVIDENCE; if a number isn't there, don't state one.`,
+    );
+  }
   lines.push('');
   lines.push('EVIDENCE — the ONLY facts you may state:');
   lines.push(renderEvidence(evidence));

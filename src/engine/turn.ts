@@ -749,25 +749,53 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  // W1+W3 share ONE bounded LLM retry per turn (review: no repair forest).
+  let retryUsed = false;
+
   let reply = stripBanned(draft);
   let grounding: TurnDebug['grounding'] = 'pass';
-  if (!checkGrounding(reply, evidence, input.text).grounded) {
-    reply = fallbackReply(req);
-    grounding = 'repaired';
+  const g1 = checkGrounding(reply, evidence, input.text);
+  if (!g1.grounded) {
+    // W1 — repair without killing the thread: feed the checker's exact
+    // rejections back for ONE re-compose before the template floor. This is
+    // the 49%-of-answer-turns problem measured in Week 0. Template-locked
+    // goals never reach here (they never compose).
+    let repaired = '';
+    if (!templateLocked && !retryUsed) {
+      retryUsed = true;
+      try {
+        repaired = stripBanned(
+          (await deps.llm.compose({ ...req, repair: { unbacked: g1.unbacked } })).trim(),
+        );
+      } catch { /* template floor below */ }
+    }
+    if (
+      repaired &&
+      checkGrounding(repaired, evidence, input.text).grounded &&
+      !needsStructuredRepair(goal, evidence, repaired, disclosedForCompose, input.text)
+    ) {
+      reply = repaired;
+      grounding = 'recomposed';
+    } else {
+      reply = fallbackReply(req); // the floor never moves
+      grounding = 'repaired';
+    }
   } else if (needsStructuredRepair(goal, evidence, reply, disclosedForCompose, input.text)) {
+    // Structured repair is topic-shape enforcement — the template IS the
+    // intended output; no retry.
     reply = fallbackReply(req);
     grounding = 'repaired';
   }
   if (!reply.trim()) reply = "Let me pull those details together and follow up shortly.";
 
-  // W3 — repeat guard: never send the previous line verbatim. One bounded
-  // re-compose with fresh-wording instructions (shares the "max 1 retry,
-  // template-locked skip" budget with W1's grounding retry when that lands);
-  // if the varied draft is empty/ungrounded/still identical, fall to the
-  // template — and if even THAT matches, keep it (deterministic content is
-  // allowed to repeat; only LLM drafts are guarded).
+  // W3 — repeat guard: never send the previous line verbatim. Shares the
+  // single retry budget with W1 above; if the varied draft is empty/
+  // ungrounded/still identical, fall to the template — and if even THAT
+  // matches, keep it (deterministic content is allowed to repeat; only LLM
+  // drafts are guarded).
   let repeat_guard: TurnDebug['repeat_guard'];
-  if (!templateLocked && state.lastReply && sameLine(reply, state.lastReply)) {
+  if (!templateLocked && !retryUsed && state.lastReply && sameLine(reply, state.lastReply)) {
+    retryUsed = true;
     let varied = '';
     try {
       varied = stripBanned(
