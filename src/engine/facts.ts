@@ -537,11 +537,31 @@ function detectShownName(_text: string, _s: ConversationState): string | undefin
 
 const TOPIC_ORDER: AnswerTopic[] = ['compare', 'price', 'legal', 'property_type', 'location', 'emi', 'amenities', 'availability', 'media'];
 
+// Cost-sheet component vocabulary — the ONE source shared by the price topic
+// pattern and the deterministic price-topic floor (extract-authority, W7).
+// Unambiguous cost terms only: bare "registration" stays legal (RERA), bare
+// "charges" stays the maintenance FAQ. Bare "tax(es)" is deliberately excluded —
+// it steals FAQ-shaped asks ("property tax?", "tax benefit?") — so taxes ground
+// only via a cost neighbour ("charges and taxes"); GST/cess are cost-specific.
+const COST_COMPONENT_SRC =
+  'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?(?:\\s+(?:and\\s+)?taxes?)?|gst|cess|cost\\s+sheet';
+const COST_COMPONENT_RE = new RegExp(`\\b(?:${COST_COMPONENT_SRC})\\b`, 'i');
+
+/** A cost-sheet component ask (stamp duty, registration charges, GST, …). */
+export function isCostComponentAsk(text: string): boolean {
+  return COST_COMPONENT_RE.test(text);
+}
+
 const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'compare', re: /\b(?:compare|vs|versus|side by side|difference between|both projects?)\b/i },
   {
+    // Cost-sheet components (stamp duty, registration charges, taxes) are price
+    // asks — they must route to the pricing evidence, not fall to no_fit (W7).
     topic: 'price',
-    re: /\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\s+sale\s+price|carpet(?:\s+area)?|sba|super\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\s+prices?)\b/i,
+    re: new RegExp(
+      `\\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\\s+sale\\s+price|carpet(?:\\s+area)?|sba|super\\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\\s+prices?|${COST_COMPONENT_SRC})\\b`,
+      'i',
+    ),
   },
   {
     topic: 'legal',
