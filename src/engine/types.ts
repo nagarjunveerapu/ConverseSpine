@@ -12,15 +12,24 @@ export interface Constraints {
   /** Soft prefs — provenance/compose only; not Desk locality invent. */
   nearAirport?: boolean;
   readyToMove?: boolean;
+  /** Trade-off Advisor soft signals — persisted as BPE facts at Layer 13;
+   *  never Desk search-filter tokens (the Desk resolves weights from BPE). */
+  commuteHub?: string;
+  priorityFocus?: 'commute' | 'budget' | 'balanced';
+  schoolsMentioned?: boolean;
+  /** Buyer's stated worries from the advisor brief ("overpaying", "daily traffic"). */
+  worries?: string[];
 }
 
-export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose';
+export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose' | 'priority';
 
 export interface OfferedProject {
   projectId: string;
   name: string;
   microMarket?: string;
   startingPriceDisplay?: string;
+  /** Desk-authored trade-off narration ("✓ 17 min to ITPL · ⚠ ₹15 L over…"). */
+  tradeoffNote?: string;
 }
 
 export interface TranscriptMessage {
@@ -225,6 +234,8 @@ export interface Match {
   startingPriceDisplay: string;
   matchReasons: string[];
   projectType?: string;
+  /** Desk-authored trade-off narration; evidence-grade (speakable verbatim). */
+  tradeoffNote?: string;
 }
 
 export interface CatalogEnvelope {
@@ -245,6 +256,15 @@ export interface SearchFilters {
   purpose?: 'self_use' | 'investment';
   searchText?: string;
   maxResults?: number;
+  /** Desk conversations row id. Recommend path only — lets the Desk resolve
+   *  the buyer's BPE preference weights and re-rank + narrate trade-offs.
+   *  Never set for catalog/facet/recovery-count calls. */
+  conversationId?: string;
+  /** Explicit in-state weights (advisor-weights.ts) — win over conversationId
+   *  resolution Desk-side; close the same-turn persist race. */
+  preferenceWeights?: Record<string, number>;
+  commuteHub?: string;
+  budgetTargetInr?: number;
 }
 
 export interface PricingEvidence {

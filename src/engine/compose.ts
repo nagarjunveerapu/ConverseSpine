@@ -167,7 +167,7 @@ function renderEvidence(ev: EvidenceSet): string {
         ev.matches
           .map(
             (m) =>
-              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}`,
+              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}${m.tradeoffNote ? ` (fit: ${m.tradeoffNote})` : ''}`,
           )
           .join('\n'),
     );
@@ -270,7 +270,11 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
       const list = ms
+<<<<<<< HEAD
         .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}`)
+=======
+        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}${m.tradeoffNote ? ` — ${m.tradeoffNote}` : ''}`)
+>>>>>>> f3c72c0 (feat(advisor): capture tradeoff weights and pass preference re-rank to Desk)
         .join('; ');
       return `${pre}Here's what fits: ${list}. Want details on any of these, or shall I set up a visit?`;
     }
@@ -642,6 +646,8 @@ function probeCopy(slot: ProbeKind): string {
       return 'How many bedrooms — 2 BHK, 3 BHK, something else?';
     case 'purpose':
       return 'Is this for you to live in, or as an investment?';
+    case 'priority':
+      return 'One quick thing so I rank these right — does a shorter commute matter more, or staying on budget?';
   }
 }
 

@@ -60,6 +60,10 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         project_types: filters.projectTypes ? splitCsv(filters.projectTypes) : undefined,
         purpose: filters.purpose,
         ...(filters.searchText ? { search_text: filters.searchText } : {}),
+        ...(filters.conversationId ? { conversation_id: filters.conversationId } : {}),
+        ...(filters.preferenceWeights ? { preference_weights: filters.preferenceWeights } : {}),
+        ...(filters.commuteHub ? { commute_hub: filters.commuteHub } : {}),
+        ...(filters.budgetTargetInr ? { budget_target_inr: filters.budgetTargetInr } : {}),
         max_results: filters.maxResults ?? 5,
       });
       return {
@@ -71,6 +75,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           starting_price_display: m.starting_price_display,
           match_reasons: m.match_reasons,
           project_type: m.project_type,
+          ...(m.tradeoff_note ? { tradeoff_note: m.tradeoff_note } : {}),
         })),
         expandedLocations: resp.expanded_locations ?? [],
         noMatchReasoning: resp.no_match_reasoning ?? '',

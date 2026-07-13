@@ -77,6 +77,8 @@ export interface EngineData {
       starting_price_display: string;
       match_reasons?: string[];
       project_type?: string;
+      /** Desk trade-off narration (advisor preference re-rank; optional). */
+      tradeoff_note?: string;
     }>;
     expandedLocations?: string[];
     noMatchReasoning?: string;

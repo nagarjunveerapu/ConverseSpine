@@ -29,6 +29,9 @@ function allowedTokens(ev: EvidenceSet, buyerText: string): Set<string> {
   for (const m of ev.matches ?? []) {
     addMoney(m.startingPriceDisplay);
     if (!m.startingPriceDisplay && m.startingPriceInr > 0) addMoney(formatInr(m.startingPriceInr));
+    // Desk-authored trade-off notes carry evidence-grade ₹ figures
+    // ("₹15 L over your budget") — allowed, else repair eats the note.
+    addMoney(m.tradeoffNote);
   }
   addMoney(ev.floor?.display);
   if (ev.pricing) {
