@@ -2,7 +2,7 @@ import type { SuggestedAction } from '../recovery-planner.js';
 import { constraintsFromAdvisorPreferences } from '../../advisor/apply-preferences.js';
 import { commitTo, releaseToDiscover } from '../state.js';
 import type { ConversationState } from '../types.js';
-import { isBudgetFitQuestion } from '../facts.js';
+import { isBudgetFitQuestion, isCostComponentAsk } from '../facts.js';
 import { extractRecoveryPatchFromText } from './extract-recovery-patch.js';
 import { classifyFocusedPivot, shouldRunFocusedTurnIntent } from './focused-intent.js';
 import { isCompareAmongOfferedTurn } from './compare-intent.js';
@@ -221,6 +221,10 @@ export function shouldRunTurnIntent(state: ConversationState, actionId?: string,
     return false;
   }
   if (state.phase === 'focused') {
+    // W7: a cost-sheet ask (stamp duty, registration charges, taxes) while
+    // focused is a facet question about the focus — let the main pipeline answer
+    // it on the pricing evidence; never divert to a search-recovery probe.
+    if (text && isCostComponentAsk(text)) return false;
     if (text && DECLINE.test(text.trim())) return true;
     if (state.rti?.pendingPrompt) {
       const pending = state.rti.pendingPrompt;
