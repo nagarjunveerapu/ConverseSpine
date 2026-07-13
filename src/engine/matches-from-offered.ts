@@ -9,5 +9,6 @@ export function matchesFromLastOffered(state: ConversationState): Match[] {
     startingPriceInr: 0,
     startingPriceDisplay: o.startingPriceDisplay ?? '',
     matchReasons: ['on your shortlist'],
+    ...(o.tradeoffNote ? { tradeoffNote: o.tradeoffNote } : {}),
   }));
 }

@@ -5,7 +5,9 @@
 import type { ConverseRuntime } from '../runtime/deps.js';
 import { runEngineTurn } from '../engine/turn.js';
 import { prefetchProjects } from '../engine/project-cache.js';
-import { commitTo, initState, withNdConversation } from '../engine/state.js';
+import { commitTo, initState, markAsked, withNdConversation } from '../engine/state.js';
+import { detectSoftPrefs } from '../engine/facts.js';
+import { derivedPriorityFromWorries } from '../engine/advisor-weights.js';
 import { mapAdvisorTurnResponse } from './map-response.js';
 import { mergeAdvisorPreferences, preferenceClearsFromPatch, ingressFilledSlotsFromPreferences } from './apply-preferences.js';
 import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
@@ -69,6 +71,59 @@ export async function handleAdvisorTurn(
         discover: { ...existing.discover, oriented: true },
       };
       await rt.engine.store.save(existing);
+
+      // Trade-off Advisor: one-time priority ask, exactly between brief-merge
+      // and the first shortlist. Advisor-door pre-turn (same class as the
+      // preference merge above — no engine stage added). The buyer's chip
+      // answer next turn is parsed at L3 (detectSoftPrefs → priorityFocus)
+      // and drives the Desk preference re-rank. Asked at most once ever
+      // (markAsked); ignored answers simply proceed unweighted.
+      const narrowing = Boolean(
+        existing.constraints.budgetMaxInr ||
+        existing.constraints.bhk ||
+        existing.constraints.location ||
+        existing.constraints.propertyType,
+      );
+      // Worries can settle commute-vs-budget on their own — then don't ask.
+      if (!existing.constraints.priorityFocus) {
+        const derived = derivedPriorityFromWorries(existing.constraints);
+        if (derived) {
+          existing = {
+            ...existing,
+            constraints: { ...existing.constraints, priorityFocus: derived },
+          };
+          await rt.engine.store.save(existing);
+        }
+      }
+      if (
+        narrowing &&
+        !existing.constraints.priorityFocus &&
+        !existing.discover.asked.includes('priority') &&
+        existing.discover.lastOffered.length === 0 &&
+        !projectId &&
+        !body.action_id?.trim()
+      ) {
+        // Keep soft signals the intercepted text carried ("we work at ITPL").
+        const soft = detectSoftPrefs(text);
+        let askedState = markAsked(existing, 'priority');
+        if (Object.keys(soft).length > 0) {
+          askedState = { ...askedState, constraints: { ...askedState.constraints, ...soft } };
+        }
+        await rt.engine.store.save(askedState);
+        return {
+          status: 'ok',
+          session_id,
+          reply:
+            'One quick thing so I rank these right — does a shorter commute matter more, or staying on budget?',
+          conversation_id: convId,
+          ...(askedState.ndConversationId ? { nd_conversation_id: askedState.ndConversationId } : {}),
+          phase: askedState.phase,
+          // matches_hub moves the SPA out of brief_collect so nba.chips render
+          // (brief_collect keeps the brief wizard's own chips in the tray).
+          ui_mode: 'matches_hub',
+          nba: { chips: ['Shorter commute', 'Staying on budget', 'About equal'], board: 'none' },
+        };
+      }
     }
   }
 

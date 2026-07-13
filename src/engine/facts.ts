@@ -138,8 +138,13 @@ export async function extractFacts(
     if (budget.min !== undefined) constraints.budgetMinInr = budget.min;
   }
   if (bhk && !constraints.bhk) constraints.bhk = bhk;
+  // A priority-probe answer ("Shorter commute") is a preference reply — the
+  // location extractor must not eat it as a locality ("green near the hills"
+  // bug class: un-understood text stuffed into the location slot).
+  const softPrefs = detectSoftPrefs(text);
   if (
     !constraints.location &&
+    !softPrefs.priorityFocus &&
     askTopic !== 'compare' &&
     !isVisitDayUtterance(text) &&
     isSlotWritable('location', filled, text)
@@ -148,11 +153,12 @@ export async function extractFacts(
   }
   if (propertyTypeKw) constraints.propertyType = propertyTypeKw;
   if (purposeKw) constraints.purpose = purposeKw;
-  Object.assign(constraints, detectSoftPrefs(text));
+  Object.assign(constraints, softPrefs);
 
   const needLlm: Array<'location' | 'property_type' | 'purpose' | 'transition'> = [];
   if (
     !constraints.location &&
+    !softPrefs.priorityFocus &&
     askTopics.length === 0 &&
     s.phase !== 'focused' &&
     s.phase !== 'visit' &&
@@ -253,8 +259,9 @@ export function extractFactsSync(
   const constraints: Extracted['constraints'] = {};
   if (budget) constraints.budgetMaxInr = budget.max;
   const askTopics = detectTopics(text);
+  const softPrefsSync = detectSoftPrefs(text);
   const loc =
-    isSlotWritable('location', filled, text)
+    !softPrefsSync.priorityFocus && isSlotWritable('location', filled, text)
       ? extractLocation(text, locationExtractCtx(s, askTopics, text))
       : undefined;
   if (loc) constraints.location = loc;
@@ -264,7 +271,7 @@ export function extractFactsSync(
   if (propertyType) constraints.propertyType = propertyType;
   const purpose = isSlotWritable('purpose', filled, text) ? detectPurpose(text) : undefined;
   if (purpose) constraints.purpose = purpose;
-  Object.assign(constraints, detectSoftPrefs(text));
+  Object.assign(constraints, softPrefsSync);
   const askTopic = askTopics[0];
   const transitionKw = detectTransition(text);
   const namedProjects = resolveNamed(text, s);
@@ -603,11 +610,37 @@ export function detectTopics(text: string): AnswerTopic[] {
 }
 
 /** Soft prefs on Constraints — not answer topics / not Desk search_text. */
-export function detectSoftPrefs(text: string): Pick<Extracted['constraints'], 'readyToMove' | 'nearAirport'> {
-  const out: Pick<Extracted['constraints'], 'readyToMove' | 'nearAirport'> = {};
+export function detectSoftPrefs(
+  text: string,
+): Pick<
+  Extracted['constraints'],
+  'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned'
+> {
+  const out: Pick<
+    Extracted['constraints'],
+    'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned'
+  > = {};
   if (/\bready\s+to\s+move\b|\bpreferably\s+ready\b/i.test(text)) out.readyToMove = true;
   if (/\bnear(?:\s+the)?\s+airport\b|\bairport\s+(?:side|corridor|road)\b/i.test(text)) {
     out.nearAirport = true;
+  }
+  // Trade-off Advisor soft signals — deterministic phrasings only (chip texts
+  // + common free-text forms). Anything fuzzier belongs to L4 gap-fill.
+  if (/\bshorter\s+commute\b|\bcommute\s+(?:matters|first|is\s+(?:key|top))\b/i.test(text)) {
+    out.priorityFocus = 'commute';
+  } else if (/\bstay(?:ing)?\s+(?:on|under|within)\s+budget\b|\bbudget\s+(?:matters|first|is\s+(?:key|top))\b/i.test(text)) {
+    out.priorityFocus = 'budget';
+  } else if (/\babout\s+equal\b|\bboth\s+matter\b|\bbalanced\b/i.test(text)) {
+    out.priorityFocus = 'balanced';
+  }
+  // Hub names are capitalized ("ITPL", "Electronic City") — capture a run of
+  // capital-initial words so trailing adverbs ("daily") never leak in.
+  const HUB_NAME = /([A-Z][A-Za-z0-9.&-]*(?:\s+[A-Z][A-Za-z0-9.&-]*){0,3})/;
+  const hub = text.match(new RegExp(String.raw`\b(?:work(?:ing)?|office)\s+(?:is\s+)?(?:at|in|near)\s+` + HUB_NAME.source))
+    ?? text.match(new RegExp(String.raw`\bcommut(?:e|ing)\s+to\s+` + HUB_NAME.source));
+  if (hub?.[1]) out.commuteHub = hub[1].trim();
+  if (/\bgood\s+schools?\b|\bschools?\s+near(?:by)?\b|\bkids?['\u2019]?s?\s+school\b/i.test(text)) {
+    out.schoolsMentioned = true;
   }
   return out;
 }

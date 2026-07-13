@@ -32,6 +32,8 @@ export interface AdvisorProjectCard {
   micro_market: string;
   price_label: string;
   source_builder_id?: string;
+  /** Desk-authored trade-off narration for the fit line on match cards. */
+  tradeoff_note?: string;
 }
 
 export interface AdvisorTurnResponse {

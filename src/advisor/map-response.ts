@@ -99,6 +99,7 @@ function mapProjectCards(state: AdvisorMapInput['state']): AdvisorProjectCard[] 
     name: o.name,
     micro_market: o.microMarket ?? '',
     price_label: o.startingPriceDisplay ?? '',
+    ...(o.tradeoffNote ? { tradeoff_note: o.tradeoffNote } : {}),
   }));
 }
 
@@ -110,5 +111,10 @@ function mapPrefsSnapshot(state: AdvisorMapInput['state']): Record<string, strin
   if (c.purpose) out.purpose = c.purpose;
   if (c.budgetMaxInr) out.budget = formatInr(c.budgetMaxInr);
   if (c.propertyType) out.property_type = c.propertyType;
+  // Trade-off Advisor soft signals — the SPA's "what Naya understands" tray.
+  if (c.commuteHub) out.commute_hub = c.commuteHub;
+  if (c.priorityFocus) out.priority = c.priorityFocus;
+  if (c.schoolsMentioned) out.schools = 'important';
+  if (c.worries?.length) out.worries = c.worries.join(', ');
   return out;
 }

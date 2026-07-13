@@ -107,6 +107,10 @@ export interface NdSearchMatch {
   match_reasons?: string[];
   lat?: number | null;
   lng?: number | null;
+  /** Trade-off Advisor (Desk Phase 1): grounded trade-off narration, present
+   *  only when the search resolved preference weights for this conversation. */
+  tradeoff_note?: string;
+  preference_boost?: number;
 }
 
 export interface NdPricingQuote {
@@ -293,6 +297,13 @@ export class NayaDeskClient {
     project_types?: string[];
     purpose?: 'self_use' | 'investment';
     max_results?: number;
+    /** Trade-off Advisor: Desk resolves BPE weights for this conversation and
+     *  re-ranks + narrates. Recommend path only; other callers omit it. */
+    conversation_id?: string;
+    /** Explicit weights win over conversation_id resolution (Desk contract). */
+    preference_weights?: Record<string, number>;
+    commute_hub?: string;
+    budget_target_inr?: number;
   }): Promise<{ matches: NdSearchMatch[]; expanded_locations?: string[]; no_match_reasoning?: string }> {
     return this.call('POST', '/api/projects/search', req);
   }

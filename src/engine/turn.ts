@@ -34,6 +34,7 @@ import {
   shouldAllowBudgetGapNoFit,
 } from './turn-intent/compare-intent.js';
 import { matchesFromLastOffered } from './matches-from-offered.js';
+import { advisorSearchPrefs, importanceFromConstraints } from './advisor-weights.js';
 import { resolveFocusedSwitchGoal } from './project_switch.js';
 import { driveLeg, haversineDriveMinutes } from './trip-logistics.js';
 import { catalogFromProjectCoords, projectGeo } from './project-geo.js';
@@ -319,6 +320,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   });
   let ex = extractResult.extracted;
   const extractProvenance = extractResult.provenance;
+
+  // Trade-off soft signals (priority / hub / schools / worries) are advisor-web
+  // only. detectSoftPrefs still runs in facts for the location-pollution guard,
+  // but WA must not persist those fields or fire Desk preference re-rank.
+  if (channel !== 'advisor_web') {
+    const hardConstraints = { ...ex.constraints };
+    delete hardConstraints.priorityFocus;
+    delete hardConstraints.commuteHub;
+    delete hardConstraints.schoolsMentioned;
+    delete hardConstraints.worries;
+    ex = { ...ex, constraints: hardConstraints };
+  }
 
   // P4-CTA: RTI seeded topic (e.g. price after offer_pricing → yes) wins over bare affirm.
   if (rtiSeedAskTopic) {
@@ -666,7 +679,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       goal = answerGoal;
     }
   } else if (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') {
-    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText));
+    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText, channel));
   } else if (goal.kind === 'objection') {
     ({ goal, evidence } = await fetchObjection(goal, state, deps, nd));
   } else if (goal.kind === 'answer') {
@@ -1104,6 +1117,7 @@ async function fetchRecommend(
   ex: Extracted,
   deps: EngineDeps,
   buyerText: string,
+  channel: TurnIntentChannel = 'whatsapp',
 ): Promise<{ goal: TurnGoal; evidence: EvidenceSet }> {
   const relistShortlist = (): { goal: TurnGoal; evidence: EvidenceSet } | null => {
     const ms = matchesFromLastOffered(s);
@@ -1112,6 +1126,19 @@ async function fetchRecommend(
   };
 
   let filters = discover.searchFilters(s.constraints);
+  // Trade-off Advisor: only the recommend path carries preference inputs.
+  // Explicit in-state weights (chip answer this session) win Desk-side;
+  // conversation_id lets the Desk fall back to stored BPE facts for a
+  // returning buyer whose KV state expired. Catalog/facet/recovery-count
+  // calls never set either (meaningless there). Advisor-web only — WA must
+  // not re-rank on soft NL heuristics.
+  if (s.ndConversationId) filters = { ...filters, conversationId: s.ndConversationId };
+  if (channel === 'advisor_web') {
+    const prefs = advisorSearchPrefs(s.constraints);
+    if (prefs.preferenceWeights) filters = { ...filters, preferenceWeights: prefs.preferenceWeights };
+    if (prefs.commuteHub) filters = { ...filters, commuteHub: prefs.commuteHub };
+    if (prefs.budgetTargetInr) filters = { ...filters, budgetTargetInr: prefs.budgetTargetInr };
+  }
   const strictSearch = await searchWithFilters(deps, s.builderId, filters);
 
   const offeredIds = new Set(s.discover.lastOffered.map((o) => o.projectId));
@@ -1125,6 +1152,7 @@ async function fetchRecommend(
       startingPriceDisplay: m.starting_price_display,
       matchReasons: m.match_reasons ?? [],
       projectType: m.project_type,
+      ...(m.tradeoff_note ? { tradeoffNote: m.tradeoff_note } : {}),
     }))
     .filter((m) => !s.discover.rejectedProjectIds.includes(m.projectId))
     .filter((m) => (ex.wantsMore ? !offeredIds.has(m.projectId) : true));
@@ -1358,6 +1386,7 @@ async function searchWithFilters(
     starting_price_display: string;
     match_reasons?: string[];
     project_type?: string;
+    tradeoff_note?: string;
   }>;
   expandedLocations?: string[];
   noMatchReasoning?: string;
@@ -1366,7 +1395,7 @@ async function searchWithFilters(
 }
 
 function rawToMatches(
-  rows: Array<{ project_id: string; name: string; micro_market: string; starting_price_inr: number; starting_price_display: string; match_reasons?: string[]; project_type?: string }>,
+  rows: Array<{ project_id: string; name: string; micro_market: string; starting_price_inr: number; starting_price_display: string; match_reasons?: string[]; project_type?: string; tradeoff_note?: string }>,
 ): Match[] {
   return rows.map((m) => ({
     projectId: m.project_id,
@@ -1376,6 +1405,7 @@ function rawToMatches(
     startingPriceDisplay: m.starting_price_display,
     matchReasons: m.match_reasons ?? [],
     projectType: m.project_type,
+    ...(m.tradeoff_note ? { tradeoffNote: m.tradeoff_note } : {}),
   }));
 }
 
@@ -1970,6 +2000,23 @@ async function syncTelemetry(
   }
   if (state.constraints.propertyType) {
     observations.push({ fact_key: 'property_interest', value: [state.constraints.propertyType], provenance: prov });
+  }
+  // Trade-off Advisor soft signals — mirror of advisor-weights.ts so the BPE
+  // resolves the same ranking for a returning buyer (migration 0116 keys).
+  // Advisor-web only (same gate as fetchRecommend).
+  if ((input.channel ?? 'whatsapp') === 'advisor_web') {
+    if (state.constraints.commuteHub) {
+      observations.push({ fact_key: 'commute_hub', value: state.constraints.commuteHub, provenance: prov });
+    }
+    if (state.constraints.worries?.length) {
+      observations.push({ fact_key: 'worries', value: state.constraints.worries, provenance: prov });
+    }
+    {
+      const imp = importanceFromConstraints(state.constraints);
+      if (imp.commute !== undefined) observations.push({ fact_key: 'commute_importance', value: imp.commute, provenance: prov });
+      if (imp.schools !== undefined) observations.push({ fact_key: 'school_importance', value: imp.schools, provenance: prov });
+      if (imp.budget !== undefined) observations.push({ fact_key: 'budget_importance', value: imp.budget, provenance: prov });
+    }
   }
   if (state.focus) {
     observations.push({

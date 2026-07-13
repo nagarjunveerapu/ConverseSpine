@@ -172,6 +172,9 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
     name: m.name,
     microMarket: m.microMarket,
     startingPriceDisplay: m.startingPriceDisplay,
+    // Trade-off note must survive this projection or it never reaches the
+    // advisor SPA — cards render from lastOffered, not raw search evidence.
+    ...(m.tradeoffNote ? { tradeoffNote: m.tradeoffNote } : {}),
   }));
   return { ...s, discover: { ...s.discover, lastOffered, ignoredProbes: 0 } };
 }
@@ -265,6 +268,12 @@ function pruneUndefined(c: Partial<Constraints>): Partial<Constraints> {
   if (c.purpose !== undefined) out.purpose = c.purpose;
   if (c.nearAirport !== undefined) out.nearAirport = c.nearAirport;
   if (c.readyToMove !== undefined) out.readyToMove = c.readyToMove;
+  // Trade-off Advisor soft signals — a missing line here silently drops the
+  // field at the extract→state boundary (this bit priorityFocus once).
+  if (c.commuteHub !== undefined) out.commuteHub = c.commuteHub;
+  if (c.priorityFocus !== undefined) out.priorityFocus = c.priorityFocus;
+  if (c.schoolsMentioned !== undefined) out.schoolsMentioned = c.schoolsMentioned;
+  if (c.worries !== undefined) out.worries = c.worries;
   return out;
 }
 

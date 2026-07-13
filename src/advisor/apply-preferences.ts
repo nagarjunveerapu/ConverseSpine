@@ -35,6 +35,21 @@ export function constraintsFromAdvisorPreferences(
   if (purpose === 'investment') out.purpose = 'investment';
   else if (purpose === 'self_use' || purpose === 'self-use') out.purpose = 'self_use';
 
+  // Trade-off Advisor: worries are the understanding half of the brief. They
+  // bump ranking weights (advisor-weights.ts) and can derive the priority so
+  // the bot asks less when it already knows.
+  const worriesRaw = prefs.worries?.trim();
+  if (worriesRaw) {
+    const worries = worriesRaw
+      .split(',')
+      .map((w) => w.trim().toLowerCase())
+      .filter(Boolean);
+    if (worries.length) {
+      out.worries = worries;
+      if (worries.some((w) => w.includes('school'))) out.schoolsMentioned = true;
+    }
+  }
+
   return out;
 }
 
