@@ -540,13 +540,16 @@ const TOPIC_ORDER: AnswerTopic[] = ['compare', 'price', 'legal', 'property_type'
 // Cost-sheet component vocabulary — the ONE source shared by the price topic
 // pattern and the deterministic price-topic floor (extract-authority, W7).
 // Unambiguous cost terms only: bare "registration" stays legal (RERA), bare
-// "charges" stays the maintenance FAQ — only cost-qualified forms match here.
+// "charges" stays the maintenance FAQ. Bare "tax(es)" is deliberately excluded —
+// it steals FAQ-shaped asks ("property tax?", "tax benefit?") — so taxes ground
+// only via a cost neighbour ("charges and taxes"); GST/cess are cost-specific.
 const COST_COMPONENT_SRC =
-  'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?|taxes?|gst|cess|cost\\s+sheet';
+  'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?(?:\\s+(?:and\\s+)?taxes?)?|gst|cess|cost\\s+sheet';
+const COST_COMPONENT_RE = new RegExp(`\\b(?:${COST_COMPONENT_SRC})\\b`, 'i');
 
-/** A cost-sheet component ask (stamp duty, registration charges, taxes, …). */
+/** A cost-sheet component ask (stamp duty, registration charges, GST, …). */
 export function isCostComponentAsk(text: string): boolean {
-  return new RegExp(`\\b(?:${COST_COMPONENT_SRC})\\b`, 'i').test(text);
+  return COST_COMPONENT_RE.test(text);
 }
 
 const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [

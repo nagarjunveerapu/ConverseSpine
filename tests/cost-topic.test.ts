@@ -42,6 +42,12 @@ describe('isCostComponentAsk — unambiguous cost-sheet vocabulary only', () => 
       expect(isCostComponentAsk(t)).toBe(false);
     }
   });
+  it('bare tax(es) is excluded — property/income tax must not steal into cost (review nit)', () => {
+    expect(isCostComponentAsk('is there property tax?')).toBe(false);
+    expect(isCostComponentAsk('any income tax benefit?')).toBe(false);
+    // …but a cost neighbour still grounds it:
+    expect(isCostComponentAsk('total charges and taxes?')).toBe(true);
+  });
 });
 
 describe('shouldRunTurnIntent — focused cost ask skips the RTI probe (W7)', () => {

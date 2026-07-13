@@ -17,7 +17,7 @@ import {
   type BamlExtractMode,
   type BamlExtractResult,
 } from './extract-baml.js';
-import { extractFacts, isConstraintRefinementTurn, isCostComponentAsk, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
+import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
 import { holdIntent } from './hold-intent.js';
 import { hasNarrowingConstraint } from './phases/discover.js';
 import { buyerCuedOtherProject } from './project_switch.js';
@@ -229,11 +229,11 @@ export async function extractTurnAuthority(
         promoted = { ...promoted, speechAct: 'search' };
         provenance.fields.speechAct = 'baml';
       }
-      return { extracted: ensurePriceTopicFloor(text, promoted), provenance, chipResolution };
+      return { extracted: promoted, provenance, chipResolution };
     }
   }
 
-  return { extracted: ensurePriceTopicFloor(text, merged), provenance, chipResolution };
+  return { extracted: merged, provenance, chipResolution };
 }
 
 /** Seed act-local flags/topics from resolved chip path when extract left them empty. */
@@ -347,20 +347,6 @@ function annotateConstraintProvenance(
   if (topics.length) {
     fields.askTopics = source;
   }
-}
-
-/**
- * W7 deterministic price-topic floor: an unambiguous cost-sheet ask (stamp
- * duty, registration charges, taxes) MUST carry the `price` topic even when the
- * promoted LLM extractor missed it — otherwise it falls to no_fit instead of
- * grounding on the pricing evidence. The LLM may ADD topics; it may not SUPPRESS
- * a deterministic cost ask. Runs on every extraction exit (promote + merge).
- */
-function ensurePriceTopicFloor(text: string, ex: Extracted): Extracted {
-  if (!isCostComponentAsk(text)) return ex;
-  const topics = ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : []);
-  if (topics.includes('price')) return ex;
-  return { ...ex, askTopics: [...topics, 'price'], askTopic: ex.askTopic ?? 'price' };
 }
 
 /**

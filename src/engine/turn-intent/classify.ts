@@ -221,9 +221,13 @@ export function shouldRunTurnIntent(state: ConversationState, actionId?: string,
     return false;
   }
   if (state.phase === 'focused') {
-    // W7: a cost-sheet ask (stamp duty, registration charges, taxes) while
-    // focused is a facet question about the focus — let the main pipeline answer
-    // it on the pricing evidence; never divert to a search-recovery probe.
+    // W7: a cost-sheet ask (stamp duty, registration charges, GST) while focused
+    // is a facet question about the focus — answer it on the pricing evidence via
+    // the main pipeline, never divert to a search-recovery probe. Placed BEFORE
+    // the pendingPrompt branch ON PURPOSE: an explicit cost question takes
+    // precedence over a pending CTA (offer_pricing / hold / visit digression) —
+    // the buyer's question is answered and the pending offer still stands. Do not
+    // move below pendingPrompt without re-soaking HOLD / offer_pricing digression.
     if (text && isCostComponentAsk(text)) return false;
     if (text && DECLINE.test(text.trim())) return true;
     if (state.rti?.pendingPrompt) {
