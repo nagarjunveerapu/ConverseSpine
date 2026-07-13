@@ -31,9 +31,9 @@ describe('detectSoftPrefs — advisor soft signals', () => {
 });
 
 describe('importanceFromConstraints — chip answer → weights', () => {
-  it('commute-first buyer', () => {
+  it('commute-first buyer — no invented schools weight', () => {
     expect(importanceFromConstraints({ priorityFocus: 'commute' }))
-      .toEqual({ commute: 0.9, budget: 0.6, schools: 0.5 });
+      .toEqual({ commute: 0.9, budget: 0.6 });
   });
   it('budget-first buyer, schools mentioned', () => {
     expect(importanceFromConstraints({ priorityFocus: 'budget', schoolsMentioned: true }))
@@ -54,7 +54,7 @@ describe('worries — the understanding half of the brief', () => {
 
   it('worries compose with a stated priority (max, not overwrite)', () => {
     const w = importanceFromConstraints({ priorityFocus: 'commute', worries: ['overpaying'] });
-    expect(w).toEqual({ commute: 0.9, budget: 0.9, schools: 0.5 });
+    expect(w).toEqual({ commute: 0.9, budget: 0.9 });
   });
 
   it('derives priority when worries settle it — the bot then skips the ask', async () => {

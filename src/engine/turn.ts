@@ -321,6 +321,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let ex = extractResult.extracted;
   const extractProvenance = extractResult.provenance;
 
+  // Trade-off soft signals (priority / hub / schools / worries) are advisor-web
+  // only. detectSoftPrefs still runs in facts for the location-pollution guard,
+  // but WA must not persist those fields or fire Desk preference re-rank.
+  if (channel !== 'advisor_web') {
+    const hardConstraints = { ...ex.constraints };
+    delete hardConstraints.priorityFocus;
+    delete hardConstraints.commuteHub;
+    delete hardConstraints.schoolsMentioned;
+    delete hardConstraints.worries;
+    ex = { ...ex, constraints: hardConstraints };
+  }
+
   // P4-CTA: RTI seeded topic (e.g. price after offer_pricing → yes) wins over bare affirm.
   if (rtiSeedAskTopic) {
     ex = {
@@ -667,7 +679,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       goal = answerGoal;
     }
   } else if (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') {
-    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText));
+    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText, channel));
   } else if (goal.kind === 'objection') {
     ({ goal, evidence } = await fetchObjection(goal, state, deps, nd));
   } else if (goal.kind === 'answer') {
@@ -1105,6 +1117,7 @@ async function fetchRecommend(
   ex: Extracted,
   deps: EngineDeps,
   buyerText: string,
+  channel: TurnIntentChannel = 'whatsapp',
 ): Promise<{ goal: TurnGoal; evidence: EvidenceSet }> {
   const relistShortlist = (): { goal: TurnGoal; evidence: EvidenceSet } | null => {
     const ms = matchesFromLastOffered(s);
@@ -1117,9 +1130,10 @@ async function fetchRecommend(
   // Explicit in-state weights (chip answer this session) win Desk-side;
   // conversation_id lets the Desk fall back to stored BPE facts for a
   // returning buyer whose KV state expired. Catalog/facet/recovery-count
-  // calls never set either (meaningless there).
+  // calls never set either (meaningless there). Advisor-web only — WA must
+  // not re-rank on soft NL heuristics.
   if (s.ndConversationId) filters = { ...filters, conversationId: s.ndConversationId };
-  {
+  if (channel === 'advisor_web') {
     const prefs = advisorSearchPrefs(s.constraints);
     if (prefs.preferenceWeights) filters = { ...filters, preferenceWeights: prefs.preferenceWeights };
     if (prefs.commuteHub) filters = { ...filters, commuteHub: prefs.commuteHub };
@@ -1989,17 +2003,20 @@ async function syncTelemetry(
   }
   // Trade-off Advisor soft signals — mirror of advisor-weights.ts so the BPE
   // resolves the same ranking for a returning buyer (migration 0116 keys).
-  if (state.constraints.commuteHub) {
-    observations.push({ fact_key: 'commute_hub', value: state.constraints.commuteHub, provenance: prov });
-  }
-  if (state.constraints.worries?.length) {
-    observations.push({ fact_key: 'worries', value: state.constraints.worries, provenance: prov });
-  }
-  {
-    const imp = importanceFromConstraints(state.constraints);
-    if (imp.commute !== undefined) observations.push({ fact_key: 'commute_importance', value: imp.commute, provenance: prov });
-    if (imp.schools !== undefined) observations.push({ fact_key: 'school_importance', value: imp.schools, provenance: prov });
-    if (imp.budget !== undefined) observations.push({ fact_key: 'budget_importance', value: imp.budget, provenance: prov });
+  // Advisor-web only (same gate as fetchRecommend).
+  if ((input.channel ?? 'whatsapp') === 'advisor_web') {
+    if (state.constraints.commuteHub) {
+      observations.push({ fact_key: 'commute_hub', value: state.constraints.commuteHub, provenance: prov });
+    }
+    if (state.constraints.worries?.length) {
+      observations.push({ fact_key: 'worries', value: state.constraints.worries, provenance: prov });
+    }
+    {
+      const imp = importanceFromConstraints(state.constraints);
+      if (imp.commute !== undefined) observations.push({ fact_key: 'commute_importance', value: imp.commute, provenance: prov });
+      if (imp.schools !== undefined) observations.push({ fact_key: 'school_importance', value: imp.schools, provenance: prov });
+      if (imp.budget !== undefined) observations.push({ fact_key: 'budget_importance', value: imp.budget, provenance: prov });
+    }
   }
   if (state.focus) {
     observations.push({

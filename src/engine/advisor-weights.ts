@@ -44,11 +44,17 @@ export function importanceFromConstraints(c: Constraints): Record<string, number
   const schools = c.schoolsMentioned || worryHas(c, 'school') ? 0.7 : undefined;
   switch (c.priorityFocus) {
     case 'commute':
-      w.commute = 0.9; w.budget = 0.6; w.schools = schools ?? 0.5; break;
+      w.commute = 0.9; w.budget = 0.6;
+      if (schools !== undefined) w.schools = schools;
+      break;
     case 'budget':
-      w.commute = 0.5; w.budget = 0.9; w.schools = schools ?? 0.5; break;
+      w.commute = 0.5; w.budget = 0.9;
+      if (schools !== undefined) w.schools = schools;
+      break;
     case 'balanced':
-      w.commute = 0.7; w.budget = 0.7; w.schools = schools ?? 0.5; break;
+      w.commute = 0.7; w.budget = 0.7;
+      if (schools !== undefined) w.schools = schools;
+      break;
     default: {
       // No stated priority: only signals the buyer actually gave register.
       if (c.commuteHub) w.commute = 0.7;

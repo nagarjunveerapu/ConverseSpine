@@ -270,11 +270,7 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
       const list = ms
-<<<<<<< HEAD
-        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}`)
-=======
-        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}${m.tradeoffNote ? ` — ${m.tradeoffNote}` : ''}`)
->>>>>>> f3c72c0 (feat(advisor): capture tradeoff weights and pass preference re-rank to Desk)
+        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}${m.tradeoffNote ? ` — ${m.tradeoffNote}` : ''}`)
         .join('; ');
       return `${pre}Here's what fits: ${list}. Want details on any of these, or shall I set up a visit?`;
     }
