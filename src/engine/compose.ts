@@ -660,22 +660,41 @@ export function formatInr(inr: number): string {
 // replies verbatim ("Base land price 499, Stamp Duty 5"). Everything the
 // adapter maps into evidence goes through these; no template formats anything.
 
-const PERCENT_LABEL = /\b(?:duty|tax|gst|interest|charge[s]? \(%|percent|%)/i;
+const PERCENT_LABEL = /\b(?:duty|tax|gst|interest|percent|%)/i;
 
 /**
  * Render a raw cost-sheet value for buyer copy.
+ *
+ * Desk ships each cost row as {value, kind} where `kind` IS the unit
+ * ('per_sqft' | 'percent' | 'flat' | 'info'). When kind is present it is
+ * authoritative — we format by it and never guess. This is the fix for the
+ * "₹499" bug: Ayana's base land price is kind='per_sqft', value='499', i.e.
+ * ₹499/sqft — rendering the bare number as a ₹ total was wrong.
+ *
+ * Only when kind is absent (older payloads) do we fall back to the honesty-
+ * first label heuristic, which never invents a "/sqft" it can't infer:
  *   already formatted ("5% of land value", "Included", "₹39 L") → passthrough
  *   bare small number on a %-ish label ("Stamp Duty", "5")       → "5%"
- *   bare number ("15000", "499")                                 → "₹15,000" / "₹499"
- * Never invents units it can't infer (no /sqft guessing — honesty first).
+ *   bare number ("15000")                                         → "₹15,000"
  */
-export function formatCostValue(label: string, raw: string): string {
+export function formatCostValue(label: string, raw: string, kind?: string): string {
   const v = (raw ?? '').trim();
   if (!v) return v;
   const bare = v.replace(/,/g, '');
-  if (!/^\d+(?:\.\d+)?$/.test(bare)) return v; // has words/symbols → already display-ready
-  const n = Number(bare);
-  if (!isFinite(n)) return v;
+  const isNumeric = /^\d+(?:\.\d+)?$/.test(bare);
+  const n = isNumeric ? Number(bare) : NaN;
+
+  const k = kind?.trim().toLowerCase();
+  if (k) {
+    if (k === 'info') return v; // free text — already display-ready
+    if (!isNumeric || !isFinite(n)) return v; // pre-formatted value → passthrough
+    if (k === 'per_sqft') return `₹${n.toLocaleString('en-IN')}/sqft`;
+    if (k === 'percent') return `${v}%`;
+    if (k === 'flat') return n >= 100_000 ? formatInr(n) : `₹${n.toLocaleString('en-IN')}`;
+    // unknown kind → fall through to the label heuristic below
+  }
+
+  if (!isNumeric || !isFinite(n)) return v; // has words/symbols → already display-ready
   if (n > 0 && n <= 30 && PERCENT_LABEL.test(label)) return `${v}%`;
   if (n >= 100_000) return formatInr(n);
   return `₹${n.toLocaleString('en-IN')}`;

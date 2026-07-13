@@ -8,9 +8,28 @@ import { formatCostValue, formatPossession, startingPriceDisplayFrom } from '../
  * Phase-wise; … ready for possession..", and "from ₹31 L" vs "from 25-50L"
  * disagreeing inside one conversation.
  */
-describe('formatCostValue', () => {
-  it('fixes the transcript bugs', () => {
-    expect(formatCostValue('Base land price', '499')).toBe('₹499');
+describe('formatCostValue — kind is the authoritative unit (P2.2 fix)', () => {
+  // Desk ships {value, kind}; kind IS the unit. Ayana's base land price is
+  // kind='per_sqft', value='499' → ₹499/sqft, NOT the ₹499 total the bot used
+  // to narrate next to a ₹24.95 L starting price.
+  it('per_sqft renders the /sqft rate, never a bare ₹ total', () => {
+    expect(formatCostValue('Base land price', '499', 'per_sqft')).toBe('₹499/sqft');
+    expect(formatCostValue('Base land price', '650', 'per_sqft')).toBe('₹650/sqft');
+  });
+  it('percent / flat / info format by kind', () => {
+    expect(formatCostValue('Stamp Duty', '5', 'percent')).toBe('5%');
+    expect(formatCostValue('Registration Charges', '15000', 'flat')).toBe('₹15,000');
+    expect(formatCostValue('Base price', '7100000', 'flat')).toBe('₹71 L');
+    expect(formatCostValue('Infrastructure', 'Included', 'info')).toBe('Included');
+  });
+  it('a value already carrying its unit passes through untouched', () => {
+    expect(formatCostValue('Base land price', '₹499/sqft', 'per_sqft')).toBe('₹499/sqft');
+  });
+});
+
+describe('formatCostValue — no-kind fallback (older payloads, honesty-first)', () => {
+  it('guesses conservatively from the label, never inventing /sqft', () => {
+    expect(formatCostValue('Base land price', '499')).toBe('₹499'); // no kind → cannot know it is /sqft
     expect(formatCostValue('Stamp Duty', '5')).toBe('5%');
     expect(formatCostValue('Registration Charges', '15000')).toBe('₹15,000');
   });

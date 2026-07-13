@@ -177,7 +177,9 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         // buyer-ready ("₹499", "5%") before any template sees them.
         const components = (q.components_quoted ?? []).map((c) => ({
           label: c.label,
-          value: formatCostValue(c.label, c.value),
+          // Format by Desk's structured `kind` (per_sqft/percent/flat/info) —
+          // never guess the unit from the label. Fixes "₹499" → "₹499/sqft".
+          value: formatCostValue(c.label, c.value, c.kind),
         }));
         const withheld = (q.components_withheld ?? []).map((c) => ({
           label: c.label,
