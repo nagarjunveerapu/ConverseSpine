@@ -113,6 +113,9 @@ export interface NdPricingQuote {
   project_id: string;
   components_quoted: Array<{
     label: string;
+    // Desk's structured unit for `value`: 'per_sqft' | 'percent' | 'flat' | 'info'.
+    // Authoritative — the bot must format by this, never guess the unit from the label.
+    kind?: string;
     value: string;
     notes_buyer_facing: string;
   }>;

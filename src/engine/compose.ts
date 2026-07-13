@@ -167,7 +167,7 @@ function renderEvidence(ev: EvidenceSet): string {
         ev.matches
           .map(
             (m) =>
-              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}`,
+              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}`,
           )
           .join('\n'),
     );
@@ -181,7 +181,7 @@ function renderEvidence(ev: EvidenceSet): string {
   }
   if (ev.detail) {
     out.push(
-      `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, from ${ev.detail.startingPriceDisplay}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.phaseNote ? `\n  phase status: ${ev.detail.phaseNote}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
+      `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, ${fromPrice(ev.detail.startingPriceDisplay)}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.phaseNote ? `\n  phase status: ${ev.detail.phaseNote}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
     );
     if (ev.detail.faqs?.length) {
       out.push(
@@ -270,7 +270,7 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
       const list = ms
-        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}`)
+        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}`)
         .join('; ');
       return `${pre}Here's what fits: ${list}. Want details on any of these, or shall I set up a visit?`;
     }
@@ -649,6 +649,19 @@ function priceOf(m: Match): string {
   return m.startingPriceDisplay || (m.startingPriceInr > 0 ? formatInr(m.startingPriceInr) : '');
 }
 
+/**
+ * Prefix a starting-price display with "from " ONLY when it is a single figure.
+ * A band ("25-50L", "₹1.2Cr onwards", "₹499–650/sqft") is a range already, so
+ * "from 25-50L" is wrong — render the band verbatim. Honesty-first: never
+ * reformat or parse the band, just decide whether "from " is truthful.
+ */
+export function fromPrice(display?: string): string {
+  const v = (display ?? '').trim();
+  if (!v) return '';
+  if (/[-–—/+]|\bto\b|onwards/i.test(v)) return v; // already a range/open-ended
+  return `from ${v}`;
+}
+
 export function formatInr(inr: number): string {
   if (!isFinite(inr) || inr <= 0) return '';
   if (inr >= 10_000_000) return `₹${(inr / 10_000_000).toFixed(2).replace(/\.?0+$/, '')} Cr`;
@@ -660,22 +673,41 @@ export function formatInr(inr: number): string {
 // replies verbatim ("Base land price 499, Stamp Duty 5"). Everything the
 // adapter maps into evidence goes through these; no template formats anything.
 
-const PERCENT_LABEL = /\b(?:duty|tax|gst|interest|charge[s]? \(%|percent|%)/i;
+const PERCENT_LABEL = /\b(?:duty|tax|gst|interest|percent|%)/i;
 
 /**
  * Render a raw cost-sheet value for buyer copy.
+ *
+ * Desk ships each cost row as {value, kind} where `kind` IS the unit
+ * ('per_sqft' | 'percent' | 'flat' | 'info'). When kind is present it is
+ * authoritative — we format by it and never guess. This is the fix for the
+ * "₹499" bug: Ayana's base land price is kind='per_sqft', value='499', i.e.
+ * ₹499/sqft — rendering the bare number as a ₹ total was wrong.
+ *
+ * Only when kind is absent (older payloads) do we fall back to the honesty-
+ * first label heuristic, which never invents a "/sqft" it can't infer:
  *   already formatted ("5% of land value", "Included", "₹39 L") → passthrough
  *   bare small number on a %-ish label ("Stamp Duty", "5")       → "5%"
- *   bare number ("15000", "499")                                 → "₹15,000" / "₹499"
- * Never invents units it can't infer (no /sqft guessing — honesty first).
+ *   bare number ("15000")                                         → "₹15,000"
  */
-export function formatCostValue(label: string, raw: string): string {
+export function formatCostValue(label: string, raw: string, kind?: string): string {
   const v = (raw ?? '').trim();
   if (!v) return v;
   const bare = v.replace(/,/g, '');
-  if (!/^\d+(?:\.\d+)?$/.test(bare)) return v; // has words/symbols → already display-ready
-  const n = Number(bare);
-  if (!isFinite(n)) return v;
+  const isNumeric = /^\d+(?:\.\d+)?$/.test(bare);
+  const n = isNumeric ? Number(bare) : NaN;
+
+  const k = kind?.trim().toLowerCase();
+  if (k) {
+    if (k === 'info') return v; // free text — already display-ready
+    if (!isNumeric || !isFinite(n)) return v; // pre-formatted value → passthrough
+    if (k === 'per_sqft') return `₹${n.toLocaleString('en-IN')}/sqft`;
+    if (k === 'percent') return `${v}%`;
+    if (k === 'flat') return n >= 100_000 ? formatInr(n) : `₹${n.toLocaleString('en-IN')}`;
+    // unknown kind → fall through to the label heuristic below
+  }
+
+  if (!isNumeric || !isFinite(n)) return v; // has words/symbols → already display-ready
   if (n > 0 && n <= 30 && PERCENT_LABEL.test(label)) return `${v}%`;
   if (n >= 100_000) return formatInr(n);
   return `₹${n.toLocaleString('en-IN')}`;
