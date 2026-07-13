@@ -153,7 +153,10 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           reraNumber: p.rera_number,
           possession: p.possession_date ? formatPossession(formatYearMonth(p.possession_date)) : undefined,
           projectType: p.project_type,
-          startingPriceDisplay: p.entry_price_band,
+          // One price policy: route the band through the shared helper (no config
+          // prices in this fallback branch, so it renders the band) instead of
+          // emitting the raw band directly. Audit P0.2.
+          startingPriceDisplay: startingPriceDisplayFrom([], p.entry_price_band),
           khata: p.khata_type,
           naStatus: p.na_status,
           ecStatus: p.ec_status,
@@ -185,19 +188,15 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           label: c.label,
           redirectHint: c.redirect_hint ?? '',
         }));
-        let startingDisplay = ctx?.project?.entry_price_band?.trim() || undefined;
-        if (!components.length && ctx?.units?.length) {
-          const priced = ctx.units
-            .map((u) => ({
-              display: u.price_display ?? (u.price_min_paise ? formatInr(Math.round(u.price_min_paise / 100)) : ''),
-            }))
-            .filter((u) => u.display);
-          if (priced[0]?.display) {
-            const display = priced[0].display.replace(/^from\s+/i, '').trim();
-            startingDisplay = startingDisplay || display;
-            components.push({ label: 'Starting from', value: display });
-          }
-        }
+        // One price policy: the starting figure is the min priced config
+        // (formatInr), falling back to the band ONLY when no config is priced —
+        // the config price must win over the coarse band, not the other way
+        // round. Audit P0.2 (previously seeded from raw entry_price_band first).
+        const configMinsInr = (ctx?.units ?? []).map((u) =>
+          u.price_min_paise ? Math.round(u.price_min_paise / 100) : 0,
+        );
+        const startingDisplay =
+          startingPriceDisplayFrom(configMinsInr, ctx?.project?.entry_price_band) || undefined;
         if (!components.length && startingDisplay) {
           components.push({
             label: 'Starting from',

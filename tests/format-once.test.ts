@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCostValue, formatPossession, startingPriceDisplayFrom } from '../src/engine/compose.js';
+import { formatCostValue, formatPossession, startingPriceDisplayFrom, fromPrice } from '../src/engine/compose.js';
 
 /**
  * W4 — format once, at the adapter. Each case below is a REAL defect from a
@@ -68,5 +68,21 @@ describe('startingPriceDisplayFrom (one price truth)', () => {
   it('falls back to the configured band only when no config carries a price', () => {
     expect(startingPriceDisplayFrom([0, 0], '25-50L')).toBe('25-50L');
     expect(startingPriceDisplayFrom([], undefined)).toBe('');
+  });
+});
+
+describe('fromPrice (no false "from" on a band — P0.2)', () => {
+  it('prefixes a single figure with "from"', () => {
+    expect(fromPrice('₹31 L')).toBe('from ₹31 L');
+    expect(fromPrice('₹24.95 L')).toBe('from ₹24.95 L');
+  });
+  it('renders a range/open-ended band verbatim — never "from 25-50L"', () => {
+    expect(fromPrice('25-50L')).toBe('25-50L');
+    expect(fromPrice('₹1.2 Cr onwards')).toBe('₹1.2 Cr onwards');
+    expect(fromPrice('₹499–650/sqft')).toBe('₹499–650/sqft');
+  });
+  it('empty in → empty out', () => {
+    expect(fromPrice('')).toBe('');
+    expect(fromPrice(undefined)).toBe('');
   });
 });

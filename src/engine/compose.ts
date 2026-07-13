@@ -167,7 +167,7 @@ function renderEvidence(ev: EvidenceSet): string {
         ev.matches
           .map(
             (m) =>
-              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}`,
+              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}`,
           )
           .join('\n'),
     );
@@ -181,7 +181,7 @@ function renderEvidence(ev: EvidenceSet): string {
   }
   if (ev.detail) {
     out.push(
-      `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, from ${ev.detail.startingPriceDisplay}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.phaseNote ? `\n  phase status: ${ev.detail.phaseNote}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
+      `project: ${ev.detail.name} in ${ev.detail.microMarket}${ev.detail.startingPriceDisplay ? `, ${fromPrice(ev.detail.startingPriceDisplay)}` : ''}${ev.detail.reraNumber ? `, RERA ${ev.detail.reraNumber}` : ''}${ev.detail.possession ? `, possession ${ev.detail.possession}` : ''}${ev.detail.phaseNote ? `\n  phase status: ${ev.detail.phaseNote}` : ''}${ev.detail.summary ? `\n  summary: ${ev.detail.summary}` : ''}`,
     );
     if (ev.detail.faqs?.length) {
       out.push(
@@ -270,7 +270,7 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
       const list = ms
-        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, from ${priceOf(m)}` : ''}`)
+        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}`)
         .join('; ');
       return `${pre}Here's what fits: ${list}. Want details on any of these, or shall I set up a visit?`;
     }
@@ -647,6 +647,19 @@ function probeCopy(slot: ProbeKind): string {
 
 function priceOf(m: Match): string {
   return m.startingPriceDisplay || (m.startingPriceInr > 0 ? formatInr(m.startingPriceInr) : '');
+}
+
+/**
+ * Prefix a starting-price display with "from " ONLY when it is a single figure.
+ * A band ("25-50L", "₹1.2Cr onwards", "₹499–650/sqft") is a range already, so
+ * "from 25-50L" is wrong — render the band verbatim. Honesty-first: never
+ * reformat or parse the band, just decide whether "from " is truthful.
+ */
+export function fromPrice(display?: string): string {
+  const v = (display ?? '').trim();
+  if (!v) return '';
+  if (/[-–—/+]|\bto\b|onwards/i.test(v)) return v; // already a range/open-ended
+  return `from ${v}`;
 }
 
 export function formatInr(inr: number): string {
