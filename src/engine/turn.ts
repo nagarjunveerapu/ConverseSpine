@@ -654,8 +654,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   } else if (goal.kind === 'commit' && nd) {
     await deps.crm.commitProject(nd, goal.projectId).catch(() => {});
+    state = commitTo(state, goal.projectId, goal.projectName);
+    // Cache the project's cost vocabulary for data-driven cost-ask detection —
+    // for every commit (bare pick or with a follow-up), so a later "floor rise?"
+    // is recognised against the real components.
+    state = await cacheCostTerms(state, deps, nd);
     if (goal.followUp || goal.followUpTopics?.length) {
-      state = commitTo(state, goal.projectId, goal.projectName);
       const answerGoal: Extract<TurnGoal, { kind: 'answer' }> = {
         kind: 'answer',
         topic: goal.followUp ?? goal.followUpTopics![0]!,
@@ -1096,6 +1100,49 @@ async function decideGoalAsync(
     if (switchGoal) return switchGoal;
   }
   return decideGoal(s, ex, visitCtx, text);
+}
+
+// Single-word cost terms that collide with property types / are too generic to
+// be a safe cost-ask signal on their own ("plantation" is a property type,
+// "base"/"land" are generic). Dropped as bare tokens; the multi-word phrase
+// ("plantation management", "base land price") is still kept and matched.
+const COST_TERM_COLLISIONS = new Set([
+  'plantation', 'villa', 'plot', 'plotted', 'apartment', 'flat', 'land',
+  'base', 'area', 'management', 'property', 'rate', 'price', 'booking',
+]);
+
+/** Flatten the focused project's Desk cost match terms (NayaDesk #212). */
+function costTermsFromBundle(
+  ctx: import('../crm/nayadesk-client.js').NdContextBundle | null,
+): readonly string[] {
+  const set = new Set<string>();
+  for (const r of ctx?.cost_sheet ?? []) {
+    for (const t of r.match_terms ?? []) {
+      const term = String(t).trim().toLowerCase();
+      if (term.length < 3) continue;
+      // Keep multi-word phrases always; drop bare single tokens that collide.
+      if (!term.includes(' ') && COST_TERM_COLLISIONS.has(term)) continue;
+      set.add(term);
+    }
+  }
+  return [...set];
+}
+
+/**
+ * Cache the project's cost vocabulary on focus so cost-ask detection is
+ * data-driven (matches the real components, not a hardcoded regex). Called on
+ * commit; the terms persist in state until focus changes.
+ */
+async function cacheCostTerms(
+  state: ConversationState,
+  deps: EngineDeps,
+  nd: string,
+): Promise<ConversationState> {
+  if (!state.focus) return state;
+  const ctx = await deps.data.conversationContext(nd).catch(() => null);
+  const terms = costTermsFromBundle(ctx);
+  if (!terms.length) return state;
+  return { ...state, focus: { ...state.focus, costTerms: terms } };
 }
 
 async function fetchRecommend(

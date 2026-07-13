@@ -48,6 +48,14 @@ export interface DiscoverState {
 export interface FocusState {
   projectId: string;
   projectName: string;
+  /**
+   * Buyer-facing cost-component match terms for this project (Desk cost_sheet
+   * match_terms), cached on commit. Lets the bot detect a cost ask ("floor
+   * rise?", "BESCOM charges?") against the real components — data, not a
+   * hardcoded vocabulary. Empty/absent → detection falls back to the universal
+   * regex (stamp duty / registration / GST).
+   */
+  costTerms?: readonly string[];
 }
 
 export interface QueuedVisit {

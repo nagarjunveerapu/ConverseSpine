@@ -228,7 +228,7 @@ export function shouldRunTurnIntent(state: ConversationState, actionId?: string,
     // precedence over a pending CTA (offer_pricing / hold / visit digression) —
     // the buyer's question is answered and the pending offer still stands. Do not
     // move below pendingPrompt without re-soaking HOLD / offer_pricing digression.
-    if (text && isCostComponentAsk(text)) return false;
+    if (text && isCostComponentAsk(text, state.focus?.costTerms)) return false;
     if (text && DECLINE.test(text.trim())) return true;
     if (state.rti?.pendingPrompt) {
       const pending = state.rti.pendingPrompt;

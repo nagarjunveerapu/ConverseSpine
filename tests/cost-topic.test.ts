@@ -48,6 +48,17 @@ describe('isCostComponentAsk — unambiguous cost-sheet vocabulary only', () => 
     // …but a cost neighbour still grounds it:
     expect(isCostComponentAsk('total charges and taxes?')).toBe(true);
   });
+  it('data-driven: matches the focused project cost terms — the long tail (NayaDesk #212)', () => {
+    // Terms the regex could never know, supplied from Desk cost_sheet.match_terms.
+    const ayana = ['floor rise', 'floor', 'bescom', 'corner', 'plantation management'];
+    expect(isCostComponentAsk('what is the floor rise?', ayana)).toBe(true);
+    expect(isCostComponentAsk('any BESCOM charges?', ayana)).toBe(true);
+    expect(isCostComponentAsk('is there a corner premium?', ayana)).toBe(true);
+    // No terms → the long tail is NOT recognised by the universal regex alone:
+    expect(isCostComponentAsk('what is the floor rise?')).toBe(false);
+    // Universal regex still fires regardless of the project terms:
+    expect(isCostComponentAsk('stamp duty?', ayana)).toBe(true);
+  });
 });
 
 describe('shouldRunTurnIntent — focused cost ask skips the RTI probe (W7)', () => {

@@ -17,7 +17,7 @@ import {
   type BamlExtractMode,
   type BamlExtractResult,
 } from './extract-baml.js';
-import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
+import { extractFacts, isConstraintRefinementTurn, isCostComponentAsk, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
 import { holdIntent } from './hold-intent.js';
 import { hasNarrowingConstraint } from './phases/discover.js';
 import { buyerCuedOtherProject } from './project_switch.js';
@@ -229,11 +229,19 @@ export async function extractTurnAuthority(
         promoted = { ...promoted, speechAct: 'search' };
         provenance.fields.speechAct = 'baml';
       }
-      return { extracted: promoted, provenance, chipResolution };
+      return {
+        extracted: ensurePriceTopicFloor(text, promoted, provenance, state.focus?.costTerms),
+        provenance,
+        chipResolution,
+      };
     }
   }
 
-  return { extracted: merged, provenance, chipResolution };
+  return {
+    extracted: ensurePriceTopicFloor(text, merged, provenance, state.focus?.costTerms),
+    provenance,
+    chipResolution,
+  };
 }
 
 /** Seed act-local flags/topics from resolved chip path when extract left them empty. */
@@ -347,6 +355,27 @@ function annotateConstraintProvenance(
   if (topics.length) {
     fields.askTopics = source;
   }
+}
+
+/**
+ * Data-driven price-topic floor (W7 / NayaDesk #212): a cost-component ask must
+ * carry the `price` topic so it grounds on the pricing evidence. When the match
+ * is against the focused project's Desk cost terms ("infrastructure", "floor
+ * rise") — which detectTopics can't know — the LLM/regex won't set price, so we
+ * add it here. `terms` is the focused project's cost vocabulary (may be empty →
+ * only the universal regex fires inside isCostComponentAsk).
+ */
+function ensurePriceTopicFloor(
+  text: string,
+  ex: Extracted,
+  provenance: ExtractProvenance,
+  terms: readonly string[] | undefined,
+): Extracted {
+  if (!isCostComponentAsk(text, terms)) return ex;
+  const topics = ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : []);
+  if (topics.includes('price')) return ex;
+  provenance.fields.askTopics = 'regex';
+  return { ...ex, askTopics: [...topics, 'price'], askTopic: ex.askTopic ?? 'price' };
 }
 
 /**

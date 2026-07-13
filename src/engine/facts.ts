@@ -547,8 +547,19 @@ const COST_COMPONENT_SRC =
   'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?(?:\\s+(?:and\\s+)?taxes?)?|gst|cess|cost\\s+sheet';
 const COST_COMPONENT_RE = new RegExp(`\\b(?:${COST_COMPONENT_SRC})\\b`, 'i');
 
-/** A cost-sheet component ask (stamp duty, registration charges, GST, …). */
-export function isCostComponentAsk(text: string): boolean {
+/**
+ * A cost-sheet component ask. When the focused project's Desk match terms are
+ * supplied (cost_sheet match_terms, NayaDesk #212), match against those — this
+ * is data-driven and covers the whole long tail ("floor rise?", "BESCOM
+ * charges?", "corner premium?") per project. Falls back to the universal regex
+ * (stamp duty / registration / GST) when no terms are cached or none matched,
+ * so the common asks and the not-yet-focused case still work.
+ */
+export function isCostComponentAsk(text: string, terms?: readonly string[]): boolean {
+  if (terms && terms.length) {
+    const t = text.toLowerCase();
+    if (terms.some((term) => term.length >= 3 && t.includes(term))) return true;
+  }
   return COST_COMPONENT_RE.test(text);
 }
 

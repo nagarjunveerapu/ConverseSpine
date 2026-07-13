@@ -57,6 +57,12 @@ export interface NdContextBundle {
     holdable_units?: number;
   }>;
   faqs?: Array<{ question_key?: string; canonical_question?: string; approved_answer?: string }>;
+  /**
+   * Cost-sheet components with Desk-derived buyer match terms (NayaDesk #212).
+   * The bot caches match_terms on the focused project for data-driven cost-ask
+   * detection — no hardcoded cost vocabulary.
+   */
+  cost_sheet?: Array<{ label?: string; kind?: string; match_terms?: string[] }>;
   /** W7 — journey composer output per active phase (Desk Phase 1; was silently dropped). */
   phase_journeys?: Array<{
     phase_id: string;
