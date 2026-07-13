@@ -7,6 +7,27 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   const d = s.discover;
   if (ex.recall) return { kind: 'visit_recall' };
 
+  // Explicit name is authoritative. A single PROJECT_VECTORS hit (≥0.65, and
+  // already gated against pure search/location/budget noise upstream) means the
+  // buyer NAMED this project. That is a pick, not a filter adjustment — it must
+  // beat the recovery/refinement search-belt below (forceRecommendList /
+  // freshSearchBoard), which would otherwise turn "Ayana" after a vague brief
+  // ("green near the hills") into a no_fit search. Compare/visit/details and
+  // "show me more" keep their own downstream paths.
+  if (
+    (ex.namedProjects?.length ?? 0) === 1 &&
+    ex.speechAct !== 'search' &&
+    ex.transition !== 'want_visit' &&
+    ex.transition !== 'want_details' &&
+    ex.askTopic !== 'compare' &&
+    !ex.compareAdvice &&
+    !ex.wantsMore &&
+    !ex.rejected
+  ) {
+    const namedPick = resolvePick(ex, d.lastOffered, s);
+    if (namedPick) return commitPickWithFollowUp(namedPick, ex);
+  }
+
   // Fresh search board: narrowing + empty shortlist beats embedder compare/visit noise.
   const freshSearchBoard =
     d.lastOffered.length === 0 &&

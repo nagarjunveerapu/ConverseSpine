@@ -85,6 +85,28 @@ describe('discover implicit project pick', () => {
     expect(goal).toMatchObject({ kind: 'commit', projectId: 'ayana' });
   });
 
+  it('explicit name beats stale filters: forceRecommendList + leftover location must still commit', () => {
+    // Dev repro (name-beats-filters): buyer says a vague brief ("green near the
+    // hills") → no_fit; the recovery prompt makes the next turn look like a
+    // refinement, so extract sets forceRecommendList=true and the project name
+    // leaks into constraints.location. A single high-confidence PROJECT_VECTORS
+    // hit means the buyer NAMED that project — it must commit, not run a search
+    // that returns no_fit. The freshSearchBoard/forceRecommendList belt yields.
+    const s = {
+      ...initState('c1', 'lokations'),
+      constraints: { location: 'Ayana' },
+    };
+    const ex: Extracted = {
+      constraints: { location: 'Ayana' },
+      speechAct: 'unknown',
+      transition: 'none',
+      forceRecommendList: true,
+      namedProjects: [{ projectId: 'ayana-lokations', name: 'Ayana' }],
+    };
+    const goal = discoverDecide(s, ex);
+    expect(goal).toMatchObject({ kind: 'commit', projectId: 'ayana-lokations' });
+  });
+
   it('LOC-G01: search + constraints recommends despite hallucinated namedProjects', () => {
     const s = {
       ...initState('c1', 'brigade-group'),
