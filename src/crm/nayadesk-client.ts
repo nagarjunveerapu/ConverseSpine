@@ -44,6 +44,26 @@ export interface NdProjectSummary {
   summary?: string;
 }
 
+/**
+ * Raw Desk `location_intelligence` row (S1). Every category column is a JSON
+ * array string of `{name, distance_km, rating, drive_minutes}` POIs from the
+ * Places refresh job; `upcoming_infra` may hold plain strings.
+ */
+export interface NdLocationIntelRow {
+  metro_stations?: string;
+  schools?: string;
+  hospitals?: string;
+  it_parks?: string;
+  malls?: string;
+  airports?: string;
+  transit_stations?: string;
+  universities?: string;
+  supermarkets?: string;
+  parks?: string;
+  pois?: string;
+  upcoming_infra?: string;
+}
+
 export interface NdContextBundle {
   conversation: NdConversation;
   project: NdProjectSummary | null;
@@ -67,12 +87,7 @@ export interface NdContextBundle {
     money_allowed: boolean;
     primary: string;
   }>;
-  location_intelligence?: {
-    connectivity_summary?: string;
-    nearby_pois_json?: string;
-    drive_times_json?: string;
-    micro_market_overview?: string;
-  } | null;
+  location_intelligence?: NdLocationIntelRow | null;
   builder: {
     name: string;
     bot_name: string;
@@ -350,18 +365,30 @@ export class NayaDeskClient {
     ec_status?: string;
     loan_eligibility?: string;
     builder_id: string;
+    /** S1 — Desk serves the LI row alongside the project (sibling key, merged here). */
+    location_intelligence?: NdLocationIntelRow | null;
   }> {
     return this.call('GET', `/api/projects/${encodeURIComponent(project_id)}`).then(
       (raw) => {
-        const wrapped = raw as { project?: typeof raw };
-        return (wrapped.project ?? raw) as {
+        const wrapped = raw as {
+          project?: typeof raw;
+          location_intelligence?: NdLocationIntelRow | null;
+        };
+        const project = (wrapped.project ?? raw) as {
           project_id: string;
           name: string;
           micro_market: string;
           rera_number?: string;
           entry_price_band?: string;
           builder_id: string;
+          location_intelligence?: NdLocationIntelRow | null;
         };
+        // Sibling key on the response envelope (kept out of the projects row);
+        // merge so the adapter reads one shape from either endpoint.
+        if (wrapped.project && wrapped.location_intelligence !== undefined) {
+          return { ...project, location_intelligence: wrapped.location_intelligence };
+        }
+        return project;
       },
     );
   }

@@ -325,16 +325,42 @@ export interface ProjectDetail {
     microMarketOverview?: string;
     nearbyPois?: string[];
     driveTimes?: string[];
-  };
+  } & LocationPoiCategories;
 }
 
-export interface LocationEvidence {
+/** One named place from Desk location_intelligence — always Desk-verified, never invented. */
+export interface LocationPoi {
+  name: string;
+  distanceKm?: number;
+  driveMinutes?: number;
+}
+
+/** Structured POI categories from Desk `location_intelligence` (S1 — LI evidence unlock). */
+export interface LocationPoiCategories {
+  schools?: LocationPoi[];
+  hospitals?: LocationPoi[];
+  metroStations?: LocationPoi[];
+  airports?: LocationPoi[];
+  itParks?: LocationPoi[];
+  malls?: LocationPoi[];
+  transitStations?: LocationPoi[];
+  universities?: LocationPoi[];
+  supermarkets?: LocationPoi[];
+  parks?: LocationPoi[];
+  upcomingInfra?: string[];
+}
+
+export type LocationCategoryKey = Exclude<keyof LocationPoiCategories, 'upcomingInfra'>;
+
+export interface LocationEvidence extends LocationPoiCategories {
   projectName: string;
   microMarket: string;
   connectivitySummary?: string;
   microMarketOverview?: string;
   nearbyPois?: string[];
   driveTimes?: string[];
+  /** Categories the buyer explicitly asked about — compose leads with these. */
+  askedCategories?: readonly LocationCategoryKey[];
 }
 
 export interface MediaEvidence {
