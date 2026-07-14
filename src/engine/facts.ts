@@ -799,6 +799,25 @@ const LOCATION_CATEGORY_TERMS: ReadonlyArray<[LocationCategoryKey, RegExp]> = [
   ['parks', /\bparks?\b/i],
 ];
 
+/**
+ * S1 — "schools near Brigade Eldorado": a location capture that echoes a known
+ * project name is a project reference, not a location move. Substring match on
+ * normalized text, either direction ("eldorado" ⊂ "brigade eldorado").
+ */
+export function locationEchoesProjectName(
+  location: string,
+  projectNames: readonly string[],
+): boolean {
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const loc = norm(location);
+  if (loc.length < 3) return false;
+  return projectNames.some((n) => {
+    const name = norm(n);
+    return name.length >= 3 && (name.includes(loc) || loc.includes(name));
+  });
+}
+
 export function locationCategoriesAsked(text: string): LocationCategoryKey[] {
   const t = text.trim();
   if (!t) return [];

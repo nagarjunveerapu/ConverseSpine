@@ -23,6 +23,7 @@ import {
   isMinimumBudgetForTypeQuestion,
   detectPropertyTypes,
   locationCategoriesAsked,
+  locationEchoesProjectName,
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
@@ -407,6 +408,59 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       transition: 'none',
     };
   }
+  // S1 — POI ask about a known project ("schools near Brigade Eldorado?"):
+  // the LLM extractor reads it as a search move; it's a location facet ask on
+  // the focused project (or a named/just-discussed one — the discover facet
+  // path commits it with followUp=location). Demote ONLY when the ask
+  // introduces no new locality — "schools in Whitefield?" still searches.
+  if (ex.speechAct === 'search' && locationCategoriesAsked(trimmedText).length > 0) {
+    const anchorNames = [
+      ...(state.phase === 'focused' && state.focus ? [state.focus.projectName] : []),
+      ...(ex.namedProjects ?? []).map((p) => p.name),
+      ...state.discover.lastOffered.map((o) => o.name),
+      ...(state.discover.discussedProjects ?? []).map((p) => p.name),
+    ].filter(Boolean);
+    const noNewLocality =
+      !ex.constraints.location || locationEchoesProjectName(ex.constraints.location, anchorNames);
+    if (anchorNames.length > 0 && noNewLocality) {
+      const named = ex.namedProjects?.length === 1 ? ex.namedProjects[0] : undefined;
+      ex = {
+        ...ex,
+        speechAct: 'answer',
+        askTopic: ex.askTopic ?? 'location',
+        askTopics: ex.askTopics?.includes('location')
+          ? ex.askTopics
+          : (['location', ...(ex.askTopics ?? [])] as Extracted['askTopics']),
+        forceRecommendList: false,
+        wantsMore: false,
+        transition: 'none',
+        ...(named && state.phase !== 'focused' && !ex.pickName ? { pickName: named.name } : {}),
+      };
+    }
+  }
+  // S1 — "schools near Brigade Eldorado": a location capture that echoes the
+  // focused (or just-offered) project's name is a project reference, not a
+  // location move. Stripping it here keeps focus (no releaseToDiscover) and
+  // keeps the constraint clean for later searches.
+  if (ex.constraints.location) {
+    const knownNames = [
+      ...(state.focus?.projectName ? [state.focus.projectName] : []),
+      ...state.discover.lastOffered.map((o) => o.name),
+    ];
+    if (knownNames.length) {
+      const kept = ex.constraints.location
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+        .filter((l: string) => !locationEchoesProjectName(l, knownNames));
+      const { location: _loc, ...restConstraints } = ex.constraints;
+      ex = {
+        ...ex,
+        constraints: kept.length ? { ...restConstraints, location: kept.join(', ') } : restConstraints,
+      };
+    }
+  }
+
   const prevConstraints = state.constraints;
   const prevLoc = state.constraints.location;
   state = applyExtracted(state, ex, clearedKeys);

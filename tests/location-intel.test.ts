@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mapLocationIntel } from '../src/engine/adapters/nayadesk.js';
-import { locationCategoriesAsked } from '../src/engine/facts.js';
+import { locationCategoriesAsked, locationEchoesProjectName } from '../src/engine/facts.js';
 import { resolveFaqQuestionKeys } from '../src/engine/faq-keys.js';
 import { locationSnapshotLine } from '../src/engine/compose.js';
 
@@ -79,6 +79,20 @@ describe('faq-keys — "schools near X" phrasing routes (S1 regex fix)', () => {
     expect(resolveFaqQuestionKeys('hospitals close by?')).toContain('nearby_hospitals');
     // original phrasings keep working
     expect(resolveFaqQuestionKeys('nearby schools?')).toContain('nearby_schools');
+  });
+});
+
+describe('locationEchoesProjectName — "near <project>" is a reference, not a move', () => {
+  it('matches the focused project name in either direction', () => {
+    expect(locationEchoesProjectName('Brigade Eldorado', ['Brigade Eldorado'])).toBe(true);
+    expect(locationEchoesProjectName('eldorado', ['Brigade Eldorado'])).toBe(true);
+    expect(locationEchoesProjectName('Brigade Eldorado Phase 2', ['Brigade Eldorado'])).toBe(true);
+  });
+
+  it('does not swallow real localities', () => {
+    expect(locationEchoesProjectName('Whitefield', ['Brigade Eldorado'])).toBe(false);
+    expect(locationEchoesProjectName('Sakleshpur', ['Ayana'])).toBe(false);
+    expect(locationEchoesProjectName('Devanahalli', ['Brigade Eldorado', 'Brigade Orchards'])).toBe(false);
   });
 });
 
