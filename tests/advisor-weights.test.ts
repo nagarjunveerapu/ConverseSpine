@@ -77,6 +77,12 @@ describe('walkability — capture and weight', () => {
   });
 });
 
+describe('builder trust — the worry finally has a dimension', () => {
+  it("'trusting the builder' worry registers a strong builder_trust weight", () => {
+    expect(importanceFromConstraints({ worries: ['trusting the builder'] }).builder_trust).toBe(0.9);
+  });
+});
+
 describe('advisorSearchPrefs — search payload', () => {
   it('empty constraints → empty payload (advisor stays off)', () => {
     expect(advisorSearchPrefs({})).toEqual({});

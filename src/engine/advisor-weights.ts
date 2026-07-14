@@ -67,6 +67,7 @@ export function importanceFromConstraints(c: Constraints): Record<string, number
   if (worryHas(c, 'overpay') || worryHas(c, 'hidden cost')) w.budget = Math.max(w.budget ?? 0, 0.9);
   if (worryHas(c, 'traffic') || worryHas(c, 'commute')) w.commute = Math.max(w.commute ?? 0, 0.8);
   if (worryHas(c, 'school')) w.schools = Math.max(w.schools ?? 0, 0.8);
+  if (worryHas(c, 'builder')) w.builder_trust = Math.max(w.builder_trust ?? 0, 0.9);
   return w;
 }
 

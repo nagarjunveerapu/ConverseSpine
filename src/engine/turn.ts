@@ -2017,6 +2017,7 @@ async function syncTelemetry(
       if (imp.schools !== undefined) observations.push({ fact_key: 'school_importance', value: imp.schools, provenance: prov });
       if (imp.budget !== undefined) observations.push({ fact_key: 'budget_importance', value: imp.budget, provenance: prov });
     if (imp.walkability !== undefined) observations.push({ fact_key: 'walkability_importance', value: imp.walkability, provenance: prov });
+    if (imp.builder_trust !== undefined) observations.push({ fact_key: 'builder_trust_importance', value: imp.builder_trust, provenance: prov });
     }
   }
   if (state.focus) {
