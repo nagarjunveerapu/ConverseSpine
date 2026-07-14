@@ -1,4 +1,4 @@
-import type { ComposeRequest } from './types.js';
+import type { ComposeRequest, LocationPoiCategories } from './types.js';
 import type { EmiFacts } from './emi.js';
 
 export type SignalKind = 'location' | 'property_type' | 'purpose' | 'transition';
@@ -41,7 +41,8 @@ export interface UnitConfig {
   holdableUnits?: number;
 }
 
-export interface LocationIntel {
+/** S1 — structured POI categories (schools/hospitals/metro/…) ride alongside the legacy display strings. */
+export interface LocationIntel extends LocationPoiCategories {
   connectivitySummary?: string;
   microMarketOverview?: string;
   nearbyPois?: string[];

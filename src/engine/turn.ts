@@ -22,6 +22,7 @@ import {
   isLocationCorrectionTurn,
   isMinimumBudgetForTypeQuestion,
   detectPropertyTypes,
+  locationCategoriesAsked,
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
@@ -80,6 +81,8 @@ import type {
   ConversationState,
   EvidenceSet,
   Extracted,
+  LocationCategoryKey,
+  LocationEvidence,
   Match,
   ObjectionTopic,
   OfferedProject,
@@ -1635,6 +1638,16 @@ async function fetchAnswer(
 
   const faqShapedHit = Boolean(buyerText && isFaqShapedAsk(buyerText) && faqHits.length > 0);
   const faqShapedMiss = Boolean(evidence.faqMiss?.keys.length);
+  // S1 — LI-backed POI asks. Location-family FAQ keys and category mentions
+  // pull structured LI evidence even on a FAQ hit (named POIs enrich the
+  // approved copy) or a FAQ miss (LI answers instead of a dead-end unknown).
+  // Only TEXT-bound FAQ keys count as asked categories — topic-hint keys
+  // (generic "where is it?") must not gate evidence on metro/airport data.
+  const askedCategories = locationCategoriesAsked(buyerText ?? '');
+  const faqLocationCategories = (buyerText ? resolveFaqQuestionKeys(buyerText) : [])
+    .map((k) => FAQ_KEY_LOCATION_CATEGORY[k])
+    .filter((c): c is LocationCategoryKey => Boolean(c));
+  const wantsLocation = topics.includes('location') || faqLocationCategories.length > 0;
   const needsDetail =
     !faqShapedHit &&
     !faqShapedMiss &&
@@ -1647,29 +1660,70 @@ async function fetchAnswer(
         t === 'availability' ||
         t === 'property_type',
     );
-  if (needsDetail) {
+  if (needsDetail || wantsLocation) {
     let detail = await hydrateProjectDetail(deps, s, goal.projectId);
     if (detail && topics.includes('legal')) {
       detail = await enrichDetailLegal(deps, nd, detail);
     }
-    if (detail) {
+    if (detail && needsDetail) {
       tools.push('detail');
+      // Detail replaces any topic-hint FAQ attach (original single-owner
+      // behavior) — only text-bound faq-shaped asks keep their FAQ answer,
+      // and those never reach here (needsDetail excludes faqShapedHit).
       evidence = { ...evidence, tools: [...new Set(tools)], detail };
     }
-    if (topics.includes('location') && detail) {
-      tools.push('location');
-      evidence = {
-        ...evidence,
-        tools: [...new Set(tools)],
-        location: buildLocationEvidence(detail),
-      };
+    if (detail && wantsLocation) {
+      const leadCategories = [...new Set([...askedCategories, ...faqLocationCategories])];
+      const location = buildLocationEvidence(detail, leadCategories);
+      if (locationHasAskedData(location, leadCategories)) {
+        tools.push('location');
+        evidence = { ...evidence, tools: [...new Set(tools)], location };
+        // The asked POI category is answerable from LI — the FAQ miss is no
+        // longer a dead end (only when every missed key was location-family).
+        if (
+          evidence.faqMiss &&
+          evidence.faqMiss.keys.every((k) => Boolean(FAQ_KEY_LOCATION_CATEGORY[k]))
+        ) {
+          const { faqMiss: _drop, ...rest } = evidence;
+          evidence = rest;
+        }
+      }
     }
   }
 
   return evidence;
 }
 
-function buildLocationEvidence(detail: NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>) {
+/** FAQ question_key → LI POI category it can be answered from (S1). */
+const FAQ_KEY_LOCATION_CATEGORY: Record<string, LocationCategoryKey | undefined> = {
+  nearby_schools: 'schools',
+  nearby_hospitals: 'hospitals',
+  metro_connectivity: 'metroStations',
+  airport_distance: 'airports',
+};
+
+/** True when the evidence can actually answer what was asked (no empty snapshots). */
+function locationHasAskedData(
+  loc: LocationEvidence,
+  asked: readonly LocationCategoryKey[],
+): boolean {
+  if (asked.length > 0) return asked.some((k) => (loc[k]?.length ?? 0) > 0);
+  return Boolean(
+    loc.connectivitySummary ||
+      loc.microMarketOverview ||
+      loc.nearbyPois?.length ||
+      loc.driveTimes?.length ||
+      loc.schools?.length ||
+      loc.hospitals?.length ||
+      loc.metroStations?.length ||
+      loc.airports?.length,
+  );
+}
+
+function buildLocationEvidence(
+  detail: NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>,
+  askedCategories?: readonly LocationCategoryKey[],
+): LocationEvidence {
   const loc = detail.location;
   return {
     projectName: detail.name,
@@ -1678,6 +1732,19 @@ function buildLocationEvidence(detail: NonNullable<Awaited<ReturnType<EngineDeps
     ...(loc?.microMarketOverview ? { microMarketOverview: loc.microMarketOverview } : {}),
     ...(loc?.nearbyPois?.length ? { nearbyPois: loc.nearbyPois } : {}),
     ...(loc?.driveTimes?.length ? { driveTimes: loc.driveTimes } : {}),
+    // S1 — structured POI categories pass through verbatim (Desk-verified).
+    ...(loc?.schools?.length ? { schools: loc.schools } : {}),
+    ...(loc?.hospitals?.length ? { hospitals: loc.hospitals } : {}),
+    ...(loc?.metroStations?.length ? { metroStations: loc.metroStations } : {}),
+    ...(loc?.airports?.length ? { airports: loc.airports } : {}),
+    ...(loc?.itParks?.length ? { itParks: loc.itParks } : {}),
+    ...(loc?.malls?.length ? { malls: loc.malls } : {}),
+    ...(loc?.transitStations?.length ? { transitStations: loc.transitStations } : {}),
+    ...(loc?.universities?.length ? { universities: loc.universities } : {}),
+    ...(loc?.supermarkets?.length ? { supermarkets: loc.supermarkets } : {}),
+    ...(loc?.parks?.length ? { parks: loc.parks } : {}),
+    ...(loc?.upcomingInfra?.length ? { upcomingInfra: loc.upcomingInfra } : {}),
+    ...(askedCategories?.length ? { askedCategories } : {}),
     ...(!loc?.connectivitySummary && !loc?.microMarketOverview && detail.summary
       ? { microMarketOverview: detail.summary }
       : {}),

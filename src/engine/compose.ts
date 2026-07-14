@@ -203,6 +203,11 @@ function renderEvidence(ev: EvidenceSet): string {
       l.driveTimes?.length ? `drive times: ${l.driveTimes.join('; ')}` : '',
     ].filter(Boolean);
     out.push(`location for ${l.projectName}: ${bits.join(' | ') || l.microMarket}`);
+    // S1 — Desk-verified POIs by category; asked categories first, top 3 each.
+    // These are the ONLY named places allowed in a location answer.
+    for (const f of locationCategoryFacts(l)) {
+      out.push(`${f.label} near ${l.projectName}: ${f.pois.map(poiFactLine).join('; ')}`);
+    }
   }
   if (ev.media) {
     out.push(
@@ -572,8 +577,66 @@ function formatStartingPrice(display?: string): string {
   return display.replace(/^from\s+/i, '').trim();
 }
 
-function locationSnapshotLine(l: import('./types.js').LocationEvidence): string {
+/** Buyer-facing label per LI category (S1). Iteration order = render order. */
+const LOCATION_CATEGORY_LABELS: ReadonlyArray<
+  [import('./types.js').LocationCategoryKey, string]
+> = [
+  ['schools', 'Schools'],
+  ['hospitals', 'Hospitals'],
+  ['metroStations', 'Metro'],
+  ['airports', 'Airport'],
+  ['itParks', 'IT parks'],
+  ['malls', 'Malls'],
+  ['transitStations', 'Rail/bus'],
+  ['universities', 'Colleges'],
+  ['supermarkets', 'Supermarkets'],
+  ['parks', 'Parks'],
+];
+
+function poiFactLine(p: import('./types.js').LocationPoi): string {
+  const parts = [p.name];
+  if (p.distanceKm !== undefined) parts.push(`${p.distanceKm} km`);
+  if (p.driveMinutes !== undefined) parts.push(`~${p.driveMinutes} min drive`);
+  return parts.join(', ');
+}
+
+/**
+ * Desk-verified POIs by category — asked categories first with up to 3 places,
+ * unasked context capped at 2 (S1). Empty categories are skipped so the
+ * composer never sees an answerable-looking header with nothing behind it.
+ */
+function locationCategoryFacts(
+  l: import('./types.js').LocationEvidence,
+): Array<{ key: import('./types.js').LocationCategoryKey; label: string; pois: import('./types.js').LocationPoi[] }> {
+  const asked = l.askedCategories ?? [];
+  const orderedKeys = [
+    ...asked,
+    ...LOCATION_CATEGORY_LABELS.map(([k]) => k).filter((k) => !asked.includes(k)),
+  ];
+  const out: Array<{ key: import('./types.js').LocationCategoryKey; label: string; pois: import('./types.js').LocationPoi[] }> = [];
+  for (const key of orderedKeys) {
+    const pois = l[key];
+    if (!pois?.length) continue;
+    const label = LOCATION_CATEGORY_LABELS.find(([k]) => k === key)?.[1] ?? key;
+    const cap = asked.length === 0 || asked.includes(key) ? 3 : 2;
+    out.push({ key, label, pois: pois.slice(0, cap) });
+  }
+  return out;
+}
+
+/** Exported for tests. */
+export function locationSnapshotLine(l: import('./types.js').LocationEvidence): string {
   const bits: string[] = [`*${l.projectName}* is in ${l.microMarket}`];
+  const asked = l.askedCategories ?? [];
+  if (asked.length) {
+    // The buyer asked about specific POI categories — answer those with named,
+    // Desk-verified places (S1), not a generic connectivity recap.
+    const askedFacts = locationCategoryFacts(l).filter((f) => asked.includes(f.key));
+    for (const f of askedFacts.slice(0, 2)) {
+      bits.push(`${f.label} nearby: ${f.pois.map(poiFactLine).join('; ')}`);
+    }
+    if (askedFacts.length) return bits.join('. ');
+  }
   if (l.microMarketOverview) bits.push(l.microMarketOverview);
   if (l.connectivitySummary) bits.push(l.connectivitySummary);
   if (l.nearbyPois?.length) bits.push(`Nearby: ${l.nearbyPois.slice(0, 3).join(', ')}`);

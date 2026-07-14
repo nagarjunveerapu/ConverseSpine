@@ -1,5 +1,6 @@
-import { NayaDeskError, type NayaDeskClient } from '../../crm/nayadesk-client.js';
+import { NayaDeskError, type NayaDeskClient, type NdLocationIntelRow } from '../../crm/nayadesk-client.js';
 import type { EngineCrm, EngineData, StoredVisit } from '../ports.js';
+import type { LocationPoi, LocationPoiCategories } from '../types.js';
 import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom, phaseNoteFrom } from '../compose.js';
 import {
   mapEnrichmentSummaryToUnitConfigs,
@@ -28,24 +29,84 @@ function formatYearMonth(s: string): string {
   return months[mi] ? `${months[mi]} ${m[1]}` : s;
 }
 
-function mapLocationIntel(raw: {
-  connectivity_summary?: string;
-  nearby_pois_json?: string;
-  drive_times_json?: string;
-  micro_market_overview?: string;
-} | null | undefined) {
+/** Parse one Desk LI category column: JSON array of {name, distance_km, drive_minutes} (or plain strings). */
+function parsePoiList(s: string | undefined): LocationPoi[] {
+  if (!s) return [];
+  try {
+    const v = JSON.parse(s) as unknown;
+    if (!Array.isArray(v)) return [];
+    const out: LocationPoi[] = [];
+    for (const item of v) {
+      if (typeof item === 'string' && item.trim()) {
+        out.push({ name: item.trim() });
+      } else if (item && typeof item === 'object') {
+        const o = item as { name?: unknown; distance_km?: unknown; drive_minutes?: unknown };
+        if (typeof o.name === 'string' && o.name.trim()) {
+          out.push({
+            name: o.name.trim(),
+            ...(typeof o.distance_km === 'number' ? { distanceKm: o.distance_km } : {}),
+            ...(typeof o.drive_minutes === 'number' ? { driveMinutes: o.drive_minutes } : {}),
+          });
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function poiDisplay(p: LocationPoi): string {
+  const dist = p.distanceKm !== undefined ? `${p.distanceKm} km` : '';
+  const drive = p.driveMinutes !== undefined ? `~${p.driveMinutes} min drive` : '';
+  const extra = [dist, drive].filter(Boolean).join(', ');
+  return extra ? `${p.name} (${extra})` : p.name;
+}
+
+/**
+ * Map the Desk `location_intelligence` row into structured POI evidence.
+ * Every category is a JSON array of Places-verified POIs (S1 — this mapper
+ * previously read four field names Desk never served and was always empty).
+ * Exported for tests only.
+ */
+export function mapLocationIntel(raw: NdLocationIntelRow | null | undefined) {
   if (!raw) return undefined;
-  const nearbyPois = parseJsonArray(raw.nearby_pois_json);
-  const driveTimes = parseJsonArray(raw.drive_times_json);
-  if (!raw.connectivity_summary && !raw.micro_market_overview && !nearbyPois.length && !driveTimes.length) {
+  const categories = {
+    schools: parsePoiList(raw.schools),
+    hospitals: parsePoiList(raw.hospitals),
+    metroStations: parsePoiList(raw.metro_stations),
+    airports: parsePoiList(raw.airports),
+    itParks: parsePoiList(raw.it_parks),
+    malls: parsePoiList(raw.malls),
+    transitStations: parsePoiList(raw.transit_stations),
+    universities: parsePoiList(raw.universities),
+    supermarkets: parsePoiList(raw.supermarkets),
+    parks: parsePoiList(raw.parks),
+  };
+  const upcomingInfra = parsePoiList(raw.upcoming_infra).map((p) => poiDisplay(p));
+  if (Object.values(categories).every((c) => c.length === 0) && upcomingInfra.length === 0) {
     return undefined;
   }
+  // Legacy display strings — the Advisor project-detail panel renders these
+  // (derived from the same verified POIs, not invented).
+  const nearbyPois = [
+    categories.schools[0],
+    categories.hospitals[0],
+    categories.malls[0],
+    categories.itParks[0],
+  ]
+    .filter((p): p is LocationPoi => Boolean(p))
+    .map(poiDisplay);
+  const driveTimes = [
+    categories.metroStations[0] ? `Metro (${poiDisplay(categories.metroStations[0])})` : '',
+    categories.airports[0] ? `Airport (${poiDisplay(categories.airports[0])})` : '',
+  ].filter(Boolean);
   return {
-    ...(raw.connectivity_summary ? { connectivitySummary: raw.connectivity_summary } : {}),
-    ...(raw.micro_market_overview ? { microMarketOverview: raw.micro_market_overview } : {}),
+    ...Object.fromEntries(Object.entries(categories).filter(([, v]) => v.length > 0)),
+    ...(upcomingInfra.length ? { upcomingInfra } : {}),
     ...(nearbyPois.length ? { nearbyPois } : {}),
     ...(driveTimes.length ? { driveTimes } : {}),
-  };
+  } as LocationPoiCategories & { nearbyPois?: string[]; driveTimes?: string[] };
 }
 
 export function nayadeskData(crm: NayaDeskClient): EngineData {
@@ -122,6 +183,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           // W7 — one buyer-ready phase caveat from the journey composer output
           // (pre-RERA phases can hold/EOI but not book).
           const phaseNote = phaseNoteFrom(ctx.phase_journeys);
+          const location = mapLocationIntel(ctx.location_intelligence);
           return {
             projectId: p.project_id,
             name: p.name,
@@ -142,7 +204,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
             ),
             ...(configurations.length ? { configurations } : {}),
             ...(phaseNote ? { phaseNote } : {}),
-            ...(mapLocationIntel(ctx.location_intelligence) ? { location: mapLocationIntel(ctx.location_intelligence) } : {}),
+            ...(location ? { location } : {}),
           };
         }
       } catch {
@@ -150,6 +212,10 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
       }
       try {
         const p = await crm.getProject(projectId);
+        // S1 — LI ships on the project GET too, so location answers work even
+        // when conversation context is unavailable (e.g. advisor-door sessions
+        // whose Desk conversation row differs from the engine's nd).
+        const location = mapLocationIntel(p.location_intelligence);
         return {
           projectId: p.project_id,
           name: p.name,
@@ -166,6 +232,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           naStatus: p.na_status,
           ecStatus: p.ec_status,
           loanEligibility: p.loan_eligibility,
+          ...(location ? { location } : {}),
         };
       } catch {
         return null;

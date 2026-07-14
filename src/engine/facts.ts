@@ -5,7 +5,7 @@
 import type { EngineLlm } from './ports.js';
 import type { IngressSlotKey } from './ingress.js';
 import { isSlotWritable } from './ingress.js';
-import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic } from './types.js';
+import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic, LocationCategoryKey } from './types.js';
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 
@@ -778,6 +778,40 @@ export function isLocationBroadenTurn(text: string): boolean {
     (/\b(?:also|too|as well)\b/i.test(text) && /\b(?:in|near|around|at)\s+/i.test(text)) ||
     /\b(?:want|include|add|show|looking for).{0,40}\b(?:in|near|around)\s+/i.test(text)
   );
+}
+
+/**
+ * S1 — which LI POI categories the buyer is asking about ("schools near X",
+ * "how far is the metro"). Order matters: itParks is tested before parks and
+ * wins when both match, so "IT parks nearby" never reads as green parks.
+ * Evidence assembly leads with these categories.
+ */
+const LOCATION_CATEGORY_TERMS: ReadonlyArray<[LocationCategoryKey, RegExp]> = [
+  ['schools', /\b(?:schools?|preschools?|kindergartens?)\b/i],
+  ['hospitals', /\b(?:hospitals?|clinics?|medical\s+(?:care|facilit))/i],
+  ['metroStations', /\b(?:metro|namma)\b/i],
+  ['airports', /\bairport\b/i],
+  ['itParks', /\b(?:it\s+parks?|tech\s+parks?|itpl|office\s+hubs?)\b/i],
+  ['malls', /\b(?:malls?|shopping)\b/i],
+  ['universities', /\b(?:universit(?:y|ies)|colleges?)\b/i],
+  ['supermarkets', /\b(?:supermarkets?|grocer(?:y|ies))\b/i],
+  ['transitStations', /\b(?:railway|train|bus\s+(?:stop|station|depot))\b/i],
+  ['parks', /\bparks?\b/i],
+];
+
+export function locationCategoriesAsked(text: string): LocationCategoryKey[] {
+  const t = text.trim();
+  if (!t) return [];
+  const out: LocationCategoryKey[] = [];
+  for (const [key, re] of LOCATION_CATEGORY_TERMS) {
+    if (re.test(t)) out.push(key);
+  }
+  // "IT park / tech park" phrasing matches the generic parks term too — only
+  // count green parks when the buyer clearly means them.
+  if (out.includes('itParks') && out.includes('parks') && !/\b(?:green|children|play)\b/i.test(t)) {
+    return out.filter((k) => k !== 'parks');
+  }
+  return out;
 }
 
 /** "wait I meant Whitefield not Devanahalli" — correction, not project switch (PIV-02). */

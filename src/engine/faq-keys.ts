@@ -56,12 +56,14 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:rera\s+status|is\s+(?:it\s+)?rera\s+(?:registered|approved))\b/i,
   },
   {
+    // "schools near <project>" / "schools around" must route too (S1 — the
+    // nearby-only phrasing missed the most natural focused ask).
     key: 'nearby_schools',
-    re: /\b(?:schools?\s+nearby|nearby\s+schools?|good\s+schools?)\b/i,
+    re: /\b(?:schools?\s+(?:near(?:by)?|around|close)|nearby\s+schools?|good\s+schools?)\b/i,
   },
   {
     key: 'nearby_hospitals',
-    re: /\b(?:hospitals?\s+nearby|nearby\s+hospitals?)\b/i,
+    re: /\b(?:hospitals?\s+(?:near(?:by)?|around|close)|nearby\s+hospitals?)\b/i,
   },
   {
     key: 'metro_connectivity',
