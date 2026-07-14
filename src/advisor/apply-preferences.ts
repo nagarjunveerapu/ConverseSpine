@@ -38,6 +38,13 @@ export function constraintsFromAdvisorPreferences(
   // Trade-off Advisor: worries are the understanding half of the brief. They
   // bump ranking weights (advisor-weights.ts) and can derive the priority so
   // the bot asks less when it already knows.
+  // Deepening answers from the advisor brief (decline chips never arrive —
+  // the SPA filters them). Both feed the Desk re-rank via advisor-weights.
+  const hub = prefs.commute_hub?.trim();
+  if (hub) out.commuteHub = hub;
+  const sch = prefs.schools?.trim().toLowerCase();
+  if (sch && !/^(not|no|skip)/.test(sch)) out.schoolsMentioned = true;
+
   const worriesRaw = prefs.worries?.trim();
   if (worriesRaw) {
     const worries = worriesRaw

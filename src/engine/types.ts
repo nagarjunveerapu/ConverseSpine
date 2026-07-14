@@ -19,6 +19,8 @@ export interface Constraints {
   schoolsMentioned?: boolean;
   /** Buyer's stated worries from the advisor brief ("overpaying", "daily traffic"). */
   worries?: string[];
+  /** Buyer mentioned walkability ("walkable", "walking distance"). */
+  walkabilityMentioned?: boolean;
 }
 
 export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose' | 'priority';

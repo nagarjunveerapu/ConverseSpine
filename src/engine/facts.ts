@@ -614,11 +614,11 @@ export function detectSoftPrefs(
   text: string,
 ): Pick<
   Extracted['constraints'],
-  'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned'
+  'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned' | 'walkabilityMentioned'
 > {
   const out: Pick<
     Extracted['constraints'],
-    'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned'
+    'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned' | 'walkabilityMentioned'
   > = {};
   if (/\bready\s+to\s+move\b|\bpreferably\s+ready\b/i.test(text)) out.readyToMove = true;
   if (/\bnear(?:\s+the)?\s+airport\b|\bairport\s+(?:side|corridor|road)\b/i.test(text)) {
@@ -641,6 +641,9 @@ export function detectSoftPrefs(
   if (hub?.[1]) out.commuteHub = hub[1].trim();
   if (/\bgood\s+schools?\b|\bschools?\s+near(?:by)?\b|\bkids?['\u2019]?s?\s+school\b/i.test(text)) {
     out.schoolsMentioned = true;
+  }
+  if (/\bwalk(?:able|ability)\b|\bwalking\s+distance\b|\beverything\s+within\s+walk/i.test(text)) {
+    out.walkabilityMentioned = true;
   }
   return out;
 }
