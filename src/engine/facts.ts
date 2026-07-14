@@ -614,11 +614,11 @@ export function detectSoftPrefs(
   text: string,
 ): Pick<
   Extracted['constraints'],
-  'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned' | 'walkabilityMentioned'
+  'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned' | 'walkabilityMentioned' | 'valueMentioned'
 > {
   const out: Pick<
     Extracted['constraints'],
-    'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned' | 'walkabilityMentioned'
+    'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned' | 'walkabilityMentioned' | 'valueMentioned'
   > = {};
   if (/\bready\s+to\s+move\b|\bpreferably\s+ready\b/i.test(text)) out.readyToMove = true;
   if (/\bnear(?:\s+the)?\s+airport\b|\bairport\s+(?:side|corridor|road)\b/i.test(text)) {
@@ -644,6 +644,9 @@ export function detectSoftPrefs(
   }
   if (/\bwalk(?:able|ability)\b|\bwalking\s+distance\b|\beverything\s+within\s+walk/i.test(text)) {
     out.walkabilityMentioned = true;
+  }
+  if (/\bresale\b|\bappreciat(?:e|ion)\b|\bhold(?:s)?\s+(?:its\s+)?value\b|\bfuture\s+value\b/i.test(text)) {
+    out.valueMentioned = true;
   }
   return out;
 }

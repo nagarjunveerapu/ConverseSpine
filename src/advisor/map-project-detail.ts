@@ -1,4 +1,5 @@
 import type { ProjectDetail } from '../engine/types.js';
+import type { NdMarketIntel } from '../crm/nayadesk-client.js';
 
 export interface AdvisorProjectDetailDto {
   project_id: string;
@@ -26,6 +27,9 @@ export interface AdvisorProjectDetailDto {
     drive_times?: string[];
   };
   faqs?: Array<{ question_key: string; question: string; answer: string }>;
+  /** Approved corridor value intel for the board's price panel (P3.4 surface).
+   *  Attached by the handler, not this mapper; absent = no verified data. */
+  market_intel?: NdMarketIntel;
 }
 
 export function mapProjectDetailDto(d: ProjectDetail): AdvisorProjectDetailDto {

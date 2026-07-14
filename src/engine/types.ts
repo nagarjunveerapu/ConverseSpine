@@ -21,6 +21,8 @@ export interface Constraints {
   worries?: string[];
   /** Buyer mentioned walkability ("walkable", "walking distance"). */
   walkabilityMentioned?: boolean;
+  /** Buyer mentioned resale / appreciation ("resale value", "will it hold value"). */
+  valueMentioned?: boolean;
 }
 
 export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose' | 'priority';

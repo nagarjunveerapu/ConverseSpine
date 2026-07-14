@@ -113,6 +113,25 @@ export interface NdSearchMatch {
   preference_boost?: number;
 }
 
+/**
+ * Approved corridor value intel (Desk micro_market_intel, Market Intel Layer).
+ * Every number arrives with provenance (source + as_of + confidence); nulls
+ * are honest gaps (e.g. appreciation until baseline gazettes are parsed).
+ */
+export interface NdMarketIntel {
+  micro_market_id: string;
+  city: string;
+  display_name: string;
+  appreciation: {
+    three_yr_pct: number | null;
+    five_yr_pct: number | null;
+    corridor_maturity: string | null;
+  };
+  rent_bands: Array<{ unit_type?: string; rent_min_inr?: number; rent_max_inr?: number }>;
+  drivers: Array<{ event: string; date?: string; note?: string }>;
+  provenance: { source: string; as_of: string; confidence: number };
+}
+
 export interface NdPricingQuote {
   project_id: string;
   components_quoted: Array<{
@@ -285,6 +304,15 @@ export class NayaDeskClient {
       conversation_id,
       ...(recent_message_limit !== undefined ? { recent_message_limit } : {}),
     });
+  }
+
+  /**
+   * Market Intel Layer — corridor value intel by free-text micro-market.
+   * Desk returns APPROVED rows only (drafts never cross this wire); null
+   * intel = no verified data for that corridor, an honest absence.
+   */
+  marketIntel(q: string): Promise<{ intel: NdMarketIntel | null }> {
+    return this.call('GET', `/api/market-intel?q=${encodeURIComponent(q)}`);
   }
 
   searchProjects(req: {

@@ -63,11 +63,17 @@ export function importanceFromConstraints(c: Constraints): Record<string, number
     }
   }
   if (c.walkabilityMentioned) w.walkability = Math.max(w.walkability ?? 0, 0.7);
+  if (c.valueMentioned) w.value = Math.max(w.value ?? 0, 0.7);
+  // An investment purpose IS a value preference — the buyer's own chip answer.
+  if (c.purpose === 'investment') w.value = Math.max(w.value ?? 0, 0.8);
   // Worries bump their dimension — a named fear outranks a default weight.
   if (worryHas(c, 'overpay') || worryHas(c, 'hidden cost')) w.budget = Math.max(w.budget ?? 0, 0.9);
   if (worryHas(c, 'traffic') || worryHas(c, 'commute')) w.commute = Math.max(w.commute ?? 0, 0.8);
   if (worryHas(c, 'school')) w.schools = Math.max(w.schools ?? 0, 0.8);
   if (worryHas(c, 'builder')) w.builder_trust = Math.max(w.builder_trust ?? 0, 0.9);
+  if (worryHas(c, 'resale') || worryHas(c, 'appreciation') || worryHas(c, 'hold value')) {
+    w.value = Math.max(w.value ?? 0, 0.9);
+  }
   return w;
 }
 

@@ -83,6 +83,29 @@ describe('builder trust — the worry finally has a dimension', () => {
   });
 });
 
+describe('value — resale/appreciation finally has a dimension (P3.4)', () => {
+  it('detects resale/appreciation mentions deterministically', () => {
+    expect(detectSoftPrefs('what about resale value here?').valueMentioned).toBe(true);
+    expect(detectSoftPrefs('will this area appreciate?').valueMentioned).toBe(true);
+    expect(detectSoftPrefs('does it hold its value long term').valueMentioned).toBe(true);
+    expect(detectSoftPrefs('shorter commute please').valueMentioned).toBeUndefined();
+  });
+
+  it("a 'resale value' worry registers a strong value weight", () => {
+    expect(importanceFromConstraints({ worries: ['resale value'] }).value).toBe(0.9);
+  });
+
+  it('an investment purpose IS a value preference (0.8), worry still wins (0.9)', () => {
+    expect(importanceFromConstraints({ purpose: 'investment' }).value).toBe(0.8);
+    expect(importanceFromConstraints({ purpose: 'investment', worries: ['resale value'] }).value).toBe(0.9);
+    expect(importanceFromConstraints({ purpose: 'self_use' }).value).toBeUndefined();
+  });
+
+  it('a free-text mention registers the dimension weight', () => {
+    expect(importanceFromConstraints({ valueMentioned: true }).value).toBe(0.7);
+  });
+});
+
 describe('advisorSearchPrefs — search payload', () => {
   it('empty constraints → empty payload (advisor stays off)', () => {
     expect(advisorSearchPrefs({})).toEqual({});

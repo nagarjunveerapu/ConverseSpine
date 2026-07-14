@@ -130,6 +130,8 @@ export interface EngineData {
   listUnits(projectId: string): Promise<UnitConfig[]>;
   mediaShare(ndConversationId: string, projectId: string, assetKind: string, unitType?: string): Promise<MediaShareResult | null>;
   conversationContext(ndConversationId: string): Promise<import('../crm/nayadesk-client.js').NdContextBundle | null>;
+  /** Approved corridor value intel for a micro-market string; null = honest absence. */
+  marketIntel(microMarket: string): Promise<import('../crm/nayadesk-client.js').NdMarketIntel | null>;
   objectionContext(ndConversationId: string): Promise<{
     playbooks: Array<{ topic: string; reframeAngles: string[]; escalateAfter: number }>;
     escalationPhone?: string;

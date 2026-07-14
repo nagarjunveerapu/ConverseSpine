@@ -337,6 +337,17 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
       }
     },
 
+    async marketIntel(microMarket) {
+      const q = microMarket.trim();
+      if (!q) return null;
+      try {
+        const r = await crm.marketIntel(q);
+        return r.intel ?? null;
+      } catch {
+        return null; // transport failure = honest absence, never a thrown turn
+      }
+    },
+
     async objectionContext(nd) {
       try {
         const ctx = await crm.conversationContext(nd);

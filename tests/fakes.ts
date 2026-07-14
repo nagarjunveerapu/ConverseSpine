@@ -269,6 +269,9 @@ export function fakeData(): EngineData & {
         assetKind,
       };
     },
+    async marketIntel(_microMarket) {
+      return null; // fakes have no approved corridor intel — honest absence
+    },
     async conversationContext(_nd) {
       return {
         conversation: {
