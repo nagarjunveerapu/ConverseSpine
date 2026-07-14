@@ -54,9 +54,15 @@ export async function handleAdvisorProjectDetail(
   const detail = state.projectCache?.[project_id];
   if (!detail) return { status: 'error', error: 'project_unavailable' };
 
+  // Corridor value intel for the board's price panel — approved rows only
+  // (drafts never cross the Desk wire). Absent = the SPA renders its honest
+  // "no verified trend yet" state; a failure here never fails the detail.
+  const intel = await rt.engine.data.marketIntel(detail.microMarket).catch(() => null);
+
+  const dto = scopeFocusedConfigurations(mapProjectDetailDto(detail), state.constraints.bhk);
   return {
     status: 'ok',
-    project: scopeFocusedConfigurations(mapProjectDetailDto(detail), state.constraints.bhk),
+    project: intel ? { ...dto, market_intel: intel } : dto,
     live: true,
   };
 }

@@ -275,6 +275,7 @@ function pruneUndefined(c: Partial<Constraints>): Partial<Constraints> {
   if (c.schoolsMentioned !== undefined) out.schoolsMentioned = c.schoolsMentioned;
   if (c.worries !== undefined) out.worries = c.worries;
   if (c.walkabilityMentioned !== undefined) out.walkabilityMentioned = c.walkabilityMentioned;
+  if (c.valueMentioned !== undefined) out.valueMentioned = c.valueMentioned;
   return out;
 }
 
