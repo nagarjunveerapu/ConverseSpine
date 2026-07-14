@@ -116,5 +116,6 @@ function mapPrefsSnapshot(state: AdvisorMapInput['state']): Record<string, strin
   if (c.priorityFocus) out.priority = c.priorityFocus;
   if (c.schoolsMentioned) out.schools = 'important';
   if (c.worries?.length) out.worries = c.worries.join(', ');
+  if (c.walkabilityMentioned) out.walkability = 'matters';
   return out;
 }

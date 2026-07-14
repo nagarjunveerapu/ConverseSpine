@@ -66,6 +66,17 @@ describe('worries — the understanding half of the brief', () => {
   });
 });
 
+describe('walkability — capture and weight', () => {
+  it('detects walkability mentions deterministically', () => {
+    expect(detectSoftPrefs('we want a walkable neighbourhood').walkabilityMentioned).toBe(true);
+    expect(detectSoftPrefs('everything within walking distance please').walkabilityMentioned).toBe(true);
+    expect(detectSoftPrefs('2 BHK in Whitefield').walkabilityMentioned).toBeUndefined();
+  });
+  it('a walkability mention registers the dimension weight', () => {
+    expect(importanceFromConstraints({ walkabilityMentioned: true }).walkability).toBe(0.7);
+  });
+});
+
 describe('advisorSearchPrefs — search payload', () => {
   it('empty constraints → empty payload (advisor stays off)', () => {
     expect(advisorSearchPrefs({})).toEqual({});

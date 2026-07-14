@@ -216,8 +216,11 @@ export function firstMissingSlot(s: ConversationState): ProbeKind | undefined {
   const asked = new Set(s.discover.asked);
   if (!c.location && !asked.has('location')) return 'location';
   if (!c.budgetMaxInr && !asked.has('budget')) return 'budget';
-  if (!c.bhk && !c.budgetMaxInr && !asked.has('bhk')) return 'bhk';
+  // Adaptive: purpose decides whether bedrooms are even the right question —
+  // an investor gets purpose first and no bhk probe (mirror of the advisor
+  // brief's rule table; same branch axis, coherent ladders).
   if (!c.purpose && !c.budgetMaxInr && !asked.has('purpose')) return 'purpose';
+  if (c.purpose !== 'investment' && !c.bhk && !c.budgetMaxInr && !asked.has('bhk')) return 'bhk';
   return undefined;
 }
 
