@@ -57,4 +57,18 @@ describe('AB-8 — multi-topic keeps the legal snapshot AND the other atom', () 
     // single topic: possession FAQ owns it (no forced snapshot duplication)
     expect(reply).toMatch(/ready for registration/i);
   });
+
+  it('keeps the LOAN FAQ in a multi-topic ask — only RERA/khata are the snapshot (review AB-8)', () => {
+    const req = multiReq(['legal', 'availability']);
+    req.context.buyerText = 'RERA and home loan eligibility?';
+    req.evidence.detail = {
+      ...OASIS,
+      faqs: [
+        { questionKey: 'rera_status', question: 'rera?', answer: 'RERA registered.' },
+        { questionKey: 'loan_eligibility', question: 'loan?', answer: 'HDFC, SBI and ICICI fund this project.' },
+      ],
+    };
+    const reply = fallbackReply(req);
+    expect(reply).toMatch(/HDFC|SBI|ICICI/); // loan atom survived (not filtered out)
+  });
 });
