@@ -936,8 +936,29 @@ function cleanLocalityFragment(raw: string): string {
       '',
     )
     .replace(/\s+(?:under|below|above)\s+[\d.,]+\s*(?:crore|cr|lakh|lakhs|lacs?)\b.*$/i, '')
+    // AB-3 — "near the airport" is a soft signal (nearAirport), never a locality.
+    .replace(/\s*near\s+(?:the\s+)?airport.*$/i, '')
     .replace(/\s+(?:preferably|\d(?:\.\d)?\s*bhk|preferably|ready\s+to\s+move|near\s+airport).*$/i, '')
     .trim();
+}
+
+/**
+ * AB-3 — words that are NOT a place, even after cleaning. A locality fragment that
+ * reduces to only these (or generics) is dialogue noise a greedy "near …" / "in …"
+ * capture grabbed, not somewhere the buyer named ("near THE airport", "ONLY plotted",
+ * "schools near THIS PROJECT"). Bare cities/areas always contain a non-stop word.
+ */
+const LOCALITY_STOP = new Set([
+  'the', 'a', 'an', 'this', 'that', 'these', 'those', 'it', 'its', 'here', 'there',
+  'only', 'just', 'near', 'nearby', 'around', 'close', 'by', 'to', 'at', 'in', 'of',
+  'airport', 'project', 'projects', 'area', 'areas', 'place', 'somewhere', 'anywhere',
+  'good', 'nice', 'best', 'us', 'consulate', 'office', 'work', 'my', 'me',
+]);
+
+function isLocalityNoise(cleaned: string): boolean {
+  const words = cleaned.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  return words.every((w) => LOCALITY_STOP.has(w));
 }
 
 /**
@@ -949,6 +970,11 @@ export function locationLooksPolluted(loc: string | undefined): boolean {
   const lc = loc.toLowerCase().trim();
   if (!lc) return false;
   if (lc.split(/\s+/).length > 6) return true;
+  // AB-3 — the embedder/BAML sometimes proposes a non-place phrase as the locality
+  // ("the", "near the airport"). This is the single gate that rejects a BAML
+  // location proposal (extract-baml), so a dialogue-noise capture stops here too —
+  // otherwise it reached the buyer as the honest no_fit "No exact match for the".
+  if (isLocalityNoise(cleanLocalityFragment(lc))) return true;
   return /\b(?:under|below|above|upto|up\s+to|budget|crore|crs?\b|lakh|lakhs|lacs?|\d+\s*(?:cr|l)\b|\d(?:\.\d)?\s*bhk|preferably|ready\s+to\s+move)\b/i.test(
     lc,
   );
@@ -970,13 +996,22 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     return undefined;
   }
 
-  const GENERIC = /\b(properties|property|projects|options|plantation|homes|flats|apartments|villas)\b/i;
+  // AB-3 — a fragment containing a type word ("plotted") or an LI-category word
+  // ("schools") is describing WHAT, not WHERE — never a locality ("only plotted",
+  // "schools near this project"). Bare place names never contain these.
+  const GENERIC =
+    /\b(properties|property|projects|options|plantation|homes|flats|apartments|villas|plot|plots|plotted|land|schools?|hospitals?|clinics?|metro|colleges?)\b/i;
   const hints = ctx?.projectNameHints;
 
   const acceptLocality = (raw: string | undefined): string | undefined => {
     if (!raw) return undefined;
     const cleaned = cleanLocalityFragment(raw);
     if (!cleaned || GENERIC.test(cleaned)) return undefined;
+    // AB-3 — a dialogue capture that is nothing but stopwords/noise is NOT a place.
+    // "near the airport" grabbed "the", "only plotted" grabbed "only", "schools near
+    // this project" grabbed "this project" — each surfaced as "No exact match for the".
+    // A locality must contain at least one word that is not a stopword or a generic.
+    if (isLocalityNoise(cleaned)) return undefined;
     if (looksLikeOfferedProjectName(cleaned, hints)) return undefined;
     return cleaned;
   };
@@ -1030,14 +1065,17 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     if (loc) return loc;
   }
   const patterns = [
-    /\b(?:looking|interested|searching)\s+(?:in|at|around|near|for)\s+([A-Za-z][A-Za-z\s]{2,24}?)(?:\s|$|[,.!?])/i,
-    /\b(?:in|near|around|at)\s+([A-Za-z][A-Za-z\s]{2,24}?)(?:\s|$|[,.!?])/i,
+    /\b(?:looking|interested|searching)\s+(?:in|at|around|near|for)\s+([A-Za-z][A-Za-z\s]{2,24}?)(?:\s|$|[,.!?])/gi,
+    /\b(?:in|near|around|at)\s+([A-Za-z][A-Za-z\s]{2,24}?)(?:\s|$|[,.!?])/gi,
   ];
   for (const re of patterns) {
-    const m = re.exec(text);
-    if (m?.[1] && !GENERIC.test(m[1]) && !/\b(lakhs|crore|bhk|budget)\b/i.test(m[1])) {
-      const loc = acceptLocality(m[1]);
-      if (loc) return loc;
+    // AB-3 — scan ALL matches, not just the first: "near the airport / Devanahalli"
+    // captures "the" first (noise), and the real locality follows it.
+    for (const m of text.matchAll(re)) {
+      if (m[1] && !GENERIC.test(m[1]) && !/\b(lakhs|crore|bhk|budget)\b/i.test(m[1])) {
+        const loc = acceptLocality(m[1]);
+        if (loc) return loc;
+      }
     }
   }
   const bare = text.trim();
