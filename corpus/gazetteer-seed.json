@@ -1,0 +1,22 @@
+{
+  "_comment": "Entities OBSERVED in corpus phrasings but outside today's Desk catalog. DATA not engine code — grows via the weekly mining review queue. Sourced 2026-07-15 from the corpus census (tag-registry-quarantine.py lists + census scan).",
+  "places": [
+    "whitefield", "sarjapur", "sarjapur road", "hennur", "yelahanka", "marathahalli",
+    "jp nagar", "budigere", "bagalur", "electronic city", "hebbal", "jakkur",
+    "kanakapura", "kanakapura road", "devanahalli", "hsr", "hsr layout", "koramangala",
+    "indiranagar", "bellandur", "varthur", "hoskote", "mysore", "mysuru", "banashankari",
+    "kondapur", "gunjur", "coorg", "sakleshpur", "gurgaon", "noida", "pune", "hyderabad",
+    "chennai", "mumbai", "thane", "wakad", "kharadi", "powai", "dwarka", "faridabad",
+    "gachibowli", "miyapur", "medavakkam", "sholinganallur", "omr", "itpl", "rt nagar",
+    "thanisandra", "nagawara", "nagavara", "panathur", "chandapura", "tumkur road",
+    "mysore road", "bannerghatta road", "outer ring road", "manyata tech park",
+    "south bangalore", "north bangalore", "nandi hills", "brookefield", "jayanagar",
+    "malleshwaram", "bangalore", "bengaluru"
+  ],
+  "builders": [
+    "prestige", "sobha", "embassy", "provident", "mantri", "salarpuria", "godrej",
+    "puravankara", "shriram", "casagrand", "lodha", "dlf", "tata", "birla", "adarsh",
+    "rohan", "purva", "brigade", "century", "sattva", "krishnaja", "manyata", "mahindra"
+  ],
+  "projects": []
+}
