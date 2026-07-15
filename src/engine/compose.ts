@@ -413,17 +413,15 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       if (goal.topic === 'media' && ev.media) {
         if (ev.media.allowed && ev.media.cdnUrl) {
-          return `Here's the ${ev.media.title ?? ev.media.assetKind ?? 'asset'} for *${ev.media.projectName}*: ${ev.media.cdnUrl}`;
+          return `Here's the ${ev.media.title ?? humanizeAsset(ev.media.assetKind)} for *${ev.media.projectName}*: ${ev.media.cdnUrl}`;
         }
         const pname = ev.media.projectName || context.focusProjectName || 'this project';
-        const hint = (ev.media.redirectHint ?? ev.media.reason ?? '').trim();
-        if (hint) {
-          const alreadyNamed = pname !== 'this project' && hint.toLowerCase().includes(pname.toLowerCase());
-          return alreadyNamed
-            ? hint
-            : `For *${pname}* — ${hint.replace(/^[—\-–]\s*/, '')}`;
-        }
-        return `I can share that after a site visit is confirmed for *${pname}*.`;
+        // ev.media.redirectHint / reason are INTERNAL composer instructions — Desk
+        // authors them for the RM ("offer site visit; do not quote this number"),
+        // never as buyer copy (see NayaDesk disclosure.ts). Echoing one printed
+        // "no floor_plan on file for this project yet — offer to follow up" to a
+        // buyer. Translate the miss into buyer-safe copy; never recite the hint.
+        return `I don't have the ${humanizeAsset(ev.media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
       }
       // Closed-beta: Desk FAQ (loan eligibility, yield, …) before EMI snapshot.
       if (ev.detail?.faqs?.length) {
@@ -560,6 +558,22 @@ function humanizeProjectType(raw?: string): string {
   if (s.includes('villa')) return 'villa project';
   if (s.includes('apartment')) return 'apartment project';
   return raw.replace(/_/g, ' ');
+}
+
+/** Buyer-facing name for a media asset kind — never an underscored key like `floor_plan`. */
+function humanizeAsset(kind?: string): string {
+  if (!kind) return 'document';
+  const nice: Record<string, string> = {
+    floor_plan: 'floor plan',
+    master_plan: 'master plan',
+    layout_plan: 'layout plan',
+    brochure: 'brochure',
+    price_sheet: 'price sheet',
+    cost_sheet: 'cost sheet',
+    video: 'walkthrough video',
+    photo: 'photos',
+  };
+  return nice[kind] ?? kind.replace(/_/g, ' ');
 }
 
 function formatPriceComponent(c: { label: string; value: string }): string {

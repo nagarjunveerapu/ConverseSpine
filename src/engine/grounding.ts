@@ -66,3 +66,32 @@ export function stripBanned(reply: string): string {
   const out = kept.join(' ').trim();
   return out.length > 0 ? out : reply.trim();
 }
+
+/**
+ * A trailing internal directive tacked onto a reply — "… — offer to follow up",
+ * "… — do not quote this number". Desk `redirect_hint` values (disclosure.ts) and
+ * the turn GOAL are written in imperative instruction voice for the composer to
+ * ACT on, not to print. The deterministic composer no longer echoes them; this is
+ * the last gate for an LLM draft that parroted one. Scoped to the exact internal
+ * vocabulary so it can never eat a real buyer sentence.
+ */
+const DIRECTIVE_TAIL =
+  /\s*[—–-]+\s*(?:offer(?:s|ing)?\s+(?:to\s+|a\s+)?(?:follow[\s-]*up|site\s+visit)|do\s+not\s+(?:quote|invent|disclose)[^.!?]*|pivot\s+to\s+(?:current\s+)?inventory|add\s+(?:the\s+)?buyer\s+to[^.!?]*|reassure\s+(?:a\s+)?human[^.!?]*|not\s+for\s+buyer\s+disclosure|not\s+currently\s+sharable)\.?\s*$/i;
+
+/** Whole sentence that is pure composer meta — a leaked prompt instruction, not a reply. */
+const DIRECTIVE_SENTENCE =
+  /\bEVIDENCE\b|\buse\s+the\s+exact\s+(?:copy|template|proposed)\b|\b(?:do\s+not|don'?t)\s+invent\b|\breframe\s+using\b|\bredirect[_\s]?hint\b/i;
+
+/**
+ * Strip leaked internal composer directives before send. Removes a trailing
+ * directive clause first, then drops any whole sentence that is pure meta. Falls
+ * back to the input if stripping would empty the reply — never send blank.
+ */
+export function stripComposerDirectives(reply: string): string {
+  let out = reply.replace(DIRECTIVE_TAIL, '').trim();
+  const parts = out.split(/(?<=[.!?])\s+/);
+  const kept = parts.filter((p) => !DIRECTIVE_SENTENCE.test(p));
+  const joined = kept.join(' ').trim();
+  if (joined.length > 0) out = joined;
+  return out.length > 0 ? out : reply.trim();
+}
