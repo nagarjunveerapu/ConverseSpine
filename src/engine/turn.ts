@@ -1834,18 +1834,36 @@ async function fetchAnswer(
     .map((k) => FAQ_KEY_LOCATION_CATEGORY[k])
     .filter((c): c is LocationCategoryKey => Boolean(c));
   const wantsLocation = topics.includes('location') || faqLocationCategories.length > 0;
-  const needsDetail =
-    !faqShapedHit &&
-    !faqShapedMiss &&
-    topics.some(
-      (t) =>
-        t === 'legal' ||
-        t === 'overview' ||
-        t === 'amenities' ||
-        t === 'location' ||
-        t === 'availability' ||
-        t === 'property_type',
+  // AB-8b — a multi-atom legal ask ("is it RERA approved AND can I get a loan?")
+  // resolves a loan FAQ hit, which used to suppress detail hydration (faqShapedHit).
+  // The RERA/khata SNAPSHOT atom then had no data and rendered "on file with our
+  // team" even though Desk carries the number. When the buyer named a snapshot atom
+  // that no FAQ hit covers, hydrate the full detail so BOTH atoms answer (the loan
+  // FAQ is preserved onto the hydrated detail below).
+  const legalSnapshotFaqPresent = faqHits.some((f) =>
+    /^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(f.questionKey),
+  );
+  const legalSnapshotNeeded =
+    topics.includes('legal') &&
+    !legalSnapshotFaqPresent &&
+    Boolean(buyerText) &&
+    // Title-atom cues only — phrase-scoped so a bare "loan approval" can't trip it.
+    /\b(?:rera|khata|title|encumbrance|\bec\b|clear\s+title|approval\s+status|plan\s+approval|legal\s+status|legal\s+details?)\b/i.test(
+      buyerText ?? '',
     );
+  const needsDetail =
+    (!faqShapedHit &&
+      !faqShapedMiss &&
+      topics.some(
+        (t) =>
+          t === 'legal' ||
+          t === 'overview' ||
+          t === 'amenities' ||
+          t === 'location' ||
+          t === 'availability' ||
+          t === 'property_type',
+      )) ||
+    legalSnapshotNeeded;
   if (needsDetail || wantsLocation) {
     let detail = await hydrateProjectDetail(deps, s, goal.projectId);
     if (detail && topics.includes('legal')) {
@@ -1854,9 +1872,16 @@ async function fetchAnswer(
     if (detail && needsDetail) {
       tools.push('detail');
       // Detail replaces any topic-hint FAQ attach (original single-owner
-      // behavior) — only text-bound faq-shaped asks keep their FAQ answer,
-      // and those never reach here (needsDetail excludes faqShapedHit).
-      evidence = { ...evidence, tools: [...new Set(tools)], detail };
+      // behavior) — only text-bound faq-shaped asks keep their FAQ answer.
+      // AB-8b — but a multi-atom legal ask (legalSnapshotNeeded) DOES carry a
+      // real FAQ hit (the loan atom); preserve it onto the hydrated detail so
+      // the snapshot answers RERA and the FAQ body answers loan.
+      const priorFaqs = evidence.detail?.faqs;
+      evidence = {
+        ...evidence,
+        tools: [...new Set(tools)],
+        detail: priorFaqs?.length ? { ...detail, faqs: priorFaqs } : detail,
+      };
     }
     if (detail && wantsLocation) {
       const leadCategories = [...new Set([...askedCategories, ...faqLocationCategories])];

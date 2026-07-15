@@ -373,26 +373,52 @@ export function fallbackReply(req: ComposeRequest): string {
       // non-legal FAQ. "RERA and possession" was dropping RERA because a possession
       // FAQ was present. Single-topic behaviour is unchanged.
       const multiTopic = topics.length > 1;
-      if (topics.includes('legal') && ev.detail && (!ev.detail.faqs?.length || multiTopic)) {
-        // Prefer facet line (banks/EC) when buyer text asks; else snapshot.
-        // When Desk FAQ hit exists, FAQ body below owns the answer (loan eligibility, etc.).
+      const faqPresent = !!ev.detail?.faqs?.length;
+      // AB-8b — render the legal SNAPSHOT (RERA/khata) when no FAQ owns it, OR it's
+      // a multi-topic ask, OR the buyer named a snapshot atom (RERA/khata/EC) that
+      // the present FAQ does not answer. The last case rescues "is it RERA approved
+      // AND can I get a loan?": both cues collapse to the single 'legal' topic, so
+      // without it the loan FAQ rendered alone and the RERA atom was silently dropped.
+      const snapshotAtomAsked =
+        topics.includes('legal') &&
+        !!ev.detail &&
+        asksLegalSnapshotAtom(context.buyerText, ev.detail!.faqs ?? []);
+      const legalSnapshotRendered =
+        topics.includes('legal') && !!ev.detail && (!faqPresent || multiTopic || snapshotAtomAsked);
+      if (legalSnapshotRendered) {
+        // When the buyer named a TITLE atom (RERA/khata/EC) and a separate FAQ carries
+        // the other legal atom (loan), render the title snapshot ONLY — focusedLegalLine
+        // would pick the loan facet and drop RERA. Snapshot=RERA/khata, FAQ body=loan,
+        // so both survive. Otherwise keep the facet-routed line (EC/banks/loan / full).
         chunks.push(
-          focusedLegalLine(ev.detail, context.buyerText, context.disclosedFacts),
+          snapshotAtomAsked
+            ? legalTitleSnapshot(ev.detail!, ev.detail!.faqs ?? [])
+            : focusedLegalLine(ev.detail!, context.buyerText, context.disclosedFacts),
         );
       }
       if (topics.includes('location') && ev.location) {
         chunks.push(locationSnapshotLine(ev.location));
       }
+      // AB-8b — a structural atom the buyer explicitly named (configs → units,
+      // EMI → schedule) must render as its OWN chunk when a FAQ body is also present,
+      // or the FAQ shadows it. "configs and possession?" returned only the possession
+      // FAQ; "2 BHK price and the EMI" only the loan FAQ. The FAQ is a DIFFERENT atom
+      // and stays additive below. When no FAQ is present the richer single-topic
+      // handlers further down own these — unchanged.
+      if (faqPresent && topics.includes('availability') && ev.units?.length) {
+        chunks.push(availabilityChunk(ev, context.buyerText ?? '', context.focusProjectName));
+      }
+      if (faqPresent && topics.includes('emi') && ev.emi) {
+        chunks.push(emiSnapshotLine(ev.emi));
+      }
       // Desk FAQ (loan eligibility, yield, …) beats EMI snapshot when both present.
       if (ev.detail?.faqs?.length) {
-        // In multi-topic, drop only the FAQs the legal snapshot ALWAYS owns —
-        // RERA / khata / rera_number. Keep loan/EMI and everything else: the snapshot
-        // renders loan only when the buyer asked banks/loan, so a "RERA and home loan"
-        // ask would otherwise lose its loan atom (review AB-8).
-        const relevant =
-          multiTopic && topics.includes('legal')
-            ? ev.detail.faqs.filter((f) => !/^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(f.questionKey))
-            : ev.detail.faqs;
+        // Drop only the FAQs the legal snapshot ALWAYS owns — RERA / khata /
+        // rera_number — and only when that snapshot actually rendered. Keep loan/EMI
+        // and everything else so a "RERA and home loan" ask keeps its loan atom.
+        const relevant = legalSnapshotRendered
+          ? ev.detail.faqs.filter((f) => !/^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(f.questionKey))
+          : ev.detail.faqs;
         const body = relevant
           .map((f) => f.answer.trim())
           .filter(Boolean)
@@ -581,6 +607,65 @@ function legalSnapshotLine(
   }
   if (bits.length) return `Regulatory snapshot for *${d.name}*: ${bits.join('. ')}`;
   return `Legal and title details for *${d.name}* are on file with our team`;
+}
+
+/**
+ * AB-8b — the buyer named a legal SNAPSHOT atom (RERA/khata/title/EC) that the
+ * present FAQ does not already answer. True lets compose render the title snapshot
+ * alongside the FAQ body so a "is it RERA approved AND can I get a loan?" ask (both
+ * cues collapse to the single 'legal' topic) keeps BOTH atoms. Bare "loan approval"
+ * has no title cue, so a pure loan ask is unaffected.
+ */
+function asksLegalSnapshotAtom(
+  text: string | undefined,
+  faqs: ReadonlyArray<{ questionKey: string }>,
+): boolean {
+  if (!text) return false;
+  // Title-atom cues only — phrase-scoped so a bare "loan approval" can't trip it.
+  if (!/\b(?:rera|khata|title|encumbrance|\bec\b|clear\s+title|approval\s+status|plan\s+approval|legal\s+status|legal\s+details?)\b/i.test(text)) return false;
+  // A legal-snapshot FAQ already carries this atom — the FAQ body answers it, no snapshot.
+  const legalOwned = /^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i;
+  return !faqs.some((f) => legalOwned.test(f.questionKey));
+}
+
+/** RERA/khata/title snapshot only — the other legal atom (loan) comes from the FAQ body. */
+function legalTitleSnapshot(
+  d: import('./types.js').ProjectDetail,
+  faqs: ReadonlyArray<{ questionKey: string }>,
+): string {
+  const bits: string[] = [];
+  if (d.reraNumber) bits.push(`RERA: ${d.reraNumber}`);
+  if (d.khata) bits.push(`Khata: ${d.khata}`);
+  if (d.naStatus) bits.push(`NA: ${d.naStatus}`);
+  if (d.ecStatus) bits.push(`EC: ${d.ecStatus}`);
+  // Loan only when no FAQ will carry it — avoids double-rendering the loan atom.
+  const loanFaq = faqs.some((f) => /loan|financ|emi/i.test(f.questionKey));
+  if (d.loanEligibility && !loanFaq) bits.push(`Loan: ${d.loanEligibility}`);
+  return bits.length
+    ? `Regulatory snapshot for *${d.name}*: ${bits.join('. ')}`
+    : `Legal and title details for *${d.name}* are on file with our team`;
+}
+
+/**
+ * AB-8b — config/inventory content for a MULTI-atom ask ("configs and possession"),
+ * as a bare chunk (the assembly appends its own follow-up). Mirrors the single-topic
+ * availability logic so a co-fetched FAQ can't shadow the configs the buyer asked for.
+ */
+function availabilityChunk(ev: EvidenceSet, buyerText: string, focusName?: string): string {
+  const units = ev.units ?? [];
+  const pname = ev.detail?.name ?? focusName;
+  const lead = pname ? `For *${pname}*: ` : '';
+  const list = units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
+  if (isInventoryAsk(buyerText)) {
+    const tracked = units.filter((u) => (u.holdableUnits ?? 0) > 0);
+    if (tracked.length) {
+      const lines = tracked.slice(0, 4).map((u) => `${u.holdableUnits} × ${u.unitType}`).join(', ');
+      return `Still open${pname ? ` at *${pname}*` : ''}: ${lines}`;
+    }
+    // 0/absent counts are unknown, never "sold out" — route exact counts to the team.
+    return `${lead}${list} are the configurations on offer — our team confirms exact unit-level availability`;
+  }
+  return `${lead}Available configurations: ${list}`;
 }
 
 function projectTypeLine(d: import('./types.js').ProjectDetail): string {
