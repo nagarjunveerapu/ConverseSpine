@@ -17,10 +17,61 @@ const EXPLORE_MORE_RE =
 const MENU_TOPIC_ONLY =
   /^(?:pricing|prices?|starting\s+prices?|legal(?:\s+status)?|rera|emi|visit|amenities|location|floor plans?|availability|media|overview)\.?$/i;
 
+/**
+ * AB-4 — a property-type word can sit INSIDE a facet question about the focused
+ * project: "can I customize the villa?", "is there a corner plot premium?", "can I
+ * build a villa on the plot?", "schools near the villa project?", "what is a managed
+ * plantation estate?". detectPropertyTypes fires on the type word and — untreated —
+ * makes isFocusedSearchPivot classify the whole turn as a broaden/search, releasing
+ * focus and answering the facet with a project list. Treat it as a focused reference,
+ * not a pivot. An explicit request for OTHER results still re-opens search.
+ */
+function typeWordIsFocusedReference(text: string): boolean {
+  const t = text.trim();
+  if (!detectPropertyTypes(t)) return false;
+
+  // A facet noun ("premium", "utilities", "customize") or a definite reference to
+  // the focused unit ("the villa", "this plot", "the villa project") means the type
+  // word describes THIS project — the strongest signal, and it must win even when the
+  // sentence also carries a soft cue like "see" / "also" / "do you have" (review AB-4:
+  // "do you have a corner plot premium?", "can I see utilities on the plot?", "can I
+  // also customize the villa?" were mis-fired as pivots).
+  const facetNoun =
+    /\b(?:premium|utilit|customi[sz]|maintenance|resell|resale|build|construct|schools?|hospital|amenit|khata|possession|charges?|facing|corner|conversion|documentation|vaastu|vastu|parking|floor\s*rise|club\s*membership)\b/i.test(
+      t,
+    );
+  const definiteRef =
+    /\b(?:the|this|that|our|my)\s+(?:\w+\s+){0,2}(?:apartment|flat|villa|plot|plantation|estate|bungalow)\b/i.test(t) ||
+    /\b(?:apartment|flat|villa|plot|plantation|estate|bungalow)\s+project\b/i.test(t);
+  const facetFramed = facetNoun || definiteRef;
+
+  // An UNAMBIGUOUS request for other results re-opens search even with a type word.
+  // Plural "<type> projects" ("any villa projects") is a search; singular "the villa
+  // project" is the focus (already caught by definiteRef above). A soft cue
+  // (show/see/other/instead/do you have) only signals a pivot when the turn is NOT
+  // facet-framed — otherwise it's part of a facet question about the focus.
+  if (EXPLORE_MORE_RE.test(t)) return false;
+  if (/\b(?:apartments?|flats?|villas?|plots?|plantations?|estates?|bungalows?)\s+projects\b/i.test(t)) return false;
+  if (
+    !facetFramed &&
+    /\b(?:show\s+me|see|other|another|different|instead|looking\s+for|search(?:ing)?\s+for|do\s+you\s+have|have\s+any|got\s+any)\b/i.test(
+      t,
+    )
+  ) {
+    return false;
+  }
+
+  // A feature question — modal/interrogative opener or a facet noun — not "show <type>".
+  const detailFraming =
+    /^(?:can|could|may|do|does|will|would|should|is|are|what|which|how|why|when)\b/i.test(t) || facetNoun;
+  return definiteRef || detailFraming;
+}
+
 /** Focused-phase project Q&A — not a search pivot. */
 function isFocusedProjectQuestion(text: string): boolean {
   const t = text.trim();
   if (MENU_TOPIC_ONLY.test(t)) return true;
+  if (typeWordIsFocusedReference(t)) return true;
   if (/^(?:legal|rera|pricing|prices?|starting\s+prices?|price|emi|visit|amenities|availability|possession|floor plan)\b/i.test(t)) {
     return true;
   }
