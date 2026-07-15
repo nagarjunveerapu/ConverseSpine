@@ -570,6 +570,9 @@ function humanizeAsset(kind?: string): string {
     brochure: 'brochure',
     price_sheet: 'price sheet',
     cost_sheet: 'cost sheet',
+    payment_plan: 'payment plan',
+    site_image: 'site photos',
+    site_plan: 'site plan',
     video: 'walkthrough video',
     photo: 'photos',
   };
