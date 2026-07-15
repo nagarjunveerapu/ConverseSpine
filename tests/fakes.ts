@@ -184,6 +184,9 @@ export function fakeData(): EngineData & {
         sample: LOKATIONS.map((p) => ({ name: p.name, startingPriceDisplay: p.display })),
       };
     },
+    async projectNames() {
+      return LOKATIONS.map((p) => ({ projectId: p.id, name: p.name }));
+    },
     async projectDetail(_b, _nd, id) {
       return projectDetailFor(id);
     },

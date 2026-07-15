@@ -92,6 +92,12 @@ export interface EngineData {
     total: number;
     sample: Array<{ name: string; startingPriceDisplay: string }>;
   }>;
+  /**
+   * AB-6 / W8 — the full builder name index, so a project NAMED from a cold start
+   * ("is Brigade Oasis plotted?") resolves against the whole catalog, not just the
+   * session shortlist. Type-only: no prices/facts.
+   */
+  projectNames(builderId: string): Promise<Array<{ projectId: string; name: string }>>;
   /** conversation-context when focused; getProject fallback otherwise. */
   projectDetail(builderId: string, ndConversationId: string, projectId: string): Promise<{
     projectId: string;

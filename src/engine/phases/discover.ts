@@ -442,7 +442,7 @@ function recentBuyerNamedPick(
   return undefined;
 }
 
-function commitPickWithFollowUp(
+export function commitPickWithFollowUp(
   pick: { projectId: string; name: string },
   ex: Extracted,
 ): TurnGoal {

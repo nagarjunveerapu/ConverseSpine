@@ -353,6 +353,42 @@ function detectPropertyType(text: string): string | undefined {
   return undefined;
 }
 
+/**
+ * AB-6 / W8 — resolve a project NAMED from a cold start against the full catalog.
+ * "is Brigade Oasis a plotted development?" contains the distinctive token "oasis",
+ * so it resolves to Brigade Oasis even with no shortlist. Returns a hit ONLY when
+ * exactly one catalog project matches — ambiguity (two names hit) yields null so the
+ * bot never guesses which project the buyer meant.
+ */
+export function resolveCatalogNameHit(
+  text: string,
+  names: ReadonlyArray<{ projectId: string; name: string }>,
+): { projectId: string; name: string } | null {
+  const t = ` ${text.toLowerCase()} `;
+  const hits: Array<{ projectId: string; name: string }> = [];
+  for (const p of names) {
+    const distinctive = p.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
+    const full = p.name.toLowerCase();
+    // Whole distinctive name present ("desire spaces") — strongest signal.
+    if (distinctive.length >= 5 && t.includes(` ${distinctive} `)) {
+      hits.push(p);
+      continue;
+    }
+    if (t.includes(` ${full} `)) {
+      hits.push(p);
+      continue;
+    }
+    // Otherwise require a distinctive ≥5-char token as a word ("oasis", "northridge").
+    const tokens = offeredNameTokens(p.name).filter((tok) => tok.length >= 5);
+    if (tokens.some((tok) => new RegExp(`\\b${tok}\\b`, 'i').test(text))) {
+      hits.push(p);
+    }
+  }
+  // Dedupe by project, then require a single unambiguous project.
+  const unique = [...new Map(hits.map((h) => [h.projectId, h])).values()];
+  return unique.length === 1 ? unique[0]! : null;
+}
+
 /** Distinctive tokens for shortlist identity ("Krishnaja Greens" → krishnaja, greens). */
 function offeredNameTokens(name: string): string[] {
   const distinctive = name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
