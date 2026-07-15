@@ -354,6 +354,32 @@ function detectPropertyType(text: string): string | undefined {
 }
 
 /**
+ * AB-7 — a KNOWLEDGE ask comparing property TYPES: "apartment or plot — what's the
+ * difference?", "apartment or plantation — which is better for investment?", "plot
+ * vs villa". These are definitional/advisory, NOT a search — dumping a project list
+ * is a non-answer. Returns the two+ types + whether an investment framing was asked,
+ * or null when it isn't a type-comparison knowledge ask.
+ */
+export function detectTypeComparisonKnowledge(
+  text: string,
+): { types: string[]; investment: boolean } | null {
+  const knowledgeCue =
+    /\b(?:difference|differ|vs\.?|versus|which\s+(?:is|one)\s+(?:better|good|right)|what'?s\s+better|better\s+(?:for|option|investment|choice)|pros\s+and\s+cons|compare\s+(?:a\s+|an\s+|the\s+)?(?:apartment|flat|plot|plotted|villa|plantation|land))\b/i.test(
+      text,
+    );
+  if (!knowledgeCue) return null;
+  const found = new Set<string>();
+  for (const part of text.split(/\bvs\.?\b|\bversus\b|\bor\b|\band\b|\bbetween\b|,/i)) {
+    const ty = detectPropertyType(part);
+    if (ty) found.add(ty);
+  }
+  const types = [...found];
+  if (types.length < 2) return null;
+  const investment = /\b(?:invest(?:ment|ing)?|returns?|appreciat|roi|rental\s+yield|capital\s+gain)\b/i.test(text);
+  return { types, investment };
+}
+
+/**
  * AB-6 / W8 — resolve a project NAMED from a cold start against the full catalog.
  * "is Brigade Oasis a plotted development?" contains the distinctive token "oasis",
  * so it resolves to Brigade Oasis even with no shortlist. Returns a hit ONLY when

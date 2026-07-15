@@ -16,6 +16,7 @@ import { buildLedgerWritePayload } from './ledger-write.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
 import {
+  detectTypeComparisonKnowledge,
   isConstraintRefinementTurn,
   isCostComponentAsk,
   isDetailAskTurn,
@@ -60,7 +61,7 @@ import {
   releaseToDiscover,
   withNdConversation,
 } from './state.js';
-import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply } from './compose.js';
+import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply } from './compose.js';
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
@@ -549,6 +550,37 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       debug: withIngressDebug(
         { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
         inputSource,
+      ),
+    };
+  }
+
+  // AB-7 — a property-TYPE knowledge ask ("apartment or plot — what's the
+  // difference?", "which is better for investment?") is definitional/advisory, not a
+  // search. Answer with the generic type taxonomy instead of dumping a project list.
+  // Not gated on phase — it's a valid question whether focused or discovering. But an
+  // ask that ALSO names a place or budget ("compare apartments and plots in Whitefield",
+  // "…under 1 Cr") wants a shortlist, not a generic taxonomy — let it fall to search
+  // (review AB-7).
+  const typeKnowledge =
+    ex.constraints.location || ex.constraints.budgetMaxInr !== undefined
+      ? null
+      : detectTypeComparisonKnowledge(trimmedText);
+  if (typeKnowledge) {
+    const reply = typeComparisonReply(typeKnowledge.types, typeKnowledge.investment);
+    state = { ...state, turnCount: state.turnCount + 1 };
+    state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
+    await deps.store.save(state);
+    if (nd) {
+      await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
+      await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'type_knowledge' }).catch(() => {});
+    }
+    return {
+      reply,
+      state,
+      debug: withIngressDebug(
+        { phase: state.phase, goal: { kind: 'answer', topic: 'property_type', projectId: '' }, tools: ['knowledge'], grounding: 'pass' },
+        inputSource,
+        extractProvenance,
       ),
     };
   }
