@@ -159,6 +159,13 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
       };
     },
 
+    async projectNames(builderId) {
+      // 50 is the Desk search cap (projects.ts max_results.max(50)); enough for the
+      // catalog. An unfiltered search returns all active projects for the builder.
+      const resp = await crm.searchProjects({ builder_id: builderId, max_results: 50 });
+      return resp.matches.map((m) => ({ projectId: m.project_id, name: m.name }));
+    },
+
     async projectDetail(_builderId, nd, projectId) {
       try {
         const ctx = await crm.conversationContext(nd);

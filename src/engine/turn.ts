@@ -26,6 +26,7 @@ import {
   locationCategoriesAsked,
   locationEchoesProjectName,
   locationLooksPolluted,
+  resolveCatalogNameHit,
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
@@ -678,7 +679,31 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       };
     }
   }
-  let goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
+  // AB-6 / W8 — a project NAMED from a cold start ("is Brigade Oasis a plotted
+  // development?", "what plot sizes does Desire Spaces have?") must commit to that
+  // project, not re-search by the type word and dump an unrelated list. Resolve
+  // against the FULL catalog (not just the empty shortlist). Gated to a detail/
+  // interrogative ask so an area name in a pure search never false-commits, and
+  // resolveCatalogNameHit requires a single unambiguous match.
+  let goal: TurnGoal;
+  // Run regardless of an embedder-resolved namedProjects: resolveCatalogNameHit is a
+  // DETERMINISTIC text match against real catalog names, so it both (a) rescues a
+  // cold name the embedder missed and (b) safely confirms one the embedder found on a
+  // search-classified turn (which discover.decide would not commit). A hallucinated
+  // embedder name that isn't in the text simply yields no hit and falls through.
+  const coldNameEligible =
+    state.phase === 'discover' &&
+    !state.focus &&
+    state.discover.lastOffered.length === 0 &&
+    (ex.namedProjects?.length ?? 0) < 2 &&
+    (ex.isQuestion || isDetailAskTurn(ex) || /^(?:is|are|does|do|what|which|how|can|tell me)\b/i.test(trimmedText));
+  if (coldNameEligible) {
+    const names = await deps.data.projectNames(state.builderId).catch(() => [] as Array<{ projectId: string; name: string }>);
+    const hit = resolveCatalogNameHit(trimmedText, names);
+    goal = hit ? discover.commitPickWithFollowUp(hit, ex) : await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
+  } else {
+    goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
+  }
 
   // W1 focus bind: answer goals must not silently drift to embedder-invented projects.
   if (
