@@ -624,6 +624,33 @@ export function componentsForAsk<T extends { label: string }>(
   });
 }
 
+/**
+ * AB-7 — generic property-TYPE taxonomy for a knowledge ask ("apartment or plot —
+ * what's the difference?"). Universal real-estate knowledge (the LLD's sanctioned
+ * template), NOT project- or place-specific data — never quotes a project or price.
+ */
+const TYPE_TAXONOMY: Record<string, string> = {
+  apartment: 'an *apartment* is a home within a shared multi-storey building — you own the unit plus an undivided share of the land, with ready common amenities and a lower entry price',
+  plot: 'a *plot* is a parcel of land in a gated layout — you own the land outright and build your own home when you choose; land value tends to track the area',
+  villa: 'a *villa* is an independent house on its own land in a community — the space and privacy of land with a ready-built home',
+  plantation: 'a *managed plantation estate* is titled farm land (coffee/pepper) with an operator running the estate on your behalf — a lifestyle asset that can earn crop revenue',
+};
+
+export function typeComparisonReply(types: readonly string[], investment: boolean): string {
+  const lines = types
+    .map((t) => TYPE_TAXONOMY[t])
+    .filter(Boolean)
+    .map((s) => `• ${s}`);
+  if (lines.length < 2) {
+    return 'Happy to explain the property types — which two are you weighing (apartment, plot, villa, or plantation)?';
+  }
+  const head = `Great question — the core difference:\n${lines.join('\n')}`;
+  const tail = investment
+    ? '\n\nOn returns: apartments are usually held for rental income, plots/land for appreciation, and plantation estates for crop revenue — the right fit depends on your horizon and how hands-on you want to be. Want me to show options in either?'
+    : '\n\nWant me to show options in either?';
+  return head + tail;
+}
+
 /** Buyer-facing name for a media asset kind — never an underscored key like `floor_plan`. */
 function humanizeAsset(kind?: string): string {
   if (!kind) return 'document';
