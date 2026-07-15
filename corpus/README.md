@@ -57,9 +57,35 @@ win nearest-neighbor and mask mapped kinds (measured: "what return can I expect?
 → `provide_qualification` by a 0.00008 margin over #2); `ask_about_builder` rows
 name competitor builders.
 
+## Registry v2 (2026-07-15, PR #88)
+
+`scripts/registry-v2.py` regenerates the registry as a pure function of the S1a-tagged
+file + `BOUNDARY_RULEBOOK.md` + `mask-vocab.json` (Desk D1 areas/projects ∪
+`gazetteer-seed.json`). Fields added per row:
+
+| Field | Meaning |
+|---|---|
+| `canonical` | masked embed text (`<builder>`/`<place>`/`<project>`, lowercased) — the ONLY text ever embedded; numbers/BHK kept (intent signal) |
+| `pattern_key` / `pattern_id` | stricter mask (numbers → `<n>`) → dedup group; 13,555 rows ≈ 5.9k patterns |
+| `eval_split` | `train` \| `holdout` — **pattern-level** stratified split (seed 42). Holdout rows are NEVER embedded; they are the frozen gate. |
+| `routable` | mapped 19 kinds + founder-approved action kinds (`opt_out`, `escalate_to_human`, `request_callback`, `report_issue`, `status_check`) |
+| `relabel_reason` | audit trail for every rulebook move (259 R1–R5 + 6 R7) |
+| `audit_status` | `machine_v2` — **rebuild still requires `clean`**; eligibility flips only with the action-kind engine PR + a measured gate |
+
+v2 census: quarantine 56.3% → **13.0%** (P5 token quarantine retired — canonicalization
+owns entities; hard-negatives + still-unmapped kinds remain). Contradicted patterns among
+servable rows: 33 → **0** (rulebook R1–R7; residuals are quarantined `boundary_contradiction`
+and hand-queued — majority NEVER decides; see PR #88 review).
+
+Held-out gate (remote bge-base + nn1 + canonical, frozen split): route accuracy
+**83.2% all / 82.2 en / 85.6 hi** vs pre-v2 masked baseline 80.5/78.5/84.6.
+This is an offline nearest-neighbor gate on the canonical train index — NOT a claim
+about S2/live buyer quality (192-Q measures that, separately, at each engine stage).
+
 ## Rules
 
 - Every change lands via PR — labels are buyer-routing decisions, they get eyes.
-- Dedupe at cosine ≥ 0.95 against existing rows before appending.
-- No place/project facts in phrasings (P5) — new rows must be generic.
+- Dedupe by `pattern_id` (and cosine ≥ 0.95) against existing rows before appending.
+- No place/project facts in phrasings (P5) — the masker canonicalizes; new rows must still be generic.
 - Fixes for misunderstood phrasings go HERE, never into understanding regexes (P7).
+- Label boundaries are decided by `BOUNDARY_RULEBOOK.md` (where the Desk answer lives) — never by majority vote.

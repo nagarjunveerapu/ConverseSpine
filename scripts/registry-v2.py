@@ -66,12 +66,15 @@ def pattern_id(kind: str, pkey: str) -> str:
     return "pt_" + hashlib.sha1(f"{kind}\x00{pkey}".encode()).hexdigest()[:12]
 
 # ── rulebook (mechanical form of BOUNDARY_RULEBOOK.md) ──────────────────────
-PROXIMITY = re.compile(r"\b(school|hospital|college|university|metro|airport|station|tech park|it park|distance|how far|kitna door|se door|se project|well connected|connectivity|waterlog|flood|which part|directions|reach|commute)\b", re.I)
-IN_PROJECT = re.compile(r"\b(gym|pool|swimming|clubhouse|club house|party hall|jogging|play area|security|cctv|parking|lift|power backup|gated|amphitheatre|badminton|tennis|sports)\b", re.I)
-INVEST = re.compile(r"\b(appreciation|rental yield|rental income|roi|investment|returns?|resale value|badhegi|grow)\b", re.I)
-DISCOVER_BUDGET = re.compile(r"\b(options?|what .*can i get|kya milega|show me|milega kya|anything|projects?)\b.*\b(under|below|within|budget|lakh|crore|l\b|cr\b)|\b(under|below|within)\b.*\b(lakh|crore)\b.*\b(options?|kya milega|milega)\b", re.I)
+# Plural-tolerant: review of PR #88 caught "schools near X" slipping past a
+# singular-only regex, after which a majority fallback flipped labels AGAINST
+# R1. Rules must cover the morphology; residuals go to the hand queue.
+PROXIMITY = re.compile(r"\b(schools?|hospitals?|colleges?|universit(?:y|ies)|metro|airports?|stations?|tech parks?|it parks?|distance|how far|kitna door|se door|se project|well connected|connectivity|waterlog\w*|flood\w*|which part|directions?|reach|commute)\b", re.I)
+IN_PROJECT = re.compile(r"\b(gyms?|pools?|swimming|clubhouses?|club house|party halls?|jogging|play areas?|security|cctv|parking|lifts?|power backup|gated|amphitheatres?|badminton|tennis|sports)\b", re.I)
+INVEST = re.compile(r"\b(appreciation|rental yields?|rental income|roi|investments?|returns?|resale values?|badhegi|grow)\b", re.I)
+DISCOVER_BUDGET = re.compile(r"\b(options?|what .*can i get|kya milega|show me|milega kya|anything|projects?)\b.*\b(under|below|within|budget|lakh|crore|l\b|cr\b)|\b(under|below|within|tak)\b.*\b(lakh|crore)\b.*\b(options?|kya milega|milega)\b|\b(lakh|crore)\b.*\btak\b.*\bmilega\b", re.I)
 VS = re.compile(r"\b(vs|versus)\b|\bor\b.{0,24}\b(better|which|recommend|kaun|konsa)\b|\b(better|kaun|konsa)\b.{0,24}\bya\b|\bcompare\b|\bfark\b|\bdifference between\b", re.I)
-PAYMENT = re.compile(r"\b(payment|milestone|clp|subvention|booking amount|upfront|instal?lment|pre-?emi|schedule of payment|paise kab|kitna dena)\b", re.I)
+PAYMENT = re.compile(r"\b(payments?|milestones?|clp|subvention|booking amount|upfront|instal?lments?|pre-?emi|schedule of payments?|paise kab|kitna dena)\b", re.I)
 
 def apply_rules(kind: str, text: str):
     """Return (new_kind, reason) or None."""
@@ -122,29 +125,43 @@ for r in rows:
     r["quarantine"] = bool(reasons)
     r["audit_status"] = "machine_v2"
 
-# contradiction check AFTER relabel (gate: must be 0 among routable kinds)
+# R7 — pattern-level adjudications (BOUNDARY_RULEBOOK R7: evidence-cited
+# rulings for patterns R1-R6 can't reach; applied by pattern_key, auditable).
+R7 = {
+    "floor rise charges": "get_price",
+    "gated community details": "get_amenities",
+    "is there a clubhouse": "get_amenities",
+    "location pin share karo": "get_location_info",
+    "rera registration number": "get_legal_info",
+    "what configurations are available": "get_availability",
+}
+r7_hits = 0
+for r in rows:
+    ruled = R7.get(r.get("pattern_key", ""))
+    if ruled and not r.get("is_negative") and r["intent_kind"] != ruled:
+        r["relabel_reason"] = f"R7_pattern_adjudication:{r['intent_kind']}->{ruled}"
+        r["intent_kind"] = ruled
+        r["pattern_id"] = pattern_id(ruled, r["pattern_key"])
+        r7_hits += 1
+
+# contradiction check AFTER relabel (gate: must be 0 among SERVABLE rows).
+# Residual contradictions mean the rules were silent and the evidence is
+# ambiguous — BOUNDARY_RULEBOOK: majority never decides. They go to the hand
+# queue (quarantined), never silently overwritten. (PR #88 review blocker:
+# a majority fallback here flipped "schools near <place>" AGAINST R1.)
 pat_kinds = defaultdict(set)
 for r in rows:
     if not r.get("is_negative") and r["routable"]:
         pat_kinds[r["pattern_key"]].add(r["intent_kind"])
 contra = {p: k for p, k in pat_kinds.items() if len(k) > 1}
-# adjudicate leftovers by rulebook-priority: first kind wins deterministically is WRONG;
-# instead relabel the minority to the majority ONLY when rules were silent (log them).
-leftover_fixed = 0
-if contra:
-    maj = defaultdict(lambda: defaultdict(int))
-    for r in rows:
-        if not r.get("is_negative") and r["routable"] and r["pattern_key"] in contra:
-            maj[r["pattern_key"]][r["intent_kind"]] += 1
-    for r in rows:
-        pk = r.get("pattern_key")
-        if not r.get("is_negative") and r["routable"] and pk in contra:
-            winner = max(maj[pk], key=lambda k: maj[pk][k])
-            if r["intent_kind"] != winner:
-                r["relabel_reason"] = f"R_majority_leftover:{r['intent_kind']}->{winner}"
-                r["intent_kind"] = winner
-                r["pattern_id"] = pattern_id(winner, pk)
-                leftover_fixed += 1
+leftover_quarantined = 0
+for r in rows:
+    pk = r.get("pattern_key")
+    if not r.get("is_negative") and r["routable"] and pk in contra:
+        if "boundary_contradiction" not in r.get("quarantine_reasons", []):
+            r.setdefault("quarantine_reasons", []).append("boundary_contradiction")
+        r["quarantine"] = True
+        leftover_quarantined += 1
 
 # eval split — pattern-level, stratified per kind, frozen seed
 random.seed(SEED)
@@ -166,14 +183,18 @@ Path(REG).write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) 
 # report
 n_hold = sum(1 for r in rows if r["eval_split"] == "holdout")
 n_q = sum(1 for r in rows if r["quarantine"])
-print(f"rows: {len(rows)}  relabeled: {sum(relabeled.values())} (+{leftover_fixed} majority-leftover)")
+print(f"rows: {len(rows)}  relabeled: {sum(relabeled.values())}  R7 adjudicated: {r7_hits}  hand-queue quarantined: {leftover_quarantined}")
 for reason, n in sorted(relabeled.items(), key=lambda x: -x[1]):
     print(f"  {reason}: {n}")
 print(f"holdout rows: {n_hold} ({100*n_hold/len(rows):.1f}%)  quarantined now: {n_q} ({100*n_q/len(rows):.1f}%)")
-# recheck contradictions
+if contra:
+    print(f"HAND QUEUE — {len(contra)} patterns where rules are silent (adjudicate in BOUNDARY_RULEBOOK, then re-run):")
+    for p, kinds in sorted(contra.items()):
+        print(f"  '{p[:64]}' kinds={sorted(kinds)}")
+# gate: contradictions among SERVABLE (routable, non-quarantined) rows must be 0
 pat_kinds2 = defaultdict(set)
 for r in rows:
-    if not r.get("is_negative") and r["routable"]:
+    if not r.get("is_negative") and r["routable"] and not r["quarantine"]:
         pat_kinds2[r["pattern_key"]].add(r["intent_kind"])
 c2 = sum(1 for k in pat_kinds2.values() if len(k) > 1)
-print(f"routable contradictions after v2: {c2} (gate: 0)")
+print(f"servable contradictions after v2: {c2} (gate: 0)")

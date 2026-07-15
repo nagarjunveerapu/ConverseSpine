@@ -47,6 +47,21 @@ All three remain NON-routable (speech-act layer owns them; rows serve as negativ
 Consistency only: explicit affirmation of a prior bot offer → confirm_action; greetings/pleasantry
 → small_talk; process questions ("how does this work") → other.
 
+## R7 — pattern-level adjudications (residuals where R1–R6 are silent)
+Rules R1–R6 are predicates; a few patterns need a direct ruling. Each cites its evidence.
+Residual contradictions that reach neither R1–R6 nor this list are **quarantined**
+(`boundary_contradiction`) for the next rulebook revision — majority never decides
+(PR #88 review: a majority fallback flipped "schools near <place>" against R1).
+
+| pattern | ruling | evidence |
+|---|---|---|
+| `floor rise charges` | get_price | cost-sheet component; served from cost rows (price topic) |
+| `gated community details` | get_amenities | in-project attribute (R1 facility side) |
+| `is there a clubhouse` | get_amenities | in-project facility (R1) |
+| `location pin share karo` | get_location_info | directions/map artifact — R1 lists "directions" as location |
+| `rera registration number` | get_legal_info | RERA status/number is the legal FAQ key (AB-9) |
+| `what configurations are available` | get_availability | unit_configs → availability route |
+
 ## Routability decisions (founder, 2026-07-15)
 `opt_out`, `escalate_to_human`, `request_callback`, `report_issue`, `status_check` are REAL
 actions the bot must honor → marked `routable: true` in registry v2. Their embedder-map routing
