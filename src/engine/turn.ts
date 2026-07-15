@@ -461,6 +461,34 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  // AB-4 — focus type-freeze: while focused, a property-type word INSIDE a facet
+  // question ("can I customize the villa?", "is there a corner plot premium?",
+  // "schools near the villa project?") is describing the focused project, not a
+  // request to re-search that type. detectPropertyTypes still fires on it, and the
+  // fresh propertyType delta (plus wantsMore) flips the turn into a recommend and
+  // drops focus — the buyer's facet question is answered with a project list.
+  // Neutralise those re-search signals so the focused answer survives. A genuine
+  // pivot ("show me villas instead") releases focus upstream (focusPivotTurn) or
+  // arrives as see_others; an explicit refine verb ("actually, make it a villa")
+  // trips isConstraintRefinementTurn. Both bypass this and still re-search.
+  if (
+    state.phase === 'focused' &&
+    state.focus &&
+    !focusPivotTurn &&
+    ex.constraints.propertyType &&
+    isDetailAskTurn(ex) &&
+    !isConstraintRefinementTurn(trimmedText)
+  ) {
+    const { propertyType: _pt, ...restC } = ex.constraints;
+    ex = {
+      ...ex,
+      constraints: restC,
+      forceRecommendList: false,
+      wantsMore: false,
+      ...(ex.askTopic ? {} : { askTopic: (ex.askTopics ?? []).find((t) => t !== 'compare') }),
+    };
+  }
+
   const prevConstraints = state.constraints;
   const prevLoc = state.constraints.location;
   state = applyExtracted(state, ex, clearedKeys);
