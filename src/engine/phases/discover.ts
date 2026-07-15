@@ -337,17 +337,21 @@ export function buildPropertyTypeNoFitEvidence(
   const budgetDisplay = c.budgetMaxInr ? formatInr(c.budgetMaxInr) : undefined;
   const altDisplay = cheapest.startingPriceDisplay || formatInr(cheapest.startingPriceInr);
   const budgetBit = budgetDisplay ? ` at ${budgetDisplay}` : '';
+  // Name the locality too (AB-2 / G-family honesty): "no plantation IN WHITEFIELD"
+  // is the honest claim — "no plantation" alone reads as a catalog-wide gap.
+  const locBit = c.location?.trim() ? ` in *${c.location.trim()}*` : '';
   return {
     tools: ['search'],
     propertyTypeGap: {
       requestedType: c.propertyType,
       budgetDisplay,
+      ...(c.location?.trim() ? { location: c.location.trim() } : {}),
       closestName: cheapest.name,
       closestDisplay: altDisplay,
       closestProjectId: cheapest.projectId,
     },
     noMatch: {
-      reasoning: `No *${c.propertyType}*${budgetBit} on our books — closest fit is *${cheapest.name}* from ${altDisplay}`,
+      reasoning: `No *${c.propertyType}*${budgetBit}${locBit} on our books — closest fit is *${cheapest.name}* from ${altDisplay}`,
       nearby: [],
     },
   };

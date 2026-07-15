@@ -1513,10 +1513,12 @@ async function broadenInitialShortlist(
     const { bhks: _b, ...noBhk } = filters;
     relaxPlans.push(noBhk);
   }
-  if (filters.projectTypes) {
-    const { projectTypes: _p, bhks: _b, ...noType } = filters;
-    relaxPlans.push(noType);
-  }
+  // AB-2 — NEVER relax projectTypes: a declared type is a hard filter. Padding a
+  // "plotted in North Bangalore" shortlist with an apartment (Century Breeze) or a
+  // "villa" list with a plantation actively misleads — the buyer reads all three
+  // cards as what they asked for. Two honest typed cards beat three polluted ones;
+  // zero typed matches falls through to the propertyTypeGap no_fit, which names
+  // the gap and offers the closest other-type option with consent.
   for (const plan of relaxPlans) {
     const broad = await searchWithFilters(deps, builderId, plan);
     const ms = discover.filterSearchMatches(rawToMatches(broad.matches), constraints, rejectedIds);

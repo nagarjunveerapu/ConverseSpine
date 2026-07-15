@@ -344,7 +344,9 @@ export function detectPropertyTypes(text: string): string | undefined {
 
 function detectPropertyType(text: string): string | undefined {
   const s = text.toLowerCase();
-  if (/\b(?:plantation|planted estate|managed.?plantation|coffee estate)\b/.test(s)) return 'plantation';
+  // "farmland near Kanakapura" is a plantation-estate ask (D1.5) — without this it
+  // carried no type at all and the location-only search listed apartments beside Vanam.
+  if (/\b(?:plantation|planted estate|managed.?plantation|coffee estate|farm\s*land|farm\s*plots?|agri(?:cultural)?\s+land)\b/.test(s)) return 'plantation';
   if (/\b(?:apartments?|flats?)\b/.test(s)) return 'apartment';
   if (/\b(?:villas?)\b/.test(s)) return 'villa';
   if (/\b(?:plots?|plot\s*\/\s*land|land parcel|plotted)\b/.test(s)) return 'plot';

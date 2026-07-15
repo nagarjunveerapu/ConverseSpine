@@ -3,6 +3,7 @@ import { constraintsFromAdvisorPreferences } from '../../advisor/apply-preferenc
 import { commitTo, releaseToDiscover } from '../state.js';
 import type { ConversationState } from '../types.js';
 import { isBudgetFitQuestion, isCostComponentAsk } from '../facts.js';
+import { hasExplicitProjectCue } from '../project_switch.js';
 import { extractRecoveryPatchFromText } from './extract-recovery-patch.js';
 import { classifyFocusedPivot, shouldRunFocusedTurnIntent } from './focused-intent.js';
 import { isCompareAmongOfferedTurn } from './compare-intent.js';
@@ -36,6 +37,12 @@ export function shouldPassthroughRecoverySearch(text: string): boolean {
   if (isBudgetFitQuestion(t)) return true;
   if (/\b(?:show|list|see)\s+(?:me\s+)?(?:the\s+)?options?\b/i.test(t)) return true;
   if (/\bwhat (?:do you have|can you find|is available)\b/i.test(t)) return true;
+  // Name beats filters (#65): "tell me about Ayana" during recovery must reach the
+  // main pipeline, where PROJECT_VECTORS resolve the name and commit focus. With
+  // AB-2's honest no_fit on typed zero-matches, recovery chips are pending more
+  // often — without this, a named-project ask that matches no chip fell into the
+  // probe and the name was never honoured. Structural cue only, no catalog names.
+  if (hasExplicitProjectCue(t)) return true;
   return false;
 }
 
