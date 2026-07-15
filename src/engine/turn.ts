@@ -491,6 +491,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   }
 
+  // AB-8 — multi-intent: an LI-category intent ("…AND are there good schools?")
+  // that detectTopics/BAML did not surface as a `location` topic. Add it once here,
+  // at the FINAL ex (after regex + BAML merge), so the second atom reaches compose.
+  // Only when another topic is already present — a lone "schools near X" keeps its
+  // S1 focused-LI path. Location-family FAQ keys resolve from buyerText regardless.
+  if (
+    (ex.askTopics?.length ?? 0) >= 1 &&
+    !ex.askTopics?.includes('location') &&
+    locationCategoriesAsked(trimmedText).length > 0
+  ) {
+    ex = { ...ex, askTopics: [...(ex.askTopics ?? []), 'location'] };
+  }
+
   const prevConstraints = state.constraints;
   const prevLoc = state.constraints.location;
   state = applyExtracted(state, ex, clearedKeys);
