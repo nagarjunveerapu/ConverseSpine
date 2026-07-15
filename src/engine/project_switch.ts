@@ -47,7 +47,12 @@ export function facetNameResidue(text: string): string {
     .replace(/\b\d+(?:\.\d+)?\s*(?:bhk|bed(?:room)?s?)\b/gi, ' ')
     .replace(/\b(?:bhk|bed(?:room)?s?|sq\.?\s*ft|sqft)\b/gi, ' ')
     .replace(
-      /\b(?:send|share|show|see|give|get|want|need|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|layout|pricing|prices?|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|one|bhejo|bhej|bhejna|bhej\s*do|batao|dikhao|dikha|do|karo|please|thanks|thank\s*you|bsp|carpet|sba|possession|date|area|break(?:\s|-)?up|breakdown|how|much|kitna|padega|and|or|with|from|also|any|there)\b/gi,
+      // AB-5 — modal/pronoun dialogue words ("can I …") and TYPE words (villa/plot)
+      // are not a project-name residue. Leaving them made hasExplicitProjectCue treat
+      // "can I see the 2 BHK floor plan?" (residue "can i") and "4 BHK villa sizes"
+      // (residue "villa sizes") as a cue to a named OTHER project — so an embedder
+      // hallucination (Century Breeze) survived the focus scrub and won the turn.
+      /\b(?:send|share|show|see|give|get|want|need|please|the|a|an|me|my|for|on|about|project|brochure|floor|plans?|layout|pricing|prices?|price|size|sizes|starting|legal|status|details?|emi|amenities|availability|configurations?|configs?|units?|location|connectivity|banks?|ec|clear|media|overview|what|which|is|are|unit|paperwork|paper\s*work|okay|ok|somehow|this|that|one|bhejo|bhej|bhejna|bhej\s*do|batao|dikhao|dikha|do|karo|please|thanks|thank\s*you|bsp|carpet|sba|possession|date|area|break(?:\s|-)?up|breakdown|how|much|kitna|padega|and|or|with|from|also|any|there|can|could|would|should|shall|will|may|might|i|you|we|they|it|villas?|plots?|plotted|apartments?|flats?|plantations?|estates?|bungalows?)\b/gi,
       ' ',
     )
     .replace(/\b\d+(?:\.\d+)?\b/g, ' ')
