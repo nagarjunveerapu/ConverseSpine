@@ -1654,12 +1654,16 @@ async function fetchAnswer(
       constraintBhk: s.constraints.bhk,
     });
     const toEvidenceUnits = (
-      rows: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string }>,
+      rows: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string; holdableUnits?: number }>,
     ) =>
       filterUnitsByBhk(rows, bhkFilter).map((c) => ({
         unitType: c.unitType,
         priceDisplay: c.priceDisplay,
         ...(c.sizeDisplay ? { sizeDisplay: c.sizeDisplay } : {}),
+        // AB-1 — the live holdable count is the FACT an inventory ask needs;
+        // dropping it here was why "is there any inventory left?" answered
+        // with a config card list.
+        ...(typeof c.holdableUnits === 'number' ? { holdableUnits: c.holdableUnits } : {}),
       }));
 
     const cachedConfigs = s.projectCache?.[goal.projectId]?.configurations;

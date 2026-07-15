@@ -706,6 +706,25 @@ export function wantsCostBreakdown(text: string): boolean {
 }
 
 /** Price/legal/detail turn — must not mutate location or release focus. */
+/**
+ * AB-1 — a live-stock question ("is there any inventory left?", "how many 2 BHKs
+ * are still available?", "is it sold out?"). Distinct from a configurations ask:
+ * the buyer wants the availability FACT, and a config card list without it is a
+ * non-answer (the founder's rejection case, B2.4).
+ */
+export function isInventoryAsk(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return (
+    /\binventory\b/i.test(t) ||
+    /\b(?:units?|flats?|plots?|villas?|homes?|bhks?)\s+(?:still\s+)?(?:left|available|remaining|unsold|open)\b/i.test(t) ||
+    /\bhow\s+many\b.{0,30}\b(?:left|available|remaining|unsold|open)\b/i.test(t) ||
+    /\bsold\s+out\b/i.test(t) ||
+    /\b(?:still|anything)\s+available\b/i.test(t) ||
+    /\bavailability\s+(?:left|status)\b/i.test(t)
+  );
+}
+
 export function isDetailAskTurn(
   ex: Pick<Extracted, 'askTopic' | 'askTopics' | 'transition' | 'implicitProjectPick'>,
 ): boolean {

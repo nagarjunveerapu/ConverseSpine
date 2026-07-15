@@ -3,6 +3,7 @@ import {
   hasDisclosedRera,
 } from './disclosed-facts.js';
 import type { ComposeRequest, EvidenceSet, Match, ProbeKind, TurnGoal } from './types.js';
+import { isInventoryAsk } from './facts.js';
 import { formatUnitConfigLine } from './unit-config.js';
 
 export function buildComposeRequest(
@@ -439,9 +440,26 @@ export function fallbackReply(req: ComposeRequest): string {
         return `${emiSnapshotLine(ev.emi)}. Want the full cost breakdown or a visit?`;
       }
       if (goal.topic === 'availability' && ev.units?.length) {
-        const list = ev.units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
         const pname = ev.detail?.name ?? context.focusProjectName;
         const lead = pname ? `For *${pname}*: ` : '';
+        const list = ev.units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
+        // AB-1 — an inventory ask ("is there any inventory left?") wants the
+        // availability FACT. A config card list without it is a non-answer.
+        if (isInventoryAsk(context.buyerText ?? '')) {
+          const tracked = ev.units.filter((u) => (u.holdableUnits ?? 0) > 0);
+          if (tracked.length) {
+            const lines = tracked
+              .slice(0, 4)
+              .map((u) => `${u.holdableUnits} × ${u.unitType}`)
+              .join(', ');
+            return `Yes — still open${pname ? ` at *${pname}*` : ''}: ${lines}. Want me to hold one, or share pricing?`;
+          }
+          // All-zero counts can mean "not tracked" as much as "sold out" — Desk
+          // sends 0 for every config when a project has no unit rows at all.
+          // Never claim sold out without positive evidence; route the exact
+          // count to the team instead.
+          return `${lead}${list} are the configurations on offer — I don't have live unit-level counts here, our team confirms exact availability. Want me to check on a specific type?`;
+        }
         return `${lead}Available configurations: ${list}. Want pricing on a specific size?`;
       }
       // SA-3: availability with empty units — honest empty, not generic overview.
