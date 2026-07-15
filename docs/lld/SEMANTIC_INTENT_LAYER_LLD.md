@@ -27,7 +27,7 @@ All numbers verified on dev, 2026-07-15:
 - **P1 — Embeddings-first for free text.** Regex remains only as a high-precision *structural* extractor (budgets, BHK counts, phone numbers, ordinals, bare affirms) and a fast path when it binds strongly. It never suppresses the semantic layer.
 - **P2 — The semantic layer runs on every free-text turn.** Upstream layers may *arbitrate* against its output; they may not *prevent* its execution. (Deterministic sub-turns — bare "yes", ordinal picks, phone numbers — are exempt: there is nothing semantic to resolve.)
 - **P3 — The 80% gate.** On the labeled eval set (§6), of turns where the regex ladder fails to bind an intent/fact-key, the embedding layer must bind correctly ≥80%. BAML LLM gap-fill covers the remainder. A confident miss degrades to an honest clarify — never a guess.
-- **P4 — The truth boundary is unchanged.** Embeddings and the LLM decide *what is being asked*. Only Desk rows decide *what is said*. Answers bound via embedding are still served **verbatim** from the Desk row (`faqLookup` by key). The grounding gate, the composer-directive strip, and the honest-miss paths are untouched. This is not a RAG kernel and not a second brain — it is an index over phrasings and keys.
+- **P4 — The truth boundary is unchanged.** Founder's words: *"the embeddings just tell what the user says, not what the bot has to say."* Embeddings and the LLM decide *what is being asked*. Only Desk rows decide *what is said*. Answers bound via embedding are still served **verbatim** from the Desk row (`faqLookup` by key). The grounding gate, the composer-directive strip, and the honest-miss paths are untouched. This is not a RAG kernel and not a second brain — it is an index over phrasings and keys.
 - **P5 — No hardcoded domain knowledge.** The corpus contains *phrasings*, not place/project facts. Place knowledge stays in the Desk area registry; project identity stays in `PROJECT_VECTORS` (see `no-hardcoded-places` rule).
 - **P6 — Nothing in Vectorize is hand-fed.** Every index is rebuilt from a git-reviewed registry (or derived from Desk rows). An empty or stale bound index fails CI and alerts at runtime — silent death becomes impossible.
 
@@ -80,6 +80,24 @@ The hit-rate question the founder asked ("how many times is it hitting embedding
 ### 3.4 Known map defects to fix with data (not silently)
 
 `embedder-map.ts` `INTENT_TO_TOPIC` has at least one wrong row: `ask_investment_return → 'overview'` (ROI asks are a known miss family — they must route to the `rental_yield`/`roi` FAQ family). Phase 0 fixes rows *only* where the corpus audit (§4.2) or harness evidence proves the correction; every change lands with a test.
+
+### 3.5 Chips — deterministic bind, corpus contributors (founder amendment)
+
+Chips stay deterministic: a **tapped** chip carries its authored payload/key → direct bind (`bind_source=chip`), zero ambiguity, no query needed. Regex/structured handling of chip payloads is correct and kept (aligns with S2 chip→FAQ-key direct binding).
+
+The embedder enters in two ways:
+
+1. **Every authored chip text is auto-added to the corpus as a labeled `fact_key`/`intent` row** — chips are pre-labeled by their own key, so they are free, zero-review training rows. When a buyer *types* chip-like text instead of tapping ("send me the cost sheet" typed freely), the semantic lane catches it because the chip phrasing is already in the index.
+2. A buyer who **edits or paraphrases** a chip produces free text → the normal semantic lane (§3.2). Telemetry distinguishes `chip` binds from `embed_*` binds, so chip-tap coverage vs free-text coverage is separately measurable.
+
+### 3.6 Multi-intent — the semantic lane returns a SET, never just top-1 (founder amendment)
+
+Single-best binding would regress the AB-8/AB-8b multi-atom wins ("price AND schools", "RERA AND loan"). Contract:
+
+- The semantic lane accepts **every distinct key/intent ≥ `τ_bind`** from the topK results (per-key dedupe), **capped at 3 atoms**, score-ordered. `τ_margin` applies only to rejecting a *lone* ambiguous winner, never to trimming a genuine multi-ask.
+- **Arbitration is a UNION:** embedding atoms are added to regex-bound topics; the semantic lane may **add** atoms but never remove a regex-bound one. The AB-8/AB-8b compose machinery (`goal.topics`, per-atom chunks, FAQ-additive rendering) is the consumer — it already exists and is tested.
+- Answer policy stays S5: answer the top-2 atoms fully, park the rest with an explicit continuation — never silently drop.
+- **Regression guard:** the I-family (multi-intent) rows are a permanent eval subset; a dropped atom counts as a MISS in the 80% metric. The frozen post-AB-8b baseline (`strict_baseline.json`, NayaDesk — strict PASS 162/192) is the floor no phase may dip under.
 
 ## 4. Corpus operations — recover, audit, enhance, rebuild
 
@@ -149,6 +167,23 @@ Phases land as separate PRs off `main`; each gate's harness run is hand-read (st
 ## 9. Acceptance (the founder's bar, verbatim → testable)
 
 1. Embeddings fire on 100% of free-text turns — `bind_source` telemetry proves it continuously.
-2. ≥80% correct semantic bind on the regex-miss lane, measured on the labeled eval set, hand-read.
+2. ≥80% correct semantic bind on the regex-miss lane, measured on the labeled eval set, hand-read. Multi-intent atoms count individually — a dropped atom is a miss.
 3. No layer can suppress the semantic query; no index can be empty without CI failure + runtime alert.
 4. Truth unchanged: zero new fabrications; grounding repair-rate not worse than baseline (36/192).
+5. **Quality never drops:** every corpus/router PR runs the eval in CI and is blocked unless strict PASS ≥ the frozen baseline AND catch-rate ≥ the previous release. Regression is structurally unmergeable, not a matter of discipline.
+
+## 10. The corpus flywheel — 6 months to production strength (founder direction)
+
+The corpus + eval pair is treated as a **durable asset**, not a one-time fix. Once on production, real traffic continuously strengthens it:
+
+| Cadence | Activity | Output |
+|---|---|---|
+| **Weekly** | Mine prod+dev ledger free-text turns where `bind_source ∈ {llm, none}` or grounding repaired — i.e., every turn the semantic layer *failed to own* | candidate phrasings, LLM-labeled → human-reviewed registry PR |
+| **Monthly** | Eval refresh: promote reviewed real-traffic rows into the labeled eval set; re-run the full gate | growing eval set that mirrors real buyers, not synthetic catalogs |
+| **Quarterly** | τ_bind / τ_margin re-tune on the enlarged eval; per-`intent_kind` hit review — dead kinds retired, hot gaps expanded | tuned thresholds with evidence |
+| **Per release** | Freeze `strict_baseline.json` snapshot tagged to the release | the regression floor ratchets UP only |
+
+Compounding effects by month 6:
+- the corpus holds thousands of **real buyer phrasings** labeled by observed outcome — an asset no regex library or competitor prompt-pack replicates;
+- the eval set doubles as the **prod regression suite for every future engine change** (any PR, semantic or not, runs against it);
+- the regex-miss lane shrinks structurally: each week's misses become next week's index rows, so the same failure phrasing can never recur — the whack-a-mole loop is replaced by a ratchet.
