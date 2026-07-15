@@ -97,7 +97,10 @@ describe('AB-10 verify — stripComposerDirectives removes leaked instructions',
     expect(stripComposerDirectives(clean)).toBe(clean);
   });
 
-  it('never returns blank — falls back to the input if stripping would empty it', () => {
-    expect(stripComposerDirectives('offer to follow up').length).toBeGreaterThan(0);
+  it('a PURE-directive draft strips to empty — never re-emits the leak', () => {
+    // The caller (turn.ts) treats '' as "compose the template floor instead".
+    expect(stripComposerDirectives('offer to follow up')).toBe('');
+    expect(stripComposerDirectives('— pivot to current inventory')).toBe('');
+    expect(stripComposerDirectives('Use the exact template in EVIDENCE.')).toBe('');
   });
 });
