@@ -83,15 +83,26 @@ const DIRECTIVE_SENTENCE =
   /\bEVIDENCE\b|\buse\s+the\s+exact\s+(?:copy|template|proposed)\b|\b(?:do\s+not|don'?t)\s+invent\b|\breframe\s+using\b|\bredirect[_\s]?hint\b/i;
 
 /**
+ * A sentence that BEGINS with a bare directive verb ("offer to follow up",
+ * "pivot to current inventory") — a whole draft that is nothing but the leaked
+ * instruction, with no em-dash to trip DIRECTIVE_TAIL. Anchored to the start so a
+ * real reply ("I can offer to follow up with pricing") is never dropped.
+ */
+const DIRECTIVE_LEAD =
+  /^\s*(?:offer(?:s|ing)?\s+(?:to\s+|a\s+)?(?:follow[\s-]*up|site\s+visit)|pivot\s+to\s+(?:current\s+)?inventory|reassure\s+(?:a\s+)?human|do\s+not\s+(?:quote|invent|disclose)|add\s+(?:the\s+)?buyer\s+to|not\s+for\s+buyer\s+disclosure|not\s+currently\s+sharable)\b/i;
+
+/**
  * Strip leaked internal composer directives before send. Removes a trailing
- * directive clause first, then drops any whole sentence that is pure meta. Falls
- * back to the input if stripping would empty the reply — never send blank.
+ * directive clause first, then drops any whole sentence that is pure meta.
+ *
+ * Returns '' when the WHOLE draft was directive — a pure-directive draft has no
+ * buyer content to keep, and re-emitting the input would ship the very leak this
+ * guards. The caller treats '' as "compose the template floor instead" (never
+ * blank, never the directive). Review AB-10 note 1.
  */
 export function stripComposerDirectives(reply: string): string {
-  let out = reply.replace(DIRECTIVE_TAIL, '').trim();
+  const out = reply.replace(DIRECTIVE_TAIL, '').trim();
   const parts = out.split(/(?<=[.!?])\s+/);
-  const kept = parts.filter((p) => !DIRECTIVE_SENTENCE.test(p));
-  const joined = kept.join(' ').trim();
-  if (joined.length > 0) out = joined;
-  return out.length > 0 ? out : reply.trim();
+  const kept = parts.filter((p) => !DIRECTIVE_SENTENCE.test(p) && !DIRECTIVE_LEAD.test(p));
+  return kept.join(' ').trim();
 }

@@ -43,12 +43,21 @@ describe('RTI-B focused pivot detection', () => {
     expect(isFocusedSearchPivot('schools near the villa project?')).toBe(false);   // F.10
   });
 
+  // Review AB-4: a soft cue (see / also / do you have) inside a FACET question is
+  // still a focused reference — the escape must not fire when the turn is facet-framed.
+  it('keeps focus on facet questions that also carry a soft search cue', () => {
+    expect(isFocusedSearchPivot('do you have a corner plot premium?')).toBe(false);
+    expect(isFocusedSearchPivot('can I also customize the villa?')).toBe(false);
+    expect(isFocusedSearchPivot('can I see utilities on the plot?')).toBe(false);
+  });
+
   // …but an explicit request for OTHER results of a type still re-opens search.
   it('still pivots on an explicit type search', () => {
     expect(isFocusedSearchPivot('show me other villas')).toBe(true);
     expect(isFocusedSearchPivot('any other apartment projects?')).toBe(true);
     expect(isFocusedSearchPivot('actually show me villas instead')).toBe(true);
     expect(isFocusedSearchPivot('villas in Whitefield')).toBe(true);
+    expect(isFocusedSearchPivot('what other villas do you have?')).toBe(true); // no facet noun → pivot
   });
 
   it('classifies location pivot as broaden_constraints', () => {
