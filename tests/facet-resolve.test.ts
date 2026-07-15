@@ -45,6 +45,20 @@ describe('AB-1 — resolver reaches the orphaned corpus', () => {
     expect(resolveFaqQuestionKeys('show me villas')).toEqual([]);
   });
 
+  // Review AB-1 note 2: the Dubai/abroad NRI clause requires an invest/buy verb, so
+  // a pure location search that merely mentions Dubai must NOT bind nri_buying.
+  it('nri_buying does not bind a pure location brief mentioning a city', () => {
+    expect(resolveFaqQuestionKeys('apartments in Dubai')).not.toContain('nri_buying');
+    expect(resolveFaqQuestionKeys('projects near the US consulate')).not.toContain('nri_buying');
+    expect(key1('I want to buy from Dubai')).toBe('nri_buying'); // the real intent still binds
+  });
+
+  // Review AB-1 note 1: gst is specific, but confirm it doesn't steal a pure legal ask.
+  it('gst binds a GST ask, not an unrelated legal turn', () => {
+    expect(key1('how much GST do I pay?')).toBe('gst_registration');
+    expect(resolveFaqQuestionKeys('is the title clear?')).not.toContain('gst_registration');
+  });
+
   it('binds the 192-run stragglers', () => {
     expect(key1('how is water and power there?')).toBe('water_power'); // D2.16
     expect(key1('is it MUDA or DTCP approved?')).toBe('plan_approval'); // C2.5
@@ -108,6 +122,16 @@ describe('AB-1 — cost-component asks get THE component, not the whole card', (
   it('a generic price ask keeps the full card', () => {
     const reply = fallbackReply(priceReq("what's the price?"));
     expect(reply).toMatch(/Base Selling Price/);
+  });
+
+  // Review AB-1 note 3: parking is BOTH a FAQ key and a cost-sheet row. When the
+  // cost sheet carries it, the pricing component owns the answer — the buyer must
+  // see the ₹ figure, not an honest-miss for a FAQ row that doesn't exist.
+  it('parking charges lead with the cost-sheet component (costSheetOwns)', () => {
+    const reply = fallbackReply(priceReq('what are the parking charges?'));
+    expect(reply).toMatch(/Car Parking/);
+    expect(reply).toMatch(/5,00,000/);
+    expect(reply).not.toMatch(/don't have|not on file/i);
   });
 });
 
