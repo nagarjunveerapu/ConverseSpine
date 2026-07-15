@@ -76,7 +76,9 @@ class_name = "TurnDebouncer"
 
 [[env.dev.vectorize]]
 binding = "INTENT_VECTORS"
-index_name = "naya-intent-phrasings"
+# SIL Phase 0 — dev must bind the seeded dev index (13,555 phrasings), not the
+# empty prod-named one. The missing -dev suffix kept the intent layer dead.
+index_name = "naya-intent-phrasings-dev"
 remote = true
 
 [[env.dev.vectorize]]

@@ -13,6 +13,25 @@ export type TurnRoutingKind =
 
 export type TurnRoutingConfidence = 'rule' | 'embedder' | 'llm' | 'abstain';
 
+/**
+ * SIL Phase 0 — per-turn semantic-layer telemetry (SEMANTIC_INTENT_LAYER_LLD §3.3).
+ * Records whether the embedder ran, what gated it when it didn't, and the top
+ * match + margin when it did. Stamped into extract_provenance.routing_bind —
+ * the debug channel that survives the /chat route re-shape.
+ */
+export interface RoutingBindTelemetry {
+  bind_source: 'regex' | 'embed_intent' | 'none';
+  embed_fired: boolean;
+  embed_gate?: 'visit_rule' | 'speech_act' | 'rule_bound' | 'act_known' | 'no_env' | 'embed_error';
+  /** When the embedder fired but produced no bind, WHY: distinguishes an empty/stale
+   *  index (no_match/query_error), a low-confidence result (below_tau), and an
+   *  unroutable intent_kind (unmapped_kind). */
+  miss_reason?: 'no_match' | 'below_tau' | 'unmapped_kind' | 'query_error';
+  top_kind?: string;
+  top_score?: number;
+  margin?: number;
+}
+
 export interface TurnRoutingResult {
   routing: TurnRoutingKind;
   confidence: TurnRoutingConfidence;
@@ -22,6 +41,7 @@ export interface TurnRoutingResult {
   embedder_intent_kind?: string;
   embedder_score?: number;
   abstain_reason?: string;
+  bind?: RoutingBindTelemetry;
 }
 
 export interface TurnRoutingInput {
