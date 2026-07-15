@@ -58,12 +58,15 @@ export function classifyTurnRoutingRules(input: TurnRoutingInput): TurnRoutingRe
   return { routing: 'defer', confidence: 'abstain', abstain_reason: 'rti_3a_no_rule' };
 }
 
+type EmbedMissReason = 'no_match' | 'below_tau' | 'unmapped_kind' | 'query_error';
+
 interface EmbedderOutcome {
   result: TurnRoutingResult | null;
   fired: boolean;
   top_kind?: string;
   top_score?: number;
   margin?: number;
+  miss_reason?: EmbedMissReason;
 }
 
 async function embedderRouting(
@@ -82,6 +85,7 @@ async function embedderRouting(
   // scoped rows) so the top-1/top-2 margin is measurable, not just the winner.
   const seen = new Set<string>();
   const matches: { kind: string; score: number }[] = [];
+  let queryOk = false;
 
   for (const scope of scopes) {
     const filter = scope ? { builder_scope: scope } : undefined;
@@ -90,6 +94,7 @@ async function embedderRouting(
       returnMetadata: 'all',
       ...(filter ? { filter } : {}),
     }).catch(() => null);
+    if (results) queryOk = true;
     for (const m of results?.matches ?? []) {
       if (m.id && seen.has(m.id)) continue;
       if (m.id) seen.add(m.id);
@@ -112,8 +117,20 @@ async function embedderRouting(
     ...(top && second ? { margin: top.score - second.score } : {}),
   };
 
-  if (!top?.kind || top.score < ROUTING_TAU_HIGH) return { result: null, ...telemetry };
-  return { result: mapIntentToRouting(top.kind, top.score, input), ...telemetry };
+  // SIL Phase 0 — record WHY a fired embedder produced no bind, so an empty/stale
+  // index, a low-confidence result, and an unroutable kind are distinguishable
+  // (review: fired:true with no reason conflates four different failures).
+  if (!top?.kind) {
+    return { result: null, ...telemetry, miss_reason: queryOk ? 'no_match' : 'query_error' };
+  }
+  if (top.score < ROUTING_TAU_HIGH) {
+    return { result: null, ...telemetry, miss_reason: 'below_tau' };
+  }
+  const result = mapIntentToRouting(top.kind, top.score, input);
+  if (!result) {
+    return { result: null, ...telemetry, miss_reason: 'unmapped_kind' };
+  }
+  return { result, ...telemetry };
 }
 
 /**
@@ -167,6 +184,7 @@ export async function classifyTurnRouting(
     ...(embedded.top_kind !== undefined ? { top_kind: embedded.top_kind } : {}),
     ...(embedded.top_score !== undefined ? { top_score: embedded.top_score } : {}),
     ...(embedded.margin !== undefined ? { margin: embedded.margin } : {}),
+    ...(embedded.miss_reason !== undefined ? { miss_reason: embedded.miss_reason } : {}),
   };
   if (embedded.result) {
     return { ...embedded.result, bind: { bind_source: 'embed_intent', embed_fired: true, ...scores } };

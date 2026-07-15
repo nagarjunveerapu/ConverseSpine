@@ -87,6 +87,30 @@ describe('SIL Phase 0 — bind telemetry stamps every path', () => {
     expect(r.bind).toEqual({ bind_source: 'none', embed_fired: false, embed_gate: 'no_env' });
   });
 
+  it('a fired-but-no-bind embedder records WHY (review): below_tau vs unmapped vs no_match', async () => {
+    // below τ → below_tau (mapped kind, low score)
+    const low = fakeEnv([{ id: 'v1', score: 0.41, intent_kind: 'get_price' }]);
+    expect((await classifyTurnRouting(low, baseInput('vague'))).bind?.miss_reason).toBe('below_tau');
+
+    // above τ but the intent_kind is not in the runtime map → unmapped_kind
+    const unmapped = fakeEnv([{ id: 'v1', score: 0.9, intent_kind: 'small_talk' }]);
+    expect((await classifyTurnRouting(unmapped, baseInput('vague'))).bind?.miss_reason).toBe('unmapped_kind');
+
+    // query returned but empty → no_match (not query_error)
+    const empty = {
+      AI: { run: async () => ({ data: [[0.1]] }) },
+      INTENT_VECTORS: { query: async () => ({ matches: [] }) },
+    } as never;
+    expect((await classifyTurnRouting(empty, baseInput('vague'))).bind?.miss_reason).toBe('no_match');
+
+    // every scope query throws → query_error, distinguishable from an empty index
+    const broken = {
+      AI: { run: async () => ({ data: [[0.1]] }) },
+      INTENT_VECTORS: { query: async () => { throw new Error('vectorize down'); } },
+    } as never;
+    expect((await classifyTurnRouting(broken, baseInput('vague'))).bind?.miss_reason).toBe('query_error');
+  });
+
   it('duplicate row returned by both scope queries does not fake a zero margin', async () => {
     // same id appears in the builder-scoped and the global query
     const env = {
