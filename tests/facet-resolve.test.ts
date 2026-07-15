@@ -44,6 +44,71 @@ describe('AB-1 — resolver reaches the orphaned corpus', () => {
     expect(resolveFaqQuestionKeys('tell me about Brigade Eldorado')).toEqual([]);
     expect(resolveFaqQuestionKeys('show me villas')).toEqual([]);
   });
+
+  it('binds the 192-run stragglers', () => {
+    expect(key1('how is water and power there?')).toBe('water_power'); // D2.16
+    expect(key1('is it MUDA or DTCP approved?')).toBe('plan_approval'); // C2.5
+    expect(key1('can I start construction immediately?')).toBe('construction_rules'); // C2.7
+    expect(key1('who is the operator?')).toBe('revenue_model'); // D2.5 / E.3
+    expect(key1('is the payout guaranteed?')).toBe('revenue_model'); // D2.8
+    expect(key1('tell me about the coffee and pepper crops')).toBe('plantation_details'); // D2.9
+    expect(key1('do I have to manage the farm myself?')).toBe('plantation_details'); // D2.10
+    expect(resolveFaqQuestionKeys('how big is the township?')).toContain('township_scale'); // B9.4
+    expect(resolveFaqQuestionKeys('how big is the community?')).toContain('community_size'); // F.8
+  });
+});
+
+describe('AB-1 — cost-component asks get THE component, not the whole card', () => {
+  const ELDORADO_COMPONENTS = [
+    { label: 'Base Selling Price', value: '₹9,000 – ₹10,500 per sqft' },
+    { label: 'Car Parking (Mandatory)', value: '₹5,00,000 per slot' },
+    { label: 'Club Membership (One-time)', value: '₹1,50,000' },
+    { label: 'Floor Rise Premium', value: '₹75/sqft/floor above 5th' },
+    { label: 'Stamp Duty', value: '5' },
+    { label: 'Registration Charges', value: '1' },
+    { label: 'GST @ 5%', value: '5' },
+  ];
+
+  function priceReq(buyerText: string): ComposeRequest {
+    return {
+      goal: { kind: 'answer', topic: 'price', projectId: 'eldorado' },
+      evidence: {
+        tools: ['pricing'],
+        pricing: { projectName: 'Brigade Eldorado', components: ELDORADO_COMPONENTS },
+      },
+      context: {
+        constraints: {},
+        alreadyShownSameSet: false,
+        builderName: 'Naya',
+        buyerText,
+        focusProjectName: 'Brigade Eldorado',
+      },
+    };
+  }
+
+  it('club membership fee → the club line, not base price (B3.3)', () => {
+    const reply = fallbackReply(priceReq('club membership fee?'));
+    expect(reply).toMatch(/Club Membership/);
+    expect(reply).not.toMatch(/9,000/); // base price must not lead a club ask
+  });
+
+  it('floor rise charges → the floor-rise line (B3.5)', () => {
+    const reply = fallbackReply(priceReq('floor rise charges?'));
+    expect(reply).toMatch(/Floor Rise/);
+    expect(reply).not.toMatch(/Club Membership/);
+  });
+
+  it('stamp duty and registration → both statutory lines (B3.7)', () => {
+    const reply = fallbackReply(priceReq('stamp duty and registration?'));
+    expect(reply).toMatch(/Stamp Duty/);
+    expect(reply).toMatch(/Registration Charges/);
+    expect(reply).not.toMatch(/Car Parking/);
+  });
+
+  it('a generic price ask keeps the full card', () => {
+    const reply = fallbackReply(priceReq("what's the price?"));
+    expect(reply).toMatch(/Base Selling Price/);
+  });
 });
 
 describe('AB-1 — isInventoryAsk', () => {

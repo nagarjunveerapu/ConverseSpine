@@ -17,6 +17,7 @@ import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingre
 import { resolveInputSource } from './ingress.js';
 import {
   isConstraintRefinementTurn,
+  isCostComponentAsk,
   isDetailAskTurn,
   isLocationBroadenTurn,
   isLocationCorrectionTurn,
@@ -57,7 +58,7 @@ import {
   releaseToDiscover,
   withNdConversation,
 } from './state.js';
-import { buildComposeRequest, fallbackReply, formatInr, minimumBudgetReply } from './compose.js';
+import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply } from './compose.js';
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
@@ -1605,10 +1606,19 @@ async function fetchAnswer(
       const pricing = await deps.data.pricing(s.builderId, nd, goal.projectId, unitType).catch(() => null);
       if (pricing) {
         tools.push('pricing');
+        // AB-1 — a cost-component ask gets THE component(s), filtered at the
+        // EVIDENCE level so both the LLM composer and the template floor see
+        // only the asked rows ("club membership fee?" led with base price when
+        // the full card reached the composer). No match → full card unchanged.
+        const asked =
+          buyerText && isCostComponentAsk(buyerText)
+            ? componentsForAsk(buyerText, pricing.components)
+            : [];
+        const components = asked.length ? asked : pricing.components;
         evidence = {
           ...evidence,
           tools: [...new Set(tools)],
-          pricing: { ...pricing, projectName: pricing.projectName || focusName },
+          pricing: { ...pricing, components, projectName: pricing.projectName || focusName },
         };
       }
     }
@@ -1717,13 +1727,21 @@ async function fetchAnswer(
       },
     };
   } else if (faqKeys.length > 0 && buyerText && isFaqShapedAsk(buyerText)) {
-    // Extractor bound a FAQ key but Desk has no row — honest miss, no overview invent.
-    tools.push('faqMiss');
-    evidence = {
-      ...evidence,
-      tools: [...new Set(tools)],
-      faqMiss: { keys: faqKeys },
-    };
+    // AB-1 — the cost sheet owns cost-component asks. "what are the parking
+    // charges?" binds the `parking` FAQ key; when the project has no such FAQ
+    // row but its pricing components DO carry the answer (Car Parking ₹5,00,000),
+    // a faqMiss here made the composer decline a question it had the data for.
+    const costSheetOwns =
+      isCostComponentAsk(buyerText) && Boolean(evidence.pricing ?? evidence.landedCost);
+    if (!costSheetOwns) {
+      // Extractor bound a FAQ key but Desk has no row — honest miss, no overview invent.
+      tools.push('faqMiss');
+      evidence = {
+        ...evidence,
+        tools: [...new Set(tools)],
+        faqMiss: { keys: faqKeys },
+      };
+    }
   }
 
   const faqShapedHit = Boolean(buyerText && isFaqShapedAsk(buyerText) && faqHits.length > 0);

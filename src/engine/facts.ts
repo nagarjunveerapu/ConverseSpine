@@ -552,8 +552,13 @@ const TOPIC_ORDER: AnswerTopic[] = ['compare', 'price', 'legal', 'property_type'
 // "charges" stays the maintenance FAQ. Bare "tax(es)" is deliberately excluded —
 // it steals FAQ-shaped asks ("property tax?", "tax benefit?") — so taxes ground
 // only via a cost neighbour ("charges and taxes"); GST/cess are cost-specific.
+// AB-1: parking / club / floor-rise / corpus / PLC are cost-sheet rows on every
+// builder sheet — "club membership fee?" answered with the whole pricing card
+// (or a FAQ miss) instead of the one component the buyer asked for.
 const COST_COMPONENT_SRC =
-  'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?(?:\\s+(?:and\\s+)?taxes?)?|gst|cess|cost\\s+sheet';
+  'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?(?:\\s+(?:and\\s+)?taxes?)?|gst|cess|cost\\s+sheet' +
+  '|parking\\s+(?:charges?|fees?|cost)|car\\s+park(?:ing)?\\s+(?:charges?|fees?|cost|slot)|club\\s*(?:house)?\\s+(?:membership|fees?|charges?)|membership\\s+fees?' +
+  '|floor\\s+rise|corpus|maintenance\\s+deposit|betterment\\s+charges?|infrastructure\\s+charges?|documentation\\s+charges?';
 const COST_COMPONENT_RE = new RegExp(`\\b(?:${COST_COMPONENT_SRC})\\b`, 'i');
 
 /** A cost-sheet component ask (stamp duty, registration charges, GST, …). */

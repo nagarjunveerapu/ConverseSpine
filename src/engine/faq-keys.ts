@@ -11,8 +11,10 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:rental\s+yield|yield(?:\s+kitna)?|roi|returns?|rental\s+income|how\s+much\s+rent|rent(?:al)?\s+(?:potential|income|return|kitna))\b/i,
   },
   {
+    // "who operates it?" / "is the payout guaranteed?" are revenue-model asks —
+    // the 192-run showed them falling to overview cards on the resort family.
     key: 'revenue_model',
-    re: /\b(?:revenue\s+model|revenue\s+share|pre-?leased|managed\s+(?:villa|resort)|rental\s+revenue)\b/i,
+    re: /\b(?:revenue\s+model|revenue\s+share|pre-?leased|managed\s+(?:villa|resort)|rental\s+revenue|payout|guaranteed\s+(?:returns?|income|rent)|who\s+(?:operates|runs)\b|who\s+is\s+the\s+operator|operator\s+(?:name|brand))\b/i,
   },
   {
     key: 'resale_value',
@@ -42,8 +44,9 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     // Desk question_key is `water_power` (brigade enrichment / live corpus).
+    // "how is water and power there?" (D2.16) missed the supply-only phrasing.
     key: 'water_power',
-    re: /\b(?:water\s+(?:supply|connection)|power\s+supply|electricity|bescom|bwssb)\b/i,
+    re: /\b(?:water\s+(?:supply|connection)|water\s+and\s+power|power\s+(?:supply|and\s+water)|electricity|bescom|bwssb)\b/i,
   },
   {
     key: 'site_visit',
@@ -125,8 +128,10 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\bplot\s+(?:sizes?|dimensions?)\b/i,
   },
   {
+    // "tell me about the coffee and pepper crops" / "do I have to manage the
+    // farm myself?" (D2.9 / D2.10) are plantation-detail asks.
     key: 'plantation_details',
-    re: /\bplantation\s+(?:details?|management)\b|\bwhat\s+(?:crops?|is\s+grown)\b|\bcoffee\s+(?:yield|crop)/i,
+    re: /\bplantation\s+(?:details?|management)\b|\bwhat\s+(?:crops?|is\s+grown)\b|\b(?:coffee|pepper|areca)\b.{0,25}\bcrops?\b|\bcoffee\s+and\s+pepper\b|\bmanage\s+the\s+(?:farm|estate|plantation)\b|\bwho\s+(?:maintains|manages)\s+the\s+(?:farm|estate|plantation|crops?)\b/i,
   },
   {
     key: 'customization',
@@ -165,17 +170,32 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:pickup|shuttle)\b|\btransport\s+(?:to|from)\b/i,
   },
   // Scale asks land on whichever scale key the project carries (all gated).
+  // "how big is the township / community?" (B9.4, F.8) counts too.
   {
     key: 'total_units_and_towers',
-    re: /\bhow\s+(?:many|big)\b.*\b(?:units?|towers?|acres?|homes?)\b|\btotal\s+units?\b|\bproject\s+(?:size|scale)\b/i,
+    re: /\bhow\s+(?:many|big)\b.*\b(?:units?|towers?|acres?|homes?|township|community|project)\b|\btotal\s+units?\b|\bproject\s+(?:size|scale)\b/i,
   },
   {
     key: 'project_scale',
-    re: /\bhow\s+(?:many|big)\b.*\b(?:units?|towers?|acres?|homes?)\b|\btotal\s+units?\b|\bproject\s+(?:size|scale)\b/i,
+    re: /\bhow\s+(?:many|big)\b.*\b(?:units?|towers?|acres?|homes?|township|community|project)\b|\btotal\s+units?\b|\bproject\s+(?:size|scale)\b/i,
   },
   {
     key: 'township_scale',
-    re: /\bhow\s+(?:many|big)\b.*\b(?:units?|towers?|acres?|homes?)\b|\btotal\s+units?\b|\bproject\s+(?:size|scale)\b/i,
+    re: /\bhow\s+(?:many|big)\b.*\b(?:units?|towers?|acres?|homes?|township|community|project)\b|\btotal\s+units?\b|\bproject\s+(?:size|scale)\b/i,
+  },
+  {
+    key: 'community_size',
+    re: /\bhow\s+(?:many|big)\b.*\b(?:units?|towers?|acres?|homes?|township|community|project)\b|\btotal\s+units?\b|\bproject\s+(?:size|scale)\b/i,
+  },
+  {
+    // "is it MUDA or DTCP approved?" (C2.5) — the approval-body ask.
+    key: 'plan_approval',
+    re: /\b(?:muda|dtcp|biapa|bmrda|bda)\b|\bplan\s+approval\b|\blayout\s+approv|\bapproved\s+layout\b/i,
+  },
+  {
+    // "can I start construction immediately?" (C2.7).
+    key: 'construction_rules',
+    re: /\bconstruction\s+(?:rules?|guidelines?|restrictions?|timeline)\b|\b(?:start|begin)\s+construction\b|\bwhen\s+can\s+i\s+(?:build|construct)\b|\bbuild(?:ing)?\s+(?:rules?|guidelines?|restrictions?)\b/i,
   },
 ];
 
@@ -217,7 +237,10 @@ export function resolveFaqQuestionKeys(
     }
   }
 
-  return out.slice(0, 3);
+  // 4, not 3: the scale ask fans to four sibling keys (total_units_and_towers /
+  // project_scale / township_scale / community_size) — projects hold exactly one,
+  // so the lookups stay gated and only that one composes.
+  return out.slice(0, 4);
 }
 
 /** True when the utterance is a FAQ-shaped ask (not a generic overview). */
