@@ -437,6 +437,7 @@ Before each phase implementation, post:
 | P4 | exists: `Naya/docs/lld/ADVISOR_CONTEXTUAL_TURN_INTENT_LLD.md` |
 | P5 | exists: `Naya/docs/lld/RTI_3_VISIT_EXPLORE_INTENT_LLD.md` |
 | P6 | [`docs/lld/P6_BAML_EXTRACT.md`](./lld/P6_BAML_EXTRACT.md) |
+| **SIL** | [`lld/SEMANTIC_INTENT_LAYER_LLD.md`](./lld/SEMANTIC_INTENT_LAYER_LLD.md) — embeddings as the first-class understanding layer; supersedes the SA INTENT_VECTORS gating (signed 2026-07-15) |
 
 ---
 
