@@ -58,20 +58,30 @@ export function classifyTurnRoutingRules(input: TurnRoutingInput): TurnRoutingRe
   return { routing: 'defer', confidence: 'abstain', abstain_reason: 'rti_3a_no_rule' };
 }
 
+interface EmbedderOutcome {
+  result: TurnRoutingResult | null;
+  fired: boolean;
+  top_kind?: string;
+  top_score?: number;
+  margin?: number;
+}
+
 async function embedderRouting(
   env: Pick<Env, 'AI' | 'INTENT_VECTORS'>,
   input: TurnRoutingInput,
-): Promise<TurnRoutingResult | null> {
-  if (!env.AI || !env.INTENT_VECTORS) return null;
+): Promise<EmbedderOutcome> {
+  if (!env.AI || !env.INTENT_VECTORS) return { result: null, fired: false };
 
   const queryText = buildRoutingQuery(input);
   const embed = (await env.AI.run(EMBED_MODEL, { text: [queryText] })) as { data?: number[][] };
   const vector = embed.data?.[0];
-  if (!vector) return null;
+  if (!vector) return { result: null, fired: false };
 
   const scopes = [input.builder_id, ''].filter((s, i, a) => a.indexOf(s) === i);
-  let bestKind = '';
-  let bestScore = 0;
+  // SIL Phase 0 — keep every match (deduped by id: the global query re-returns
+  // scoped rows) so the top-1/top-2 margin is measurable, not just the winner.
+  const seen = new Set<string>();
+  const matches: { kind: string; score: number }[] = [];
 
   for (const scope of scopes) {
     const filter = scope ? { builder_scope: scope } : undefined;
@@ -80,20 +90,30 @@ async function embedderRouting(
       returnMetadata: 'all',
       ...(filter ? { filter } : {}),
     }).catch(() => null);
-    const top = results?.matches?.[0];
-    const kind =
-      top?.metadata && typeof top.metadata.intent_kind === 'string'
-        ? (top.metadata.intent_kind as string)
-        : '';
-    const score = top?.score ?? 0;
-    if (score > bestScore) {
-      bestScore = score;
-      bestKind = kind;
+    for (const m of results?.matches ?? []) {
+      if (m.id && seen.has(m.id)) continue;
+      if (m.id) seen.add(m.id);
+      matches.push({
+        kind:
+          m.metadata && typeof m.metadata.intent_kind === 'string'
+            ? (m.metadata.intent_kind as string)
+            : '',
+        score: m.score ?? 0,
+      });
     }
   }
 
-  if (!bestKind || bestScore < ROUTING_TAU_HIGH) return null;
-  return mapIntentToRouting(bestKind, bestScore, input);
+  matches.sort((a, b) => b.score - a.score);
+  const top = matches[0];
+  const second = matches[1];
+  const telemetry = {
+    fired: true,
+    ...(top ? { top_kind: top.kind, top_score: top.score } : {}),
+    ...(top && second ? { margin: top.score - second.score } : {}),
+  };
+
+  if (!top?.kind || top.score < ROUTING_TAU_HIGH) return { result: null, ...telemetry };
+  return { result: mapIntentToRouting(top.kind, top.score, input), ...telemetry };
 }
 
 /**
@@ -117,27 +137,50 @@ export async function classifyTurnRouting(
       routing: 'visit_schedule_stop',
       confidence: 'rule',
       ...(pid ? { project_id: pid } : {}),
+      bind: { bind_source: 'regex', embed_fired: false, embed_gate: 'visit_rule' },
     };
   }
 
   const fromAct = projectRoutingFromSpeechAct(input);
-  if (fromAct && fromAct.routing !== 'defer') return fromAct;
+  if (fromAct && fromAct.routing !== 'defer') {
+    return { ...fromAct, bind: { bind_source: 'regex', embed_fired: false, embed_gate: 'speech_act' } };
+  }
 
   const ruled = classifyTurnRoutingRules(input);
-  if (ruled.routing !== 'defer') return ruled;
+  if (ruled.routing !== 'defer') {
+    return { ...ruled, bind: { bind_source: 'regex', embed_fired: false, embed_gate: 'rule_bound' } };
+  }
 
   // Embedder gap-fill only when speech act is unknown (or absent).
   const act = input.speech_act;
   if (act && act !== 'unknown') {
-    return fromAct ?? ruled;
+    const gated = fromAct ?? ruled;
+    return { ...gated, bind: { bind_source: 'none', embed_fired: false, embed_gate: 'act_known' } };
   }
 
-  if (!env) return ruled;
+  if (!env) {
+    return { ...ruled, bind: { bind_source: 'none', embed_fired: false, embed_gate: 'no_env' } };
+  }
 
   const embedded = await embedderRouting(env, input);
-  if (embedded) return embedded;
+  const scores = {
+    ...(embedded.top_kind !== undefined ? { top_kind: embedded.top_kind } : {}),
+    ...(embedded.top_score !== undefined ? { top_score: embedded.top_score } : {}),
+    ...(embedded.margin !== undefined ? { margin: embedded.margin } : {}),
+  };
+  if (embedded.result) {
+    return { ...embedded.result, bind: { bind_source: 'embed_intent', embed_fired: true, ...scores } };
+  }
 
-  return ruled;
+  return {
+    ...ruled,
+    bind: {
+      bind_source: 'none',
+      embed_fired: embedded.fired,
+      ...(embedded.fired ? {} : { embed_gate: 'embed_error' }),
+      ...scores,
+    },
+  };
 }
 
 /** @deprecated use classifyTurnRoutingRules — kept for tests importing sync helper */

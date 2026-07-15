@@ -46,6 +46,8 @@ export interface ExtractProvenance {
   chip_path_ids?: import('./speech-act/types.js').ChipPathId[];
   /** P6 — shadow/promote telemetry for ExtractTurnFacts. */
   baml?: import('./extract-baml.js').BamlShadowReport;
+  /** SIL Phase 0 — semantic-layer fire/gate/bind telemetry (SEMANTIC_INTENT_LAYER_LLD §3.3). */
+  routing_bind?: import('./turn-routing/types.js').RoutingBindTelemetry;
 }
 
 export function markIngressBlocked(

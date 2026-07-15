@@ -519,6 +519,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const routing = await classifyTurnRouting(deps.routingEnv, buildTurnRoutingInput(state, ex, trimmedText));
+  // SIL Phase 0 — surface the semantic-layer verdict per turn in the debug
+  // channel that survives the /chat route re-shape (LLD §3.3).
+  if (extractProvenance && routing.bind) {
+    extractProvenance.routing_bind = routing.bind;
+  }
   state = {
     ...state,
     rti: {
