@@ -25,6 +25,7 @@ import {
   detectPropertyTypes,
   locationCategoriesAsked,
   locationEchoesProjectName,
+  locationLooksPolluted,
   resolveCatalogNameHit,
   wantsCostBreakdown,
 } from './facts.js';
@@ -1453,7 +1454,11 @@ async function fetchRecommend(
   }
 
   const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
-  const reasoning = `No exact match for ${[s.constraints.location, s.constraints.propertyType].filter(Boolean).join(' ') || 'those filters'}`;
+  // AB-3 — never interpolate a polluted/noise locality into the honest miss ("No
+  // exact match for the"). The constraint gate rejects most upstream; this is the
+  // final guard before the raw string reaches the buyer.
+  const reasonLoc = locationLooksPolluted(s.constraints.location) ? undefined : s.constraints.location;
+  const reasoning = `No exact match for ${[reasonLoc, s.constraints.propertyType].filter(Boolean).join(' ') || 'those filters'}`;
   const resolved = discover.resolveRecommend(
     base,
     scopedMatches,
