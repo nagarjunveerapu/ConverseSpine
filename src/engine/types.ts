@@ -451,7 +451,8 @@ export interface EvidenceSet {
   emi?: EmiEvidence;
   landedCost?: LandedCostEvidence;
   visits?: VisitEvidence;
-  units?: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string }>;
+  /** holdableUnits: live per-type availability (AB-1). Positive = real count; 0/absent = unknown (Desk sends 0 when a project tracks no units). */
+  units?: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string; holdableUnits?: number }>;
   /** FAQ-shaped ask where Desk had no row for the resolved key(s). */
   faqMiss?: { keys: string[] };
   searchRecovery?: import('./recovery-planner.js').SearchRecoveryEnvelope;

@@ -552,8 +552,13 @@ const TOPIC_ORDER: AnswerTopic[] = ['compare', 'price', 'legal', 'property_type'
 // "charges" stays the maintenance FAQ. Bare "tax(es)" is deliberately excluded —
 // it steals FAQ-shaped asks ("property tax?", "tax benefit?") — so taxes ground
 // only via a cost neighbour ("charges and taxes"); GST/cess are cost-specific.
+// AB-1: parking / club / floor-rise / corpus / PLC are cost-sheet rows on every
+// builder sheet — "club membership fee?" answered with the whole pricing card
+// (or a FAQ miss) instead of the one component the buyer asked for.
 const COST_COMPONENT_SRC =
-  'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?(?:\\s+(?:and\\s+)?taxes?)?|gst|cess|cost\\s+sheet';
+  'stamp\\s*duty|registration\\s+(?:charges?|fees?|cost)|(?:total|all|other|additional|extra)\\s+charges?(?:\\s+(?:and\\s+)?taxes?)?|gst|cess|cost\\s+sheet' +
+  '|parking\\s+(?:charges?|fees?|cost)|car\\s+park(?:ing)?\\s+(?:charges?|fees?|cost|slot)|club\\s*(?:house)?\\s+(?:membership|fees?|charges?)|membership\\s+fees?' +
+  '|floor\\s+rise|corpus|maintenance\\s+deposit|betterment\\s+charges?|infrastructure\\s+charges?|documentation\\s+charges?';
 const COST_COMPONENT_RE = new RegExp(`\\b(?:${COST_COMPONENT_SRC})\\b`, 'i');
 
 /** A cost-sheet component ask (stamp duty, registration charges, GST, …). */
@@ -706,6 +711,25 @@ export function wantsCostBreakdown(text: string): boolean {
 }
 
 /** Price/legal/detail turn — must not mutate location or release focus. */
+/**
+ * AB-1 — a live-stock question ("is there any inventory left?", "how many 2 BHKs
+ * are still available?", "is it sold out?"). Distinct from a configurations ask:
+ * the buyer wants the availability FACT, and a config card list without it is a
+ * non-answer (the founder's rejection case, B2.4).
+ */
+export function isInventoryAsk(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return (
+    /\binventory\b/i.test(t) ||
+    /\b(?:units?|flats?|plots?|villas?|homes?|bhks?)\s+(?:still\s+)?(?:left|available|remaining|unsold|open)\b/i.test(t) ||
+    /\bhow\s+many\b.{0,30}\b(?:left|available|remaining|unsold|open)\b/i.test(t) ||
+    /\bsold\s+out\b/i.test(t) ||
+    /\b(?:still|anything)\s+available\b/i.test(t) ||
+    /\bavailability\s+(?:left|status)\b/i.test(t)
+  );
+}
+
 export function isDetailAskTurn(
   ex: Pick<Extracted, 'askTopic' | 'askTopics' | 'transition' | 'implicitProjectPick'>,
 ): boolean {
