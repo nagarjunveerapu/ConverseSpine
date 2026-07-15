@@ -30,6 +30,7 @@ All numbers verified on dev, 2026-07-15:
 - **P4 — The truth boundary is unchanged.** Founder's words: *"the embeddings just tell what the user says, not what the bot has to say."* Embeddings and the LLM decide *what is being asked*. Only Desk rows decide *what is said*. Answers bound via embedding are still served **verbatim** from the Desk row (`faqLookup` by key). The grounding gate, the composer-directive strip, and the honest-miss paths are untouched. This is not a RAG kernel and not a second brain — it is an index over phrasings and keys.
 - **P5 — No hardcoded domain knowledge.** The corpus contains *phrasings*, not place/project facts. Place knowledge stays in the Desk area registry; project identity stays in `PROJECT_VECTORS` (see `no-hardcoded-places` rule).
 - **P6 — Nothing in Vectorize is hand-fed.** Every index is rebuilt from a git-reviewed registry (or derived from Desk rows). An empty or stale bound index fails CI and alerts at runtime — silent death becomes impossible.
+- **P7 — Misses are fixed in the semantic lane (founder rule, 2026-07-15).** When a phrasing is misunderstood or an answer drops, the fix is a registry row (new phrasing or label correction), a τ adjustment, or a `fact_key` row derived from the Desk row it should have bound — **never a new or widened understanding regex**. The structural extractors (P1's list) are the only regex exemption. Enforcement is auditable: the fix PR must show the fixed phrasing re-binding with `bind_source = embed_intent | embed_fact`; a fix PR whose diff widens understanding regexes is review-blocked. Every fix routed through the corpus compounds; a regex fix doesn't — that asymmetry is the point of this layer.
 
 ## 3. Architecture
 
@@ -194,7 +195,8 @@ Each row is labeled with its expected intent/fact-key. Regex-miss lane = the sub
 2. ≥80% correct semantic bind on the regex-miss lane, measured on the labeled eval set, hand-read. Multi-intent atoms count individually — a dropped atom is a miss.
 3. No layer can suppress the semantic query; no index can be empty without CI failure + runtime alert.
 4. Truth unchanged: zero new fabrications; grounding repair-rate not worse than baseline (36/192).
-5. **Quality never drops:** every corpus/router PR runs the eval in CI and is blocked unless strict PASS ≥ the frozen baseline AND catch-rate ≥ the previous release. Regression is structurally unmergeable, not a matter of discipline.
+5. **Quality never drops:** every corpus/router PR runs the eval in CI and is blocked unless strict PASS ≥ the frozen baseline AND catch-rate ≥ the previous release. Regression is structurally unmergeable, not a matter of discipline. (Phase 0 measured a ±3–5 row composer-wording noise band in the strict grader — the gate therefore compares **row-level evidence diffs**, not raw counts; disputed rows are hand-read.)
+6. **Uptick through the lane, not around it (P7):** each phase must show strict PASS above the frozen baseline with the improvement attributable to semantic binds (`bind_source` proves attribution), and no fix PR may route an understanding miss through new regex — structural extractors exempt.
 
 ## 10. The corpus flywheel — 6 months to production strength (founder direction)
 
