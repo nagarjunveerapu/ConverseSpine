@@ -68,6 +68,15 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"
 LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
+# SIL data pipeline — weekly intent-index rebuild from the git registry.
+# Model is a config: the bake-off decides it; default = current, so no change
+# until a model is chosen. Registry URL is the raw JSONL (raster to R2 later).
+SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
+
+# Weekly rebuild — Mondays 03:30 UTC. Dev-only until S1b marks rows clean.
+[env.dev.triggers]
+crons = ["30 3 * * 1"]
 BAML_EXTRACT_MODE = "promote"
 
 [[env.dev.durable_objects.bindings]]
