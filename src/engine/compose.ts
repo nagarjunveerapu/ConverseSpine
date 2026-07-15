@@ -317,7 +317,8 @@ export function fallbackReply(req: ComposeRequest): string {
       if (ev.propertyTypeGap) {
         const g = ev.propertyTypeGap;
         const budget = g.budgetDisplay ? ` at ${g.budgetDisplay}` : '';
-        return `No *${g.requestedType}*${budget} on our books — closest fit is *${g.closestName}* from ${g.closestDisplay}. Want me to open *${g.closestName}*?`;
+        const loc = g.location ? ` in *${g.location}*` : '';
+        return `No *${g.requestedType}*${budget}${loc} on our books — closest fit is *${g.closestName}* from ${g.closestDisplay}. Want me to open *${g.closestName}*?`;
       }
       if (ev.floor) {
         const lead = ev.floor.projectName ? ` with *${ev.floor.projectName}*` : '';

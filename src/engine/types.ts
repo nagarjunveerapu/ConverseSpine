@@ -418,6 +418,8 @@ export interface EvidenceSet {
   propertyTypeGap?: {
     requestedType: string;
     budgetDisplay?: string;
+    /** Locality the type was asked in — "no plantation IN WHITEFIELD" beats "no plantation". */
+    location?: string;
     closestName: string;
     closestDisplay: string;
     closestProjectId?: string;
