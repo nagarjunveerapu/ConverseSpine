@@ -13,6 +13,10 @@ export interface Env {
   /** Workers AI for embeddings when Vectorize query needs live embed. */
   AI?: Ai;
 
+  /** SIL data pipeline (weekly rebuild): embedding model + registry JSONL source URL. */
+  SIL_EMBED_MODEL?: string;
+  SIL_REGISTRY_URL?: string;
+
   /** Turn bundle cache (conversation-context), 60s TTL. */
   TURN_CACHE?: KVNamespace;
 

@@ -7,6 +7,7 @@ import { handleAgentSend, handleChat, health, json, toDeskChatResponse } from '.
 import { overRateLimit } from './channel/ingress-guard.js';
 import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
+import { rebuildIntentIndex } from './rebuild/intent-index.js';
 
 export { TurnDebouncer } from './agent/turn_debouncer.js';
 
@@ -140,5 +141,20 @@ export default {
       const msg = err instanceof Error ? err.message : String(err);
       return json({ error: 'internal', detail: msg.slice(0, 500) }, 500);
     }
+  },
+
+  /**
+   * SIL data pipeline — weekly Cron Trigger keeps the intent index in sync with
+   * the git registry (SEMANTIC_INTENT_LAYER_LLD §4.4/§10). Incremental: embeds
+   * only new/changed clean rows, deletes de-listed ones. No-op until rows pass
+   * the S1b quarantine gate, so it is safe to ship dark.
+   */
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      (async () => {
+        const report = await rebuildIntentIndex(env);
+        console.log('[sil-intent-rebuild]', JSON.stringify(report));
+      })(),
+    );
   },
 };
