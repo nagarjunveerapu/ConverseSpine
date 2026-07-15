@@ -556,8 +556,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // AB-7 — a property-TYPE knowledge ask ("apartment or plot — what's the
   // difference?", "which is better for investment?") is definitional/advisory, not a
   // search. Answer with the generic type taxonomy instead of dumping a project list.
-  // Not gated on phase — it's a valid question whether focused or discovering.
-  const typeKnowledge = detectTypeComparisonKnowledge(trimmedText);
+  // Not gated on phase — it's a valid question whether focused or discovering. But an
+  // ask that ALSO names a place or budget ("compare apartments and plots in Whitefield",
+  // "…under 1 Cr") wants a shortlist, not a generic taxonomy — let it fall to search
+  // (review AB-7).
+  const typeKnowledge =
+    ex.constraints.location || ex.constraints.budgetMaxInr !== undefined
+      ? null
+      : detectTypeComparisonKnowledge(trimmedText);
   if (typeKnowledge) {
     const reply = typeComparisonReply(typeKnowledge.types, typeKnowledge.investment);
     state = { ...state, turnCount: state.turnCount + 1 };

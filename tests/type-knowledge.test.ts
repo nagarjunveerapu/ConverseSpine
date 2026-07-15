@@ -52,4 +52,13 @@ describe('AB-7 — end-to-end: a type-knowledge ask answers, does not recommend'
     expect(r.reply).not.toMatch(/Here's what fits/);
     expect(r.debug.goal.kind).not.toBe('recommend');
   });
+
+  it('a type comparison that NAMES a place searches instead (review AB-7)', async () => {
+    const r = await runEngineTurn(
+      { convId: 'ab7-loc', builderId: 'lokations', text: 'compare apartments and plots in Sarjapur', buyerPhone: '+919999999972' },
+      fakeDeps(),
+    );
+    // a locality is present → wants a shortlist, not a generic taxonomy
+    expect(r.reply).not.toMatch(/core difference/i);
+  });
 });
