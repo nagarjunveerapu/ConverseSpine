@@ -58,7 +58,7 @@ import {
   withNdConversation,
 } from './state.js';
 import { buildComposeRequest, fallbackReply, formatInr, minimumBudgetReply } from './compose.js';
-import { checkGrounding, stripBanned } from './grounding.js';
+import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
 import { filterUnitsByBhk, resolveAvailabilityBhkFilter } from './unit-config.js';
@@ -833,7 +833,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // W1+W3 share ONE bounded LLM retry per turn (review: no repair forest).
   let retryUsed = false;
 
-  let reply = stripBanned(draft);
+  // AB-10 — a pure-directive draft strips to '' (nothing but the leaked
+  // instruction). Never re-emit it: fall to the grounded template floor.
+  const stripped = stripComposerDirectives(stripBanned(draft));
+  let reply = stripped.trim() ? stripped : fallbackReply(req);
   let grounding: TurnDebug['grounding'] = 'pass';
   const g1 = checkGrounding(reply, evidence, input.text);
   // Placeholder-leak guard (dev: "[real starting point]" reached a buyer):
@@ -1611,7 +1614,9 @@ async function fetchAnswer(
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
-        media: { ...media, projectName: mediaName || focusName || 'this project' },
+        // Requested `assetKind` first so an honest miss can name it ("floor plan");
+        // a successful share carries its own asset_kind in `...media`, which wins.
+        media: { assetKind, ...media, projectName: mediaName || focusName || 'this project' },
       };
     }
   }
@@ -2271,7 +2276,9 @@ async function completeRtiFocusCommit(
   let reply = fallbackReply(req);
   try {
     const drafted = await deps.llm.compose(req);
-    if (drafted.trim()) reply = stripBanned(drafted);
+    // AB-10 — keep the grounded floor if the draft strips to a pure directive.
+    const cleaned = drafted.trim() ? stripComposerDirectives(stripBanned(drafted)) : '';
+    if (cleaned.trim()) reply = cleaned;
   } catch {
     /* keep fallback */
   }
