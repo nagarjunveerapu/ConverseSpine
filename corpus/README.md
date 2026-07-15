@@ -1,22 +1,32 @@
 # corpus/ — the semantic intent registry
 
-`intent-registry.jsonl` is the git source of truth for the `naya-intent-phrasings-*`
-Vectorize indexes (SEMANTIC_INTENT_LAYER_LLD §4.1). **The registry is the source;
-the index is a build artifact.** Never hand-edit the index — edit this file in a
-reviewed PR and rebuild.
+Two files, one rule: **the registry is the source, the index is a build artifact.**
+
+| File | What it is | Rebuild reads it? |
+|---|---|---|
+| `recovered-raw.jsonl` | Immutable provenance — the untouched dump of the 13,555 seeded vectors. Reproduce with `scripts/vectorize-dump-registry.py`. | No |
+| `intent-registry.jsonl` | The registry = raw rows **tagged** with `quarantine` / `audit_status`. This is the audit worklist and the eventual rebuild source. | Only rows where `audit_status=='clean' && !quarantine` |
+
+**The recovered corpus is NOT safe to rebuild from as-is.** It carries P5 place/builder
+tokens, unmapped intent_kinds that mask mapped intents, and hard-negatives the runtime
+would bind as positives. So every recovered row is `audit_status: "unaudited"` and
+quarantine-tagged; the rebuild-eligible set is **0 rows today, by design** (S1b gate).
+Reviving the raw corpus at full throttle is a regression machine — this is the guard.
 
 ## Provenance
 
 Recovered 2026-07-15 by dumping all 13,555 vectors of `naya-intent-phrasings-dev`
 (`scripts/vectorize-dump-registry.py`). The corpus had been seeded out-of-band
 (~2026-06-08→20, no seeder ever in git) and served zero queries until SIL Phase 0.
+`scripts/tag-registry-quarantine.py` produces `intent-registry.jsonl` from the raw dump.
 
 ## Row shape
 
 ```json
 {"id": "ph_…", "phrasing": "namaste, koi legal issue toh nahi",
  "intent_kind": "get_legal_info", "language": "hi-en",
- "is_negative": false, "hard_negative_for": "", "source": "corpus_v2"}
+ "is_negative": false, "hard_negative_for": "", "source": "corpus_v2",
+ "quarantine": true, "quarantine_reasons": ["unmapped_kind"], "audit_status": "unaudited"}
 ```
 
 ## Census at recovery (audit 2026-07-15)
@@ -31,6 +41,16 @@ Recovered 2026-07-15 by dumping all 13,555 vectors of `naya-intent-phrasings-dev
 | `builder_scope` set | **0 rows** — the runtime's builder-scoped query always returns empty |
 | Negative rows (`is_negative`) | 94 (with `hard_negative_for`) — the runtime does not read this field |
 | Sources | corpus_v2 13,123 · retroactive_mined 244 · embedding_gap_batch_1 188 |
+| **Quarantined** (unmapped_kind ∪ hard_negative ∪ P5 place/builder token) | **7,635 rows (56.3%)** — excluded from rebuild until audited |
+| Rebuild-eligible today | **0** — no row is `audit_status=='clean'` yet |
+
+## S1b exit gate (before always-on, LLD §4.2)
+
+The rebuild source must reach: unmapped-kind share **< 2%**, P5 contamination **< 5%**
+on kept rows, `builder_scope` strategy implemented (real scopes or global-only,
+documented), `is_negative` read-or-stripped at runtime, per-kind precision audited
+with floor `min(20, n)` and sub-floor kinds killed/relabeled. Until then the quarantine
+holds and S2 (always-on) is blocked.
 
 Known label defects (per-kind stratified audit pending, LLD §4.2): invisible kinds
 win nearest-neighbor and mask mapped kinds (measured: "what return can I expect?"

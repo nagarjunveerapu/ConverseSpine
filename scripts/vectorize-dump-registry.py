@@ -1,60 +1,72 @@
-"""Dump id+metadata of every vector in naya-intent-phrasings-dev to JSONL.
+"""Dump id+metadata of every vector in a Vectorize index to JSONL.
 
-Phase 1 registry recovery (SEMANTIC_INTENT_LAYER_LLD 4.1). Vector values are
+Phase 1 registry recovery (SEMANTIC_INTENT_LAYER_LLD §4.1). Vector values are
 NOT kept - the registry stores phrasing+labels; embeddings are a build artifact.
+
+Reproducible from any checkout (no hardcoded paths):
+    python3 scripts/vectorize-dump-registry.py
+    python3 scripts/vectorize-dump-registry.py --index naya-intent-phrasings-dev \
+            --out corpus/recovered-raw.jsonl
 """
-import json, re, subprocess, sys, time
+import argparse, json, re, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
-CWD = "/Users/arjun/Nayaworkspace/ConverseSpine-holds"
-INDEX = "naya-intent-phrasings-dev"
-OUT = "/private/tmp/claude-501/-Users-arjun-Nayaworkspace-NayaDesk/b05c466b-73c1-414e-99de-c606a5768b41/scratchpad/intent-registry-dump.jsonl"
-
-def wrangler(args, retries=3):
+def wrangler(args, cwd, retries=3):
+    err = ""
     for attempt in range(retries):
-        p = subprocess.run(["npx", "wrangler"] + args, cwd=CWD, capture_output=True, text=True, timeout=180)
+        p = subprocess.run(["npx", "wrangler"] + args, cwd=cwd,
+                           capture_output=True, text=True, timeout=180)
         if p.returncode == 0:
             return p.stdout
+        err = p.stderr[-300:]
         time.sleep(2 + attempt * 3)
-    raise RuntimeError(f"wrangler failed: {args[:3]} :: {p.stderr[-300:]}")
+    raise RuntimeError(f"wrangler failed: {args[:3]} :: {err}")
 
-# -- 1. collect all ids ------------------------------------------------------
-ids, cursor = [], None
-while True:
-    args = ["vectorize", "list-vectors", INDEX, "--count", "1000", "--json"]
-    if cursor:
-        args += ["--cursor", cursor]
-    out = wrangler(args)
-    m = re.search(r"\{.*\}|\[.*\]", out, re.S)
-    data = json.loads(m.group(0))
-    page = data.get("vectors", data if isinstance(data, list) else [])
-    page_ids = [v["id"] if isinstance(v, dict) else v for v in page]
-    ids.extend(page_ids)
-    cursor = data.get("nextCursor") if isinstance(data, dict) else None
-    print(f"listed {len(ids)} ids", flush=True)
-    if not cursor or not page_ids:
-        break
-print(f"TOTAL ids: {len(ids)}", flush=True)
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--index", default="naya-intent-phrasings-dev")
+    ap.add_argument("--out", default="corpus/recovered-raw.jsonl")
+    ap.add_argument("--cwd", default=str(Path.cwd()),
+                    help="repo root wrangler runs in (needs wrangler.toml)")
+    ap.add_argument("--batch", type=int, default=20, help="get-vectors id cap is 20")
+    ap.add_argument("--workers", type=int, default=6)
+    a = ap.parse_args()
 
-# -- 2. fetch metadata in batches --------------------------------------------
-BATCH = 20  # API hard cap (code 40007: max id count is 20)
-batches = [ids[i:i + BATCH] for i in range(0, len(ids), BATCH)]
+    ids, cursor = [], None
+    while True:
+        args = ["vectorize", "list-vectors", a.index, "--count", "1000", "--json"]
+        if cursor:
+            args += ["--cursor", cursor]
+        data = json.loads(re.search(r"\{.*\}|\[.*\]", wrangler(args, a.cwd), re.S).group(0))
+        page = data.get("vectors", data if isinstance(data, list) else [])
+        page_ids = [v["id"] if isinstance(v, dict) else v for v in page]
+        ids.extend(page_ids)
+        cursor = data.get("nextCursor") if isinstance(data, dict) else None
+        print(f"listed {len(ids)} ids", flush=True)
+        if not cursor or not page_ids:
+            break
+    print(f"TOTAL ids: {len(ids)}", flush=True)
 
-def fetch(batch):
-    out = wrangler(["vectorize", "get-vectors", INDEX, "--ids"] + batch)
-    m = re.search(r"\[.*\]", out, re.S)
-    vecs = json.loads(m.group(0))
-    return [{"id": v["id"], **(v.get("metadata") or {})} for v in vecs]
+    batches = [ids[i:i + a.batch] for i in range(0, len(ids), a.batch)]
+    def fetch(batch):
+        out = wrangler(["vectorize", "get-vectors", a.index, "--ids"] + batch, a.cwd)
+        vecs = json.loads(re.search(r"\[.*\]", out, re.S).group(0))
+        return [{"id": v["id"], **(v.get("metadata") or {})} for v in vecs]
 
-rows, done = [], 0
-with ThreadPoolExecutor(max_workers=6) as ex:
-    for chunk in ex.map(fetch, batches):
-        rows.extend(chunk)
-        done += 1
-        if done % 20 == 0:
-            print(f"fetched {len(rows)}/{len(ids)}", flush=True)
+    rows = []
+    with ThreadPoolExecutor(max_workers=a.workers) as ex:
+        for i, chunk in enumerate(ex.map(fetch, batches)):
+            rows.extend(chunk)
+            if (i + 1) % 20 == 0:
+                print(f"fetched {len(rows)}/{len(ids)}", flush=True)
 
-with open(OUT, "w") as f:
-    for r in rows:
-        f.write(json.dumps(r, ensure_ascii=False) + "\n")
-print(f"WROTE {len(rows)} rows -> {OUT}", flush=True)
+    out_path = Path(a.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"WROTE {len(rows)} rows -> {out_path}", flush=True)
+
+if __name__ == "__main__":
+    sys.exit(main())
