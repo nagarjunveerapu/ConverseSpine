@@ -385,11 +385,13 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       // Desk FAQ (loan eligibility, yield, …) beats EMI snapshot when both present.
       if (ev.detail?.faqs?.length) {
-        // In multi-topic, drop legal-family FAQs — the snapshot above already owns
-        // RERA/khata/loan, so we don't double-answer while keeping possession/yield/etc.
+        // In multi-topic, drop only the FAQs the legal snapshot ALWAYS owns —
+        // RERA / khata / rera_number. Keep loan/EMI and everything else: the snapshot
+        // renders loan only when the buyer asked banks/loan, so a "RERA and home loan"
+        // ask would otherwise lose its loan atom (review AB-8).
         const relevant =
           multiTopic && topics.includes('legal')
-            ? ev.detail.faqs.filter((f) => !/rera|khata|legal|loan/i.test(f.questionKey))
+            ? ev.detail.faqs.filter((f) => !/^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(f.questionKey))
             : ev.detail.faqs;
         const body = relevant
           .map((f) => f.answer.trim())
