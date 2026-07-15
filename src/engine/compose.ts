@@ -368,7 +368,12 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('property_type') && ev.detail?.projectType) {
         chunks.push(projectTypeLine(ev.detail));
       }
-      if (topics.includes('legal') && ev.detail && !ev.detail.faqs?.length) {
+      // AB-8 — in a MULTI-topic ask the FAQ body carries the OTHER atom(s), so the
+      // legal snapshot (RERA/khata) must still render rather than be swallowed by a
+      // non-legal FAQ. "RERA and possession" was dropping RERA because a possession
+      // FAQ was present. Single-topic behaviour is unchanged.
+      const multiTopic = topics.length > 1;
+      if (topics.includes('legal') && ev.detail && (!ev.detail.faqs?.length || multiTopic)) {
         // Prefer facet line (banks/EC) when buyer text asks; else snapshot.
         // When Desk FAQ hit exists, FAQ body below owns the answer (loan eligibility, etc.).
         chunks.push(
@@ -380,7 +385,15 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       // Desk FAQ (loan eligibility, yield, …) beats EMI snapshot when both present.
       if (ev.detail?.faqs?.length) {
-        const body = ev.detail.faqs
+        // In multi-topic, drop only the FAQs the legal snapshot ALWAYS owns —
+        // RERA / khata / rera_number. Keep loan/EMI and everything else: the snapshot
+        // renders loan only when the buyer asked banks/loan, so a "RERA and home loan"
+        // ask would otherwise lose its loan atom (review AB-8).
+        const relevant =
+          multiTopic && topics.includes('legal')
+            ? ev.detail.faqs.filter((f) => !/^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(f.questionKey))
+            : ev.detail.faqs;
+        const body = relevant
           .map((f) => f.answer.trim())
           .filter(Boolean)
           .join(' ');
