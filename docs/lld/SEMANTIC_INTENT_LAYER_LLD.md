@@ -1,6 +1,6 @@
 # SEMANTIC_INTENT_LAYER_LLD — embeddings as the first-class understanding layer
 
-**Status:** DRAFT — awaiting founder sign-off
+**Status:** SIGNED 2026-07-15 (founder + external review) — P0–P1 go; P2 gated on §3.2 arbitration table + §6 held-out eval (both now written)
 **Date:** 2026-07-15
 **Scope:** ConverseSpine turn understanding (routing + fact-key binding) and Vectorize corpus operations. NayaDesk participates only as the fact source (FAQ rows, cost sheets, facets). Dialogue policy unchanged.
 **Supersedes:** the SA-4/P5 "embedder only when act=unknown + defer" gating in `turn-routing/classify.ts`; amends the earlier answerability-kernel refusal of a semantic retrieval layer (the refusal of an LLM-answers-from-RAG kernel STANDS — see §2 P4).
@@ -44,6 +44,8 @@ Repurpose `naya-intent-phrasings-dev` (per founder: "re-purpose it to be used ef
 
 One index, metadata-filtered queries. The existing `builder_scope` filter pattern in `embedderRouting` is kept.
 
+**`fact_key` cardinality & scoping (review amendment).** Fact rows are **canonical-global by default**: one row per phrasing variant of a canonical `question_key`/`component_id`, derived from the union of Desk FAQ questions deduped **by key** across the catalog (~40 served keys × a handful of phrasings, plus cost labels and facet asks → low hundreds of rows). They cannot swamp the 13.5k intent rows: the two kinds are queried under separate metadata filters, so they never compete in one topK. A per-`project_id` row is authored only where a project's own phrasing differs materially (a named amenity, a project-specific scheme). Every fact-lane query filters `project_id ∈ {focus_project, 'global'}` — cross-project FAQ bleed is structurally impossible, and an unfocused fact ask can bind only global keys.
+
 ### 3.2 The understanding ladder (per free-text turn)
 
 ```
@@ -66,6 +68,22 @@ One index, metadata-filtered queries. The existing `builder_scope` filter patter
 **Thresholds.** Two, not one: `τ_bind` (accept floor; start at the existing 0.78, tuned on the eval set) and `τ_margin` (top1−top2 gap; guards nearest-neighbor noise — the Century-Breeze lesson from AB-5). Both are constants in `embedder-map.ts`, tuned only via eval evidence.
 
 **What is removed.** The `act && act !== 'unknown'` early-return and the defer-only gating in `classifyTurnRouting`. Speech-act projection and the rule ladder become arbitration inputs, not gatekeepers.
+
+**Arbitration conflict table (review amendment — the AB protections, made explicit).** "Arbitrate, don't gate" must not re-open the focus-death / wrong-search / knowledge-dump classes that AB-4/AB-5/AB-2/AB-7 just closed. The winner per conflict:
+
+| Conflict | Winner | The semantic lane may |
+|---|---|---|
+| Focused facet / media / LI ask (AB-4/AB-5 focus lock) | Focus holds | bind `fact_key`/topic **on the focused project only** — never emit `find_projects`/`recommend`, never move focus |
+| Visit follow-up rule active | Visit machine | nothing — embed visit/search neighbors are discarded on these sub-turns |
+| Visit-intent NN hit on an ordinary turn | speech-act / rule confirmation | a bare NN hit can **never** invent `visit_book`; it needs τ_bind + τ_margin **and** visit context (carries forward the Speech-Act contract — see supersession note) |
+| Strong structural extract (budget / BHK / ordinal / affirm / phone) | Structural slots kept verbatim | add an intent/fact bind on top — additive only |
+| Typed type-knowledge ask (AB-7 sink) | Knowledge sink | no `find_projects` from embed noise |
+| Regex authoritative bind (list below) | Regex | ADD atoms per the §3.6 union — never remove or override one |
+| Regex weak or silent | Embedding ≥ τ_bind | bind intent + fact keys — **the 80% lane** |
+
+**When regex is the authority (defined, not fuzzy):** an exact FAQ-key hit **whose key the focused project actually serves** (verified Desk row), phone numbers, ordinal picks, bare affirm/negative, and budget/BHK slot extraction. Everything else regex produces is advisory input to arbitration, not a verdict.
+
+**Supersession note.** `SPEECH_ACT_CONTRACT_LLD.md` scoped INTENT_VECTORS to "topic gap-fill only under act=`answer`/`search`". This LLD supersedes that **gating** role; that doc's "never invent `visit_book` from embed noise" rule is carried forward in the table above, strengthened with the margin requirement.
 
 ### 3.3 Provenance & telemetry (permanent)
 
@@ -98,6 +116,7 @@ Single-best binding would regress the AB-8/AB-8b multi-atom wins ("price AND sch
 - **Arbitration is a UNION:** embedding atoms are added to regex-bound topics; the semantic lane may **add** atoms but never remove a regex-bound one. The AB-8/AB-8b compose machinery (`goal.topics`, per-atom chunks, FAQ-additive rendering) is the consumer — it already exists and is tested.
 - Answer policy stays S5: answer the top-2 atoms fully, park the rest with an explicit continuation — never silently drop.
 - **Regression guard:** the I-family (multi-intent) rows are a permanent eval subset; a dropped atom counts as a MISS in the 80% metric. The frozen post-AB-8b baseline (`strict_baseline.json`, NayaDesk — strict PASS 162/192) is the floor no phase may dip under.
+- **Division of labor stays sharp (review amendment):** the semantic lane decides *which atoms were asked*; the AB-8/AB-8b compose machinery decides *how they render*. This LLD adds **zero compose changes** — when two fact_keys both clear τ_bind, both bind and flow into the existing multi-atom path.
 
 ## 4. Corpus operations — recover, audit, enhance, rebuild
 
@@ -108,7 +127,7 @@ Dump all 13,555 rows (id, text, metadata) from `naya-intent-phrasings-dev` into 
 ### 4.2 Audit
 
 - Distribution by `intent_kind`; verify against the 15 kinds the code maps; flag unmapped/dead kinds.
-- Stratified hand-check of ~200 rows for label correctness (per the grade-the-answer rule: read, don't trust).
+- Stratified hand-check with a **per-`intent_kind` floor** — min(20, kind size) rows per kind, not a flat global sample (a flat 200 can miss a dead kind entirely). Per-kind precision goes in the audit report; a kind below the precision floor is **killed or relabeled before Phase 2** — no unaudited kind ships into always-on arbitration.
 - Verify `builder_scope` hygiene (no project/place facts smuggled into phrasings — P5).
 
 ### 4.3 Enhance from the last month of real interactions (founder ask)
@@ -134,7 +153,7 @@ Pipeline: LLM proposes labels → human review in the registry PR (labels are bu
 
 | Phase | Work | Gate (go/no-go) |
 |---|---|---|
-| **0 — Revive** (day 1) | Fix `wrangler.toml:79` → `naya-intent-phrasings-dev`; deploy dev; ship `bind_source` telemetry; full 192-Q run, row-diff vs post-AB-8b baseline, **hand-read every changed row** | No regression class introduced; embed fire-rate & catch-rate reported for the first time |
+| **0 — Revive** (day 1) | Fix `wrangler.toml:79` → `naya-intent-phrasings-dev`; deploy dev; ship `bind_source` telemetry; full 192-Q run, row-diff vs post-AB-8b baseline, **hand-read every changed row** | **Expect a real row-diff** — the flip alone activates today's gated call-sites (topic gap-fill on the `act=unknown` lane), so topic/FAQ-path rows CAN move even while fire-rate looks low under the gates. A zero diff is itself a finding to investigate (the gates may be suppressing everything), not a free pass. Gate: every changed row hand-read + classified improved/neutral/regressed; no regression class introduced; fire-rate & catch-rate reported for the first time. Phase 0 revives the layer — it does **not** mean "quality fixed" |
 | **1 — Own** | Registry recovery (§4.1) + audit (§4.2) + rebuild script + CI lints (§4.4); evidence-backed map fixes (§3.4) | registry == index; audit report delivered; map fixes each carry a failing-then-passing test |
 | **2 — Always-on** | Remove the act-gates; arbitration table + τ_margin; `fact_key` lane live | **≥80% embed catch on the regex-miss eval set**; zero POLLUTED regression; "loan on a plot"-class misroutes = 0 |
 | **3 — Enhance** | Mine + label + dedupe last-month phrasings (§4.3); re-tune τ | 80% sustained on the refreshed eval set; corpus growth reviewed in PR |
@@ -143,9 +162,14 @@ Phases land as separate PRs off `main`; each gate's harness run is hand-read (st
 
 ## 6. Eval set & the 80% metric — precise definition
 
-**Eval set:** every 192-Q catalog ask + all mined real-transcript phrasings (§4.3), each labeled with its expected intent/fact-key. Regex-miss lane = the subset where step-1 regex binding fails or key-misses (currently ≥17 faqMiss + the SHALLOW misroutes).
+**Two sets, or the 80% number is theater (review amendment).** Mining the harness's SHALLOW/faqMiss rows into the corpus (§4.3) and then scoring the same rows would be training on the test set. Split:
 
-**Metric:** `embed_catch = correct embedding binds / regex-miss lane size` per run, computed by the harness and stored alongside `strict.json`. Gate: ≥0.80, hand-verified on the changed rows.
+- **Tune set** — mined phrasings (§4.3): used for labeling, corpus growth, and τ tuning. Anything that enters the registry lives here.
+- **Held-out gate set** — the 192-Q harness + fresh ledger turns **never used for mining or labeling**, refreshed monthly by promoting new never-mined traffic (§10). The moment a phrasing (or a near-dup at cosine ≥0.95) is mined into the registry, its matching gate rows are flagged `seen` and scored separately — **the 80% gate is computed on `unseen` rows only** (both numbers are reported).
+
+Each row is labeled with its expected intent/fact-key. Regex-miss lane = the subset where step-1 regex binding fails or key-misses (currently ≥17 faqMiss + the SHALLOW misroutes).
+
+**Metric:** `embed_catch = correct embedding binds / regex-miss lane size` on the **gate set**, per run, computed by the harness and stored alongside `strict.json`. Gate: ≥0.80 on unseen rows, hand-verified on the changed rows.
 
 ## 7. Risks & mitigations
 

@@ -48,7 +48,7 @@ Telemetry smell: ~10k `template_fired` vs ~6k brain; ~350 turns with missed inte
 | Wait for P2 ledger before any facet work | **SA-0…2 can ship without P2** — corpus failures are act collisions, not missing memory |
 | P3 facet extractors (ec/banks/…) next | **After** SA answer-vs-search gate; P3 deepens *copy/evidence*, doesn’t invent acts |
 | P5 wire `lastRouting` as independent authority | **Demote:** routing becomes **projection of speech act** (same closed set) |
-| INTENT_VECTORS as primary “intent” | Keep as **topic gap-fill only** under act=`answer`/`search`; never invent `visit_book` from embed noise |
+| INTENT_VECTORS as primary “intent” | Keep as **topic gap-fill only** under act=`answer`/`search`; never invent `visit_book` from embed noise. **[SUPERSEDED (the gating role) by [`SEMANTIC_INTENT_LAYER_LLD.md`](./SEMANTIC_INTENT_LAYER_LLD.md) §3.2 — the never-invent-visit rule carries forward as an arbitration row]** |
 | Expand AnswerTopic for payment_plan/investment now | Stay **DEFER** — corpus volume exists but tool+honest path first |
 | `recommend_ask` separate act | Stay **FOLD → search** — corpus doesn’t need a second hunt desk |
 
