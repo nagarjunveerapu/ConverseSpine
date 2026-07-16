@@ -1,4 +1,5 @@
 import type { Env } from '../env.js';
+import { canonicalize } from '../nlu/canonicalize.js';
 
 /**
  * SIL data pipeline — the weekly incremental rebuild that keeps the Vectorize
@@ -7,8 +8,11 @@ import type { Env } from '../env.js';
  *
  * Design invariants:
  *  - The registry is the source; the index is a build artifact.
- *  - Only rows that pass the S1b quarantine gate are pushed
- *    (audit_status === 'clean' && !quarantine), unless seeding.
+ *  - Rows are embedded as their CANONICAL (entity-masked) form via the shared
+ *    canonicalize() — the same one the live query uses, so there is no skew.
+ *  - Eligible = audit_status ∈ ELIGIBLE_AUDIT (clean | machine_v2 |
+ *    mined_yantra_v1) && !quarantine, unless seeding. (The old clean-only gate
+ *    silently no-op'd the entire v2 corpus, which is all machine_v2.)
  *  - Incremental: a KV manifest records id→contentHash of what this pipeline
  *    has pushed, so a weekly run embeds only NEW or CHANGED rows and deletes
  *    rows that fell out of the clean set. It manages ONLY its own tracked ids —
@@ -30,13 +34,39 @@ export interface RegistryRow {
   is_negative?: boolean;
   quarantine?: boolean;
   audit_status?: string;
+  /** Pre-computed offline canonical (advisory only — the rebuild recomputes it
+   *  via canonicalize() so there is exactly ONE canonicalization code path). */
+  canonical?: string;
+  source?: string;
+  /** Frozen eval split. 'holdout' rows are NEVER embedded, so generalization
+   *  stays honestly measurable forever; their 'train' siblings still serve. */
+  eval_split?: string;
 }
+
+/**
+ * audit_status values eligible for the index. Registry v2 emits 'machine_v2'
+ * (machine-adjudicated by the boundary rulebook) and mined rows 'mined_yantra_v1';
+ * both are shippable — quarantine still excludes the bad rows. Without this the
+ * clean-only gate makes the whole v2 corpus a no-op (it never reaches the index).
+ */
+const ELIGIBLE_AUDIT = new Set(['clean', 'machine_v2', 'mined_yantra_v1']);
 
 export interface RebuildOptions {
   /** Seed mode — push every well-formed row regardless of audit_status. */
   pushUnaudited?: boolean;
   /** Plan only; embed/upsert/delete nothing. */
   dryRun?: boolean;
+  /**
+   * Master switch for the canonical schema evolution (SIL_CANONICAL_EMBED).
+   *  - false (default): legacy behaviour — clean-only gate (a no-op today,
+   *    since every v2 row is machine_v2) and RAW-phrasing embeds.
+   *  - true: ship the v2 + mined corpus (ELIGIBLE_AUDIT gate) as CANONICAL
+   *    (entity-masked) embeds. The live query flips in lockstep via the same
+   *    env flag, so corpus and query are never in different vector spaces.
+   * Flipping the flag requires a manifest reset + full rebuild (documented in
+   * the PR) so every vector is re-embedded in the new form.
+   */
+  canonicalMode?: boolean;
 }
 
 export interface RebuildReport {
@@ -51,9 +81,13 @@ export interface RebuildReport {
   reason?: string;
 }
 
-/** FNV-1a over the routing-relevant content — cheap, deterministic, no crypto. */
+/**
+ * FNV-1a over the EMBEDDED content — cheap, deterministic, no crypto. Keyed on
+ * the canonical form (what actually gets embedded), so flipping raw→canonical
+ * invalidates every manifest entry and forces a clean re-embed on next rebuild.
+ */
 export function contentHash(r: RegistryRow): string {
-  const s = `${r.phrasing}${r.intent_kind}${r.is_negative ? 1 : 0}`;
+  const s = `${canonicalize(r.phrasing)}${r.intent_kind}${r.is_negative ? 1 : 0}`;
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -88,12 +122,19 @@ export function planRebuild(
   manifest: Record<string, string>,
   opts: RebuildOptions = {},
 ): RebuildPlan {
+  // canonicalMode broadens the gate to the whole v2 + mined corpus; legacy mode
+  // keeps the clean-only floor (a no-op today). Quarantine + holdout always excluded.
+  const auditOk = (r: RegistryRow): boolean =>
+    opts.canonicalMode
+      ? ELIGIBLE_AUDIT.has(r.audit_status ?? '') && !r.quarantine
+      : r.audit_status === 'clean' && !r.quarantine;
   const eligible = rows.filter(
     (r) =>
       r.id &&
       r.phrasing &&
       r.intent_kind &&
-      (opts.pushUnaudited || (r.audit_status === 'clean' && !r.quarantine)),
+      r.eval_split !== 'holdout' &&
+      (opts.pushUnaudited || auditOk(r)),
   );
   const eligibleIds = new Set(eligible.map((r) => r.id));
   const changed = eligible.filter((r) => manifest[r.id] !== contentHash(r));
@@ -103,6 +144,9 @@ export function planRebuild(
 
 export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): Promise<RebuildReport> {
   const model = env.SIL_EMBED_MODEL || DEFAULT_MODEL;
+  // Master switch for the canonical schema evolution. Explicit opts win (tests);
+  // otherwise the SIL_CANONICAL_EMBED env flag decides. Default false = legacy.
+  const canonicalMode = opts.canonicalMode ?? env.SIL_CANONICAL_EMBED === 'true';
   const base: RebuildReport = {
     ok: false,
     model,
@@ -127,7 +171,7 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
   base.source_rows = rows.length;
 
   const manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(MANIFEST_KEY)) || '{}');
-  const { eligible, changed, toRemove } = planRebuild(rows, manifest, opts);
+  const { eligible, changed, toRemove } = planRebuild(rows, manifest, { ...opts, canonicalMode });
   base.eligible = eligible.length;
 
   if (opts.dryRun) {
@@ -144,7 +188,12 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
   for (let i = 0; i < changed.length; i += EMBED_BATCH) {
     const batch = changed.slice(i, i + EMBED_BATCH);
     try {
-      const out = (await env.AI.run(model as never, { text: batch.map((r) => r.phrasing) })) as {
+      // canonicalMode: embed the CANONICAL (entity-masked) form — the schema
+      // evolution that kills train/serve skew, using the same canonicalize() the
+      // live query uses. Legacy mode embeds raw phrasing (matches a raw query).
+      const out = (await env.AI.run(model as never, {
+        text: batch.map((r) => (canonicalMode ? canonicalize(r.phrasing) : r.phrasing)),
+      })) as {
         data?: number[][];
       };
       const vecs = out.data ?? [];

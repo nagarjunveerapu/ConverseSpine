@@ -29,6 +29,46 @@ describe('SIL rebuild planner', () => {
     expect(eligible.map((r) => r.id)).toEqual(['a']);
   });
 
+  it('LEGACY mode (default) keeps the clean-only floor — v2/mined stay dark', () => {
+    const rows = [
+      clean({ id: 'a', audit_status: 'clean' }),
+      clean({ id: 'b', audit_status: 'machine_v2' }), // NOT shipped until the flag flips
+      clean({ id: 'c', audit_status: 'mined_yantra_v1' }),
+    ];
+    const { eligible } = planRebuild(rows, {}); // canonicalMode omitted → legacy
+    expect(eligible.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('canonicalMode gate ships v2 + mined: machine_v2 and mined_yantra_v1 eligible', () => {
+    const rows = [
+      clean({ id: 'a', audit_status: 'machine_v2' }), // registry v2 → eligible
+      clean({ id: 'b', audit_status: 'mined_yantra_v1' }), // mined → eligible
+      clean({ id: 'c', audit_status: 'machine_v2', quarantine: true }), // still gated by quarantine
+      clean({ id: 'd', audit_status: 'unaudited' }), // unknown status → excluded
+    ];
+    const { eligible } = planRebuild(rows, {}, { canonicalMode: true });
+    expect(eligible.map((r) => r.id)).toEqual(['a', 'b']);
+  });
+
+  it('held-out rows are NEVER embedded, even when eligible — eval stays measurable', () => {
+    const rows = [
+      clean({ id: 'a', audit_status: 'machine_v2', eval_split: 'train' }),
+      clean({ id: 'b', audit_status: 'machine_v2', eval_split: 'holdout' }), // frozen eval → excluded
+      clean({ id: 'c', eval_split: 'holdout' }), // clean but holdout → excluded
+    ];
+    const { eligible } = planRebuild(rows, {}, { canonicalMode: true });
+    expect(eligible.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('seed mode still excludes held-out rows (pushUnaudited is not a holdout bypass)', () => {
+    const rows = [
+      clean({ id: 'a', audit_status: 'unaudited', eval_split: 'train' }),
+      clean({ id: 'b', audit_status: 'unaudited', eval_split: 'holdout' }),
+    ];
+    const { eligible } = planRebuild(rows, {}, { pushUnaudited: true });
+    expect(eligible.map((r) => r.id)).toEqual(['a']);
+  });
+
   it('seed mode (pushUnaudited) ignores the gate but still needs well-formed rows', () => {
     const rows = [
       clean({ id: 'a', audit_status: 'unaudited' }),
