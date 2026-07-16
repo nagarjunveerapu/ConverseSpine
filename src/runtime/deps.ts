@@ -25,7 +25,7 @@ export class ConverseRuntime {
       data: nayadeskData(this.crm),
       llm: makeEngineLlm(env),
       semantic: makeSemanticNlu(env),
-      crm: nayadeskCrm(this.crm),
+      crm: nayadeskCrm(this.crm, { understandingCapture: env.UNDERSTANDING_CAPTURE === 'true' }),
       store: kvStore(env.TURN_CACHE),
       clock: {
         nowMs: () => Date.now(),
