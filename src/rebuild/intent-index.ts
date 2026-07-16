@@ -1,6 +1,7 @@
 import type { Env } from '../env.js';
 import { canonicalize, makeCanonicalizer } from '../nlu/canonicalize.js';
 import { getRebuildVocab } from '../nlu/vocab.js';
+import { NayaDeskClient } from '../crm/nayadesk-client.js';
 
 /**
  * SIL data pipeline — the weekly incremental rebuild that keeps the Vectorize
@@ -50,8 +51,10 @@ export interface RegistryRow {
  * (machine-adjudicated by the boundary rulebook) and mined rows 'mined_yantra_v1';
  * both are shippable — quarantine still excludes the bad rows. Without this the
  * clean-only gate makes the whole v2 corpus a no-op (it never reaches the index).
+ * 'desk_promoted' = human-taught rows from the Desk understanding board (Wave B
+ * safe lane) — reviewed by a person, so at least as trustworthy as machine_v2.
  */
-const ELIGIBLE_AUDIT = new Set(['clean', 'machine_v2', 'mined_yantra_v1']);
+const ELIGIBLE_AUDIT = new Set(['clean', 'machine_v2', 'mined_yantra_v1', 'desk_promoted']);
 
 export interface RebuildOptions {
   /** Seed mode — push every well-formed row regardless of audit_status. */
@@ -81,6 +84,10 @@ export interface RebuildReport {
   removed: number;
   errors: string[];
   reason?: string;
+  /** Wave B — Desk-promoted rows merged this run (canonical mode only). */
+  desk_promoted?: number;
+  /** Desk rows dropped because their canonical collided with a frozen holdout row. */
+  holdout_collisions?: number;
 }
 
 /**
@@ -116,6 +123,40 @@ export interface RebuildPlan {
   eligible: RegistryRow[];
   changed: RegistryRow[];
   toRemove: string[];
+}
+
+/**
+ * Wave B safe promotion lane — merge Desk-promoted rows into the registry set.
+ * Pure so the two invariants stay unit-testable:
+ *  - registry wins on id collisions (Desk can never shadow a registry row);
+ *  - a Desk phrasing whose CANONICAL form matches a frozen holdout row is
+ *    dropped — training on it would silently inflate every future eval.
+ */
+export function mergeDeskPromoted(
+  registryRows: RegistryRow[],
+  deskRows: Array<{ id: string; phrasing: string; intent_kind: string; language?: string; source?: string }>,
+  canon: (text: string) => string,
+): { rows: RegistryRow[]; added: number; holdout_collisions: number } {
+  const holdoutCanon = new Set(
+    registryRows.filter((r) => r.eval_split === 'holdout').map((r) => canon(r.phrasing)),
+  );
+  const registryIds = new Set(registryRows.map((r) => r.id));
+  const accepted: RegistryRow[] = [];
+  let holdout_collisions = 0;
+  for (const d of deskRows) {
+    if (!d.id || !d.phrasing || !d.intent_kind || registryIds.has(d.id)) continue;
+    if (holdoutCanon.has(canon(d.phrasing))) { holdout_collisions++; continue; }
+    accepted.push({
+      id: d.id,
+      phrasing: d.phrasing,
+      intent_kind: d.intent_kind,
+      language: d.language,
+      source: d.source,
+      audit_status: 'desk_promoted',
+      eval_split: 'train',
+    });
+  }
+  return { rows: registryRows.concat(accepted), added: accepted.length, holdout_collisions };
 }
 
 /** Pure planner — no IO, so the diff logic is unit-testable. */
@@ -182,6 +223,23 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
     const snap = await getRebuildVocab(env);
     canon = makeCanonicalizer(snap.vocab);
     vocabVersion = snap.version;
+  }
+
+  // Wave B safe promotion lane — merge the human-taught rows from Desk's
+  // understanding board. They ride the SAME pipeline as registry rows:
+  // canonical embed, manifest diffing (a later dismiss drops the row from the
+  // feed → toRemove deletes its vector). Fetch failure is non-fatal: the
+  // registry corpus still rebuilds, Desk rows catch up next run.
+  if (canonicalMode) {
+    try {
+      const desk = await new NayaDeskClient(env).getPromotedPhrasings();
+      const merged = mergeDeskPromoted(rows, desk.rows, canon);
+      rows = merged.rows;
+      base.desk_promoted = merged.added;
+      if (merged.holdout_collisions > 0) base.holdout_collisions = merged.holdout_collisions;
+    } catch (e) {
+      base.errors.push(`desk_promoted_fetch:${(e as Error).message}`);
+    }
   }
   let manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(MANIFEST_KEY)) || '{}');
   if (canonicalMode) {
