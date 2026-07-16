@@ -21,6 +21,14 @@ export interface Env {
    *  live query in lockstep. Default/unset = legacy raw behaviour (rebuild no-op). */
   SIL_CANONICAL_EMBED?: string;
 
+  /**
+   * Understanding Flywheel Wave A — "true" wires every turn into Desk's
+   * intent review queue (POST /api/intent-review-queue/internal/enqueue,
+   * fire-and-forget) so the /operations/understanding board sees real
+   * traffic. Off/absent = zero behaviour change.
+   */
+  UNDERSTANDING_CAPTURE?: string;
+
   /** Turn bundle cache (conversation-context), 60s TTL. */
   TURN_CACHE?: KVNamespace;
 
