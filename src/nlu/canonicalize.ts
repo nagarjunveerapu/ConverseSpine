@@ -25,6 +25,12 @@ import vocab from './mask-vocab.json';
 
 const WS = /\s+/g;
 
+export interface MaskVocab {
+  places: string[];
+  builders: string[];
+  projects: string[];
+}
+
 /** Build one longest-first, case-insensitive, word-boundary alternation. */
 function compile(terms: string[]): RegExp | null {
   const parts = terms
@@ -35,25 +41,50 @@ function compile(terms: string[]): RegExp | null {
   return new RegExp('\\b(' + parts.join('|') + ')\\b', 'gi');
 }
 
-const RX_PROJECT = compile(vocab.projects as string[]);
-const RX_BUILDER = compile(vocab.builders as string[]);
-const RX_PLACE = compile(vocab.places as string[]);
+/** The static bundled vocab — Desk-sourced snapshot + gazetteer. Used as the
+ *  default and as the FALLBACK when the live Desk/KV vocab is unavailable. */
+export const BUNDLED_VOCAB: MaskVocab = {
+  places: vocab.places as string[],
+  builders: vocab.builders as string[],
+  projects: vocab.projects as string[],
+};
 
 /**
- * Canonicalize buyer/corpus text to its masked intent shape. Deterministic and
- * side-effect free — safe to call on the hot path (a few regex passes).
+ * Compile a canonicalizer bound to a specific vocab (Understanding Flywheel
+ * §7.4). The rebuild and the live query each construct one from the vocab
+ * snapshot they load, so corpus and query always mask with the identical vocab
+ * — the same code path, no train/serve drift. Regexes compile once per vocab.
  */
-export function canonicalize(text: string): string {
-  let t = text ?? '';
-  if (RX_PROJECT) t = t.replace(RX_PROJECT, '<project>');
-  if (RX_BUILDER) t = t.replace(RX_BUILDER, '<builder>');
-  if (RX_PLACE) t = t.replace(RX_PLACE, '<place>');
-  return t.replace(WS, ' ').trim().toLowerCase();
+export function makeCanonicalizer(v: MaskVocab): (text: string) => string {
+  const rxProject = compile(v.projects);
+  const rxBuilder = compile(v.builders);
+  const rxPlace = compile(v.places);
+  return (text: string): string => {
+    let t = text ?? '';
+    if (rxProject) t = t.replace(rxProject, '<project>');
+    if (rxBuilder) t = t.replace(rxBuilder, '<builder>');
+    if (rxPlace) t = t.replace(rxPlace, '<place>');
+    return t.replace(WS, ' ').trim().toLowerCase();
+  };
 }
+
+/** Union two vocabs (live Desk catalog ∪ static gazetteer seed), deduped. */
+export function mergeVocab(a: MaskVocab, b: MaskVocab): MaskVocab {
+  const u = (x: string[], y: string[]) => [...new Set([...x, ...y].filter(Boolean))];
+  return {
+    places: u(a.places, b.places),
+    builders: u(a.builders, b.builders),
+    projects: u(a.projects, b.projects),
+  };
+}
+
+/** Default canonicalizer over the bundled vocab. Backward-compatible with all
+ *  existing call sites; live-vocab call sites use makeCanonicalizer instead. */
+export const canonicalize = makeCanonicalizer(BUNDLED_VOCAB);
 
 /** Vocab sizes — for the rebuild report / command-center diagnostics. */
 export const vocabSizes = {
-  projects: (vocab.projects as string[]).length,
-  builders: (vocab.builders as string[]).length,
-  places: (vocab.places as string[]).length,
+  projects: BUNDLED_VOCAB.projects.length,
+  builders: BUNDLED_VOCAB.builders.length,
+  places: BUNDLED_VOCAB.places.length,
 };

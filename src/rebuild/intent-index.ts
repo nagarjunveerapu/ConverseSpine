@@ -1,5 +1,6 @@
 import type { Env } from '../env.js';
-import { canonicalize } from '../nlu/canonicalize.js';
+import { canonicalize, makeCanonicalizer } from '../nlu/canonicalize.js';
+import { getRebuildVocab } from '../nlu/vocab.js';
 
 /**
  * SIL data pipeline — the weekly incremental rebuild that keeps the Vectorize
@@ -23,6 +24,7 @@ import { canonicalize } from '../nlu/canonicalize.js';
 
 const DEFAULT_MODEL = '@cf/baai/bge-base-en-v1.5';
 const MANIFEST_KEY = 'sil:intent-manifest:v1';
+const VOCAB_VERSION_KEY = 'sil:intent-manifest:vocab-version';
 const EMBED_BATCH = 96; // Workers AI text-array headroom
 const UPSERT_BATCH = 500;
 
@@ -170,7 +172,22 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
   }
   base.source_rows = rows.length;
 
-  const manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(MANIFEST_KEY)) || '{}');
+  // §7.4 live vocab: in canonical mode, fetch the catalog-sourced vocab and pin
+  // it to KV so the live query masks with the IDENTICAL vocab. Compile the
+  // rebuild's canonicalizer from it. A vocab-version change means every canonical
+  // may differ → reset the manifest so every row re-embeds under the new vocab.
+  let canon = canonicalize;
+  let vocabVersion = 'bundled';
+  if (canonicalMode) {
+    const snap = await getRebuildVocab(env);
+    canon = makeCanonicalizer(snap.vocab);
+    vocabVersion = snap.version;
+  }
+  let manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(MANIFEST_KEY)) || '{}');
+  if (canonicalMode) {
+    const prevVocab = await env.TURN_CACHE.get(VOCAB_VERSION_KEY);
+    if (prevVocab !== vocabVersion) manifest = {};
+  }
   const { eligible, changed, toRemove } = planRebuild(rows, manifest, { ...opts, canonicalMode });
   base.eligible = eligible.length;
 
@@ -192,7 +209,7 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
       // evolution that kills train/serve skew, using the same canonicalize() the
       // live query uses. Legacy mode embeds raw phrasing (matches a raw query).
       const out = (await env.AI.run(model as never, {
-        text: batch.map((r) => (canonicalMode ? canonicalize(r.phrasing) : r.phrasing)),
+        text: batch.map((r) => (canonicalMode ? canon(r.phrasing) : r.phrasing)),
       })) as {
         data?: number[][];
       };
@@ -232,6 +249,9 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
   }
 
   await env.TURN_CACHE.put(MANIFEST_KEY, JSON.stringify(manifest));
+  // Record the vocab version this index was built with, so the next rebuild
+  // knows whether the catalog vocab changed (→ full re-embed).
+  if (canonicalMode) await env.TURN_CACHE.put(VOCAB_VERSION_KEY, vocabVersion);
   base.unchanged = eligible.length - changed.length;
   base.ok = base.errors.length === 0;
   return base;
