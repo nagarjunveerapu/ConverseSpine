@@ -239,6 +239,19 @@ export class NayaDeskClient {
     return this.call('GET', '/api/engine/mask-vocab');
   }
 
+  /** Wave B safe promotion lane — human-taught phrasings from the understanding
+   *  board, in registry-row shape, so the weekly rebuild ingests them exactly
+   *  like git-registry rows (canonical embed, manifest-tracked). */
+  getPromotedPhrasings(): Promise<{
+    rows: Array<{
+      id: string; phrasing: string; intent_kind: string; language: string;
+      source: string; audit_status: string; eval_split: string; promoted_at: number;
+    }>;
+    count: number;
+  }> {
+    return this.call('GET', '/api/engine/promoted-phrasings');
+  }
+
   upsertLead(req: {
     builder_id: string;
     buyer_phone: string;
