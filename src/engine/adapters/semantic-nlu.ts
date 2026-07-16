@@ -1,6 +1,7 @@
 import type { Env } from '../../env.js';
 import type { AnswerTopic, ConversationState, Extracted, OfferedProject } from '../types.js';
 import { detectTopics, isDetailAskTurn, isLocationCorrectionTurn, looksLikeConfigAsk } from '../facts.js';
+import { getQueryCanonicalizer } from '../../nlu/vocab.js';
 import { buyerCuedOtherProject, facetNameResidue } from '../project_switch.js';
 
 const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
@@ -294,7 +295,15 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
       // Topic gap-fill when chip-resolve left act unknown (or regex topics empty).
       // INTENT_VECTORS never invents a chip — only fills AnswerTopic under answer/search.
       if (topics.length === 0 && env.INTENT_VECTORS) {
-        const vectors = await embedTexts(env.AI, [text]);
+        // SIL_CANONICAL_EMBED: canonicalize (entity-mask) the query so it lands in
+        // the same vector space as the canonical corpus (intent-index.ts). Uses the
+        // LIVE vocab the current index was built with (pinned in KV, §7.4), so the
+        // dictionary auto-refreshes with the catalog and never drifts from the
+        // corpus. ONLY the intent path — location/project paths match on names, raw.
+        const queryText = env.SIL_CANONICAL_EMBED === 'true'
+          ? (await getQueryCanonicalizer(env))(text)
+          : text;
+        const vectors = await embedTexts(env.AI, [queryText]);
         const query = vectors[0];
         if (query) {
           const results = await env.INTENT_VECTORS.query(query, {

@@ -16,6 +16,10 @@ export interface Env {
   /** SIL data pipeline (weekly rebuild): embedding model + registry JSONL source URL. */
   SIL_EMBED_MODEL?: string;
   SIL_REGISTRY_URL?: string;
+  /** Master switch for the canonical intent-embed schema: 'true' ships the v2 +
+   *  mined corpus as entity-masked (canonical) vectors and canonicalizes the
+   *  live query in lockstep. Default/unset = legacy raw behaviour (rebuild no-op). */
+  SIL_CANONICAL_EMBED?: string;
 
   /** Turn bundle cache (conversation-context), 60s TTL. */
   TURN_CACHE?: KVNamespace;

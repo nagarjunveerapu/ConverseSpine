@@ -232,6 +232,13 @@ export class NayaDeskClient {
     return this.call('GET', '/api/health');
   }
 
+  /** SIL mask vocab, sourced live from the catalog (Understanding Flywheel §7.4). */
+  getMaskVocab(): Promise<{
+    places: string[]; builders: string[]; projects: string[]; version: string;
+  }> {
+    return this.call('GET', '/api/engine/mask-vocab');
+  }
+
   upsertLead(req: {
     builder_id: string;
     buyer_phone: string;

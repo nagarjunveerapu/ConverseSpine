@@ -73,6 +73,10 @@ LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 # until a model is chosen. Registry URL is the raw JSONL (raster to R2 later).
 SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
 SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
+# Master switch for the canonical intent-embed schema (entity-masked corpus +
+# query in lockstep, ships the v2 + mined corpus). "false" = legacy raw (rebuild
+# stays a no-op today). Flip to "true" only WITH a manifest-reset full rebuild.
+SIL_CANONICAL_EMBED = "false"
 
 # Weekly rebuild — Mondays 03:30 UTC. Dev-only until S1b marks rows clean.
 [env.dev.triggers]
