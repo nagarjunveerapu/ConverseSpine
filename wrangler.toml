@@ -77,10 +77,15 @@ SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSp
 # query in lockstep, ships the v2 + mined corpus). "false" = legacy raw (rebuild
 # stays a no-op today). Flip to "true" only WITH a manifest-reset full rebuild.
 SIL_CANONICAL_EMBED = "false"
+# Wave C overnight auto-teach — gate-checked self-promotion. Requires canonical
+# mode; flip to "true" AFTER the SIL_CANONICAL_EMBED cutover has soaked.
+UNDERSTANDING_AUTO_TEACH = "false"
 
-# Weekly rebuild — Mondays 03:30 UTC. Dev-only until S1b marks rows clean.
+# Weekly rebuild — Mondays 03:30 UTC. Nightly 22:30 UTC (04:00 IST) = Wave C
+# auto-teach (runs after Desk's 18:00 UTC sweep+teacher; no-op unless
+# UNDERSTANDING_AUTO_TEACH=true).
 [env.dev.triggers]
-crons = ["30 3 * * 1"]
+crons = ["30 3 * * 1", "30 22 * * *"]
 BAML_EXTRACT_MODE = "promote"
 
 [[env.dev.durable_objects.bindings]]

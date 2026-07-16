@@ -8,6 +8,7 @@ import { overRateLimit } from './channel/ingress-guard.js';
 import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 import { rebuildIntentIndex } from './rebuild/intent-index.js';
+import { runAutoTeach } from './understanding/auto-teach.js';
 
 export { TurnDebouncer } from './agent/turn_debouncer.js';
 
@@ -144,12 +145,25 @@ export default {
   },
 
   /**
-   * SIL data pipeline — weekly Cron Trigger keeps the intent index in sync with
-   * the git registry (SEMANTIC_INTENT_LAYER_LLD §4.4/§10). Incremental: embeds
-   * only new/changed clean rows, deletes de-listed ones. No-op until rows pass
-   * the S1b quarantine gate, so it is safe to ship dark.
+   * Cron Triggers.
+   *  - Weekly (Mon 03:30 UTC): SIL rebuild — keeps the intent index in sync with
+   *    the git registry (+ Desk-promoted rows in canonical mode). Incremental.
+   *  - Nightly (22:30 UTC = 04:00 IST): Wave C auto-teach — teacher-confident
+   *    clusters pass the exact holdout no-regression gate, safe ones promote as
+   *    'flywheel_auto' and ship via an incremental rebuild. Runs AFTER Desk's
+   *    18:00 UTC sweep+teacher so tonight's verdicts are in. No-op unless
+   *    UNDERSTANDING_AUTO_TEACH=true.
    */
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (event.cron === '30 22 * * *') {
+      ctx.waitUntil(
+        (async () => {
+          const report = await runAutoTeach(env);
+          console.log('[understanding-auto-teach]', JSON.stringify(report));
+        })(),
+      );
+      return;
+    }
     ctx.waitUntil(
       (async () => {
         const report = await rebuildIntentIndex(env);
