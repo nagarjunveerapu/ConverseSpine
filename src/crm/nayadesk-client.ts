@@ -252,6 +252,28 @@ export class NayaDeskClient {
     return this.call('GET', '/api/engine/promoted-phrasings');
   }
 
+  /** Wave C auto-teach step 1 — teacher-confident pending clusters. */
+  getAutoCandidates(opts: { minConf: number; maxClusters: number }): Promise<{
+    clusters: Array<{
+      cluster_key: string; teacher_intent: string; teacher_confidence: number;
+      members: Array<{ queue_id: string; buyer_text: string }>;
+    }>;
+    count: number;
+  }> {
+    return this.call(
+      'GET',
+      `/api/engine/auto-candidates?min_conf=${opts.minConf}&max_clusters=${opts.maxClusters}`,
+    );
+  }
+
+  /** Wave C auto-teach step 3 — the gate's promote/flag decision per cluster. */
+  postAutoTeachDecisions(body: {
+    promote: Array<{ cluster_key: string; reviewed_intent: string; note: string }>;
+    flag: Array<{ cluster_key: string; note: string }>;
+  }): Promise<{ ok: boolean; promoted: number; failed: number; flagged: number }> {
+    return this.call('POST', '/api/intent-review-queue/internal/auto-promote', body);
+  }
+
   upsertLead(req: {
     builder_id: string;
     buyer_phone: string;
