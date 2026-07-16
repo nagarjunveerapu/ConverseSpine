@@ -78,7 +78,7 @@ import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
 import { silDecision } from '../understanding/capture.js';
-import { buildTurnRoutingInput } from './turn-routing/types.js';
+import { buildTurnRoutingInput, type TurnRoutingResult } from './turn-routing/types.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
 import { constraintsSnapshot } from './recovery-planner.js';
 import type {
@@ -1161,6 +1161,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     extractProvenance,
     inputSource,
     grounding,
+    routing,
   }).catch(() => {});
 
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
@@ -2216,6 +2217,7 @@ async function syncTelemetry(
     extractProvenance?: ExtractProvenance;
     inputSource?: TurnInputSource;
     grounding?: string;
+    routing?: TurnRoutingResult;
   },
 ): Promise<void> {
   if (!nd) return;
@@ -2272,7 +2274,9 @@ async function syncTelemetry(
   // Wired only when UNDERSTANDING_CAPTURE is on; isolated like every other
   // Desk write so a capture failure never touches the buyer's turn.
   if (deps.crm.enqueueIntentReview) {
-    const sil = silDecision(state.rti?.lastRouting);
+    // The routing verdict is threaded explicitly: buildRtiStateUpdate rebuilds
+    // state.rti before this runs, so state.rti.lastRouting is already gone here.
+    const sil = silDecision(opts?.routing ?? state.rti?.lastRouting);
     await deps.crm
       .enqueueIntentReview({
         builderId: state.builderId,
