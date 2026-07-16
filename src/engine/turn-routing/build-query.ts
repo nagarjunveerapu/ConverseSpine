@@ -1,15 +1,20 @@
 import type { TurnRoutingInput } from './types.js';
 
-/** Context bundle for embed query — same features as SCRUM-9 Path A. */
+/**
+ * Query text for the intent-embedding lookup.
+ *
+ * INVARIANT (nlu/vocab.ts): the query must live in the SAME embedding space
+ * as the corpus. The live index stores RAW phrasings (the mined corpus and
+ * every Desk-promoted taught row), so the query is the buyer's raw words.
+ * The canonical cutover (SIL_CANONICAL_EMBED) flips corpus and query together.
+ *
+ * This used to prepend a feature bundle (`phase=… | focus=… | buyer: …`,
+ * the SCRUM-9 Path A classifier recipe). Against a raw-phrase corpus the
+ * prefix is pure noise: on short asks it dominates the cosine — "ameneties?"
+ * scored 0.65 (below τ) against its own exact taught vector — and the focus
+ * project name drags matches toward get_project_info. Phase/visit context
+ * belongs in mapIntentToRouting, which already receives the full input.
+ */
 export function buildRoutingQuery(input: TurnRoutingInput): string {
-  const parts = [
-    `phase=${input.phase}`,
-    input.focus ? `focus=${input.focus.project_name}` : '',
-    input.visit?.awaiting_confirm ? 'awaiting_visit_confirm=true' : '',
-    (input.visit?.booked_count ?? 0) > 0 ? `booked_stops=${input.visit!.booked_count}` : '',
-    (input.visit?.queued_count ?? 0) > 0 ? `queued_stops=${input.visit!.queued_count}` : '',
-    input.transition && input.transition !== 'none' ? `transition=${input.transition}` : '',
-    `buyer: ${input.text.trim()}`,
-  ];
-  return parts.filter(Boolean).join(' | ');
+  return input.text.trim();
 }
