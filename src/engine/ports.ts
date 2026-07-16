@@ -255,6 +255,27 @@ export interface EngineCrm {
   postChoiceResponse(conversationId: string, responseText: string, responseIntent?: string): Promise<void>;
   deleteBuyerMemory(conversationId: string): Promise<void>;
   mirrorMemory(conversationId: string): Promise<void>;
+  /**
+   * Understanding Flywheel Wave A — capture this turn into Desk's intent
+   * review queue (feeds the /operations/understanding board + T1 grading).
+   * Optional: wired only when UNDERSTANDING_CAPTURE is on. Deliberately does
+   * NOT set the legacy embedder/llm voter fields, so the old retroactive
+   * miner can never auto-promote from the bot's own confidence.
+   */
+  enqueueIntentReview?(payload: {
+    builderId: string;
+    conversationId: string;
+    buyerPhone: string;
+    turnIndex: number;
+    buyerText: string;
+    botReply: string;
+    recentMessages: Array<{ role: 'user' | 'bot'; text: string }>;
+    silIntent: string;
+    silScore: number;
+    silBindSource: string;
+    speechAct: string;
+    language: string;
+  }): Promise<void>;
 }
 
 export interface EngineStore {

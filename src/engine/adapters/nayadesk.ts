@@ -617,7 +617,14 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
   };
 }
 
-export function nayadeskCrm(crm: NayaDeskClient): EngineCrm {
+export function nayadeskCrm(
+  crm: NayaDeskClient,
+  opts?: {
+    /** Understanding Flywheel Wave A — when true, wires enqueueIntentReview so
+     *  every turn feeds Desk's understanding board (UNDERSTANDING_CAPTURE). */
+    understandingCapture?: boolean;
+  },
+): EngineCrm {
   return {
     async ensureLead(builderId, buyerPhone, channel) {
       const resp = await crm.upsertLead({
@@ -746,5 +753,42 @@ export function nayadeskCrm(crm: NayaDeskClient): EngineCrm {
     async mirrorMemory(conversationId) {
       await crm.mirrorMemory(conversationId);
     },
+    ...(opts?.understandingCapture
+      ? {
+          async enqueueIntentReview(p: {
+            builderId: string;
+            conversationId: string;
+            buyerPhone: string;
+            turnIndex: number;
+            buyerText: string;
+            botReply: string;
+            recentMessages: Array<{ role: 'user' | 'bot'; text: string }>;
+            silIntent: string;
+            silScore: number;
+            silBindSource: string;
+            speechAct: string;
+            language: string;
+          }) {
+            // Desk canonicalizes + clusters server-side (it owns the vocab).
+            // The legacy embedder_*/llm_* voter fields stay at their schema
+            // defaults (abstained) ON PURPOSE — see the port doc.
+            await crm.enqueueIntentReview({
+              builder_id: p.builderId,
+              conversation_id: p.conversationId,
+              buyer_phone: p.buyerPhone,
+              turn_index: p.turnIndex,
+              buyer_text: p.buyerText,
+              bot_reply: p.botReply,
+              recent_messages: p.recentMessages,
+              sil_intent: p.silIntent,
+              sil_score: p.silScore,
+              sil_bind_source: p.silBindSource,
+              speech_act: p.speechAct,
+              language: p.language,
+              source: 'auto_turn',
+            });
+          },
+        }
+      : {}),
   };
 }

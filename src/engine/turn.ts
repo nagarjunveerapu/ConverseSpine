@@ -77,6 +77,7 @@ import {
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
+import { silDecision } from '../understanding/capture.js';
 import { buildTurnRoutingInput } from './turn-routing/types.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
 import { constraintsSnapshot } from './recovery-planner.js';
@@ -2266,6 +2267,34 @@ async function syncTelemetry(
     .catch((err) => {
       console.error('[syncTelemetry] postJourneyTurnSnapshot', nd, err);
     });
+
+  // Understanding Flywheel Wave A — feed the /operations/understanding board.
+  // Wired only when UNDERSTANDING_CAPTURE is on; isolated like every other
+  // Desk write so a capture failure never touches the buyer's turn.
+  if (deps.crm.enqueueIntentReview) {
+    const sil = silDecision(state.rti?.lastRouting);
+    await deps.crm
+      .enqueueIntentReview({
+        builderId: state.builderId,
+        conversationId: nd,
+        buyerPhone: buyerPhone || 'unknown',
+        turnIndex: state.turnCount,
+        buyerText: input.text.slice(0, 2000),
+        botReply: reply.slice(0, 4000),
+        recentMessages: (state.discover.recentMessages ?? []).slice(-6).map((m) => ({
+          role: m.role === 'buyer' ? ('user' as const) : ('bot' as const),
+          text: m.text.slice(0, 500),
+        })),
+        silIntent: sil.intent,
+        silScore: sil.score,
+        silBindSource: sil.bindSource,
+        speechAct: opts?.ex?.speechAct ?? '',
+        language: '',
+      })
+      .catch((err) => {
+        console.error('[syncTelemetry] enqueueIntentReview', nd, err);
+      });
+  }
 
   const observations: Array<{ fact_key: string; value: unknown; provenance: string }> = [];
   const prov = deskFactProvenance('regex');

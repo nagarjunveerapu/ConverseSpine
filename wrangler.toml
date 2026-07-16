@@ -77,6 +77,10 @@ SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSp
 # query in lockstep, ships the v2 + mined corpus). "false" = legacy raw (rebuild
 # stays a no-op today). Flip to "true" only WITH a manifest-reset full rebuild.
 SIL_CANONICAL_EMBED = "false"
+# Understanding Flywheel Wave A — every turn feeds Desk's review queue so the
+# /operations/understanding board sees real traffic. Dev-only until the board
+# has soaked; prod omits the var (= off, zero behaviour change).
+UNDERSTANDING_CAPTURE = "true"
 # Wave C overnight auto-teach — gate-checked self-promotion. Requires canonical
 # mode; flip to "true" AFTER the SIL_CANONICAL_EMBED cutover has soaked.
 UNDERSTANDING_AUTO_TEACH = "false"
