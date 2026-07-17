@@ -50,6 +50,15 @@ describe('focused taught-lane fill', () => {
     expect(goal).toMatchObject({ kind: 'answer', topic: 'overview' });
   });
 
+  it('a text-bound FAQ key keeps precedence — "when is possession?" stays on the overview path that serves its FAQ', () => {
+    // Gate row B5.1: the fill flipping this to the availability template
+    // dumped a configuration list instead of the possession answer.
+    const s = withRouting(focusedState(), 'availability', 'embed_intent');
+    const ex = extractFactsSync('when is possession?', s);
+    const goal = focused.decide(s, ex, 'when is possession?');
+    expect((goal as { topic?: string }).topic).not.toBe('availability');
+  });
+
   it('a taught bind upgrades a generic want-details turn — overview is a default, not evidence', () => {
     // An embed bind only exists because a human taught this phrasing; the
     // overview fallback carries no signal, so the taught topic wins.
