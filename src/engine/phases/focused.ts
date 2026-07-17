@@ -1,4 +1,5 @@
 import type { AnswerTopic, ConversationState, Extracted, TurnGoal } from '../types.js';
+import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { holdUnitType } from '../hold-intent.js';
 
 /** Facet topics — P3-B: never collapse these to overview when already extracted. */
@@ -136,6 +137,27 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
       (ex.askTopic && FACET_TOPICS.has(ex.askTopic) ? ex.askTopic : undefined) ??
       topics.find((t) => FACET_TOPICS.has(t));
     if (facet) primary = facet;
+  }
+  // Taught-lane fill: the keyword lanes are typo-blind ("ameneties?" extracts
+  // nothing) but the intent embedder bound a taught answer kind ≥ τ this turn
+  // (lastRouting is stamped before goal selection). primary === 'overview'
+  // already means extract surfaced NO facet topic (P3-B promoted any facet
+  // above) — overview here is a default, not evidence, so a human-taught
+  // facet bind outranks it. Every deterministic signal keeps precedence:
+  // extracted facet topics above, AND a text-bound FAQ key here — "when is
+  // possession?" reaches its possession FAQ through the overview path, and
+  // the fill flipping it to the availability template dumped configs at the
+  // buyer instead (192-Q gate row B5.1).
+  const taught = s.rti?.lastRouting;
+  if (
+    primary === 'overview' &&
+    taught?.routing === 'answer_on_project' &&
+    taught.bind?.bind_source === 'embed_intent' &&
+    taught.answer_topic &&
+    FACET_TOPICS.has(taught.answer_topic) &&
+    resolveFaqQuestionKeys(text).length === 0
+  ) {
+    primary = taught.answer_topic;
   }
   return {
     kind: 'answer',

@@ -34,17 +34,17 @@ describe('RTI-3B routing golden', () => {
     });
   }
 
-  it('buildRoutingQuery includes visit context', () => {
+  it('buildRoutingQuery is the raw buyer text — same embedding space as the corpus', () => {
+    // The corpus (mined + Desk-promoted rows) embeds raw phrasings; a feature
+    // prefix here diluted short asks below τ against their own taught vectors.
     const q = buildRoutingQuery({
-      text: 'what about Eldorado?',
+      text: '  what about Eldorado?  ',
       builder_id: 'brigade-group',
       phase: 'visit',
       visit: { booked_count: 1, queued_count: 1, awaiting_confirm: false },
       named_project_ids: ['eldorado'],
     });
-    expect(q).toContain('phase=visit');
-    expect(q).toContain('booked_stops=1');
-    expect(q).toContain('queued_stops=1');
+    expect(q).toBe('what about Eldorado?');
   });
 });
 
