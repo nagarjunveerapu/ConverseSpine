@@ -67,6 +67,7 @@ interface EmbedderOutcome {
   top_score?: number;
   margin?: number;
   miss_reason?: EmbedMissReason;
+  facet?: string;
 }
 
 async function embedderRouting(
@@ -84,7 +85,7 @@ async function embedderRouting(
   // SIL Phase 0 — keep every match (deduped by id: the global query re-returns
   // scoped rows) so the top-1/top-2 margin is measurable, not just the winner.
   const seen = new Set<string>();
-  const matches: { kind: string; score: number }[] = [];
+  const matches: { kind: string; score: number; facet: string }[] = [];
   let queryOk = false;
 
   for (const scope of scopes) {
@@ -104,6 +105,10 @@ async function embedderRouting(
             ? (m.metadata.intent_kind as string)
             : '',
         score: m.score ?? 0,
+        facet:
+          m.metadata && typeof m.metadata.facet === 'string'
+            ? (m.metadata.facet as string)
+            : '',
       });
     }
   }
@@ -114,6 +119,7 @@ async function embedderRouting(
   const telemetry = {
     fired: true,
     ...(top ? { top_kind: top.kind, top_score: top.score } : {}),
+    ...(top?.facet ? { facet: top.facet } : {}),
     ...(top && second ? { margin: top.score - second.score } : {}),
   };
 
@@ -130,7 +136,12 @@ async function embedderRouting(
   if (!result) {
     return { result: null, ...telemetry, miss_reason: 'unmapped_kind' };
   }
-  return { result, ...telemetry };
+  // Taught sub-intent rides the winning vector's metadata (Desk mirrors the
+  // facet the human picked on the board) — carry it for the compose consumer.
+  return {
+    result: top.facet ? { ...result, embedder_facet: top.facet } : result,
+    ...telemetry,
+  };
 }
 
 /**
@@ -185,6 +196,7 @@ export async function classifyTurnRouting(
     ...(embedded.top_score !== undefined ? { top_score: embedded.top_score } : {}),
     ...(embedded.margin !== undefined ? { margin: embedded.margin } : {}),
     ...(embedded.miss_reason !== undefined ? { miss_reason: embedded.miss_reason } : {}),
+    ...(embedded.facet !== undefined ? { facet: embedded.facet } : {}),
   };
   if (embedded.result) {
     return { ...embedded.result, bind: { bind_source: 'embed_intent', embed_fired: true, ...scores } };

@@ -348,7 +348,10 @@ export function fallbackReply(req: ComposeRequest): string {
       // Over-answer fix — a primary "tell me about X" gets the compact card,
       // never the chunk assembly (and never FAQ text): sizes, one price band,
       // location, possession, one probing question. Facet asks fall through.
-      if (topics[0] === 'overview' && ev.detail && !ev.detail.faqs?.length) {
+      // A TAUGHT facet miss also falls through (to the honest-miss line): the
+      // bind read the ask's meaning, so the card would answer a question the
+      // buyer didn't ask. Text-bound misses keep today's card behaviour.
+      if (topics[0] === 'overview' && ev.detail && !ev.detail.faqs?.length && !ev.faqMiss?.taught) {
         return overviewCard(ev.detail);
       }
 
