@@ -275,6 +275,9 @@ export interface EngineCrm {
     silBindSource: string;
     speechAct: string;
     language: string;
+    /** Desk project_id the buyer was focused on at ask time ('' = none) —
+     *  lets Desk probe taught lessons where the demand actually is. */
+    projectFocus: string;
   }): Promise<void>;
 }
 
