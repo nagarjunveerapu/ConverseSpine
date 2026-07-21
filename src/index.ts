@@ -24,6 +24,9 @@ export default {
       }
 
       // Human takeover from NayaDesk lead dossier (Graph send + TURN_CACHE invalidate).
+      // Hard first-human-touch for Desk SLA is stamped on Desk BEFORE this call:
+      // messages.policy_action='agent_manual' + activity_log action='agent_manual_send'.
+      // Spine delivers WA + invalidates cache; it does not own the CRM hard-event clock.
       if (path === '/internal/agent-send' && method === 'POST') {
         const secret = request.headers.get('x-bot-secret');
         if (env.BOT_SHARED_SECRET && secret !== env.BOT_SHARED_SECRET) {
