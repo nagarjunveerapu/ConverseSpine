@@ -113,7 +113,10 @@ async function embedderRouting(
     }
   }
 
-  matches.sort((a, b) => b.score - a.score);
+  // Tie-break: identical phrasings taught under several doors score equal;
+  // the copy carrying a taught facet is strictly more information (facets are
+  // only taught when one FAQ key owns the meaning catalog-wide), so it wins.
+  matches.sort((a, b) => b.score - a.score || (b.facet ? 1 : 0) - (a.facet ? 1 : 0));
   const top = matches[0];
   const second = matches[1];
   const telemetry = {
