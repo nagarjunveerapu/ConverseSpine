@@ -247,3 +247,27 @@ export function resolveFaqQuestionKeys(
 export function isFaqShapedAsk(text: string): boolean {
   return resolveFaqQuestionKeys(text).length > 0;
 }
+
+/**
+ * Taught sub-intent → FAQ key. A human taught this phrasing family a facet on
+ * the Understanding board (Desk mirrors it into vector metadata); when THIS
+ * turn's embed bind carried one, compose pins that exact Desk FAQ row on the
+ * focused project ("can i sell the plot later?" → resale_value, not the
+ * overview card). Deterministic lanes keep precedence: a text-bound FAQ key
+ * disables the taught key entirely, and the key stays lookup-gated — a project
+ * without the row composes exactly as before.
+ */
+export function taughtFaqKey(
+  routing:
+    | { routing?: string; embedder_facet?: string; bind?: { bind_source?: string } }
+    | undefined,
+  text: string,
+): string | undefined {
+  if (routing?.routing !== 'answer_on_project') return undefined;
+  if (routing.bind?.bind_source !== 'embed_intent') return undefined;
+  const facet = routing.embedder_facet ?? '';
+  // Same shape Desk validates at teach time — anything else is index noise.
+  if (!/^[a-z0-9_]{1,60}$/.test(facet)) return undefined;
+  if (resolveFaqQuestionKeys(text).length > 0) return undefined;
+  return facet;
+}

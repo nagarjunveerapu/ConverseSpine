@@ -31,7 +31,7 @@ import {
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
-import { isFaqShapedAsk, resolveFaqQuestionKeys } from './faq-keys.js';
+import { isFaqShapedAsk, resolveFaqQuestionKeys, taughtFaqKey } from './faq-keys.js';
 import { buyerCuedOtherProject } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
@@ -1789,7 +1789,15 @@ async function fetchAnswer(
   }
 
   // Closed-beta: Desk FAQ corpus — rental_yield, possession, loan, amenities, …
-  const faqKeys = resolveFaqQuestionKeys(buyerText ?? '', topics);
+  // Taught facet first (Understanding board): a ≥τ embed bind whose vector
+  // carries a human-taught FAQ key pins that row ahead of topic hints.
+  // lastRouting is re-stamped every turn before goal selection, so this is
+  // always THIS turn's bind; text-bound keys win inside taughtFaqKey.
+  const taughtKey = buyerText ? taughtFaqKey(s.rti?.lastRouting, buyerText) : undefined;
+  const resolvedKeys = resolveFaqQuestionKeys(buyerText ?? '', topics);
+  const faqKeys = taughtKey
+    ? [taughtKey, ...resolvedKeys.filter((k) => k !== taughtKey)]
+    : resolvedKeys;
   const faqHits: Array<{ questionKey: string; question: string; answer: string }> = [];
   for (const key of faqKeys) {
     const faq = await deps.data.faqLookup(goal.projectId, key).catch(() => null);
@@ -1811,7 +1819,11 @@ async function fetchAnswer(
         faqs: faqHits,
       },
     };
-  } else if (faqKeys.length > 0 && buyerText && isFaqShapedAsk(buyerText)) {
+  } else if (faqKeys.length > 0 && buyerText && (isFaqShapedAsk(buyerText) || taughtKey)) {
+    // taughtKey: a taught facet that MISSED (project has no such FAQ row) earns
+    // the honest miss too — the bind read the ask's meaning (≥τ, human-taught),
+    // so the overview card would be the exact wrong answer this lane kills.
+    // Data-aware by construction: this branch runs only after the real lookup.
     // AB-1 — the cost sheet owns cost-component asks. "what are the parking
     // charges?" binds the `parking` FAQ key; when the project has no such FAQ
     // row but its pricing components DO carry the answer (Car Parking ₹5,00,000),
@@ -1824,7 +1836,7 @@ async function fetchAnswer(
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
-        faqMiss: { keys: faqKeys },
+        faqMiss: { keys: faqKeys, ...(taughtKey ? { taught: true } : {}) },
       };
     }
   }

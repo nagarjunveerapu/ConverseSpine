@@ -453,8 +453,10 @@ export interface EvidenceSet {
   visits?: VisitEvidence;
   /** holdableUnits: live per-type availability (AB-1). Positive = real count; 0/absent = unknown (Desk sends 0 when a project tracks no units). */
   units?: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string; holdableUnits?: number }>;
-  /** FAQ-shaped ask where Desk had no row for the resolved key(s). */
-  faqMiss?: { keys: string[] };
+  /** FAQ-shaped ask where Desk had no row for the resolved key(s).
+   *  taught: the missed key came from a human-taught facet bind (not buyer
+   *  text) — the floor renders the honest miss instead of the overview card. */
+  faqMiss?: { keys: string[]; taught?: boolean };
   searchRecovery?: import('./recovery-planner.js').SearchRecoveryEnvelope;
 }
 

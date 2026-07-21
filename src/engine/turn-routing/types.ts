@@ -30,6 +30,9 @@ export interface RoutingBindTelemetry {
   top_kind?: string;
   top_score?: number;
   margin?: number;
+  /** Taught sub-intent (Desk FAQ question_key) carried on the top match's
+   *  vector metadata — surfaced so Try-it verdicts can show kind · facet. */
+  facet?: string;
 }
 
 export interface TurnRoutingResult {
@@ -40,6 +43,10 @@ export interface TurnRoutingResult {
   answer_topic?: AnswerTopic;
   embedder_intent_kind?: string;
   embedder_score?: number;
+  /** Taught sub-intent from vector metadata — a Desk FAQ question_key the
+   *  human attached at teach time. Consumed at compose (fetchAnswer) to pin
+   *  the exact FAQ row on the focused project. */
+  embedder_facet?: string;
   abstain_reason?: string;
   bind?: RoutingBindTelemetry;
 }
