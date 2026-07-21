@@ -768,6 +768,7 @@ export function nayadeskCrm(
             silBindSource: string;
             speechAct: string;
             language: string;
+            projectFocus: string;
           }) {
             // Desk canonicalizes + clusters server-side (it owns the vocab).
             // The legacy embedder_*/llm_* voter fields stay at their schema
@@ -785,6 +786,7 @@ export function nayadeskCrm(
               sil_bind_source: p.silBindSource,
               speech_act: p.speechAct,
               language: p.language,
+              project_focus: p.projectFocus,
               source: 'auto_turn',
             });
           },

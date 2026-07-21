@@ -2306,6 +2306,7 @@ async function syncTelemetry(
         silBindSource: sil.bindSource,
         speechAct: opts?.ex?.speechAct ?? '',
         language: '',
+        projectFocus: state.focus?.projectId ?? '',
       })
       .catch((err) => {
         console.error('[syncTelemetry] enqueueIntentReview', nd, err);
