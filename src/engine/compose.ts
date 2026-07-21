@@ -1036,7 +1036,27 @@ export function priceBandDisplayFrom(
  * name + location, the configuration types, ONE price band (low–high, from
  * configs), possession — then exactly one probing question. Never the FAQ
  * catalog; facet questions get facet answers on the next turn.
+ *
+ * Catalog-first: the one narrative line comes from the catalog's own summary
+ * field (a tab the builder maintains), never from FAQ rows — capped and cut
+ * at a sentence boundary so the card stays a card.
  */
+const SUMMARY_BLURB_CAP = 220;
+
+export function summaryBlurb(summary: string | undefined): string {
+  const s = (summary ?? '').replace(/\s+/g, ' ').trim();
+  // Too short to be a real narrative (empty, or a stray token) — skip.
+  if (s.length < 20) return '';
+  let out = s;
+  if (out.length > SUMMARY_BLURB_CAP) {
+    const cut = out.slice(0, SUMMARY_BLURB_CAP);
+    const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '));
+    out = lastStop > 60 ? cut.slice(0, lastStop + 1) : `${cut.trimEnd()}…`;
+  }
+  if (!/[.!…?]$/.test(out)) out = `${out}.`;
+  return ` ${out}`;
+}
+
 export function overviewCard(d: NonNullable<EvidenceSet['detail']>): string {
   const cfgs = d.configurations ?? [];
   const types = cfgs.map((c) => c.unitType).filter(Boolean);
@@ -1050,7 +1070,8 @@ export function overviewCard(d: NonNullable<EvidenceSet['detail']>): string {
   const where = d.microMarket ? ` — ${d.microMarket}` : '';
   const facts = bits.length ? ` ${bits.join(' · ')}.` : '';
   const phase = d.phaseNote ? ` ${d.phaseNote}.` : '';
-  return `*${d.name}*${where}.${facts}${phase} Want pricing details, unit configurations, or the legal & RERA picture?`;
+  const blurb = summaryBlurb(d.summary);
+  return `*${d.name}*${where}.${facts}${phase}${blurb} Want pricing details, unit configurations, or the legal & RERA picture?`;
 }
 
 /**

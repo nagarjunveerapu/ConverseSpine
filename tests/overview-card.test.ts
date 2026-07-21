@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fallbackReply, overviewCard, priceBandDisplayFrom, buildComposeRequest } from '../src/engine/compose.js';
+import { fallbackReply, overviewCard, priceBandDisplayFrom, buildComposeRequest, summaryBlurb } from '../src/engine/compose.js';
 import type { EvidenceSet } from '../src/engine/types.js';
 
 /**
@@ -76,5 +76,34 @@ describe('overviewCard', () => {
     const reply = fallbackReply(req);
     expect(reply).toContain('Pre-approved by HDFC, ICICI, SBI.');
     expect(reply).not.toContain('₹31 L – ₹1.66 Cr'); // no card bleed into facet answers
+  });
+});
+
+describe('overviewCard — catalog summary enrichment (catalog-first)', () => {
+  const SUMMARY =
+    'Luxury villa community on 18 acres in Devanahalli — 109 exclusive 3/4 BHK villas with private gardens, operated with resort-grade amenities.';
+
+  it('appends the catalog summary line before the probing question', () => {
+    const card = overviewCard({ ...DETAIL, summary: SUMMARY });
+    expect(card).toContain('Luxury villa community on 18 acres');
+    expect(card).toMatch(/Want pricing details, unit configurations, or the legal & RERA picture\?$/);
+    // Facts stay intact — the blurb enriches, never replaces.
+    expect(card).toContain('₹31 L – ₹1.66 Cr');
+  });
+
+  it('no summary → the card is unchanged (byte-identical to today)', () => {
+    expect(overviewCard({ ...DETAIL })).toBe(overviewCard(DETAIL));
+    expect(overviewCard(DETAIL)).not.toContain('  '); // no stray double space
+  });
+
+  it('summaryBlurb caps long text at a sentence boundary and skips junk', () => {
+    const long =
+      'First sentence about the township masterplan and its phased delivery. ' +
+      'Second sentence with a very long tail that would blow the card size well past the two-hundred-and-twenty character cap if it were appended in full without any sentence-boundary trimming at all whatsoever.';
+    const blurb = summaryBlurb(long);
+    expect(blurb).toBe(' First sentence about the township masterplan and its phased delivery.');
+    expect(summaryBlurb('')).toBe('');
+    expect(summaryBlurb('apartment')).toBe(''); // a stray token is not a narrative
+    expect(summaryBlurb('   ')).toBe('');
   });
 });
