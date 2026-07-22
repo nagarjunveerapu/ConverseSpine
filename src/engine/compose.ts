@@ -125,6 +125,8 @@ function describeGoal(g: TurnGoal): string {
       return 'recommend matching projects from EVIDENCE';
     case 'clarify_project_pick':
       return 'ask which shortlisted project they want details on — do not invent a pick';
+    case 'shortlist_answer':
+      return `answer their ${g.topic} question for EVERY shortlisted project from EVIDENCE — never ask which one to open`;
     case 'advance':
       return 'do NOT relist — nudge forward or ask one missing slot';
     case 'no_fit':
@@ -251,6 +253,26 @@ function renderEvidence(ev: EvidenceSet): string {
   return out.length ? out.join('\n') : '  (no data — ask a clarifying question, invent nothing)';
 }
 
+/** Buyer-facing phrase for a facet asked across the shortlist (honest-miss copy). */
+function shortlistTopicLabel(topic: import('./types.js').AnswerTopic): string {
+  switch (topic) {
+    case 'price':
+      return 'pricing';
+    case 'emi':
+      return 'EMI figures';
+    case 'legal':
+      return 'the legal papers';
+    case 'availability':
+      return 'availability';
+    case 'location':
+      return 'location details';
+    case 'property_type':
+      return 'the project type';
+    default:
+      return 'that';
+  }
+}
+
 export function fallbackReply(req: ComposeRequest): string {
   const { goal, evidence: ev, context } = req;
   const name = context.buyerName ? ` ${context.buyerName}` : '';
@@ -298,6 +320,25 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const list = ms.map((m, i) => `${i + 1}) *${m.name}*`).join(', ');
       return `Which one should I open for details — ${list}?`;
+    }
+    case 'shortlist_answer': {
+      const ms = (ev.matches ?? []).slice(0, 3);
+      const facets = ev.shortlistFacet?.facets ?? [];
+      const answered = facets.filter((f) => f.perProject.some((p) => p.value));
+      if (!answered.length) {
+        // Honest miss — an information ask never earns a bare pick-menu.
+        const askLabel = facets[0]?.label.toLowerCase() ?? shortlistTopicLabel(goal.topic);
+        const list = ms.map((m, i) => `${i + 1}) *${m.name}*`).join(', ');
+        const fork = list ? ` Meanwhile, want the full picture on any of them — ${list}?` : '';
+        return `I don't have ${askLabel} on file for your shortlist yet — I'll flag it to the team.${fork}`;
+      }
+      const blocks = answered.map(
+        (f) =>
+          `*${f.label}*\n${f.perProject
+            .map((p) => `• *${p.name}* — ${p.value || 'not on file yet'}`)
+            .join('\n')}`,
+      );
+      return `${blocks.join('\n\n')}\n\nWant the full picture on any one of them, or shall I set up a visit?`;
     }
     case 'advance': {
       // W2 — a focused bare-affirm ("ok"/"yes" with nothing pending) lands

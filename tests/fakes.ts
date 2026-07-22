@@ -214,16 +214,21 @@ export function fakeData(): EngineData & {
         : null;
     },
     async compare(_nd, ids) {
-      const names = ids.map((id) => LOKATIONS.find((x) => x.id === id)?.name).filter(Boolean) as string[];
-      if (names.length < 2) return null;
+      const ps = ids.map((id) => LOKATIONS.find((x) => x.id === id)).filter(Boolean) as P[];
+      if (ps.length < 2) return null;
       return {
-        tableText: names
-          .map((n) => {
-            const p = LOKATIONS.find((x) => x.name === n)!;
-            return `${n}: ${p.market}, from ${p.display}`;
-          })
-          .join('\n'),
-        projects: names.map((n) => ({ name: n })),
+        tableText: ps.map((p) => `${p.name}: ${p.market}, from ${p.display}`).join('\n'),
+        projects: ps.map((p) => ({ name: p.name })),
+        // Mirror the Desk compare_matrix contract (fixed rows × project columns).
+        matrix: {
+          projects: ps.map((p) => ({ project_id: p.id, name: p.name })),
+          rows: [
+            { key: 'location', label: 'Location', values: ps.map((p) => p.market) },
+            { key: 'configurations', label: 'Configurations', values: ps.map(() => '—') },
+            { key: 'starting_price', label: 'Starting price', values: ps.map((p) => p.display) },
+            { key: 'possession', label: 'Possession', values: ps.map(() => 'Dec 2027') },
+          ],
+        },
       };
     },
     async priceBasis(_b, _nd, id) {

@@ -157,6 +157,13 @@ function dimensionAndJourney(
       for (const o of offered.slice(0, 3)) chips.push(o.name);
       break;
 
+    case 'shortlist_answer':
+      // Facet answered across the board — next moves: open one, or go deeper.
+      for (const o of offered.slice(0, 3)) chips.push(o.name);
+      if (offered.length >= 2) chips.push(`Compare all ${Math.min(offered.length, 3)}`);
+      chips.push('Plan a visit day');
+      break;
+
     case 'visit_ask':
     case 'visit_propose':
     case 'propose_visit':

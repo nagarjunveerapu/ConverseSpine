@@ -42,6 +42,10 @@ function allowedTokens(ev: EvidenceSet, buyerText: string): Set<string> {
     for (const c of ev.pricing.components) addMoney(c.value);
   }
   addMoney(ev.compare?.tableText);
+  // Shortlist-wide facet values (EMI, starting prices) are evidence-grade figures.
+  for (const f of ev.shortlistFacet?.facets ?? []) {
+    for (const p of f.perProject) addMoney(p.value);
+  }
   if (ev.detail) addMoney(ev.detail.startingPriceDisplay);
   if (ev.catalog?.priceMinInr) addMoney(formatInr(ev.catalog.priceMinInr));
   addMoney(buyerText);

@@ -224,6 +224,9 @@ export type TurnGoal =
   | { kind: 'ack_reject_recommend' }
   | { kind: 'objection'; topic: ObjectionTopic; projectId?: string }
   | { kind: 'answer'; topic: AnswerTopic; projectId: string; topics?: AnswerTopic[] }
+  /** Facet ask over a multi-project shortlist with no pick — answer the facet
+   *  for EVERY shortlisted project instead of asking which one to open. */
+  | { kind: 'shortlist_answer'; topic: AnswerTopic; topics?: AnswerTopic[]; projectIds: string[] }
   | {
       kind: 'commit';
       projectId: string;
@@ -498,7 +501,18 @@ export interface EvidenceSet {
    *  taught: the missed key came from a human-taught facet bind (not buyer
    *  text) — the floor renders the honest miss instead of the overview card. */
   faqMiss?: { keys: string[]; taught?: boolean };
+  /** Per-project values for a facet asked across the whole shortlist
+   *  (shortlist_answer). Empty `value` = honestly not on file for that project. */
+  shortlistFacet?: ShortlistFacetEvidence;
   searchRecovery?: import('./recovery-planner.js').SearchRecoveryEnvelope;
+}
+
+export interface ShortlistFacetEvidence {
+  facets: Array<{
+    topic: AnswerTopic;
+    label: string;
+    perProject: Array<{ projectId: string; name: string; value: string }>;
+  }>;
 }
 
 export interface Extracted {

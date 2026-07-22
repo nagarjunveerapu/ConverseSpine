@@ -66,7 +66,8 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   }
 
   // Details ask: commit only when pick is unambiguous (named/ordinal or singleton).
-  // Multi shortlist without a name → ask which project (do not default to [0]).
+  // Multi shortlist without a name → answer the facet across the shortlist when
+  // one was asked; only a topicless "tell me more" earns the pick-menu.
   if (ex.implicitProjectPick || ex.transition === 'want_details') {
     const explicit = resolvePick(ex, d.lastOffered, s);
     if (explicit) return commitPickWithFollowUp(explicit, ex);
@@ -74,6 +75,8 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
       return commitPickWithFollowUp(d.lastOffered[0]!, ex);
     }
     if (d.lastOffered.length >= 2) {
+      const across = shortlistAnswerGoal(s, ex);
+      if (across) return across;
       return { kind: 'clarify_project_pick' };
     }
   }
@@ -404,21 +407,55 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
     (s.discover.discussedProjects?.length
       ? s.discover.discussedProjects[s.discover.discussedProjects.length - 1]
       : undefined);
-  // Facet ask ("Starting prices") with multi shortlist but no pick → clarify,
-  // not fall through to recommend/no_fit with stale constraints.
-  // Exception: constraint refine without a named pick should re-search (PIV-03).
+  // Facet ask ("Starting prices") with multi shortlist but no pick → answer the
+  // facet for every shortlisted project (4q-fix3 kill #1: the clarify-pick
+  // sinkhole ate EMI/legal/cost asks with "Which one should I open — 1) 2) 3)?").
+  // Topics with no shortlist-wide lane still clarify; a constraint refine
+  // without a named pick still re-searches (PIV-03).
   if (!pick) {
-    if (
-      topics.length > 0 &&
-      s.discover.lastOffered.length >= 2 &&
-      !(ex.speechAct === 'search' && hasNarrowingConstraint(s.constraints))
-    ) {
-      return { kind: 'clarify_project_pick' };
+    const refine = ex.speechAct === 'search' && hasNarrowingConstraint(s.constraints);
+    if (s.discover.lastOffered.length >= 2 && !refine) {
+      // shortlistAnswerGoal reads askTopic AND askTopics; the clarify fallback
+      // keeps its original askTopics-only condition — nothing NEW clarifies.
+      const across = shortlistAnswerGoal(s, ex);
+      if (across) return across;
+      if (topics.length > 0) return { kind: 'clarify_project_pick' };
     }
     return null;
   }
 
   return commitPickWithFollowUp(pick, ex);
+}
+
+/**
+ * Facet topics that have a shortlist-wide answer lane (compare-matrix rows,
+ * per-project legal detail, per-project EMI basis). Topics outside this set —
+ * overview ("tell me more"), media (a brochure send targets one project),
+ * amenities (no per-project fetch lane yet) — keep the pick-menu.
+ */
+const SHORTLIST_ANSWERABLE: ReadonlySet<import('../types.js').AnswerTopic> = new Set([
+  'price',
+  'emi',
+  'legal',
+  'availability',
+  'location',
+  'property_type',
+] as import('../types.js').AnswerTopic[]);
+
+/** Facet ask over a ≥2 shortlist with no pick → answer across the board. */
+function shortlistAnswerGoal(s: ConversationState, ex: Extracted): TurnGoal | null {
+  const asked = (ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []).filter(
+    (t) => SHORTLIST_ANSWERABLE.has(t),
+  );
+  if (!asked.length) return null;
+  const ids = s.discover.lastOffered.slice(0, 3).map((o) => o.projectId);
+  if (ids.length < 2) return null;
+  return {
+    kind: 'shortlist_answer',
+    topic: asked[0]!,
+    ...(asked.length > 1 ? { topics: asked } : {}),
+    projectIds: ids,
+  };
 }
 
 /** Prior buyer turn named a shortlisted project — use for facet asks without re-naming. */
