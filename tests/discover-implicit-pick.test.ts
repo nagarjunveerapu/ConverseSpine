@@ -129,7 +129,7 @@ describe('discover implicit project pick', () => {
     expect(goal).toEqual({ kind: 'recommend' });
   });
 
-  it('facet ask with multi shortlist and no pick → clarify (not recommend)', () => {
+  it('facet ask with multi shortlist and no pick → shortlist-wide answer (not recommend)', () => {
     const s = {
       ...initState('c1', 'brigade-group'),
       discover: {
@@ -148,6 +148,13 @@ describe('discover implicit project pick', () => {
       speechAct: 'answer',
     };
     const goal = discoverDecide(s, ex);
-    expect(goal).toEqual({ kind: 'clarify_project_pick' });
+    // Was clarify_project_pick — the 4q clarify-pick sinkhole. The protection
+    // this test encodes (never recommend/no_fit on stale constraints) holds;
+    // the facet is now ANSWERED per shortlisted project instead of menu'd.
+    expect(goal).toEqual({
+      kind: 'shortlist_answer',
+      topic: 'price',
+      projectIds: ['neo', 'eldorado'],
+    });
   });
 });

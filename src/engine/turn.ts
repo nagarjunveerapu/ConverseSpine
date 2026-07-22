@@ -914,6 +914,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ({ goal, evidence } = await fetchObjection(goal, state, deps, nd));
   } else if (goal.kind === 'answer') {
     evidence = await fetchAnswer(goal, state, ex, deps, nd, trimmedText);
+  } else if (goal.kind === 'shortlist_answer') {
+    evidence = await fetchShortlistAnswer(goal, state, ex, deps, nd);
   } else if (goal.kind === 'visit_recall') {
     evidence = await fetchVisitRecall(state, deps, nd);
   } else {
@@ -948,6 +950,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
     (evidence.matches?.length ?? 0) > 0;
   const clarifyPickDeterministic = goal.kind === 'clarify_project_pick';
+  // Shortlist-wide facet blocks are structured facts — template-locked like compare.
+  const shortlistAnswerDeterministic = goal.kind === 'shortlist_answer';
   const compareDeterministic = goal.kind === 'answer' && goal.topic === 'compare';
   const multiAnswerDeterministic =
     goal.kind === 'answer' && (goal.topics?.length ?? 0) > 1;
@@ -979,6 +983,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     holdDeterministic ||
     firstShortlistTurn ||
     clarifyPickDeterministic ||
+    shortlistAnswerDeterministic ||
     compareDeterministic ||
     multiAnswerDeterministic ||
     locationDeterministic ||
@@ -1740,6 +1745,119 @@ async function fetchObjection(
       },
     },
   };
+}
+
+/**
+ * 4q kill #1 — shortlist-wide facet answer (the clarify-pick sinkhole). A facet
+ * asked over the whole shortlist ("what emi will I pay", "which have proper
+ * khata") is answered per project from EXISTING authorities — the Desk compare
+ * matrix for price/config/location/type rows, projectDetail for the legal
+ * snapshot, priceBasis + computeEmi for EMI. A project with no value renders an
+ * honest "not on file"; no facts at all → honest miss, never a bare pick-menu.
+ */
+const SHORTLIST_MATRIX_ROWS: Partial<Record<import('./types.js').AnswerTopic, readonly string[]>> = {
+  price: ['starting_price'],
+  availability: ['configurations', 'possession'],
+  location: ['location'],
+  property_type: ['project_type'],
+};
+
+async function fetchShortlistAnswer(
+  goal: Extract<TurnGoal, { kind: 'shortlist_answer' }>,
+  s: ConversationState,
+  ex: Extracted,
+  deps: EngineDeps,
+  nd: string,
+): Promise<EvidenceSet> {
+  const matches = matchesFromLastOffered(s)
+    .filter((m) => goal.projectIds.includes(m.projectId))
+    .slice(0, 3);
+  const base: EvidenceSet = { tools: ['lastOffered'], matches };
+  if (!nd || matches.length < 2) return base;
+
+  const topics = goal.topics?.length ? goal.topics : [goal.topic];
+  const tools = new Set<string>(['lastOffered']);
+  const facets: import('./types.js').ShortlistFacetEvidence['facets'] = [];
+
+  if (topics.some((t) => SHORTLIST_MATRIX_ROWS[t])) {
+    const cmp = await deps.data.compare(nd, matches.map((m) => m.projectId)).catch(() => null);
+    const matrix = cmp?.matrix;
+    if (matrix) {
+      tools.add('compare');
+      for (const t of topics) {
+        for (const key of SHORTLIST_MATRIX_ROWS[t] ?? []) {
+          const row = matrix.rows.find((r) => r.key === key);
+          if (!row) continue;
+          facets.push({
+            topic: t,
+            label: row.label,
+            perProject: matrix.projects.map((p, i) => ({
+              projectId: p.project_id,
+              name: p.name,
+              value: cleanShortlistFacetValue(row.values[i]),
+            })),
+          });
+        }
+      }
+    }
+  }
+
+  if (topics.includes('legal')) {
+    const details = await Promise.all(
+      matches.map((m) => deps.data.projectDetail(s.builderId, nd, m.projectId).catch(() => null)),
+    );
+    tools.add('projectDetail');
+    facets.push({
+      topic: 'legal',
+      label: 'Legal & approvals',
+      perProject: matches.map((m, i) => {
+        const d = details[i];
+        const parts = [
+          d?.reraNumber?.trim() ? `RERA ${d.reraNumber.trim()}` : '',
+          d?.khata?.trim() ?? '',
+          d?.ecStatus?.trim() ? `EC: ${d.ecStatus.trim()}` : '',
+          d?.naStatus?.trim() ? `NA: ${d.naStatus.trim()}` : '',
+        ].filter(Boolean);
+        return { projectId: m.projectId, name: m.name, value: parts.join(' · ') };
+      }),
+    });
+  }
+
+  if (topics.includes('emi')) {
+    const rate = ex.emiRatePercent ?? DEFAULT_RATE_PERCENT;
+    const years = ex.emiTenureYears ?? DEFAULT_TENURE_YEARS;
+    const bases = await Promise.all(
+      matches.map((m) =>
+        deps.data.priceBasis(s.builderId, nd, m.projectId, s.constraints.bhk).catch(() => null),
+      ),
+    );
+    tools.add('priceBasis');
+    facets.push({
+      topic: 'emi',
+      label: `Approx. EMI (80% loan, ${years} yrs @ ${rate}%)`,
+      perProject: matches.map((m, i) => {
+        const b = bases[i];
+        const emi = b ? computeEmi(b.priceInr, rate, years) : null;
+        return {
+          projectId: m.projectId,
+          name: m.name,
+          value: emi ? `${emi.emiFormatted}/mo on ${emi.basisFormatted}` : '',
+        };
+      }),
+    });
+  }
+
+  return {
+    ...base,
+    tools: [...tools],
+    ...(facets.length ? { shortlistFacet: { facets } } : {}),
+  };
+}
+
+/** Desk renders missing matrix cells as an em-dash — normalize to honest-empty. */
+function cleanShortlistFacetValue(v: string | undefined): string {
+  const t = (v ?? '').trim();
+  return t === '—' ? '' : t;
 }
 
 async function fetchAnswer(

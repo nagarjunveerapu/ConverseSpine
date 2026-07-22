@@ -26,7 +26,9 @@ export function buildPendingPrompt(
   turnCount: number,
   focus?: { projectId: string; projectName: string } | null,
 ): PendingPrompt | undefined {
-  if (goal.kind === 'clarify_project_pick') {
+  // shortlist_answer ends on the same "open any one of them?" fork — a bare
+  // ordinal/name reply must resolve as a pick (bare "yes" still probes).
+  if (goal.kind === 'clarify_project_pick' || goal.kind === 'shortlist_answer') {
     return {
       kind: 'chip_menu',
       chip_ids: (evidence.matches ?? []).map((m) => m.projectId).slice(0, 3),
