@@ -261,7 +261,13 @@ export function applyChipPathSeeds(extracted: Extracted, resolution: ChipResolut
   } else if (resolution.speechAct === 'visit_book' && next.transition === 'none') {
     next = { ...next, transition: 'want_visit' };
   }
-  if (resolution.speechAct === 'stop' && !next.stop) {
+  // Destructive-signal authority: only an actual Stop button tap may add stop —
+  // free-text opt-out detection belongs solely to STOP_RE in facts.ts.
+  if (
+    resolution.speechAct === 'stop' &&
+    !next.stop &&
+    resolution.primary?.source === 'action_id'
+  ) {
     next = { ...next, stop: true };
   }
   if (resolution.speechAct === 'greet' && !next.smalltalk) {

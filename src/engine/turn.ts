@@ -554,18 +554,66 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = releaseToDiscover(state);
   }
 
+  // Opt-out confirm resolution: only a strict standalone yes deletes ("ok what
+  // would YOU pick" contains an affirm token but is not consent); anything else
+  // clears the pending flag and the turn continues as a normal message.
+  if (state.stopConfirmPending) {
+    const { stopConfirmPending: _pendingStop, ...stateSansPending } = state;
+    state = stateSansPending as typeof state;
+    const strictYes =
+      /^(?:yes|yeah|yep|yup|haan|confirm(?:ed)?|yes please|delete (?:it|everything))[.!]?\s*$/i.test(
+        trimmedText,
+      );
+    if (strictYes && nd) {
+      await deps.crm.deleteBuyerMemory(nd).catch(() => {});
+      const reply = "Done — I've removed your details from our system. You won't hear from us again.";
+      state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };
+      await deps.store.save(state);
+      await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
+      await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop' }).catch(() => {});
+      return {
+        reply,
+        state,
+        debug: withIngressDebug(
+          { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
+          inputSource,
+        ),
+      };
+    }
+  }
+
   if (ex.stop && nd) {
-    await deps.crm.deleteBuyerMemory(nd).catch(() => {});
-    const reply = "Understood — I've removed your details from our system. You won't hear from us again.";
-    state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };
+    // Standalone SMS keyword is an unambiguous opt-out — act immediately. Anything
+    // longer (a sentence mentioning contact/data) confirms before the destructive
+    // delete: extraction can misread, and "removed your details" must never be false.
+    const standaloneStop = /^(?:stop|unsubscribe)[.!]?\s*$/i.test(trimmedText);
+    if (standaloneStop) {
+      await deps.crm.deleteBuyerMemory(nd).catch(() => {});
+      const reply = "Understood — I've removed your details from our system. You won't hear from us again.";
+      state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };
+      await deps.store.save(state);
+      await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
+      await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop' }).catch(() => {});
+      return {
+        reply,
+        state,
+        debug: withIngressDebug(
+          { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
+          inputSource,
+        ),
+      };
+    }
+    const reply =
+      'Just to confirm — should I remove your details and stop messaging you? Reply "yes" and I\'ll delete everything.';
+    state = { ...state, stopConfirmPending: true, turnCount: state.turnCount + 1 };
     await deps.store.save(state);
     await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
-    await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop' }).catch(() => {});
+    await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop_confirm' }).catch(() => {});
     return {
       reply,
       state,
       debug: withIngressDebug(
-        { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
+        { phase: state.phase, goal: { kind: 'handoff' }, tools: [], grounding: 'pass' },
         inputSource,
       ),
     };
