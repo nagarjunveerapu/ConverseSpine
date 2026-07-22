@@ -85,6 +85,16 @@ describe('opt-out confirm flow', () => {
     await turn('coorg, 50 Lakhs');
     const r = await turn('stop asking questions. rent probably. maybe live later. whatever');
     expect(r.state.phase).not.toBe('handoff');
+    expect(r.reply).not.toMatch(/removed your details|remove your details/i);
+    expect(deps.crm.calls).not.toContain('delete-memory');
+  });
+
+  it('an affirm-flavored question is NOT consent — "ok what would YOU pick" never deletes', async () => {
+    const { deps, turn } = harness('stop-loose-affirm');
+    await turn('coorg, 50 Lakhs');
+    await turn('please stop messaging me');
+    const r = await turn('ok what would YOU pick. one answer');
+    expect(r.state.phase).not.toBe('handoff');
     expect(r.reply).not.toMatch(/removed your details/i);
     expect(deps.crm.calls).not.toContain('delete-memory');
   });

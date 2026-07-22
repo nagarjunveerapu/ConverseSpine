@@ -554,12 +554,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = releaseToDiscover(state);
   }
 
-  // Opt-out confirm resolution: an explicit yes deletes; anything else clears the
-  // pending flag and the turn continues as a normal message.
+  // Opt-out confirm resolution: only a strict standalone yes deletes ("ok what
+  // would YOU pick" contains an affirm token but is not consent); anything else
+  // clears the pending flag and the turn continues as a normal message.
   if (state.stopConfirmPending) {
     const { stopConfirmPending: _pendingStop, ...stateSansPending } = state;
     state = stateSansPending as typeof state;
-    if (ex.affirm && nd) {
+    const strictYes =
+      /^(?:yes|yeah|yep|yup|haan|confirm(?:ed)?|yes please|delete (?:it|everything))[.!]?\s*$/i.test(
+        trimmedText,
+      );
+    if (strictYes && nd) {
       await deps.crm.deleteBuyerMemory(nd).catch(() => {});
       const reply = "Done — I've removed your details from our system. You won't hear from us again.";
       state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };

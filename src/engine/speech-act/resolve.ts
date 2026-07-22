@@ -20,7 +20,9 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   // stop / handoff / greet (whole-ish)
   {
     id: 'chip.stop',
-    re: /\b(?:stop|unsubscribe|opt[\s-]?out|delete my data|forget me|don't (?:message|text|contact)|do not (?:message|text|contact))\b/i,
+    // Keep in lockstep with STOP_RE in facts.ts: opt-out targets CONTACT/DATA,
+    // never the bot's behavior ("stop asking questions" must not resolve here).
+    re: /^(?:stop|unsubscribe)[.!]?\s*$|\b(?:unsubscribe|opt[\s-]?out|delete my (?:data|details|number|info(?:rmation)?)|forget me|remove (?:me|my (?:number|details|data))|(?:stop|don'?t|do not)\s+(?:messag\w*|text\w*|calls?|calling|contact\w*|whatsapp\w*|sms)(?:\s+me)?)\b/i,
     priority: 100,
   },
   {
