@@ -85,8 +85,12 @@ export async function handleAdvisorTurn(
         existing.constraints.propertyType,
       );
       // Worries can settle commute-vs-budget on their own — then don't ask.
+      // So does an explicit commute decline: with commute off the table the
+      // question has no tension left — asking it anyway is the "didn't
+      // listen" defect. Of the two tradables, budget rules by elimination.
       if (!existing.constraints.priorityFocus) {
-        const derived = derivedPriorityFromWorries(existing.constraints);
+        const derived = derivedPriorityFromWorries(existing.constraints)
+          ?? (existing.constraints.commuteDeclined ? 'budget' : undefined);
         if (derived) {
           existing = {
             ...existing,

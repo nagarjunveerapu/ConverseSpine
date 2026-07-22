@@ -32,6 +32,9 @@ function allowedTokens(ev: EvidenceSet, buyerText: string): Set<string> {
     // Desk-authored trade-off notes carry evidence-grade ₹ figures
     // ("₹15 L over your budget") — allowed, else repair eats the note.
     addMoney(m.tradeoffNote);
+    // Typed receipts carry the same class of figures ("your 10,000 sqft
+    // ≈ ₹50 L") — same whitelist, or verify eats the four-questions line.
+    for (const f of m.dimensionFit ?? []) addMoney(f.evidence);
   }
   addMoney(ev.floor?.display);
   if (ev.pricing) {

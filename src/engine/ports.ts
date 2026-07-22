@@ -80,6 +80,9 @@ export interface EngineData {
       project_type?: string;
       /** Desk trade-off narration (advisor preference re-rank; optional). */
       tradeoff_note?: string;
+      /** Typed rank receipts + structured absence (Desk advisor re-rank). */
+      dimension_fit?: Array<{ dimension: string; score: number; weight: number; evidence: string; good: boolean }>;
+      dimension_gap?: { dimension: string; weight: number; label: string };
     }>;
     expandedLocations?: string[];
     noMatchReasoning?: string;

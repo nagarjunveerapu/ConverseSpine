@@ -126,6 +126,10 @@ export interface NdSearchMatch {
    *  only when the search resolved preference weights for this conversation. */
   tradeoff_note?: string;
   preference_boost?: number;
+  /** Four-questions receipts: typed per-dimension backing + structured absence
+   *  (Desk advisor_rerank DimensionFit / AdvisorResult.gap). */
+  dimension_fit?: Array<{ dimension: string; score: number; weight: number; evidence: string; good: boolean }>;
+  dimension_gap?: { dimension: string; weight: number; label: string };
 }
 
 /**
@@ -389,6 +393,7 @@ export class NayaDeskClient {
     preference_weights?: Record<string, number>;
     commute_hub?: string;
     budget_target_inr?: number;
+    ask_size_sqft?: number;
   }): Promise<{ matches: NdSearchMatch[]; expanded_locations?: string[]; no_match_reasoning?: string }> {
     return this.call('POST', '/api/projects/search', req);
   }

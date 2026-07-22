@@ -1305,6 +1305,7 @@ async function fetchRecommend(
     if (prefs.preferenceWeights) filters = { ...filters, preferenceWeights: prefs.preferenceWeights };
     if (prefs.commuteHub) filters = { ...filters, commuteHub: prefs.commuteHub };
     if (prefs.budgetTargetInr) filters = { ...filters, budgetTargetInr: prefs.budgetTargetInr };
+    if (prefs.askSizeSqft) filters = { ...filters, askSizeSqft: prefs.askSizeSqft };
   }
   const strictSearch = await searchWithFilters(deps, s.builderId, filters);
 
@@ -1320,6 +1321,8 @@ async function fetchRecommend(
       matchReasons: m.match_reasons ?? [],
       projectType: m.project_type,
       ...(m.tradeoff_note ? { tradeoffNote: m.tradeoff_note } : {}),
+      ...(m.dimension_fit ? { dimensionFit: m.dimension_fit } : {}),
+      ...(m.dimension_gap ? { dimensionGap: m.dimension_gap } : {}),
     }))
     .filter((m) => !s.discover.rejectedProjectIds.includes(m.projectId))
     .filter((m) => (ex.wantsMore ? !offeredIds.has(m.projectId) : true));
@@ -1558,6 +1561,8 @@ async function searchWithFilters(
     match_reasons?: string[];
     project_type?: string;
     tradeoff_note?: string;
+    dimension_fit?: Array<{ dimension: string; score: number; weight: number; evidence: string; good: boolean }>;
+    dimension_gap?: { dimension: string; weight: number; label: string };
   }>;
   expandedLocations?: string[];
   noMatchReasoning?: string;
@@ -1566,7 +1571,7 @@ async function searchWithFilters(
 }
 
 function rawToMatches(
-  rows: Array<{ project_id: string; name: string; micro_market: string; starting_price_inr: number; starting_price_display: string; match_reasons?: string[]; project_type?: string; tradeoff_note?: string }>,
+  rows: Array<{ project_id: string; name: string; micro_market: string; starting_price_inr: number; starting_price_display: string; match_reasons?: string[]; project_type?: string; tradeoff_note?: string; dimension_fit?: Array<{ dimension: string; score: number; weight: number; evidence: string; good: boolean }>; dimension_gap?: { dimension: string; weight: number; label: string } }>,
 ): Match[] {
   return rows.map((m) => ({
     projectId: m.project_id,
@@ -1577,6 +1582,8 @@ function rawToMatches(
     matchReasons: m.match_reasons ?? [],
     projectType: m.project_type,
     ...(m.tradeoff_note ? { tradeoffNote: m.tradeoff_note } : {}),
+    ...(m.dimension_fit ? { dimensionFit: m.dimension_fit } : {}),
+    ...(m.dimension_gap ? { dimensionGap: m.dimension_gap } : {}),
   }));
 }
 

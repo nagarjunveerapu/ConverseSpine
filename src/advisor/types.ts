@@ -32,8 +32,12 @@ export interface AdvisorProjectCard {
   micro_market: string;
   price_label: string;
   source_builder_id?: string;
-  /** Desk-authored trade-off narration for the fit line on match cards. */
+  /** Desk-authored trade-off narration for the fit line on match cards.
+   *  Fallback — clients render from dimension_fit when present. */
   tradeoff_note?: string;
+  /** Typed rank receipts + structured absence — the four-questions slots. */
+  dimension_fit?: Array<{ dimension: string; score: number; weight: number; evidence: string; good: boolean }>;
+  dimension_gap?: { dimension: string; weight: number; label: string };
 }
 
 export interface AdvisorTurnResponse {

@@ -24,7 +24,15 @@ export function constraintsFromAdvisorPreferences(
   }
 
   const bhk = prefs.bhk?.trim();
-  if (bhk) out.bhk = bhk;
+  if (bhk) {
+    out.bhk = bhk;
+    // The buyer's asked size rides inside their own config words
+    // ("Quarter-Acre Plot (10,000 sqft)") — a numeric-unit parse, so the
+    // Desk budget dimension can price THEIR unit. Nothing domain-specific:
+    // any "<number> sqft" in the config string counts; none → no ask.
+    const size = parseAskSizeSqft(bhk);
+    if (size) out.askSizeSqft = size;
+  }
 
   const propertyType = prefs.property_type?.trim();
   if (propertyType && propertyType.toLowerCase() !== 'open to suggestions') {
@@ -41,7 +49,12 @@ export function constraintsFromAdvisorPreferences(
   // Deepening answers from the advisor brief (decline chips never arrive —
   // the SPA filters them). Both feed the Desk re-rank via advisor-weights.
   const hub = prefs.commute_hub?.trim();
-  if (hub) out.commuteHub = hub;
+  if (hub) {
+    // An explicit decline is a signal too — it zeroes the commute weight
+    // and blocks the priority probe; it is never a hub name.
+    if (/\b(not|no)[ -]?commute/i.test(hub)) out.commuteDeclined = true;
+    else out.commuteHub = hub;
+  }
   const sch = prefs.schools?.trim().toLowerCase();
   if (sch && !/^(not|no|skip)/.test(sch)) out.schoolsMentioned = true;
 
@@ -58,6 +71,15 @@ export function constraintsFromAdvisorPreferences(
   }
 
   return out;
+}
+
+/** First "<number> sqft" in a config string → sqft as a number, else null.
+ *  Accepts Indian-formatted digits ("10,000 sqft", "1200 sq ft"). */
+export function parseAskSizeSqft(raw: string): number | null {
+  const m = /([\d][\d,]*)\s*(?:sq\.?\s*\.?\s*ft|sqft|sq\s*feet)/i.exec(raw);
+  if (!m || !m[1]) return null;
+  const n = Number(m[1].replace(/,/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export function mergeAdvisorPreferences(

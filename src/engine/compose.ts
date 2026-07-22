@@ -5,6 +5,7 @@ import {
 import type { ComposeRequest, EvidenceSet, Match, ProbeKind, TurnGoal } from './types.js';
 import { isInventoryAsk } from './facts.js';
 import { formatUnitConfigLine } from './unit-config.js';
+import { matchFitClauses, sensitivityLine } from './sensitivity.js';
 
 export function buildComposeRequest(
   goal: TurnGoal,
@@ -167,8 +168,10 @@ function renderEvidence(ev: EvidenceSet): string {
       'matches:\n' +
         ev.matches
           .map(
-            (m) =>
-              `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}${m.tradeoffNote ? ` (fit: ${m.tradeoffNote})` : ''}`,
+            (m) => {
+              const fit = matchFitClauses(m);
+              return `  - ${m.name} — ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}${fit ? ` (fit: ${fit})` : ''}`;
+            },
           )
           .join('\n'),
     );
@@ -275,10 +278,18 @@ export function fallbackReply(req: ComposeRequest): string {
         return `I couldn't find a fresh match with those filters — tell me if you'd like to adjust area or budget?`;
       }
       const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
+      // Four-questions rendering: each match speaks its receipts (Q1 why +
+      // Q2 trade-offs, fits-first, Desk note only as fallback), then the
+      // shortlist speaks its sensitivity (Q3) once. Chips carry Q4.
       const list = ms
-        .map((m) => `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}${m.tradeoffNote ? ` — ${m.tradeoffNote}` : ''}`)
+        .map((m) => {
+          const fit = matchFitClauses(m);
+          return `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}${fit ? ` — ${fit}` : ''}`;
+        })
         .join('; ');
-      return `${pre}Here's what fits: ${list}. Want details on any of these, or shall I set up a visit?`;
+      const sensitivity = sensitivityLine(ms);
+      const tail = sensitivity ? ` ${sensitivity}` : '';
+      return `${pre}Here's what fits: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
     }
     case 'clarify_project_pick': {
       const ms = (ev.matches ?? []).slice(0, 3);

@@ -35,9 +35,24 @@ describe('importanceFromConstraints — chip answer → weights', () => {
     expect(importanceFromConstraints({ priorityFocus: 'commute' }))
       .toEqual({ commute: 0.9, budget: 0.6 });
   });
-  it('budget-first buyer, schools mentioned', () => {
+  it('budget-first buyer, schools mentioned — no phantom commute without a hub', () => {
+    // 4Q amendment: a priority chip alone must not manufacture a commute
+    // weight — that's how "⚠ 131 min to work hubs" reached a buyer who said
+    // "not commute-driven". Residual commute needs a named hub to grade.
     expect(importanceFromConstraints({ priorityFocus: 'budget', schoolsMentioned: true }))
-      .toEqual({ commute: 0.5, budget: 0.9, schools: 0.7 });
+      .toEqual({ budget: 0.9, schools: 0.7 });
+  });
+  it('budget-first buyer WITH a hub keeps the residual commute weight', () => {
+    expect(importanceFromConstraints({ priorityFocus: 'budget', commuteHub: 'ITPL' }))
+      .toEqual({ commute: 0.5, budget: 0.9 });
+  });
+  it('an explicit decline zeroes commute whatever set it', () => {
+    expect(importanceFromConstraints({
+      priorityFocus: 'commute', commuteHub: 'ITPL', commuteDeclined: true,
+    }).commute).toBeUndefined();
+    expect(importanceFromConstraints({
+      worries: ['daily traffic'], commuteDeclined: true,
+    }).commute).toBeUndefined();
   });
   it('no priority: only given signals register', () => {
     expect(importanceFromConstraints({})).toEqual({});
