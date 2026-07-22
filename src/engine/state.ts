@@ -172,6 +172,7 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
     name: m.name,
     microMarket: m.microMarket,
     startingPriceDisplay: m.startingPriceDisplay,
+    ...(m.startingPriceInr > 0 ? { startingPriceInr: m.startingPriceInr } : {}),
     // Receipts must survive this projection or they never reach the
     // advisor SPA — cards render from lastOffered, not raw search evidence.
     ...(m.tradeoffNote ? { tradeoffNote: m.tradeoffNote } : {}),

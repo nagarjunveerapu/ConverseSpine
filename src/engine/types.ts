@@ -56,6 +56,9 @@ export interface OfferedProject {
   name: string;
   microMarket?: string;
   startingPriceDisplay?: string;
+  /** Numeric price from the Desk match — kept so shortlist-wide computes
+   *  (EMI fallback basis) never have to parse a display string. */
+  startingPriceInr?: number;
   /** Desk-authored trade-off narration ("✓ 17 min to ITPL · ⚠ ₹15 L over…").
    *  Fallback voice only — compose renders from dimensionFit when present. */
   tradeoffNote?: string;

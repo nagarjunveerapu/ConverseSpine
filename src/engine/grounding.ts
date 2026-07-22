@@ -68,6 +68,11 @@ export function checkGrounding(reply: string, ev: EvidenceSet, buyerText: string
 }
 
 export function stripBanned(reply: string): string {
+  // Clean replies pass through untouched — the split/rejoin below replaces
+  // every post-sentence separator with a single space, which was eating the
+  // newlines between template bullet lines whose values end in a period
+  // (shortlist legal blocks rendered glued: "…on request. • *Next Project*").
+  if (!BANNED.some((re) => re.test(reply))) return reply.trim();
   const parts = reply.split(/(?<=[.!?])\s+/);
   const kept = parts.filter((p) => !BANNED.some((re) => re.test(p)));
   const out = kept.join(' ').trim();
