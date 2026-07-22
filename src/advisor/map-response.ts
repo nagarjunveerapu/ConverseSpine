@@ -111,7 +111,13 @@ function mapPrefsSnapshot(state: AdvisorMapInput['state']): Record<string, strin
   if (c.location) out.location = c.location;
   if (c.bhk) out.bhk = c.bhk;
   if (c.purpose) out.purpose = c.purpose;
-  if (c.budgetMaxInr) out.budget = formatInr(c.budgetMaxInr);
+  if (c.budgetMaxInr) {
+    out.budget = formatInr(c.budgetMaxInr);
+    // Numeric alongside the display string so a consumer (the SPA brief funnel)
+    // maps to its own band without re-parsing "₹80 L". Same principle as the
+    // EMI-basis fix — never make the client parse a formatted figure.
+    out.budget_max_inr = String(c.budgetMaxInr);
+  }
   if (c.propertyType) out.property_type = c.propertyType;
   // Trade-off Advisor soft signals — the SPA's "what Naya understands" tray.
   if (c.commuteHub) out.commute_hub = c.commuteHub;

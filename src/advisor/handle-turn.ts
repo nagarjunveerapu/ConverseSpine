@@ -183,6 +183,7 @@ export async function handleAdvisorTurn(
         action_id: body.action_id?.trim(),
         preferenceClears,
         ingressFilledSlots,
+        briefExtract: body.brief_extract === true,
       },
       rt.engine,
     );
