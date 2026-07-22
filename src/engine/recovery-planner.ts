@@ -74,25 +74,6 @@ function isBangaloreMicroMarket(loc: string): boolean {
   );
 }
 
-async function tryAction(
-  deps: RecoveryPlannerDeps,
-  id: string,
-  label: string,
-  merged: Constraints,
-  patch: Record<string, string | undefined>,
-  userLine: string,
-): Promise<SuggestedAction | null> {
-  const count = await deps.searchCount(searchFilters(merged));
-  if (count <= 0) return null;
-  return {
-    id,
-    label: truncateLabel(label),
-    patch,
-    user_line: userLine,
-    expected_matches: count,
-  };
-}
-
 type PushFn = (
   push: (
     id: string,
@@ -288,26 +269,43 @@ function strategyOrder(hint: RecoveryHint): PushFn[] {
   }
 }
 
+/**
+ * Cap on how many candidate relaxations we preflight. A genuine no-match (e.g. a
+ * premium villa nobody stocks) used to probe every candidate across every
+ * strategy SEQUENTIALLY — dozens of Desk round-trips, ~20s, client timeout. We
+ * now collect candidates in priority order, cap the total, and probe them all
+ * CONCURRENTLY. Kept comfortably above maxActions so enough survive the ≥1-match
+ * filter to fill the chip tray.
+ */
+const PROBE_BUDGET = 12;
+
+interface RecoveryCandidate {
+  id: string;
+  label: string;
+  merged: Constraints;
+  patch: Record<string, string | undefined>;
+  userLine: string;
+}
+
 /** Rank catalog-backed relaxations; only return actions that preflight to ≥1 match. */
 export async function planSearchRecovery(deps: RecoveryPlannerDeps): Promise<SearchRecoveryEnvelope> {
-  const actions: SuggestedAction[] = [];
-  const seen = new Set<string>();
   const c = deps.constraints;
   const mode = deps.variant === 'zero_match' ? 'search_recovery' : 'preference_refine';
   const hint = deps.hint ?? 'general';
 
-  const push = async (
+  // 1) Collect candidate relaxations in priority order — no I/O here, just specs.
+  const seen = new Set<string>();
+  const candidates: RecoveryCandidate[] = [];
+  const collect = async (
     id: string,
     label: string,
     merged: Constraints,
     patch: Record<string, string | undefined>,
     userLine: string,
   ) => {
-    if (actions.length >= deps.maxActions || seen.has(id)) return;
-    const action = await tryAction(deps, id, label, merged, patch, userLine);
-    if (!action) return;
+    if (candidates.length >= PROBE_BUDGET || seen.has(id)) return;
     seen.add(id);
-    actions.push(action);
+    candidates.push({ id, label, merged, patch, userLine });
   };
 
   const currentLoc = (c.location ?? '').toLowerCase();
@@ -325,8 +323,27 @@ export async function planSearchRecovery(deps: RecoveryPlannerDeps): Promise<Sea
   };
 
   for (const strategy of strategyOrder(hint)) {
-    if (actions.length >= deps.maxActions) break;
-    await strategy(push, ctx);
+    if (candidates.length >= PROBE_BUDGET) break;
+    await strategy(collect, ctx);
+  }
+
+  // 2) Preflight every candidate CONCURRENTLY (one round-trip wall-clock, not N),
+  //    then keep the first maxActions that yield ≥1 match, in priority order.
+  const counts = await Promise.all(
+    candidates.map((cand) => deps.searchCount(searchFilters(cand.merged)).catch(() => 0)),
+  );
+  const actions: SuggestedAction[] = [];
+  for (let i = 0; i < candidates.length && actions.length < deps.maxActions; i++) {
+    if (counts[i]! > 0) {
+      const cand = candidates[i]!;
+      actions.push({
+        id: cand.id,
+        label: truncateLabel(cand.label),
+        patch: cand.patch,
+        user_line: cand.userLine,
+        expected_matches: counts[i]!,
+      });
+    }
   }
 
   return {
