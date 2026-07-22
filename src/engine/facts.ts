@@ -25,8 +25,11 @@ const VISIT_RECALL_RE =
   /\b(?:my|all) (?:site )?(?:visits?|bookings?)\b|visits? (?:i have )?(?:planned|booked|scheduled)/i;
 const COMPARE_ADVICE_RE =
   /\b(which one is better|which is better|better for|recommend between|which fits my budget|best for my budget|fits my budget best)\b/i;
+// Opt-out is a destructive action (buyer memory delete) — the trigger must target
+// CONTACT or DATA, never the bot's behavior. Bare "stop" only as the standalone
+// SMS keyword; "stop asking questions" / "near the bus stop" must not fire.
 const STOP_RE =
-  /\b(?:stop|unsubscribe|opt out|delete my data|forget me|don't (?:message|text|contact)|do not (?:message|text|contact))\b/i;
+  /^(?:stop|unsubscribe)[.!]?\s*$|\b(?:unsubscribe|opt\s*out|delete my (?:data|details|number|info(?:rmation)?)|forget me|remove (?:me|my (?:number|details|data))|(?:stop|don'?t|do not)\s+(?:messag\w*|text\w*|calls?|calling|contact\w*|whatsapp\w*|sms)(?:\s+me)?)\b/i;
 const SMALLTALK_RE = /\b(?:how are you|how'?s it going|how do you do|what'?s up)\b/i;
 const POST_VISIT_ACK_RE =
   /^(?:ok(?:ay)?|thanks?(?: you)?|thank you|cool|great|got it|noted|perfect|sounds good|cheers)\.?!?\s*$/i;

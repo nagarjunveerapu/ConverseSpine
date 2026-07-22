@@ -161,6 +161,8 @@ export interface ConversationState {
   ndBuyerPhone?: string;
   /** After visit_booked — next short ack should not escalate to handoff. */
   postVisitAckPending?: boolean;
+  /** Opt-out asked in a mixed message — delete buyer memory only after an explicit yes. */
+  stopConfirmPending?: boolean;
   /** Cached NayaDesk project facts for focused / shortlisted projects. */
   projectCache?: Record<string, ProjectDetail>;
   /** Last-read confirmed visits from NayaDesk (itinerary mirror for board). */
