@@ -20,6 +20,7 @@ export interface AdvisorSearchPrefs {
   preferenceWeights?: Record<string, number>;
   commuteHub?: string;
   budgetTargetInr?: number;
+  askSizeSqft?: number;
 }
 
 /** Worry token predicates (advisor brief chips, lowercased by the door). */
@@ -48,11 +49,16 @@ export function importanceFromConstraints(c: Constraints): Record<string, number
       if (schools !== undefined) w.schools = schools;
       break;
     case 'budget':
-      w.commute = 0.5; w.budget = 0.9;
+      // Residual commute weight needs a commute SIGNAL (a named hub) to
+      // grade against — a priority chip alone must not manufacture one.
+      // This is the "⚠ 131 min shown to a not-commute-driven buyer" fix.
+      if (c.commuteHub) w.commute = 0.5;
+      w.budget = 0.9;
       if (schools !== undefined) w.schools = schools;
       break;
     case 'balanced':
-      w.commute = 0.7; w.budget = 0.7;
+      if (c.commuteHub) w.commute = 0.7;
+      w.budget = 0.7;
       if (schools !== undefined) w.schools = schools;
       break;
     default: {
@@ -74,6 +80,9 @@ export function importanceFromConstraints(c: Constraints): Record<string, number
   if (worryHas(c, 'resale') || worryHas(c, 'appreciation') || worryHas(c, 'hold value')) {
     w.value = Math.max(w.value ?? 0, 0.9);
   }
+  // An explicit decline is a zero, whatever set it above — the buyer's own
+  // "not commute-driven" beats every derived weight.
+  if (c.commuteDeclined) delete w.commute;
   return w;
 }
 
@@ -86,5 +95,8 @@ export function advisorSearchPrefs(c: Constraints): AdvisorSearchPrefs {
   // Soft target = the buyer's stated cap: "within/over your budget" narration
   // is measured against their own number, never an invented one.
   if (c.budgetMaxInr && c.budgetMaxInr > 0) out.budgetTargetInr = c.budgetMaxInr;
+  // The buyer's own asked size — Desk's budget dimension prices THEIR unit
+  // instead of the smallest-unit teaser price.
+  if (c.askSizeSqft && c.askSizeSqft > 0) out.askSizeSqft = c.askSizeSqft;
   return out;
 }

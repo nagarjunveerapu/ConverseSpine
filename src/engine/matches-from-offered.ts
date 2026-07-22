@@ -10,5 +10,7 @@ export function matchesFromLastOffered(state: ConversationState): Match[] {
     startingPriceDisplay: o.startingPriceDisplay ?? '',
     matchReasons: ['on your shortlist'],
     ...(o.tradeoffNote ? { tradeoffNote: o.tradeoffNote } : {}),
+    ...(o.dimensionFit ? { dimensionFit: o.dimensionFit } : {}),
+    ...(o.dimensionGap ? { dimensionGap: o.dimensionGap } : {}),
   }));
 }

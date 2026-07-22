@@ -100,6 +100,8 @@ function mapProjectCards(state: AdvisorMapInput['state']): AdvisorProjectCard[] 
     micro_market: o.microMarket ?? '',
     price_label: o.startingPriceDisplay ?? '',
     ...(o.tradeoffNote ? { tradeoff_note: o.tradeoffNote } : {}),
+    ...(o.dimensionFit ? { dimension_fit: o.dimensionFit } : {}),
+    ...(o.dimensionGap ? { dimension_gap: o.dimensionGap } : {}),
   }));
 }
 

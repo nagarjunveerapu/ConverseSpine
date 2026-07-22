@@ -23,6 +23,30 @@ export interface Constraints {
   walkabilityMentioned?: boolean;
   /** Buyer mentioned resale / appreciation ("resale value", "will it hold value"). */
   valueMentioned?: boolean;
+  /** The size the buyer asked for, parsed from their own config words
+   *  ("Quarter-Acre Plot (10,000 sqft)" → 10000). Desk prices THEIR unit. */
+  askSizeSqft?: number;
+  /** Buyer explicitly declined the commute angle ("not commute-driven").
+   *  A declined dimension must never earn a phantom weight or a probe. */
+  commuteDeclined?: boolean;
+}
+
+/** One ranked-dimension receipt from the Desk re-rank (see Desk
+ *  advisor_rerank.ts DimensionFit) — evidence-grade, speakable verbatim. */
+export interface DimensionFitReceipt {
+  dimension: string;
+  score: number;
+  weight: number;
+  evidence: string;
+  good: boolean;
+}
+
+/** Structured absence: the buyer's top-weighted dimension a project has no
+ *  data for. Rendered as an honest-unknown, never silently dropped. */
+export interface DimensionGapReceipt {
+  dimension: string;
+  weight: number;
+  label: string;
 }
 
 export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose' | 'priority';
@@ -32,8 +56,11 @@ export interface OfferedProject {
   name: string;
   microMarket?: string;
   startingPriceDisplay?: string;
-  /** Desk-authored trade-off narration ("✓ 17 min to ITPL · ⚠ ₹15 L over…"). */
+  /** Desk-authored trade-off narration ("✓ 17 min to ITPL · ⚠ ₹15 L over…").
+   *  Fallback voice only — compose renders from dimensionFit when present. */
   tradeoffNote?: string;
+  dimensionFit?: DimensionFitReceipt[];
+  dimensionGap?: DimensionGapReceipt;
 }
 
 export interface TranscriptMessage {
@@ -238,8 +265,12 @@ export interface Match {
   startingPriceDisplay: string;
   matchReasons: string[];
   projectType?: string;
-  /** Desk-authored trade-off narration; evidence-grade (speakable verbatim). */
+  /** Desk-authored trade-off narration; evidence-grade (speakable verbatim).
+   *  Fallback voice only — compose renders from dimensionFit when present. */
   tradeoffNote?: string;
+  /** Typed rank receipts (Desk advisor re-rank) — the four-questions source. */
+  dimensionFit?: DimensionFitReceipt[];
+  dimensionGap?: DimensionGapReceipt;
 }
 
 export interface CatalogEnvelope {
@@ -268,6 +299,8 @@ export interface SearchFilters {
    *  resolution Desk-side; close the same-turn persist race. */
   preferenceWeights?: Record<string, number>;
   commuteHub?: string;
+  /** Buyer's asked size — Desk's budget dimension prices THEIR unit. */
+  askSizeSqft?: number;
   budgetTargetInr?: number;
 }
 

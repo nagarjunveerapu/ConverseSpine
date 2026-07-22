@@ -125,6 +125,7 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         ...(filters.preferenceWeights ? { preference_weights: filters.preferenceWeights } : {}),
         ...(filters.commuteHub ? { commute_hub: filters.commuteHub } : {}),
         ...(filters.budgetTargetInr ? { budget_target_inr: filters.budgetTargetInr } : {}),
+        ...(filters.askSizeSqft ? { ask_size_sqft: filters.askSizeSqft } : {}),
         max_results: filters.maxResults ?? 5,
       });
       return {
@@ -137,6 +138,8 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           match_reasons: m.match_reasons,
           project_type: m.project_type,
           ...(m.tradeoff_note ? { tradeoff_note: m.tradeoff_note } : {}),
+          ...(m.dimension_fit ? { dimension_fit: m.dimension_fit } : {}),
+          ...(m.dimension_gap ? { dimension_gap: m.dimension_gap } : {}),
         })),
         expandedLocations: resp.expanded_locations ?? [],
         noMatchReasoning: resp.no_match_reasoning ?? '',

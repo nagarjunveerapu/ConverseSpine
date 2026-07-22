@@ -172,9 +172,11 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
     name: m.name,
     microMarket: m.microMarket,
     startingPriceDisplay: m.startingPriceDisplay,
-    // Trade-off note must survive this projection or it never reaches the
+    // Receipts must survive this projection or they never reach the
     // advisor SPA — cards render from lastOffered, not raw search evidence.
     ...(m.tradeoffNote ? { tradeoffNote: m.tradeoffNote } : {}),
+    ...(m.dimensionFit ? { dimensionFit: m.dimensionFit } : {}),
+    ...(m.dimensionGap ? { dimensionGap: m.dimensionGap } : {}),
   }));
   return { ...s, discover: { ...s.discover, lastOffered, ignoredProbes: 0 } };
 }
