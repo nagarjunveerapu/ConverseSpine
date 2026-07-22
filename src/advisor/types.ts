@@ -24,6 +24,13 @@ export interface AdvisorTurnRequest {
   board_tab?: string;
   /** Recovery chip tap — deterministic RTI fast path. */
   action_id?: string;
+  /**
+   * Brief-phase free text: extract constraints and return them via
+   * `prefs_snapshot`, but do NOT search/compose. Keeps the SPA's chip funnel
+   * the single control point (no shortlist can jump the brief-ready gate) while
+   * still routing natural language to the one language authority.
+   */
+  brief_extract?: boolean;
 }
 
 export interface AdvisorProjectCard {

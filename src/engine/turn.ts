@@ -107,6 +107,15 @@ export interface EngineTurnInput {
   preferenceClears?: PatchClearKey[];
   /** Slots pre-filled by advisor UI this turn — extract skips re-parsing them. */
   ingressFilledSlots?: IngressSlotKey[];
+  /**
+   * Brief-phase free text: run the full extraction funnel and merge constraints,
+   * then STOP — no goal selection, search, or compose. The merged constraints
+   * ride back out via the prefs_snapshot the mapper already builds. This keeps
+   * the SPA's chip funnel the single control point (a shortlist can never jump
+   * the brief-ready gate) while natural language still reaches the one language
+   * authority. See handle-turn `brief_extract`.
+   */
+  briefExtract?: boolean;
 }
 
 export interface EngineTurnOutput {
@@ -528,6 +537,31 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     shouldInvalidateLastOffered(prevConstraints, state.constraints, trimmedText, ex)
   ) {
     state = clearLastOffered(state);
+  }
+
+  // Brief-phase free text (SPA chip funnel still open): the extraction funnel has
+  // run and the constraints are now merged into state — STOP here. No goal, no
+  // search, no compose. The merged brief rides back out via the prefs_snapshot the
+  // mapper builds from state.constraints; the SPA pre-fills its chips and its own
+  // brief-ready gate still decides when the first real turn fires. turnCount is
+  // left untouched so the post-brief first turn behaves exactly as today.
+  if (input.briefExtract) {
+    await deps.store.save(state);
+    await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+    return {
+      reply: '',
+      state,
+      debug: withIngressDebug(
+        {
+          phase: state.phase,
+          goal: { kind: 'orient' },
+          tools: [],
+          grounding: 'pass',
+          ...(extractProvenance ? { extract_provenance: extractProvenance } : {}),
+        },
+        inputSource,
+      ),
+    };
   }
 
   const routing = await classifyTurnRouting(deps.routingEnv, buildTurnRoutingInput(state, ex, trimmedText));
