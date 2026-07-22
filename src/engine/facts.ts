@@ -494,7 +494,16 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
     .replace(/\b\d+\s*(?:people|persons?|members?|adults?|kids?|children)\b/g, ' ')
     .replace(/\b\d+(?:\.\d+)?\s*(?:bhk|bedrooms?)\b/g, ' ')
     .replace(/\d+(?:\.\d+)?\s*(?:%|percent)/g, ' ')
-    .replace(/\d+(?:\.\d+)?\s*(?:years?|yrs?|months?)\b/g, ' ');
+    .replace(/\d+(?:\.\d+)?\s*(?:years?|yrs?|months?)\b/g, ' ')
+    // Numbered-list markers — "(1) I prefer ground floor" is an enumeration,
+    // not ₹1 L (ten-buyers S02: the Colonel's four numbered questions).
+    .replace(/\(\s*\d{1,2}\s*\)/g, ' ')
+    // Narrative money — an amount the buyer HAS, PAYS, or LOST is not a price
+    // bound: "12 lakhs saved" (S01), "builder took 40 lakhs" (S03 — a 2019
+    // story), "13L down payment" (S05), "take home 85k". Same scrubber class
+    // as family-of-4 above; both orders (amount-first and keyword-first).
+    .replace(/\b\d[\d.,]*\s*(?:lakhs?|lacs?|l|k|cr|crores?)?\s*(?:saved|savings?|down\s*payment|downpayment|deposit(?:ed)?|salary|income)\b/g, ' ')
+    .replace(/\b(?:saved?|savings?|down\s*payment|downpayment|deposit(?:ed)?|salary|take\s*home|income|earns?|earning|paid|took|spent|gave|lost)\s*(?:of|is|was|:)?\s*\d[\d.,]*\s*(?:lakhs?|lacs?|l|k|cr|crores?)?\b/g, ' ');
   const range = s.match(
     /(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?\s*(?:[-–—]|to|and)\s*(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?/,
   );
@@ -524,6 +533,11 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
   }
   const single = s.match(/(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?(?=\s|$|[^\w])/);
   if (!single) return null;
+  // A bare unitless digit is a budget only when the number IS the message
+  // ("70", "around 70 max" — a probe answer). Inside running prose it is
+  // narration, not a price bound — the Colonel's "(1)" and a story's stray
+  // number must never become ₹N L (ten-buyers S01/S02/S03).
+  if (!single[2] && s.trim().split(/\s+/).length > 5) return null;
   const v = toInr(parseFloat(single[1]!), single[2] ?? '');
   return v !== null && v > 0 ? { max: v } : null;
 }

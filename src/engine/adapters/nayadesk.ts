@@ -142,6 +142,11 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
           ...(m.dimension_gap ? { dimension_gap: m.dimension_gap } : {}),
         })),
         expandedLocations: resp.expanded_locations ?? [],
+        // null (no locations sent) and missing (old Desk) both map to
+        // undefined — only a real array may trigger the junk-locality drop.
+        ...(Array.isArray(resp.recognized_locations)
+          ? { recognizedLocations: resp.recognized_locations }
+          : {}),
         noMatchReasoning: resp.no_match_reasoning ?? '',
       };
     },

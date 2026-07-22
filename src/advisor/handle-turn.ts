@@ -9,7 +9,13 @@ import { commitTo, initState, markAsked, withNdConversation } from '../engine/st
 import { detectSoftPrefs } from '../engine/facts.js';
 import { derivedPriorityFromWorries } from '../engine/advisor-weights.js';
 import { mapAdvisorTurnResponse } from './map-response.js';
-import { mergeAdvisorPreferences, preferenceClearsFromPatch, ingressFilledSlotsFromPreferences } from './apply-preferences.js';
+import {
+  advisorPrefsDelta,
+  advisorPrefsSnapshot,
+  ingressFilledSlotsFromPreferences,
+  mergeAdvisorPreferences,
+  preferenceClearsFromPatch,
+} from './apply-preferences.js';
 import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
 import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../engine/phases/visit.js';
 import type { AdvisorTurnRequest, AdvisorTurnResponse } from './types.js';
@@ -53,8 +59,6 @@ export async function handleAdvisorTurn(
   const pivotTurn = isFocusedSearchPivot(text);
 
   if (body.preferences && Object.keys(body.preferences).length > 0) {
-    preferenceClears = preferenceClearsFromPatch(body.preferences);
-    ingressFilledSlots = ingressFilledSlotsFromPreferences(body.preferences);
     let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
     if (!existing.ndConversationId && buyer_phone) {
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone, 'advisor_web').catch(() => null);
@@ -64,13 +68,26 @@ export async function handleAdvisorTurn(
       existing.rti?.lastUiMode === 'search_recovery' ||
       existing.rti?.lastUiMode === 'preference_refine' ||
       existing.rti?.lastGoalKind === 'no_fit';
-    if (!inRecovery) {
+    // Field-level delta-merge (RTI-2.1, reworked): out of recovery the whole
+    // brief applies — the advisor UI is source of truth. In recovery only
+    // fields whose value CHANGED vs the last-applied snapshot apply, so a
+    // stale re-sent brief can't clobber recovery edits, but a fresh buyer
+    // edit mid-recovery is never swallowed wholesale again.
+    const effectivePrefs = inRecovery
+      ? advisorPrefsDelta(existing.advisorPrefsSnapshot, body.preferences)
+      : body.preferences;
+    if (Object.keys(effectivePrefs).length > 0) {
+      preferenceClears = preferenceClearsFromPatch(effectivePrefs);
+      ingressFilledSlots = ingressFilledSlotsFromPreferences(effectivePrefs);
       existing = {
         ...existing,
-        constraints: mergeAdvisorPreferences(existing.constraints, body.preferences),
+        constraints: mergeAdvisorPreferences(existing.constraints, effectivePrefs),
         discover: { ...existing.discover, oriented: true },
+        advisorPrefsSnapshot: advisorPrefsSnapshot(body.preferences, existing.advisorPrefsSnapshot),
       };
       await rt.engine.store.save(existing);
+    }
+    if (!inRecovery) {
 
       // Trade-off Advisor: one-time priority ask, exactly between brief-merge
       // and the first shortlist. Advisor-door pre-turn (same class as the

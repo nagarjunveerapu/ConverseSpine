@@ -85,6 +85,10 @@ export interface EngineData {
       dimension_gap?: { dimension: string; weight: number; label: string };
     }>;
     expandedLocations?: string[];
+    /** Provisional-locality contract: subset of the sent locations the Desk
+     *  recognizes as real places (registry / catalog / geocoder). Absent on
+     *  older Desk deploys — absence must mean "no drop", never "unrecognized". */
+    recognizedLocations?: string[];
     noMatchReasoning?: string;
   }>;
   catalog(builderId: string): Promise<{

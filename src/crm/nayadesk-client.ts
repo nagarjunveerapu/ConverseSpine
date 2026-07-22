@@ -394,7 +394,7 @@ export class NayaDeskClient {
     commute_hub?: string;
     budget_target_inr?: number;
     ask_size_sqft?: number;
-  }): Promise<{ matches: NdSearchMatch[]; expanded_locations?: string[]; no_match_reasoning?: string }> {
+  }): Promise<{ matches: NdSearchMatch[]; expanded_locations?: string[]; recognized_locations?: string[] | null; no_match_reasoning?: string }> {
     return this.call('POST', '/api/projects/search', req);
   }
 

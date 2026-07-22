@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advisorPrefsDelta,
+  advisorPrefsSnapshot,
   constraintsFromAdvisorPreferences,
   mergeAdvisorPreferences,
 } from '../src/advisor/apply-preferences.js';
@@ -67,5 +69,42 @@ describe('mergeAdvisorPreferences', () => {
     });
     expect(merged.propertyType).toBe('Apartment');
     expect(merged.bhk).toBeUndefined();
+  });
+});
+
+describe('advisorPrefsDelta / advisorPrefsSnapshot (recovery delta-merge)', () => {
+  it('first-ever brief: everything differs from the empty snapshot', () => {
+    const delta = advisorPrefsDelta(undefined, { location: 'Devanahalli', budget: 'around 60' });
+    expect(delta).toEqual({ location: 'Devanahalli', budget: 'around 60' });
+  });
+
+  it('stale re-sent brief in recovery: nothing changed → empty delta', () => {
+    const snap = advisorPrefsSnapshot({ location: 'Devanahalli', budget: 'around 60' });
+    const delta = advisorPrefsDelta(snap, { location: 'Devanahalli', budget: 'around 60' });
+    expect(Object.keys(delta)).toHaveLength(0);
+  });
+
+  it('fresh edit mid-recovery: only the edited field flows through', () => {
+    const snap = advisorPrefsSnapshot({ location: 'Devanahalli', budget: 'around 60' });
+    const delta = advisorPrefsDelta(snap, { location: 'Devanahalli', budget: 'up to 75' });
+    expect(delta).toEqual({ budget: 'up to 75' });
+  });
+
+  it('explicit clear (value emptied) counts as a change', () => {
+    const snap = advisorPrefsSnapshot({ bhk: '3 BHK', location: 'Devanahalli' });
+    const delta = advisorPrefsDelta(snap, { bhk: '', location: 'Devanahalli' });
+    expect(delta).toEqual({ bhk: '' });
+  });
+
+  it('whitespace-only difference is not a change', () => {
+    const snap = advisorPrefsSnapshot({ budget: 'around 60' });
+    const delta = advisorPrefsDelta(snap, { budget: ' around 60 ' });
+    expect(Object.keys(delta)).toHaveLength(0);
+  });
+
+  it('snapshot merges over the prior snapshot (fields absent this turn survive)', () => {
+    const first = advisorPrefsSnapshot({ location: 'Devanahalli', budget: 'around 60' });
+    const second = advisorPrefsSnapshot({ budget: 'up to 75' }, first);
+    expect(second).toEqual({ location: 'Devanahalli', budget: 'up to 75' });
   });
 });
