@@ -1836,8 +1836,12 @@ async function fetchShortlistAnswer(
       topic: 'emi',
       label: `Approx. EMI (80% loan, ${years} yrs @ ${rate}%)`,
       perProject: matches.map((m, i) => {
-        const b = bases[i];
-        const emi = b ? computeEmi(b.priceInr, rate, years) : null;
+        // Unit-type basis first; the shortlist's own starting price as the
+        // honest fallback (s01: no BHK on the brief → priceBasis missed and
+        // the whole EMI block silently vanished). basisFormatted names the
+        // basis either way, so the figure is never presented as unit-exact.
+        const basisInr = bases[i]?.priceInr ?? (m.startingPriceInr > 0 ? m.startingPriceInr : 0);
+        const emi = basisInr > 0 ? computeEmi(basisInr, rate, years) : null;
         return {
           projectId: m.projectId,
           name: m.name,

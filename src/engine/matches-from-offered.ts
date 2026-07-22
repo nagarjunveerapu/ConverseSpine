@@ -6,7 +6,7 @@ export function matchesFromLastOffered(state: ConversationState): Match[] {
     projectId: o.projectId,
     name: o.name,
     microMarket: o.microMarket ?? '',
-    startingPriceInr: 0,
+    startingPriceInr: o.startingPriceInr ?? 0,
     startingPriceDisplay: o.startingPriceDisplay ?? '',
     matchReasons: ['on your shortlist'],
     ...(o.tradeoffNote ? { tradeoffNote: o.tradeoffNote } : {}),

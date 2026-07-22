@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { decide } from '../src/engine/phases/discover.js';
 import { runEngineTurn } from '../src/engine/turn.js';
+import { stripBanned } from '../src/engine/grounding.js';
 import { fakeDeps } from './fakes.js';
 import type { ConversationState, Extracted } from '../src/engine/types.js';
 
@@ -124,15 +125,45 @@ describe('shortlist facet answers end-to-end', () => {
     expect(r.reply).toMatch(/₹/);
   });
 
-  it('a project missing the fact renders an honest "not on file", never an invented value', async () => {
-    const { deps, turn } = harness('sla-missing');
+  it('priceBasis miss falls back to the board price — EMI never silently vanishes (s01)', async () => {
+    const { deps, turn } = harness('sla-basis-fallback');
     const original = deps.data.priceBasis.bind(deps.data);
     deps.data.priceBasis = async (b, nd, id, ut) =>
       id === 'ayana' ? null : original(b, nd, id, ut);
     await turn('plantation under 50 lakhs');
     const r = await turn('ohh ok. emi will be how much');
+    // Ayana's EMI computes from its own shortlist price (₹24.95 L basis).
+    expect(r.reply).toMatch(/\*Ayana\* — ₹[\d,]+\/mo on ₹24,95,000/);
+  });
+
+  it('a project with no basis AND no board price renders an honest "not on file"', async () => {
+    const { deps, turn } = harness('sla-missing');
+    const originalBasis = deps.data.priceBasis.bind(deps.data);
+    deps.data.priceBasis = async (b, nd, id, ut) =>
+      id === 'ayana' ? null : originalBasis(b, nd, id, ut);
+    const originalSearch = deps.data.search.bind(deps.data);
+    deps.data.search = async (b, f) => {
+      const r = await originalSearch(b, f);
+      // Emulate a price-on-request project — no numeric price anywhere.
+      return {
+        matches: r.matches.map((m) =>
+          m.project_id === 'ayana' ? { ...m, starting_price_inr: 0 } : m,
+        ),
+      };
+    };
+    // No budget cap — a price-less project can't board under one (by design).
+    await turn('show me plantation options');
+    const r = await turn('ohh ok. emi will be how much');
     expect(r.reply).toMatch(/\*Ayana\* — not on file yet/);
     expect(r.reply).toMatch(/₹[\d,]+\/mo/); // the others still answer
+  });
+
+  it('stripBanned leaves a clean templated block untouched (bullet newlines survive)', () => {
+    const block =
+      '*Legal & approvals*\n• *Ayana* — EC clear. Full EC available at site visit.\n• *Vanam* — not on file yet';
+    expect(stripBanned(block)).toBe(block);
+    // The scrub path still removes banned filler when present.
+    expect(stripBanned('Here are the docs. Hope this helps!')).toBe('Here are the docs.');
   });
 
   it('facet answer ends on a forward fork, and a follow-up name still picks', async () => {
