@@ -1,6 +1,7 @@
 import type { Env } from './env.js';
 import { handleAdvisorBriefFacets } from './advisor/handle-brief-facets.js';
 import { handleAdvisorProjectDetail } from './advisor/handle-project-detail.js';
+import { handleAdvisorPreview } from './advisor/handle-preview.js';
 import { handleAdvisorTurn } from './advisor/handle-turn.js';
 import { createWorkerRuntime } from './runtime/deps.js';
 import { handleAgentSend, handleChat, health, json, toDeskChatResponse } from './worker/routes.js';
@@ -73,6 +74,21 @@ export default {
               ? 404
               : 200;
         return json(result, status);
+      }
+
+      if (path === '/api/advisor/preview' && method === 'POST') {
+        // Stateless narrowing preview for the SPA thinking-strip — a pure
+        // read (no state, no message, no priority ask, no prefetch). Fired on
+        // every debounced brief change, so it stays as cheap as one search.
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ status: 'error', error: 'invalid_json' }, 400);
+        }
+        const rt = createWorkerRuntime(env);
+        const result = await handleAdvisorPreview(rt, body as Parameters<typeof handleAdvisorPreview>[1]);
+        return json(result, 200);
       }
 
       if (path === '/api/advisor/turn' && method === 'POST') {
