@@ -194,39 +194,35 @@ export function filterNamedProjectsByEvidence(
   }
   let alive = candidates.filter((c) => c.ev !== 'none');
   if (!alive.length) return [];
-  // "cornerstone utopia" names the more specific sibling: a fully-matched name whose
-  // tokens are a strict subset of another fully-matched name loses to the superset.
-  const fulls = alive.filter((c) => c.ev === 'full');
-  if (fulls.length > 1) {
-    const dropped = new Set<string>();
-    for (const a of fulls) {
-      const ta = evidenceTokens(a.p.name);
-      for (const b of fulls) {
-        if (a === b || dropped.has(a.p.projectId)) continue;
-        const tb = evidenceTokens(b.p.name);
-        if (tb.length > ta.length && ta.every((t) => tb.includes(t))) {
-          dropped.add(a.p.projectId);
-        }
+  // Specificity: a candidate whose matched tokens are a strict subset of another's
+  // loses to the more specifically named one — "krishnaja greens" drops Viva Greens
+  // (matched {greens} ⊂ {krishnaja, greens}); "cornerstone utopia" drops the plain
+  // Cornerstone sibling the same way.
+  const words = facetNameResidue(text).split(' ').filter(Boolean);
+  const matchedSet = (name: string): string[] =>
+    evidenceTokens(name)
+      .filter((t) => words.some((w) => tokenMatchesWord(w, t)))
+      .sort();
+  const matched = new Map<string, string[]>(alive.map((c) => [c.p.projectId, matchedSet(c.p.name)]));
+  const dropped = new Set<string>();
+  for (const a of alive) {
+    const ta = matched.get(a.p.projectId)!;
+    for (const b of alive) {
+      if (a === b) continue;
+      const tb = matched.get(b.p.projectId)!;
+      if (tb.length > ta.length && ta.every((t) => tb.includes(t))) {
+        dropped.add(a.p.projectId);
       }
     }
-    if (dropped.size) alive = alive.filter((c) => !dropped.has(c.p.projectId));
   }
-  // Full-beats-partial and pool-beats-global arbitrate only between candidates
-  // competing for the SAME typed name ("conerstone" → board Cornerstone over global
+  if (dropped.size) alive = alive.filter((c) => !dropped.has(c.p.projectId));
+  // Full-beats-partial and pool-beats-global arbitrate only between candidates the
+  // text points at with the SAME words ("conerstone" → board Cornerstone over global
   // Utopia) — distinct names in one utterance ("compare ayana and krishnaja greens")
   // are separate claims and all survive.
-  const words = facetNameResidue(text).split(' ').filter(Boolean);
-  const matchedKey = (name: string): string => {
-    const tokens = evidenceTokens(name);
-    const distinctive = tokens.length > 1 ? tokens.slice(1) : tokens;
-    return distinctive
-      .filter((t) => words.some((w) => tokenMatchesWord(w, t)))
-      .sort()
-      .join('|');
-  };
   const groups = new Map<string, typeof alive>();
   for (const c of alive) {
-    const key = matchedKey(c.p.name) || `#${c.p.projectId}`;
+    const key = matched.get(c.p.projectId)!.join('|') || `#${c.p.projectId}`;
     groups.set(key, [...(groups.get(key) ?? []), c]);
   }
   const keep = new Set<string>();

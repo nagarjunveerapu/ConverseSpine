@@ -87,6 +87,21 @@ describe('filterNamedProjectsByEvidence', () => {
     expect(filterNamedProjectsByEvidence('vanam', [VANAM], [])).toEqual([VANAM]);
   });
 
+  it('"krishnaja greens" drops the shared-token cousin Viva Greens', () => {
+    const VIVA: OfferedProject = { projectId: 'viva-greens', name: 'Viva Greens' };
+    const out = filterNamedProjectsByEvidence('and krishnaja greens?', [KRISHNAJA, VIVA], []);
+    expect(out).toEqual([KRISHNAJA]);
+  });
+
+  it('distinct names in one utterance all survive (compare stays a compare)', () => {
+    const out = filterNamedProjectsByEvidence(
+      'compare ayana and krishnaja greens',
+      [AYANA, KRISHNAJA],
+      [KRISHNAJA],
+    );
+    expect(out).toEqual([AYANA, KRISHNAJA]);
+  });
+
   it('never invents: empty proposal stays empty even when the pool matches', () => {
     expect(filterNamedProjectsByEvidence('tell me about eldorado', [], BOARD)).toEqual([]);
   });
