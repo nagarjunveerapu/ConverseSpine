@@ -174,6 +174,12 @@ export interface ConversationState {
   returningBuyer?: { buyerName: string; daysSinceLastSeen: number };
   /** Contextual turn intent session (recovery yes/no, chips). */
   rti?: import('./turn-intent/types.js').RtiState;
+  /**
+   * Last advisor-brief payload applied (values trimmed), keyed by pref field.
+   * The SPA re-sends the whole brief every turn; in recovery only fields whose
+   * value CHANGED vs this snapshot may overwrite server-side constraints.
+   */
+  advisorPrefsSnapshot?: Record<string, string>;
   /** P2b — structured prior from turn_ledger (gap-fill source; live KV wins). */
   feedForward?: import('./ledger-read.js').TurnFeedForward;
   /**

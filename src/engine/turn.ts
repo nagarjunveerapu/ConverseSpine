@@ -266,7 +266,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       if (nd) await deps.crm.releaseProject(nd).catch(() => {});
     }
 
-    if (applied.probeReply) {
+    // Recovery-lane escape hatch: an ABSTAINED classification means neither
+    // rules nor the classifier understood the turn — exactly the case the
+    // full pipeline (embedder + extraction + goal machinery) exists for. Same
+    // when the canned probe would repeat the previous reply verbatim (the
+    // "same three chips again" defect, ten-buyers S08/S09). Fall through to
+    // the main pipeline instead of early-returning the canned probe.
+    const probeFallsThrough =
+      Boolean(applied.probeReply) &&
+      (intent.confidence === 'abstain' ||
+        excerptReply(applied.probeReply ?? '') === state.rti?.lastReplyExcerpt);
+
+    if (applied.probeReply && !probeFallsThrough) {
       let searchRecovery = storedSearchRecovery(state);
       if (!searchRecovery?.suggested_actions.length) {
         searchRecovery = await freshSearchRecovery(deps, state, channel);
@@ -842,7 +853,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       goal = answerGoal;
     }
   } else if (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') {
-    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText, channel));
+    const recFlags: { droppedLocation?: string } = {};
+    ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText, channel, recFlags));
+    if (recFlags.droppedLocation && state.constraints.location) {
+      // Junk-locality purge (see fetchRecommend): persisting an unrecognized
+      // capture is what made "No exact match for one week. ELEVEN" echo on
+      // every later turn.
+      const { location: _junkLoc, ...cleanConstraints } = state.constraints;
+      state = { ...state, constraints: cleanConstraints };
+    }
   } else if (goal.kind === 'objection') {
     ({ goal, evidence } = await fetchObjection(goal, state, deps, nd));
   } else if (goal.kind === 'answer') {
@@ -1285,6 +1304,9 @@ async function fetchRecommend(
   deps: EngineDeps,
   buyerText: string,
   channel: TurnIntentChannel = 'whatsapp',
+  /** Out-flags for the single caller: a junk locality dropped here must also
+   *  be purged from PERSISTED state, or it echoes on every later turn. */
+  out?: { droppedLocation?: string },
 ): Promise<{ goal: TurnGoal; evidence: EvidenceSet }> {
   const relistShortlist = (): { goal: TurnGoal; evidence: EvidenceSet } | null => {
     const ms = matchesFromLastOffered(s);
@@ -1307,7 +1329,30 @@ async function fetchRecommend(
     if (prefs.budgetTargetInr) filters = { ...filters, budgetTargetInr: prefs.budgetTargetInr };
     if (prefs.askSizeSqft) filters = { ...filters, askSizeSqft: prefs.askSizeSqft };
   }
-  const strictSearch = await searchWithFilters(deps, s.builderId, filters);
+  let strictSearch = await searchWithFilters(deps, s.builderId, filters);
+
+  // Provisional locality — the Desk is the locality authority (area registry +
+  // catalog identity + geocoder). Zero matches AND none of the sent locations
+  // recognized means the captured "place" is dialogue noise ("boarding a
+  // flight", "next option"), not an uncovered locality: drop it from this
+  // search and flag it for the state purge, then re-search the rest of the
+  // brief. A RECOGNIZED place with zero matches keeps the honest no_fit path
+  // (echoing "Mysuru" back is honest; echoing noise back is the defect).
+  if (
+    filters.locations &&
+    strictSearch.matches.length === 0 &&
+    strictSearch.recognizedLocations !== undefined &&
+    strictSearch.recognizedLocations.length === 0
+  ) {
+    if (out) out.droppedLocation = filters.locations;
+    const { locations: _junkLoc, ...withoutLocation } = filters;
+    filters = withoutLocation;
+    if (s.constraints.location) {
+      const { location: _sLoc, ...cleanConstraints } = s.constraints;
+      s = { ...s, constraints: cleanConstraints };
+    }
+    strictSearch = await searchWithFilters(deps, s.builderId, filters);
+  }
 
   const offeredIds = new Set(s.discover.lastOffered.map((o) => o.projectId));
 
@@ -1565,6 +1610,7 @@ async function searchWithFilters(
     dimension_gap?: { dimension: string; weight: number; label: string };
   }>;
   expandedLocations?: string[];
+  recognizedLocations?: string[];
   noMatchReasoning?: string;
 }> {
   return deps.data.search(builderId, filters).catch(() => ({ matches: [] }));

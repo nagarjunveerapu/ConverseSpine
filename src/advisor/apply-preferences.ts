@@ -108,6 +108,34 @@ export function mergeAdvisorPreferences(
   return next;
 }
 
+/**
+ * Fields whose value actually changed vs the last-applied client brief.
+ * The SPA re-sends the WHOLE brief on every turn; in recovery only fields the
+ * buyer just edited may overwrite server-side constraints. This keeps the
+ * RTI-2.1 protection (stale re-sent fields never clobber recovery edits) while
+ * ending the wholesale skip that swallowed fresh edits mid-recovery.
+ */
+export function advisorPrefsDelta(
+  snapshot: Record<string, string> | undefined,
+  prefs: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(prefs)) {
+    if ((snapshot?.[k] ?? '') !== (v?.trim() ?? '')) out[k] = v;
+  }
+  return out;
+}
+
+/** Normalized (trimmed) snapshot of the client brief, merged over the prior one. */
+export function advisorPrefsSnapshot(
+  prefs: Record<string, string | undefined>,
+  prior?: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = { ...(prior ?? {}) };
+  for (const [k, v] of Object.entries(prefs)) out[k] = v?.trim() ?? '';
+  return out;
+}
+
 /** Slots explicitly set by advisor preferences this turn — extract must not re-parse them. */
 export function ingressFilledSlotsFromPreferences(
   prefs: Record<string, string | undefined>,
