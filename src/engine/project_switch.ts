@@ -102,6 +102,143 @@ export function hasExplicitProjectCue(text: string): boolean {
   return false;
 }
 
+/** One insertion/deletion/substitution — tolerates buyer typos ("conerstone"). */
+function withinOneEdit(a: string, b: string): boolean {
+  if (a === b) return true;
+  const la = a.length;
+  const lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  const [s, l] = la <= lb ? [a, b] : [b, a];
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < s.length && j < l.length) {
+    if (s[i] === l[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    if (edits++) return false;
+    if (s.length === l.length) i++; // substitution
+    j++; // insertion in the longer string (or the substitution's other half)
+  }
+  return edits + (l.length - j) + (s.length - i) <= 1;
+}
+
+function evidenceTokens(name: string): string[] {
+  return name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+}
+
+function tokenMatchesWord(word: string, token: string): boolean {
+  if (word === token) return true;
+  // Typo tolerance only where a single edit can't turn one real word into another
+  // short one ("oasis" vs "basis" stays exact-only via the length floor).
+  return token.length >= 6 && word.length >= 5 && withinOneEdit(word, token);
+}
+
+export type NameEvidence = 'full' | 'partial' | 'none';
+
+/**
+ * Does the buyer's own text contain this project's name? Judged on the facet-stripped
+ * residue so "starting prices for eldorado" reads as name evidence while "starting
+ * prices" alone never does. 'full' = every distinctive token present (typo-tolerant);
+ * 'partial' = some; 'none' = the buyer never named this project.
+ */
+export function nameEvidenceIn(text: string, name: string): NameEvidence {
+  const words = facetNameResidue(text).split(' ').filter(Boolean);
+  if (!words.length) return 'none';
+  const tokens = evidenceTokens(name);
+  if (!tokens.length) return 'none';
+  const distinctive = tokens.length > 1 ? tokens.slice(1) : tokens;
+  const matched = distinctive.filter((t) => words.some((w) => tokenMatchesWord(w, t)));
+  if (matched.length === distinctive.length) return 'full';
+  // A lone brand token ("brigade") is not evidence for one sibling over another.
+  if (matched.length > 0) return 'partial';
+  if (tokens.length > 1 && tokens[0] && words.some((w) => tokenMatchesWord(w, tokens[0]!))) {
+    return 'partial';
+  }
+  return 'none';
+}
+
+/**
+ * Precision floor for vector/LLM-proposed project identity: a proposal survives only
+ * when the buyer's text actually names it, and on split evidence the session pool
+ * (board / discussed / focus) outranks the global catalog — "conerstone" must resolve
+ * to the Cornerstone already on the buyer's board, never a same-brand sibling from
+ * another corridor. Veto-only: this never adds candidates the extractor didn't propose.
+ */
+export function filterNamedProjectsByEvidence(
+  text: string,
+  named: ReadonlyArray<OfferedProject>,
+  pool: ReadonlyArray<{ projectId?: string; name: string }>,
+): OfferedProject[] {
+  if (!named.length) return [...named];
+  const inPool = (p: OfferedProject): boolean =>
+    pool.some(
+      (q) =>
+        (q.projectId && q.projectId === p.projectId) ||
+        q.name.trim().toLowerCase() === p.name.trim().toLowerCase(),
+    );
+  // The pool competes for identity: a board project fully named by the text beats a
+  // global proposal that the text only partially names.
+  const candidates: { p: OfferedProject; ev: NameEvidence; pool: boolean }[] = [];
+  const seen = new Set<string>();
+  for (const p of named) {
+    candidates.push({ p, ev: nameEvidenceIn(text, p.name), pool: inPool(p) });
+    seen.add(p.projectId);
+  }
+  for (const q of pool) {
+    if (!q.projectId || seen.has(q.projectId)) continue;
+    const ev = nameEvidenceIn(text, q.name);
+    if (ev === 'full') candidates.push({ p: { projectId: q.projectId, name: q.name }, ev, pool: true });
+  }
+  let alive = candidates.filter((c) => c.ev !== 'none');
+  if (!alive.length) return [];
+  // "cornerstone utopia" names the more specific sibling: a fully-matched name whose
+  // tokens are a strict subset of another fully-matched name loses to the superset.
+  const fulls = alive.filter((c) => c.ev === 'full');
+  if (fulls.length > 1) {
+    const dropped = new Set<string>();
+    for (const a of fulls) {
+      const ta = evidenceTokens(a.p.name);
+      for (const b of fulls) {
+        if (a === b || dropped.has(a.p.projectId)) continue;
+        const tb = evidenceTokens(b.p.name);
+        if (tb.length > ta.length && ta.every((t) => tb.includes(t))) {
+          dropped.add(a.p.projectId);
+        }
+      }
+    }
+    if (dropped.size) alive = alive.filter((c) => !dropped.has(c.p.projectId));
+  }
+  // Full-beats-partial and pool-beats-global arbitrate only between candidates
+  // competing for the SAME typed name ("conerstone" → board Cornerstone over global
+  // Utopia) — distinct names in one utterance ("compare ayana and krishnaja greens")
+  // are separate claims and all survive.
+  const words = facetNameResidue(text).split(' ').filter(Boolean);
+  const matchedKey = (name: string): string => {
+    const tokens = evidenceTokens(name);
+    const distinctive = tokens.length > 1 ? tokens.slice(1) : tokens;
+    return distinctive
+      .filter((t) => words.some((w) => tokenMatchesWord(w, t)))
+      .sort()
+      .join('|');
+  };
+  const groups = new Map<string, typeof alive>();
+  for (const c of alive) {
+    const key = matchedKey(c.p.name) || `#${c.p.projectId}`;
+    groups.set(key, [...(groups.get(key) ?? []), c]);
+  }
+  const keep = new Set<string>();
+  for (const group of groups.values()) {
+    const score = (c: { ev: NameEvidence; pool: boolean }): number =>
+      (c.ev === 'full' ? 2 : 0) + (c.pool ? 1 : 0);
+    const best = Math.max(...group.map(score));
+    for (const c of group) if (score(c) === best) keep.add(c.p.projectId);
+  }
+  return alive.filter((c) => keep.has(c.p.projectId)).map((c) => c.p);
+}
+
 /** Residue overlaps offered/discussed/focus names (session pool — never a global catalog). */
 export function residueMatchesPool(
   text: string,
@@ -185,8 +322,16 @@ export function detectFocusedSwitchIntent(
     const n = named[0];
     if (!n) return null;
     if (n.projectId !== focus.projectId) {
-      // Sticky facet without structural/pool cue → stay on focus (vector noise).
-      if (isStickyFacetAsk(ex) && !buyerCuedOtherProject(_text, poolOf(s))) return null;
+      // Sticky facet without structural/pool cue → stay on focus (vector noise) —
+      // unless the buyer's text itself fully names the project ("and krishnaja
+      // greens?"): typed name evidence beats the pool gate.
+      if (
+        isStickyFacetAsk(ex) &&
+        !buyerCuedOtherProject(_text, poolOf(s)) &&
+        nameEvidenceIn(_text, n.name) !== 'full'
+      ) {
+        return null;
+      }
       return { commit: n, ...fu };
     }
     return null;

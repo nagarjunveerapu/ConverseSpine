@@ -20,7 +20,11 @@ import {
 import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
 import { holdIntent } from './hold-intent.js';
 import { hasNarrowingConstraint } from './phases/discover.js';
-import { buyerCuedOtherProject } from './project_switch.js';
+import {
+  buyerCuedOtherProject,
+  filterNamedProjectsByEvidence,
+  nameEvidenceIn,
+} from './project_switch.js';
 import type {
   ExtractProvenance,
   FieldProvenance,
@@ -431,10 +435,32 @@ export function scrubEmbedderIdentityNoise(
     const { namedProjects: _n, pickName: _p, ...rest } = extracted;
     return rest;
   }
+  // Precision floor, every phase: proposed identity survives only when the buyer's
+  // text names it; split evidence resolves toward the session pool (the buyer's own
+  // board), never a same-brand sibling from the global catalog. Kills state-dependent
+  // focus steals ("take home 85k" → Century Breeze) at the producer so every consumer
+  // (discover / focused / visit / compare) inherits the guarantee.
+  if (extracted.namedProjects?.length) {
+    const filtered = filterNamedProjectsByEvidence(
+      text,
+      extracted.namedProjects,
+      (sessionPool ?? []) as ReadonlyArray<{ projectId?: string; name: string }>,
+    );
+    if (!filtered.length) {
+      const { namedProjects: _n, ...rest } = extracted;
+      extracted = rest;
+    } else {
+      extracted = { ...extracted, namedProjects: filtered };
+    }
+  }
   if (phase !== 'focused' && phase !== 'visit') return extracted;
   if (!isDetailAskTurn(extracted)) return extracted;
-  // Keep identity only on structural cue or session-pool name — never a global catalog list.
+  // Keep identity on structural cue, session-pool name, or a fully-typed project name
+  // (the floor above already vetoed anything the buyer didn't actually write).
   if (buyerCuedOtherProject(text, sessionPool)) return extracted;
+  if (extracted.namedProjects?.some((p) => nameEvidenceIn(text, p.name) === 'full')) {
+    return extracted;
+  }
   if (!extracted.namedProjects?.length && !extracted.pickName) return extracted;
   const { namedProjects: _n, pickName: _p, ...rest } = extracted;
   return rest;
