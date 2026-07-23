@@ -1,3 +1,4 @@
+import type { TurnInputSource } from '../ingress.js';
 import type { AnswerTopic, ConversationState, Extracted, Phase } from '../types.js';
 
 export type TurnRoutingKind =
@@ -22,7 +23,7 @@ export type TurnRoutingConfidence = 'rule' | 'embedder' | 'llm' | 'abstain';
 export interface RoutingBindTelemetry {
   bind_source: 'regex' | 'embed_intent' | 'none';
   embed_fired: boolean;
-  embed_gate?: 'visit_rule' | 'speech_act' | 'rule_bound' | 'act_known' | 'no_env' | 'embed_error' | 'embed_declined';
+  embed_gate?: 'visit_rule' | 'speech_act' | 'rule_bound' | 'act_known' | 'no_env' | 'embed_error' | 'embed_declined' | 'chip';
   /** When the embedder fired but produced no bind, WHY: distinguishes an empty/stale
    *  index (no_match/query_error), a low-confidence result (below_tau), and an
    *  unroutable intent_kind (unmapped_kind). */
@@ -69,12 +70,21 @@ export interface TurnRoutingInput {
   transition?: Extracted['transition'];
   /** SA-4: resolved speech act — routing projects from this when known. */
   speech_act?: Extracted['speechAct'];
+  /**
+   * How this turn arrived. A chip tap is a BUTTON with a constant payload, not
+   * ambiguous language: its meaning is already known at the source, so the
+   * embedding has nothing to add and every reason to be skipped. Free text is
+   * the embedding's job. The SPA already distinguishes the two (it sends
+   * action_id), so this is a fact carried forward, never a guess.
+   */
+  input_source?: TurnInputSource;
 }
 
 export function buildTurnRoutingInput(
   state: ConversationState,
   ex: Extracted,
   text: string,
+  inputSource?: TurnInputSource,
 ): TurnRoutingInput {
   return {
     text,
@@ -99,5 +109,6 @@ export function buildTurnRoutingInput(
     ...(ex.askTopics?.length ? { ask_topics: ex.askTopics } : {}),
     named_project_ids: (ex.namedProjects ?? []).map((p) => p.projectId),
     ...(ex.speechAct ? { speech_act: ex.speechAct } : {}),
+    ...(inputSource ? { input_source: inputSource } : {}),
   };
 }
