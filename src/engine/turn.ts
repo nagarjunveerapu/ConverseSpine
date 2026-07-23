@@ -92,6 +92,7 @@ import type {
   Match,
   ObjectionTopic,
   OfferedProject,
+  RelaxedDimension,
   TurnDebug,
   TurnGoal,
 } from './types.js';
@@ -942,9 +943,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       // fell back to an area-less one. Tell compose, or those fallback matches
       // get announced as "Here's what fits" for an area we never searched —
       // a buyer asking for Mumbai was being shown Devanahalli as a fit.
-      // Deliberately a boolean, not the string: the capture may be dialogue
-      // noise, and echoing noise back is the defect the purge below exists for.
-      evidence = { ...evidence, areaFilterDropped: true };
+      // Dimension only, never the captured string: it may be dialogue noise,
+      // and echoing noise back is the defect the purge below exists for.
+      evidence = {
+        ...evidence,
+        relaxed: [...new Set<RelaxedDimension>([...(evidence.relaxed ?? []), 'area'])],
+      };
     }
     if (recFlags.droppedLocation && state.constraints.location) {
       // Junk-locality purge (see fetchRecommend): persisting an unrecognized
@@ -1484,8 +1488,15 @@ async function fetchRecommend(
       s.discover.rejectedProjectIds,
       [],
     );
-    if (broadened.length > 0) {
-      return { goal: base, evidence: { tools: ['search'], matches: broadened } };
+    if (broadened.matches.length > 0) {
+      return {
+        goal: base,
+        evidence: {
+          tools: ['search'],
+          matches: broadened.matches,
+          ...(broadened.relaxed.length ? { relaxed: broadened.relaxed } : {}),
+        },
+      };
     }
   }
 
@@ -1517,7 +1528,9 @@ async function fetchRecommend(
       s.discover.rejectedProjectIds,
     );
     if (relaxedMatches.length > 0) {
-      return { goal: base, evidence: { tools: ['search'], matches: relaxedMatches } };
+      // The buyer's configuration found nothing, so this list came from a
+      // search with the size filter removed — say so rather than call it a fit.
+      return { goal: base, evidence: { tools: ['search'], matches: relaxedMatches, relaxed: ['size'] } };
     }
     const gapEv = discover.buildConstraintGapEvidence(
       s.constraints,
@@ -1573,8 +1586,17 @@ async function fetchRecommend(
           s.discover.rejectedProjectIds,
           [],
         );
-        if (broadened.length >= 2) {
-          return { goal: base, evidence: { tools: ['search'], matches: broadened } };
+        if (broadened.matches.length >= 2) {
+          return {
+            goal: base,
+            evidence: {
+              tools: ['search'],
+              matches: broadened.matches,
+              // Reached via the budget gap — the budget itself is the thing we
+              // could not honour, plus whatever broadening gave up on top.
+              relaxed: [...new Set<RelaxedDimension>(['budget', ...broadened.relaxed])],
+            },
+          };
         }
       }
       const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
@@ -1631,8 +1653,13 @@ async function fetchRecommend(
 
   if (scopedMatches.length > 0) {
     let listed = scopedMatches;
+    // Padding a short-but-real shortlist up to three (RTI-D+). Anything the
+    // padding gave up rides along so compose never calls the padded entries a fit.
+    let padRelaxed: RelaxedDimension[] = [];
     if (base.kind === 'recommend' && s.discover.lastOffered.length === 0 && listed.length < 3) {
-      listed = await broadenInitialShortlist(deps, s.builderId, filters, s.constraints, s.discover.rejectedProjectIds, listed);
+      const padded = await broadenInitialShortlist(deps, s.builderId, filters, s.constraints, s.discover.rejectedProjectIds, listed);
+      listed = padded.matches;
+      padRelaxed = padded.relaxed;
     }
     if (
       base.kind === 'recommend' &&
@@ -1643,10 +1670,18 @@ async function fetchRecommend(
       const miss = s.discover.advancedOnce ? undefined : discover.firstMissingSlot(s);
       return {
         goal: { kind: 'advance', reason: 'same_set' },
-        evidence: { tools: ['search'], matches: listed, ...(miss ? { nextSlot: miss } : {}) },
+        evidence: {
+          tools: ['search'],
+          matches: listed,
+          ...(miss ? { nextSlot: miss } : {}),
+          ...(padRelaxed.length ? { relaxed: padRelaxed } : {}),
+        },
       };
     }
-    return { goal: base, evidence: { tools: ['search'], matches: listed } };
+    return {
+      goal: base,
+      evidence: { tools: ['search'], matches: listed, ...(padRelaxed.length ? { relaxed: padRelaxed } : {}) },
+    };
   }
 
   const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
@@ -1737,13 +1772,20 @@ async function broadenInitialShortlist(
   constraints: import('./types.js').Constraints,
   rejectedIds: readonly string[],
   current: Match[],
-): Promise<Match[]> {
+): Promise<{ matches: Match[]; relaxed: RelaxedDimension[] }> {
   const merged = [...current];
   const seen = new Set(merged.map((m) => m.projectId));
-  const relaxPlans: import('./types.js').SearchFilters[] = [];
+  // What we actually gave up to fill the list — reported back so compose can
+  // disclose it. Recorded only when a relaxed project really ENTERS the list,
+  // so an untouched shortlist never claims a relaxation that didn't happen.
+  const relaxed: RelaxedDimension[] = [];
+  const relaxPlans: Array<{
+    plan: import('./types.js').SearchFilters;
+    gaveUp: RelaxedDimension;
+  }> = [];
   if (filters.bhks) {
     const { bhks: _b, ...noBhk } = filters;
-    relaxPlans.push(noBhk);
+    relaxPlans.push({ plan: noBhk, gaveUp: 'size' });
   }
   // AB-2 — NEVER relax projectTypes: a declared type is a hard filter. Padding a
   // "plotted in North Bangalore" shortlist with an apartment (Century Breeze) or a
@@ -1751,17 +1793,18 @@ async function broadenInitialShortlist(
   // cards as what they asked for. Two honest typed cards beat three polluted ones;
   // zero typed matches falls through to the propertyTypeGap no_fit, which names
   // the gap and offers the closest other-type option with consent.
-  for (const plan of relaxPlans) {
+  for (const { plan, gaveUp } of relaxPlans) {
     const broad = await searchWithFilters(deps, builderId, plan);
     const ms = discover.filterSearchMatches(rawToMatches(broad.matches), constraints, rejectedIds);
     for (const m of ms) {
       if (seen.has(m.projectId)) continue;
       seen.add(m.projectId);
       merged.push(m);
-      if (merged.length >= 3) return merged;
+      if (!relaxed.includes(gaveUp)) relaxed.push(gaveUp);
+      if (merged.length >= 3) return { matches: merged, relaxed };
     }
   }
-  return merged;
+  return { matches: merged, relaxed };
 }
 
 async function fetchObjection(
