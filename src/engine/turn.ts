@@ -937,6 +937,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   } else if (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') {
     const recFlags: { droppedLocation?: string } = {};
     ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText, channel, recFlags));
+    if (recFlags.droppedLocation) {
+      // The buyer named an area the Desk could not match, so the search above
+      // fell back to an area-less one. Tell compose, or those fallback matches
+      // get announced as "Here's what fits" for an area we never searched —
+      // a buyer asking for Mumbai was being shown Devanahalli as a fit.
+      // Deliberately a boolean, not the string: the capture may be dialogue
+      // noise, and echoing noise back is the defect the purge below exists for.
+      evidence = { ...evidence, areaFilterDropped: true };
+    }
     if (recFlags.droppedLocation && state.constraints.location) {
       // Junk-locality purge (see fetchRecommend): persisting an unrecognized
       // capture is what made "No exact match for one week. ELEVEN" echo on
