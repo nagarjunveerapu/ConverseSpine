@@ -85,6 +85,14 @@ SIL_EVAL_ENABLED = "true"
 # Wave C overnight auto-teach — gate-checked self-promotion. Requires canonical
 # mode; flip to "true" AFTER the SIL_CANONICAL_EMBED cutover has soaked.
 UNDERSTANDING_AUTO_TEACH = "false"
+# ── Embeddings-first, on dev ──────────────────────────────────────────────
+# The learned metric (256x768 fitted on the labelled corpus) and the inverted
+# ladder: state-dependent rules only, then the embedding, then regex as the
+# fallback that catches what it declines. Both measured before flipping —
+# see PRs #115/#116/#117. Prod stays on the raw model and the old order until
+# its vector indexes are filled and this has soaked.
+SIL_INTENT_PROJECTION = "p256-f6665e0b79"
+SIL_EMBED_FIRST = "true"
 
 # Weekly rebuild — Mondays 03:30 UTC. Nightly 22:30 UTC (04:00 IST) = Wave C
 # auto-teach (runs after Desk's 18:00 UTC sweep+teacher; no-op unless
@@ -99,9 +107,15 @@ class_name = "TurnDebouncer"
 
 [[env.dev.vectorize]]
 binding = "INTENT_VECTORS"
-# SIL Phase 0 — dev must bind the seeded dev index (13,555 phrasings), not the
-# empty prod-named one. The missing -dev suffix kept the intent layer dead.
-index_name = "naya-intent-phrasings-dev"
+# Dev now serves the LEARNED metric. This index is not a rebuild from the git
+# registry — it is the previous dev index (naya-intent-phrasings-dev) with every
+# vector multiplied by the projection, same ids and same metadata. Rebuilding
+# from source would have dropped the ~3k Desk-taught and legacy rows whose text
+# is not in the registry. See scripts/sil-project-existing-index.py.
+#
+# The name carries the projection id on purpose: tests/intent-projection-space
+# fails the build if the configured index and SIL_INTENT_PROJECTION disagree.
+index_name = "naya-intent-p256-f6665e0b79-full-dev"
 remote = true
 
 [[env.dev.vectorize]]

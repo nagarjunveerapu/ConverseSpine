@@ -11,6 +11,10 @@ import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 import { rebuildIntentIndex } from './rebuild/intent-index.js';
 import { runSilProbe } from './understanding/sil-probe.js';
 import { runSilEmbed } from './understanding/sil-embed.js';
+import {
+  deleteIntentVectors,
+  upsertIntentVectors,
+} from './understanding/intent-vector-write.js';
 import { runAutoTeach } from './understanding/auto-teach.js';
 
 export { TurnDebouncer } from './agent/turn_debouncer.js';
@@ -115,6 +119,31 @@ export default {
         const b = body as { texts?: string[] };
         const out = await runSilEmbed(env, (b.texts ?? []).slice(0, 384));
         return json({ status: 'ok', ...out });
+      }
+
+      // THE single writer to the intent vector index. Desk owns the truth
+      // (phrasing, kind, facet); this owns the geometry (model + projection +
+      // which index they belong in). Desk used to embed and upsert directly,
+      // which silently stopped reaching the bot the moment the space changed.
+      // Secret-gated like /internal/agent-send; synchronous, so teaching from
+      // the understanding board stays instant.
+      if (path === '/internal/intent-vector' && method === 'POST') {
+        const secret = request.headers.get('x-bot-secret');
+        if (!env.BOT_SHARED_SECRET || secret !== env.BOT_SHARED_SECRET) {
+          return json({ error: 'forbidden' }, 403);
+        }
+        let body: unknown;
+        try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+        const b = body as {
+          op?: 'upsert' | 'delete';
+          items?: Array<{ id: string; text: string; metadata?: Record<string, string | number | boolean> }>;
+          ids?: string[];
+        };
+        const result =
+          b.op === 'delete'
+            ? await deleteIntentVectors(env, (b.ids ?? []).slice(0, 500))
+            : await upsertIntentVectors(env, (b.items ?? []).slice(0, 500));
+        return json(result, result.ok ? 200 : 502);
       }
 
       if (path === '/api/advisor/turn' && method === 'POST') {
