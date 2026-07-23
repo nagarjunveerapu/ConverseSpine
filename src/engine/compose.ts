@@ -2,7 +2,37 @@ import {
   formatDisclosedForPrompt,
   hasDisclosedRera,
 } from './disclosed-facts.js';
-import type { ComposeRequest, EvidenceSet, Match, ProbeKind, TurnGoal } from './types.js';
+import type {
+  ComposeRequest,
+  EvidenceSet,
+  Match,
+  ProbeKind,
+  RelaxedDimension,
+  TurnGoal,
+} from './types.js';
+
+/** Buyer-facing noun for a relaxed dimension — never their raw value. */
+const RELAXED_NOUN: Record<RelaxedDimension, string> = {
+  area: 'that area',
+  size: 'that size',
+  budget: 'that budget',
+};
+
+/**
+ * Lead-in for a shortlist. A list that only exists because part of the ask was
+ * relaxed is NOT a fit, and must not be announced as one — broadening exists so
+ * the buyer is never dead-ended, not so we can overstate the match.
+ */
+function relaxedLead(relaxed: readonly RelaxedDimension[] | undefined): string {
+  if (!relaxed?.length) return `Here's what fits`;
+  const nouns = relaxed.map((r) => RELAXED_NOUN[r]).filter(Boolean);
+  if (!nouns.length) return `Here's what fits`;
+  const phrase =
+    nouns.length === 1
+      ? nouns[0]!
+      : `${nouns.slice(0, -1).join(', ')} or ${nouns[nouns.length - 1]!}`;
+  return `I couldn't match ${phrase} — here's what we do have`;
+}
 import { isInventoryAsk } from './facts.js';
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
@@ -311,12 +341,10 @@ export function fallbackReply(req: ComposeRequest): string {
         .join('; ');
       const sensitivity = sensitivityLine(ms);
       const tail = sensitivity ? ` ${sensitivity}` : '';
-      // The area the buyer named could not be matched, so these came from an
-      // area-less fallback search — never announce them as fitting that area.
-      // Phrased without repeating the area: the capture may be dialogue noise.
-      const lead = ev.areaFilterDropped
-        ? `I couldn't match that area — here's what we do have`
-        : `Here's what fits`;
+      // Some part of the ask had to be relaxed for this list to exist, so it is
+      // NOT a fit — say which dimension gave. Dimensions only, never the buyer's
+      // raw values: a location capture may be dialogue noise.
+      const lead = relaxedLead(ev.relaxed);
       return `${pre}${lead}: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
     }
     case 'clarify_project_pick': {

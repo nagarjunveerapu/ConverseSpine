@@ -450,16 +450,28 @@ export interface ObjectionEvidence {
   reframeAngles: string[];
 }
 
+/**
+ * A dimension of the buyer's ask a search had to relax to return anything.
+ *
+ * `type` is deliberately absent: AB-2 makes a declared property type a HARD
+ * filter that is never relaxed (padding a "villa" list with a plantation
+ * misleads), so it can never appear here.
+ */
+export type RelaxedDimension = 'area' | 'size' | 'budget';
+
 export interface EvidenceSet {
   tools: string[];
   matches?: Match[];
   /**
-   * The buyer named an area we could not match, so the search fell back to an
-   * area-less one. Compose MUST NOT present these matches as fitting that area.
-   * The area string itself is deliberately NOT carried: the capture may be
+   * Dimensions of the buyer's ask that had to be RELAXED for these matches to
+   * exist. Compose MUST NOT present relaxed matches as satisfying the original
+   * ask — broadening exists so the buyer is never dead-ended (RTI-D+ "list
+   * three projects on first brief"), not so we can claim a fit we don't have.
+   *
+   * Dimensions only, never the buyer's raw values: a location capture may be
    * dialogue noise, and echoing noise back is its own defect.
    */
-  areaFilterDropped?: boolean;
+  relaxed?: RelaxedDimension[];
   catalog?: CatalogEnvelope;
   floor?: { display: string; projectName?: string };
   budgetGap?: {
