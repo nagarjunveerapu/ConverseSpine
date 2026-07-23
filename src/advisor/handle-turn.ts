@@ -37,12 +37,16 @@ export async function handleAdvisorTurn(
   const buyer_phone = body.buyer_phone?.trim() || (session_id ? sessionToPhone(session_id) : '');
 
   if (!session_id) {
-    return { status: 'error', session_id: '', reply: '', conversation_id: '', error: 'session_id_required' };
+    return {
+      status: 'error', session_id: '', reply: '', conversation_id: '',
+      error: 'session_id_required', suggest_refine: false,
+    };
   }
   if (!text) {
     return {
       status: 'error',
       session_id,
+      suggest_refine: false,
       reply: '',
       conversation_id: sessionToConvId(session_id),
       error: 'text_required',
@@ -134,6 +138,8 @@ export async function handleAdvisorTurn(
         return {
           status: 'ok',
           session_id,
+          // The priority ask is a question, not a dead end — nothing to refine.
+          suggest_refine: false,
           reply:
             'One quick thing so I rank these right — does a shorter commute matter more, or staying on budget?',
           conversation_id: convId,
@@ -205,6 +211,7 @@ export async function handleAdvisorTurn(
       reply: '',
       conversation_id: convId,
       error: msg.slice(0, 300),
+      suggest_refine: false,
     };
   }
 }

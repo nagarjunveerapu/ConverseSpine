@@ -36,6 +36,20 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
   }
   const checklist_snapshot = buildChecklistSnapshot(state);
 
+  // THE ENGINE STATES WHAT IT DID, so the client never has to guess it back.
+  // The SPA used to decide whether to offer refine chips by running regexes
+  // over this very reply — matching "no exact match", "want to adjust", and
+  // (worse) place names like /Aerospace|Corridor/. Reword one sentence and the
+  // chips silently vanish, with no error and no failing test.
+  //
+  // Every condition below is something the engine already computed a moment
+  // ago. Sending it as a field is not new information; it is the information
+  // arriving intact instead of being re-derived from prose.
+  const suggest_refine =
+    debug.goal.kind === 'no_fit' ||
+    debug.goal.kind === 'ack_reject_recommend' ||
+    !!searchRecovery?.suggested_actions?.length;
+
   return {
     status: 'ok',
     session_id: sessionId,
@@ -55,6 +69,7 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     phase: state.phase,
     ...(uiMode ? { ui_mode: uiMode } : {}),
     ...(searchRecovery ? { search_recovery: searchRecovery } : {}),
+    suggest_refine,
     nba,
     checklist_snapshot,
     debug: {
