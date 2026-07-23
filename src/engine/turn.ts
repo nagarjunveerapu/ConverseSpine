@@ -77,6 +77,7 @@ import {
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
+import { applyIntentAuthority } from './turn-routing/intent-authority.js';
 import { silDecision } from '../understanding/capture.js';
 import { buildTurnRoutingInput, type TurnRoutingResult } from './turn-routing/types.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
@@ -348,7 +349,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ingressFilledSlots: ingressFilled,
     actionId: input.action_id,
   });
-  let ex = extractResult.extracted;
+  let ex: Extracted = extractResult.extracted;
   const extractProvenance = extractResult.provenance;
 
   // Trade-off soft signals (priority / hub / schools / worries) are advisor-web
@@ -571,6 +572,24 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (extractProvenance && routing.bind) {
     extractProvenance.routing_bind = routing.bind;
   }
+
+  // The intent verdict fills the meaning slots NOTHING else owns — see
+  // turn-routing/intent-authority.ts for why that is a seam and not a second
+  // authority. Placed here deliberately: after routing, and BEFORE the ex.stop
+  // branch below, so an embedding-recognised opt-out reuses the existing
+  // confirm-before-delete gate instead of inventing a second destructive path.
+  if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
+    const claimed = applyIntentAuthority(ex, routing);
+    if (claimed.wrote.length) {
+      ex = claimed.ex;
+      // Stamp the slot, not a synthetic key, so the ledger's existing
+      // provenance.fields tally shows the intent layer's real contribution.
+      for (const slot of claimed.wrote) {
+        if (extractProvenance) extractProvenance.fields[slot] = 'intent';
+      }
+    }
+  }
+
   state = {
     ...state,
     rti: {
@@ -1368,6 +1387,12 @@ function decideGoal(
   text = '',
 ): TurnGoal {
   if (ex.recall) return { kind: 'visit_recall' };
+  // "Get me a person" outranks the phase, exactly as recall does. Someone
+  // asking for grievance redressal, or reporting the third leak in their
+  // bathroom, is not in a discovery conversation — and every phase selector
+  // would otherwise fall through to search and answer with a project list.
+  // One check, one owner: this slot is written only by the intent authority.
+  if (ex.wantsHuman) return { kind: 'handoff' };
   switch (s.phase) {
     case 'discover':
       return discover.decide(s, ex);
