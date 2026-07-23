@@ -1777,6 +1777,14 @@ async function fetchObjection(
   if (count >= threshold) {
     return { goal: { kind: 'handoff' }, evidence: { tools: ['objectionContext'] } };
   }
+  if (!(match?.reframeAngles?.length)) {
+    // No playbook for this topic. The objection contract is "reframe using
+    // EVIDENCE angles only", so reaching compose with ZERO angles leaves the
+    // model nothing to reframe from and it invents — "something green near the
+    // hills" was read as a location objection and answered with "the hills
+    // offer better views and natural cooling". Ask instead of generate.
+    return { goal: { kind: 'clarify_intent' }, evidence: { tools: ['objectionContext'] } };
+  }
   return {
     goal,
     evidence: {
