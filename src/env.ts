@@ -67,6 +67,8 @@ export interface Env {
   DEFAULT_BUILDER_ID?: string;
   /** Builder tenant for NayaAdvisor channel (default naya-advisor). */
   ADVISOR_BUILDER_ID?: string;
+  /** Dev-only: enables the embedder-only measurement route. Never set in prod. */
+  SIL_EVAL_ENABLED?: string;
 
   META_VERIFY_TOKEN?: string;
   META_APP_SECRET?: string;
