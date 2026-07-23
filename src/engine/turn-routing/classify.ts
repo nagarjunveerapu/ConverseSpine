@@ -63,6 +63,16 @@ export function classifyTurnRoutingRules(input: TurnRoutingInput): TurnRoutingRe
   return { routing: 'defer', confidence: 'abstain', abstain_reason: 'rti_3a_no_rule' };
 }
 
+/**
+ * The old regex ladder, minus the state-dependent rules that now run first.
+ * Under SIL_EMBED_FIRST this is the fallback the embedding falls through to.
+ */
+export function classifyTurnRoutingFallback(input: TurnRoutingInput): TurnRoutingResult {
+  const fromAct = projectRoutingFromSpeechAct(input);
+  if (fromAct && fromAct.routing !== 'defer') return fromAct;
+  return classifyTurnRoutingRules(input);
+}
+
 type EmbedMissReason = 'no_match' | 'below_tau' | 'unmapped_kind' | 'query_error';
 
 interface EmbedderOutcome {
@@ -168,13 +178,18 @@ export async function embedderRouting(
 }
 
 /**
- * SA-4 = P5: speech-act projection first; rule ladder; embedder only when act=unknown + defer.
- * Visit follow-up (bare "what about X" with visit context) beats speech-act overview (V02).
+ * State-dependent rules — the ONLY things that must outrank the embedding.
+ *
+ * These turns cannot be resolved from sentence meaning at all: "yes" means
+ * nothing without knowing a confirmation is pending, and a bare "what about
+ * parking?" routes differently mid-visit-scheduling than in discovery. No
+ * embedding, however good, can recover conversation state from the words.
+ *
+ * Everything else in the old ladder — speech-act projection, deferrable answer
+ * topics — is a judgement about what the buyer MEANT, which is the embedding's
+ * job. That is the whole distinction `SIL_EMBED_FIRST` acts on.
  */
-export async function classifyTurnRouting(
-  env: Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL'> | undefined,
-  input: TurnRoutingInput,
-): Promise<TurnRoutingResult> {
+function stateDependentRouting(input: TurnRoutingInput): TurnRoutingResult | null {
   const pid = input.named_project_ids?.[0];
 
   if (
@@ -191,6 +206,74 @@ export async function classifyTurnRouting(
       bind: { bind_source: 'regex', embed_fired: false, embed_gate: 'visit_rule' },
     };
   }
+
+  if (
+    input.visit?.awaiting_confirm &&
+    /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|sounds good)\.?!?\s*$/i.test(
+      input.text.trim(),
+    )
+  ) {
+    return {
+      routing: 'visit_confirm',
+      confidence: 'rule',
+      bind: { bind_source: 'regex', embed_fired: false, embed_gate: 'visit_rule' },
+    };
+  }
+
+  return null;
+}
+
+/**
+ * SA-4 = P5: speech-act projection first; rule ladder; embedder only when act=unknown + defer.
+ * Visit follow-up (bare "what about X" with visit context) beats speech-act overview (V02).
+ *
+ * SIL_EMBED_FIRST inverts that. Measured on production traffic (7,694 turns of
+ * ledger provenance), the regex-first order left the intent embedding deciding
+ * 1.9% of topic understanding — so corpus work, teaching, and a better metric
+ * all moved almost nothing. Embed-first keeps only the state-dependent rules
+ * ahead of the embedding and demotes the rest to fallback, so regex catches
+ * what the embedding declines instead of pre-empting it.
+ */
+export async function classifyTurnRouting(
+  env:
+    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST'>
+    | undefined,
+  input: TurnRoutingInput,
+): Promise<TurnRoutingResult> {
+  const stateRule = stateDependentRouting(input);
+  if (stateRule) return stateRule;
+
+  if (env?.SIL_EMBED_FIRST === 'true' && env.AI && env.INTENT_VECTORS) {
+    const first = await embedderRouting(env, input);
+    const firstScores = {
+      ...(first.top_kind !== undefined ? { top_kind: first.top_kind } : {}),
+      ...(first.top_score !== undefined ? { top_score: first.top_score } : {}),
+      ...(first.margin !== undefined ? { margin: first.margin } : {}),
+      ...(first.miss_reason !== undefined ? { miss_reason: first.miss_reason } : {}),
+      ...(first.facet !== undefined ? { facet: first.facet } : {}),
+    };
+    if (first.result) {
+      return {
+        ...first.result,
+        bind: { bind_source: 'embed_intent', embed_fired: true, ...firstScores },
+      };
+    }
+    // Declined (below tau / unmapped / no match) — fall through to the rules,
+    // which now act as the SAFETY NET rather than the gate. The regex verdict
+    // is still labelled `regex` so the split stays measurable.
+    const fallback = classifyTurnRoutingFallback(input);
+    return {
+      ...fallback,
+      bind: {
+        bind_source: fallback.routing === 'defer' ? 'none' : 'regex',
+        embed_fired: first.fired,
+        embed_gate: 'embed_declined',
+        ...firstScores,
+      },
+    };
+  }
+
+  const pid = input.named_project_ids?.[0];
 
   const fromAct = projectRoutingFromSpeechAct(input);
   if (fromAct && fromAct.routing !== 'defer') {

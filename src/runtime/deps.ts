@@ -35,7 +35,23 @@ export class ConverseRuntime {
         classify: (input) => classifyTurnIntent(env, input),
       },
       maps: env.GOOGLE_PLACES_API_KEY ? { apiKey: env.GOOGLE_PLACES_API_KEY } : undefined,
-      routingEnv: env.AI || env.INTENT_VECTORS ? { AI: env.AI, INTENT_VECTORS: env.INTENT_VECTORS } : undefined,
+      // Forward the WHOLE intent-layer config, not just the bindings. This
+      // Pick used to be {AI, INTENT_VECTORS} only, which silently dropped
+      // SIL_EMBED_MODEL and SIL_INTENT_PROJECTION on the live turn path: the
+      // learned metric applied through /api/sil/probe (full Env) and was inert
+      // in the actual bot. Same failure shape as the embed-model drift —
+      // narrowing a Pick is a config leak that nothing type-checks against.
+      routingEnv:
+        env.AI || env.INTENT_VECTORS
+          ? {
+              AI: env.AI,
+              INTENT_VECTORS: env.INTENT_VECTORS,
+              SIL_EMBED_MODEL: env.SIL_EMBED_MODEL,
+              SIL_INTENT_PROJECTION: env.SIL_INTENT_PROJECTION,
+              SIL_ROUTING_TAU: env.SIL_ROUTING_TAU,
+              SIL_EMBED_FIRST: env.SIL_EMBED_FIRST,
+            }
+          : undefined,
       ...(bamlMode !== 'off'
         ? {
             bamlMode,
