@@ -173,6 +173,8 @@ function describeGoal(g: TurnGoal): string {
       return `acknowledge ${g.topic} concern and reframe using EVIDENCE angles only`;
     case 'answer':
       return `answer their ${g.topic} question from EVIDENCE`;
+    case 'emi_calculate':
+      return 'calculate EMI from the buyer-stated loan principal in EVIDENCE';
     case 'commit':
       return 'confirm their project choice and offer next step';
     case 'propose_visit':
@@ -439,6 +441,10 @@ export function fallbackReply(req: ComposeRequest): string {
       const ack = o?.acknowledged ?? 'I hear you';
       return `${ack}.${angle ? ` ${angle}` : ' Let me get you specifics.'} Want the numbers or a site visit?`;
     }
+    case 'emi_calculate':
+      return ev.emi
+        ? `${emiSnapshotLine(ev.emi)}. Want me to try another loan amount, rate, or tenure?`
+        : 'I need a loan amount before I can calculate the EMI.';
     case 'answer': {
       const topics = goal.topics?.length ? goal.topics : [goal.topic];
 
@@ -940,8 +946,18 @@ export function locationSnapshotLine(l: import('./types.js').LocationEvidence): 
 }
 
 function emiSnapshotLine(e: import('./types.js').EmiEvidence): string {
-  const down = e.downPaymentFormatted ? ` (~${e.downPaymentFormatted} down on ${e.basisFormatted})` : '';
-  return `Indicative EMI: *${e.emiFormatted}/month*${down} at ${e.ratePercent}% for ${e.tenureYears} years`;
+  if (!e.discloseInputs) {
+    const down = e.downPaymentFormatted
+      ? ` (~${e.downPaymentFormatted} down on ${e.basisFormatted})`
+      : '';
+    return `Indicative EMI: *${e.emiFormatted}/month*${down} at ${e.ratePercent}% for ${e.tenureYears} years`;
+  }
+  if (e.basisKind === 'explicit_principal') {
+    return `Indicative EMI: *${e.emiFormatted}/month* on a ${e.principalFormatted} loan at ${e.ratePercent}% for ${e.tenureYears} years`;
+  }
+  const ltv = e.ltvPercent ?? 80;
+  const down = e.downPaymentFormatted ? `; ~${e.downPaymentFormatted} down` : '';
+  return `Indicative EMI: *${e.emiFormatted}/month* on a ${ltv}% loan (${e.principalFormatted} principal${down}) against ${e.basisFormatted} project price, at ${e.ratePercent}% for ${e.tenureYears} years`;
 }
 
 function landedCostLine(lc: import('./types.js').LandedCostEvidence): string {

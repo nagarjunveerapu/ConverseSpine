@@ -1,0 +1,16 @@
+{
+  "id": "FV-P1-EMI-MISSING",
+  "title": "Failure Phase 1: EMI without principal or project asks for input",
+  "builder_id": "lokations",
+  "tags": ["failure-value", "phase1", "emi", "missing-input"],
+  "turns": [
+    {
+      "text": "calculate EMI at 8.5% for 20 years",
+      "assert": {
+        "goal_kind": "emi_calculate",
+        "reply_includes": ["need a loan amount"],
+        "reply_excludes": ["₹8,00,000 loan"]
+      }
+    }
+  ]
+}

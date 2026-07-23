@@ -34,6 +34,10 @@ export function deriveShadowFailures(input: {
   const relaxed = new Set<RelaxedDimension>(evidence.relaxed ?? []);
   if (droppedLocation) relaxed.add('area');
 
+  if (evidence.failure) {
+    failures.push(evidence.failure);
+  }
+
   if (relaxed.size) {
     failures.push({
       kind: 'relaxed',

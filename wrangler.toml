@@ -66,6 +66,8 @@ LOG_LEVEL = "info"
 LOCAL_TURN_LOG = "on"
 # Failure-as-a-value Phase 0: additive shadow ledger/log records only.
 FAILURE_LOG = "true"
+# Failure-as-a-value Phase 1: EMI authority + destructive-intent disambiguation.
+FAILURE_TOOLS = "true"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"

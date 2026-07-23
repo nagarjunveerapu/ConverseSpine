@@ -164,8 +164,10 @@ export interface ConversationState {
   ndBuyerPhone?: string;
   /** After visit_booked — next short ack should not escalate to handoff. */
   postVisitAckPending?: boolean;
-  /** Opt-out asked in a mixed message — delete buyer memory only after an explicit yes. */
+  /** Opt-out confirmation/disambiguation is active. */
   stopConfirmPending?: boolean;
+  /** Whether the pending turn confirms explicit deletion or clarifies contact scope. */
+  stopConfirmMode?: 'delete_confirm' | 'contact_scope';
   /** Cached NayaDesk project facts for focused / shortlisted projects. */
   projectCache?: Record<string, ProjectDetail>;
   /** Last-read confirmed visits from NayaDesk (itinerary mirror for board). */
@@ -239,6 +241,8 @@ export type TurnGoal =
   | { kind: 'ack_reject_recommend' }
   | { kind: 'objection'; topic: ObjectionTopic; projectId?: string }
   | { kind: 'answer'; topic: AnswerTopic; projectId: string; topics?: AnswerTopic[] }
+  /** EMI from a buyer-stated principal; no project pick or price lookup required. */
+  | { kind: 'emi_calculate' }
   /** Facet ask over a multi-project shortlist with no pick — answer the facet
    *  for EVERY shortlisted project instead of asking which one to open. */
   | { kind: 'shortlist_answer'; topic: AnswerTopic; topics?: AnswerTopic[]; projectIds: string[] }
@@ -437,6 +441,10 @@ export interface EmiEvidence {
   principalFormatted: string;
   downPaymentFormatted?: string;
   basisFormatted: string;
+  basisKind: 'explicit_principal' | 'project_price';
+  ltvPercent?: number;
+  /** Phase 1 copy contract: name principal/basis, rate, and tenure. */
+  discloseInputs?: boolean;
   ratePercent: number;
   tenureYears: number;
 }
@@ -535,6 +543,8 @@ export interface EvidenceSet {
    *  taught: the missed key came from a human-taught facet bind (not buyer
    *  text) — the floor renders the honest miss instead of the overview card. */
   faqMiss?: { keys: string[]; taught?: boolean };
+  /** Terminal stage failure; the single failure speaker owns buyer copy. */
+  failure?: import('./outcome.js').Failure;
   /** Per-project values for a facet asked across the whole shortlist
    *  (shortlist_answer). Empty `value` = honestly not on file for that project. */
   shortlistFacet?: ShortlistFacetEvidence;
@@ -572,6 +582,10 @@ export interface Extracted {
   visitSlotText?: string;
   emiRatePercent?: number;
   emiTenureYears?: number;
+  /** Explicit loan principal stated in an EMI ask; never a search budget. */
+  emiPrincipalInr?: number;
+  /** Phase 1 extraction/goal contract is active for this EMI turn. */
+  emiContractV1?: boolean;
   mediaAssetKind?: string;
   namedProjects?: OfferedProject[];
   compareAdvice?: boolean;

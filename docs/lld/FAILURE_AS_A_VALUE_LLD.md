@@ -1,6 +1,6 @@
 # Failure as a value — LLD
 
-**Status** approved for phased rollout · Phase 0 implementation in progress
+**Status** Phase 0 shipped · Phase 1 implementation in progress
 **Author** derived from the six-family persona programme (30 personas, ~550 turns, 2026-07-23)
 **Scope** ConverseSpine engine. One NayaDesk read-model addition. No SPA change required for Phase 1–3.
 
@@ -259,6 +259,10 @@ interface ToolCall<I, O> {
   `budget=₹5 L` and a ₹24 L filter respectively. One guard, two defects.
 - Every tool output states the inputs it used. The reply says
   *"on ₹85 L over 20 years at 8.5%"* — a number the buyer can check.
+- A buyer-stated EMI amount is a **loan principal** and wins over any focused
+  project. A focused-project EMI with no stated principal remains valid, but
+  is labelled as an 80% LTV calculation with project price, principal, rate,
+  and tenure. With neither source, the tool returns `missing_input`.
 
 ### 4.5 Compose — the answer contract
 

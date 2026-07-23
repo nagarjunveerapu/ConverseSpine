@@ -66,6 +66,13 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   }
 
   if (ex.recall) return { kind: 'visit_recall' };
+  if (
+    ex.emiContractV1 &&
+    ex.emiPrincipalInr !== undefined &&
+    (ex.askTopic === 'emi' || ex.askTopics?.includes('emi'))
+  ) {
+    return { kind: 'emi_calculate' };
+  }
   // !ex.holdAsk: a hold ask that couldn't resolve a type still must not become
   // a visit — fall through to answer availability instead.
   if (ex.transition === 'want_visit' && !ex.holdAsk) return { kind: 'propose_visit', projectId: focus.projectId };

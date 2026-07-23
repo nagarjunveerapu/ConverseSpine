@@ -3,6 +3,7 @@ import type { Failure } from './outcome.js';
 export interface SpeakContext {
   subjectLabel?: string;
   buyerValue?: string;
+  readings?: readonly [string, string];
 }
 
 /**
@@ -30,6 +31,9 @@ export function speakFailure(failure: Failure, ctx: SpeakContext = {}): string {
     case 'unsupported':
       return `I can't help with ${subject}.`;
     case 'ambiguous':
+      if (ctx.readings) {
+        return `Just so I get this right — do you want me to ${ctx.readings[0]}, or ${ctx.readings[1]}?`;
+      }
       return `I want to make sure I understood ${subject} correctly.`;
   }
 }

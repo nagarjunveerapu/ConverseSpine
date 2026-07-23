@@ -6,6 +6,14 @@ import { formatInr } from '../compose.js';
 export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   const d = s.discover;
   if (ex.recall) return { kind: 'visit_recall' };
+  const asksEmi =
+    ex.askTopic === 'emi' || (ex.askTopics?.includes('emi') ?? false);
+  if (
+    ex.emiContractV1 &&
+    (ex.emiPrincipalInr !== undefined || (asksEmi && d.lastOffered.length === 0))
+  ) {
+    return { kind: 'emi_calculate' };
+  }
 
   // Explicit name is authoritative. A single PROJECT_VECTORS hit (≥0.65, and
   // already gated against pure search/location/budget noise upstream) means the

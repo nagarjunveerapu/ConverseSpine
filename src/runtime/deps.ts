@@ -59,6 +59,7 @@ export class ConverseRuntime {
           }
         : {}),
       ...(env.FAILURE_LOG === 'true' ? { failureLog: true } : {}),
+      ...(env.FAILURE_TOOLS === 'true' ? { failureTools: true } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),
