@@ -9,6 +9,7 @@ import { overRateLimit } from './channel/ingress-guard.js';
 import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 import { rebuildIntentIndex } from './rebuild/intent-index.js';
+import { runSilProbe } from './understanding/sil-probe.js';
 import { runAutoTeach } from './understanding/auto-teach.js';
 
 export { TurnDebouncer } from './agent/turn_debouncer.js';
@@ -89,6 +90,18 @@ export default {
         const rt = createWorkerRuntime(env);
         const result = await handleAdvisorPreview(rt, body as Parameters<typeof handleAdvisorPreview>[1]);
         return json(result, 200);
+      }
+
+      // Embedder-only measurement (dev-gated, never affects a turn). Runs the
+      // engine's own embedderRouting with the regex ladder bypassed, so the
+      // intent embedding can be scored against the held-out corpus split.
+      if (path === '/api/sil/probe' && method === 'POST') {
+        if (env.SIL_EVAL_ENABLED !== 'true') return json({ error: 'not_found' }, 404);
+        let body: unknown;
+        try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+        const b = body as { builder_id?: string; items?: Array<{ text: string; expected?: string }> };
+        const results = await runSilProbe(env, b.builder_id ?? 'naya-advisor', (b.items ?? []).slice(0, 200));
+        return json({ status: 'ok', results });
       }
 
       if (path === '/api/advisor/turn' && method === 'POST') {

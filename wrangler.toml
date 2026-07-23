@@ -81,6 +81,7 @@ SIL_CANONICAL_EMBED = "false"
 # /operations/understanding board sees real traffic. Dev-only until the board
 # has soaked; prod omits the var (= off, zero behaviour change).
 UNDERSTANDING_CAPTURE = "true"
+SIL_EVAL_ENABLED = "true"
 # Wave C overnight auto-teach — gate-checked self-promotion. Requires canonical
 # mode; flip to "true" AFTER the SIL_CANONICAL_EMBED cutover has soaked.
 UNDERSTANDING_AUTO_TEACH = "false"

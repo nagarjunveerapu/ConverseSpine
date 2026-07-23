@@ -70,7 +70,9 @@ interface EmbedderOutcome {
   facet?: string;
 }
 
-async function embedderRouting(
+/** Exported for the embedder-only experiment: run the SAME bind the engine uses,
+ *  bypassing the regex ladder that normally gates it. Measurement only. */
+export async function embedderRouting(
   env: Pick<Env, 'AI' | 'INTENT_VECTORS'>,
   input: TurnRoutingInput,
 ): Promise<EmbedderOutcome> {
