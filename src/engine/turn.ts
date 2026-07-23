@@ -78,6 +78,7 @@ import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
 import { silDecision } from '../understanding/capture.js';
+import { silTopic } from './sil-topic.js';
 import { buildTurnRoutingInput, type TurnRoutingResult } from './turn-routing/types.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
 import { constraintsSnapshot } from './recovery-planner.js';
@@ -570,6 +571,25 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (extractProvenance && routing.bind) {
     extractProvenance.routing_bind = routing.bind;
   }
+
+  // SIL wire — let the 14k-row intent corpus actually REACH routing.
+  //
+  // Until now the semantic verdict was observability only: `intent_kind` went
+  // to the intent-review telemetry and nowhere else, so goal selection ran
+  // purely off the deterministic + LLM extraction, and a confident embedding
+  // bind changed nothing about the turn.
+  //
+  // GAP-FILL, never an override: this only speaks when the extraction funnel
+  // produced NO topic at all. Any extracted topic, named project, constraint or
+  // speech act still wins, so existing routes are untouched — the corpus only
+  // gets to answer turns the funnel had no opinion on.
+  if (!ex.askTopic && !(ex.askTopics?.length)) {
+    const silTopicHit = silTopic(routing);
+    if (silTopicHit) {
+      ex = { ...ex, askTopic: silTopicHit, askTopics: [silTopicHit] };
+    }
+  }
+
   state = {
     ...state,
     rti: {
