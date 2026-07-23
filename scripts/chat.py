@@ -50,10 +50,29 @@ def fmt_timing(t):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--url', default='https://converse-spine-dev.nagarjun-arjun.workers.dev')
+    ap.add_argument('--allow-prod', action='store_true',
+                    help='required to point this at anything that is not a dev deployment')
     ap.add_argument('--builder', default='naya-advisor')
     ap.add_argument('--session', help='resume an existing session id')
     ap.add_argument('--report', default=None, help='where to write the HTML transcript')
     a = ap.parse_args()
+
+    # Dev by default is not the same as dev only. Prod is one --url away in the
+    # same config (converse-spine -> nayadesk), and a real conversation written
+    # to prod is not something you can quietly undo. Production is deferred
+    # pre-MVP, so reaching it has to be a sentence someone typed on purpose.
+    #
+    # Check the WORKER NAME, not the url. Every Cloudflare worker lives under
+    # `.workers.dev`, so a substring test for 'dev' passes prod — which is what
+    # the first version of this guard did, and it let
+    # converse-spine.nagarjun-arjun.workers.dev straight through.
+    host = a.url.split('://')[-1].split('/')[0].split(':')[0]
+    worker = host.split('.')[0]
+    is_dev = worker.endswith('dev') or host in ('localhost', '127.0.0.1')
+    if not is_dev and not a.allow_prod:
+        sys.exit(f'{RED}refusing: worker "{worker}" is not a dev deployment.{RESET}\n'
+                 f'Production is deferred pre-MVP and these turns write real leads.\n'
+                 f'Pass --allow-prod if you really mean it.')
 
     session = a.session or f'cli-{int(time.time())}-{uuid.uuid4().hex[:6]}'
     turns, last = [], None
