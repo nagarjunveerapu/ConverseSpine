@@ -1,5 +1,9 @@
 import type { Env } from '../env.js';
 
+/** Default only — env.SIL_EMBED_MODEL is the single source of truth so the
+ *  query side can never drift from the index side. */
+const DEFAULT_EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
+
 /** Vectorize + Workers AI intent match — optional when bindings wired. */
 export class IntentEmbedder {
   constructor(private readonly env: Env) {}
@@ -7,7 +11,8 @@ export class IntentEmbedder {
   async matchIntent(buyerText: string, builderId: string): Promise<{ kind: string; score: number } | null> {
     if (!this.env.INTENT_VECTORS || !this.env.AI) return null;
 
-    const embed = await this.env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [buyerText] }) as {
+    const model = this.env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
+    const embed = await this.env.AI.run(model as never, { text: [buyerText] }) as {
       data?: number[][];
     };
     const vector = embed.data?.[0];
