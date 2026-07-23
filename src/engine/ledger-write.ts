@@ -5,6 +5,7 @@
 import type { ExtractProvenance } from '../engine/ingress.js';
 import { buildChipShadow } from '../chips/shadow.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
+import { summarizeFailure, type Failure } from './outcome.js';
 import type {
   ConversationState,
   EvidenceSet,
@@ -31,8 +32,18 @@ export function buildLedgerWritePayload(input: {
   inputSource?: string;
   extractProvenance?: ExtractProvenance;
   grounding?: string;
+  failures?: readonly Failure[];
 }): LedgerWritePayload {
-  const { state, ex, goal, evidence, inputSource, extractProvenance, grounding } = input;
+  const {
+    state,
+    ex,
+    goal,
+    evidence,
+    inputSource,
+    extractProvenance,
+    grounding,
+    failures,
+  } = input;
 
   const snapshot_in: Record<string, unknown> = {
     phase: state.phase,
@@ -93,6 +104,9 @@ export function buildLedgerWritePayload(input: {
     // turn's outgoing decisions live, and because a reader joining rows for the
     // prediction and the outcome then needs exactly one column.
     chip_shadow: buildChipShadow({ state, goal, evidence }),
+    ...(failures?.length
+      ? { failures: failures.map(summarizeFailure) }
+      : {}),
   };
 
   const fromMatches = evidence.matches?.map((m) => m.projectId) ?? [];

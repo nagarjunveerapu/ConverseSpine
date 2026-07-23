@@ -53,6 +53,15 @@ describe('buildLedgerWritePayload — P2a / SA-5', () => {
         chip_path_ids: ['chip.answer.availability'],
       },
       grounding: 'pass',
+      failures: [
+        {
+          kind: 'relaxed',
+          stage: 'search',
+          subject: 'recommendation',
+          dimensions: ['size'],
+          detail: { rawBuyerText: 'must not persist' },
+        },
+      ],
     });
 
     expect(payload.resolved_intent.speech_act).toBe('answer');
@@ -61,7 +70,16 @@ describe('buildLedgerWritePayload — P2a / SA-5', () => {
       kind: 'answer',
       topic: 'availability',
       project_id: 'brigade-eldorado',
+      failures: [
+        {
+          kind: 'relaxed',
+          stage: 'search',
+          subject: 'recommendation',
+          dimensions: ['size'],
+        },
+      ],
     });
+    expect(JSON.stringify(payload.action_plan)).not.toContain('rawBuyerText');
     expect(payload.snapshot_in).toMatchObject({
       phase: 'focused',
       focus: { project_id: 'brigade-eldorado', name: 'Brigade Eldorado' },

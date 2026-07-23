@@ -64,6 +64,8 @@ NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
 ADVISOR_BUILDER_ID = "naya-advisor"
 LOG_LEVEL = "info"
 LOCAL_TURN_LOG = "on"
+# Failure-as-a-value Phase 0: additive shadow ledger/log records only.
+FAILURE_LOG = "true"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"

@@ -8,6 +8,7 @@ import type {
 } from '../engine/types.js';
 import type { TurnIntentChannel } from '../engine/turn-intent/types.js';
 import type { LocalTurnLogEntry } from './local-turn-log.js';
+import { summarizeFailure, type Failure } from '../engine/outcome.js';
 
 export function buildTurnLogSnapshot(input: {
   turnInput: {
@@ -21,9 +22,21 @@ export function buildTurnLogSnapshot(input: {
   reply: string;
   evidence: EvidenceSet;
   buyerText: string;
+  failures?: readonly Failure[];
   exit?: string;
 }): LocalTurnLogEntry {
-  const { turnInput, state, ex, goal, debug, reply, evidence, buyerText, exit } = input;
+  const {
+    turnInput,
+    state,
+    ex,
+    goal,
+    debug,
+    reply,
+    evidence,
+    buyerText,
+    failures,
+    exit,
+  } = input;
   const switchIntent =
     state.phase === 'focused' ? detectFocusedSwitchIntent(buyerText, ex, state) : null;
 
@@ -69,6 +82,9 @@ export function buildTurnLogSnapshot(input: {
       ...(state.rti?.pendingPrompt ? { pending_prompt: state.rti.pendingPrompt } : {}),
     },
     grounding: debug.grounding,
+    ...(failures?.length
+      ? { failures: failures.map(summarizeFailure) }
+      : {}),
     ...(exit ? { exit } : {}),
   };
 }

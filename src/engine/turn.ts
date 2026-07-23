@@ -13,6 +13,8 @@ import { extractTurnAuthority } from './extract-authority.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
 import { buildLedgerWritePayload } from './ledger-write.js';
+import { deriveShadowFailures } from './failure-shadow.js';
+import type { Failure } from './outcome.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
 import {
@@ -891,6 +893,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   let evidence: EvidenceSet = { tools: [] };
+  let droppedLocation = false;
   if (goal.kind === 'hold_propose' && nd) {
     // W7 — pre-check live per-type availability (Desk #203 counts, KV-cached
     // context) BEFORE proposing: a sold-out type gets the waitlist offer up
@@ -958,6 +961,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const recFlags: { droppedLocation?: string } = {};
     ({ goal, evidence } = await fetchRecommend(goal, state, ex, deps, trimmedText, channel, recFlags));
     if (recFlags.droppedLocation) {
+      droppedLocation = true;
       // The buyer named an area the Desk could not match, so the search above
       // fell back to an area-less one. Tell compose, or those fallback matches
       // get announced as "Here's what fits" for an area we never searched —
@@ -1280,6 +1284,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       .catch(() => false);
   }
 
+  const failures = deps.failureLog
+    ? deriveShadowFailures({ goal, evidence, droppedLocation })
+    : [];
+
   await deps.store.save(state);
   await deps.store.logTurn({
     convId: state.convId,
@@ -1300,6 +1308,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     inputSource,
     grounding,
     routing,
+    failures,
   }).catch(() => {});
 
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
@@ -1327,6 +1336,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       reply,
       evidence,
       buyerText: trimmedText,
+      failures,
     }),
   );
 
@@ -2572,6 +2582,7 @@ async function syncTelemetry(
     inputSource?: TurnInputSource;
     grounding?: string;
     routing?: TurnRoutingResult;
+    failures?: readonly Failure[];
   },
 ): Promise<void> {
   if (!nd) return;
@@ -2585,6 +2596,7 @@ async function syncTelemetry(
         inputSource: opts.inputSource,
         extractProvenance: opts.extractProvenance,
         grounding: opts.grounding,
+        ...(opts.failures?.length ? { failures: opts.failures } : {}),
       })
     : null;
 
