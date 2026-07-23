@@ -243,6 +243,25 @@ export async function classifyTurnRouting(
   const stateRule = stateDependentRouting(input);
   if (stateRule) return stateRule;
 
+  // A chip tap is a BUTTON with a constant payload — its meaning is already
+  // known at the source, so the deterministic chip lane owns it outright and
+  // the embedding never runs. That is not a regex gate sneaking back in: the
+  // input SOURCE decides the owner, it is a fact the SPA carries (action_id),
+  // and no sentence-meaning model can add anything to text a button produced.
+  // It also stops every chip tap paying for an embed call plus two Vectorize
+  // queries.
+  if (input.input_source === 'chip') {
+    const ruledChip = classifyTurnRoutingFallback(input);
+    return {
+      ...ruledChip,
+      bind: {
+        bind_source: ruledChip.routing === 'defer' ? 'none' : 'regex',
+        embed_fired: false,
+        embed_gate: 'chip',
+      },
+    };
+  }
+
   if (env?.SIL_EMBED_FIRST === 'true' && env.AI && env.INTENT_VECTORS) {
     const first = await embedderRouting(env, input);
     const firstScores = {
