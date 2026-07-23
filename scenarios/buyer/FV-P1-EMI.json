@@ -1,0 +1,18 @@
+{
+  "id": "FV-P1-EMI",
+  "title": "Failure Phase 1: explicit EMI principal beats focused project basis",
+  "builder_id": "lokations",
+  "tags": ["failure-value", "phase1", "emi"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "emi at 85L for 20 years at 8.5%",
+      "assert": {
+        "goal_kind": "emi_calculate",
+        "reply_includes": ["₹85,00,000 loan", "8.5%", "20 years"],
+        "reply_excludes": ["₹24,95,000 project price"]
+      }
+    }
+  ]
+}

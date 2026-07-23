@@ -15,6 +15,13 @@ import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './
 import { buildLedgerWritePayload } from './ledger-write.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import type { Failure } from './outcome.js';
+import {
+  contactScopeFailure,
+  isExplicitDeleteIntent,
+  isStandaloneStop,
+  resolvePendingStop,
+} from './optout-confirm.js';
+import { speakFailure } from './speak-failure.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
 import {
@@ -345,6 +352,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     llm: deps.llm,
     semantic: deps.semantic,
     microMarkets: catalogForNlu?.microMarkets ?? [],
+    ...(deps.failureTools ? { failureTools: true } : {}),
     ...(deps.bamlExtract ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' } : {}),
   }, {
     inputSource,
@@ -610,17 +618,21 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = releaseToDiscover(state);
   }
 
-  // Opt-out confirm resolution: only a strict standalone yes deletes ("ok what
-  // would YOU pick" contains an affirm token but is not consent); anything else
-  // clears the pending flag and the turn continues as a normal message.
+  // Opt-out resolution. A two-reading contact-scope question can never be
+  // resolved by "yes": the buyer must choose keep-chat or delete-all.
   if (state.stopConfirmPending) {
-    const { stopConfirmPending: _pendingStop, ...stateSansPending } = state;
+    const mode =
+      deps.failureTools
+        ? state.stopConfirmMode ?? 'delete_confirm'
+        : 'delete_confirm';
+    const resolution = resolvePendingStop(mode, trimmedText);
+    const {
+      stopConfirmPending: _pendingStop,
+      stopConfirmMode: _pendingMode,
+      ...stateSansPending
+    } = state;
     state = stateSansPending as typeof state;
-    const strictYes =
-      /^(?:yes|yeah|yep|yup|haan|confirm(?:ed)?|yes please|delete (?:it|everything))[.!]?\s*$/i.test(
-        trimmedText,
-      );
-    if (strictYes && nd) {
+    if (resolution === 'delete' && nd) {
       await deps.crm.deleteBuyerMemory(nd).catch(() => {});
       const reply = "Done — I've removed your details from our system. You won't hear from us again.";
       state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };
@@ -636,13 +648,70 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         ),
       };
     }
+    if (deps.failureTools && mode === 'contact_scope' && resolution === 'keep') {
+      const reply =
+        "Understood — I'll keep your property search and continue in this chat. I haven't deleted your details.";
+      state = { ...state, turnCount: state.turnCount + 1 };
+      await deps.store.save(state);
+      await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+      await deps.crm
+        .appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'stop_scope_keep' })
+        .catch(() => {});
+      return {
+        reply,
+        state,
+        debug: withIngressDebug(
+          { phase: state.phase, goal: { kind: 'handoff' }, tools: [], grounding: 'pass' },
+          inputSource,
+        ),
+      };
+    }
+    if (deps.failureTools && mode === 'contact_scope' && resolution === 'ambiguous') {
+      const failure = contactScopeFailure();
+      const reply = speakFailure(failure, {
+        readings: [
+          'stop calling and keep chatting here',
+          'stop all contact and delete your details',
+        ],
+      });
+      state = {
+        ...state,
+        stopConfirmPending: true,
+        stopConfirmMode: 'contact_scope',
+        turnCount: state.turnCount + 1,
+      };
+      await deps.store.save(state);
+      await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+      await deps.crm
+        .appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'stop_scope' })
+        .catch(() => {});
+      await appendEarlyFailureLedger({
+        deps,
+        nd: nd || input.convId,
+        input,
+        state,
+        ex,
+        extractProvenance,
+        inputSource,
+        reply,
+        failure,
+      });
+      return {
+        reply,
+        state,
+        debug: withIngressDebug(
+          { phase: state.phase, goal: { kind: 'handoff' }, tools: [], grounding: 'pass' },
+          inputSource,
+        ),
+      };
+    }
   }
 
   if (ex.stop && nd) {
     // Standalone SMS keyword is an unambiguous opt-out — act immediately. Anything
     // longer (a sentence mentioning contact/data) confirms before the destructive
     // delete: extraction can misread, and "removed your details" must never be false.
-    const standaloneStop = /^(?:stop|unsubscribe)[.!]?\s*$/i.test(trimmedText);
+    const standaloneStop = isStandaloneStop(trimmedText);
     if (standaloneStop) {
       await deps.crm.deleteBuyerMemory(nd).catch(() => {});
       const reply = "Understood — I've removed your details from our system. You won't hear from us again.";
@@ -659,12 +728,40 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         ),
       };
     }
-    const reply =
-      'Just to confirm — should I remove your details and stop messaging you? Reply "yes" and I\'ll delete everything.';
-    state = { ...state, stopConfirmPending: true, turnCount: state.turnCount + 1 };
+    const scopeAmbiguous = deps.failureTools && !isExplicitDeleteIntent(trimmedText);
+    const failure = scopeAmbiguous ? contactScopeFailure() : undefined;
+    const reply = failure
+      ? speakFailure(failure, {
+          readings: [
+            'stop calling and keep chatting here',
+            'stop all contact and delete your details',
+          ],
+        })
+      : 'Just to confirm — should I remove your details and stop messaging you? Reply "yes" and I\'ll delete everything.';
+    state = {
+      ...state,
+      stopConfirmPending: true,
+      ...(deps.failureTools
+        ? { stopConfirmMode: scopeAmbiguous ? 'contact_scope' : 'delete_confirm' }
+        : {}),
+      turnCount: state.turnCount + 1,
+    };
     await deps.store.save(state);
     await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
     await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop_confirm' }).catch(() => {});
+    if (failure) {
+      await appendEarlyFailureLedger({
+        deps,
+        nd,
+        input,
+        state,
+        ex,
+        extractProvenance,
+        inputSource,
+        reply,
+        failure,
+      });
+    }
     return {
       reply,
       state,
@@ -984,6 +1081,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ({ goal, evidence } = await fetchObjection(goal, state, deps, nd));
   } else if (goal.kind === 'answer') {
     evidence = await fetchAnswer(goal, state, ex, deps, nd, trimmedText);
+  } else if (goal.kind === 'emi_calculate') {
+    evidence = fetchEmiCalculation(ex);
   } else if (goal.kind === 'shortlist_answer') {
     evidence = await fetchShortlistAnswer(goal, state, ex, deps, nd);
   } else if (goal.kind === 'visit_recall') {
@@ -1010,6 +1109,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ...(ff?.priorReplyExcerpt ? { priorReplyExcerpt: ff.priorReplyExcerpt } : {}),
     ...(disclosedForCompose.length ? { disclosedFacts: disclosedForCompose } : {}),
   });
+  const terminalFailure = evidence.failure;
 
   const visitDeterministic =
     goal.kind === 'visit_ask' || goal.kind === 'visit_propose' || goal.kind === 'visit_booked';
@@ -1039,6 +1139,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const commitDeterministic = goal.kind === 'commit';
   const overviewDeterministic =
     goal.kind === 'answer' && goal.topic === 'overview' && !!evidence.detail;
+  const emiCalculateDeterministic = goal.kind === 'emi_calculate';
 
   // no_fit is a hard honesty statement with a well-built template (constraint
   // gap, catalog floor, alternate project) — LLM paraphrase of it produced
@@ -1048,6 +1149,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Template-locked goals: commitments and structured facts that must never be
   // LLM-paraphrased — and (W3) must never be "varied" by the repeat guard.
   const templateLocked =
+    !!terminalFailure ||
     noFitDeterministic ||
     visitDeterministic ||
     holdDeterministic ||
@@ -1064,10 +1166,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     warmAckDeterministic ||
     propertyTypeDeterministic ||
     commitDeterministic ||
-    overviewDeterministic;
+    overviewDeterministic ||
+    emiCalculateDeterministic;
 
   let draft: string;
-  if (templateLocked) {
+  if (terminalFailure) {
+    draft = speakFailure(terminalFailure, {
+      ...(terminalFailure.subject === 'emi.principal'
+        ? { subjectLabel: 'a loan amount (for example, ₹85 lakh)' }
+        : {}),
+    });
+  } else if (templateLocked) {
     draft = fallbackReply(req);
   } else {
     try {
@@ -1884,6 +1993,17 @@ async function fetchObjection(
  * snapshot, priceBasis + computeEmi for EMI. A project with no value renders an
  * honest "not on file"; no facts at all → honest miss, never a bare pick-menu.
  */
+function fetchEmiCalculation(ex: Extracted): EvidenceSet {
+  const outcome = computeEmi({
+    ...(ex.emiPrincipalInr !== undefined ? { principalInr: ex.emiPrincipalInr } : {}),
+    ...(ex.emiRatePercent !== undefined ? { ratePercent: ex.emiRatePercent } : {}),
+    ...(ex.emiTenureYears !== undefined ? { tenureYears: ex.emiTenureYears } : {}),
+  });
+  return outcome.ok
+    ? { tools: ['emi'], emi: { ...outcome.value, discloseInputs: true } }
+    : { tools: [], failure: outcome.failure };
+}
+
 const SHORTLIST_MATRIX_ROWS: Partial<Record<import('./types.js').AnswerTopic, readonly string[]>> = {
   price: ['starting_price'],
   availability: ['configurations', 'possession'],
@@ -1970,11 +2090,20 @@ async function fetchShortlistAnswer(
         // the whole EMI block silently vanished). basisFormatted names the
         // basis either way, so the figure is never presented as unit-exact.
         const basisInr = bases[i]?.priceInr ?? (m.startingPriceInr > 0 ? m.startingPriceInr : 0);
-        const emi = basisInr > 0 ? computeEmi(basisInr, rate, years) : null;
+        const outcome = computeEmi({
+          ...(basisInr > 0 ? { projectPriceInr: basisInr } : {}),
+          ratePercent: rate,
+          tenureYears: years,
+        });
+        const emi = outcome.ok ? outcome.value : null;
         return {
           projectId: m.projectId,
           name: m.name,
-          value: emi ? `${emi.emiFormatted}/mo on ${emi.basisFormatted}` : '',
+          value: emi
+            ? deps.failureTools
+              ? `${emi.emiFormatted}/mo on ${emi.principalFormatted} principal (${emi.basisFormatted} project price)`
+              : `${emi.emiFormatted}/mo on ${emi.basisFormatted}`
+            : '',
         };
       }),
     });
@@ -2063,16 +2192,23 @@ async function fetchAnswer(
 
   if (topics.includes('emi')) {
     const basis = await deps.data.priceBasis(s.builderId, nd, goal.projectId, unitType).catch(() => null);
-    if (basis) {
-      const emi = computeEmi(
-        basis.priceInr,
-        ex.emiRatePercent ?? DEFAULT_RATE_PERCENT,
-        ex.emiTenureYears ?? DEFAULT_TENURE_YEARS,
-      );
-      if (emi) {
-        tools.push('priceBasis', 'emi');
-        evidence = { ...evidence, tools: [...new Set(tools)], emi };
-      }
+    const outcome = computeEmi({
+      ...(basis ? { projectPriceInr: basis.priceInr } : {}),
+      ratePercent: ex.emiRatePercent ?? DEFAULT_RATE_PERCENT,
+      tenureYears: ex.emiTenureYears ?? DEFAULT_TENURE_YEARS,
+    });
+    if (outcome.ok) {
+      tools.push('priceBasis', 'emi');
+      evidence = {
+        ...evidence,
+        tools: [...new Set(tools)],
+        emi: {
+          ...outcome.value,
+          ...(deps.failureTools ? { discloseInputs: true } : {}),
+        },
+      };
+    } else if (deps.failureTools) {
+      evidence = { ...evidence, failure: outcome.failure };
     }
   }
 
@@ -2566,6 +2702,84 @@ function answerFactKind(topic: string): string | null {
     default:
       return null;
   }
+}
+
+async function appendEarlyFailureLedger(input: {
+  deps: EngineDeps;
+  nd: string;
+  input: EngineTurnInput;
+  state: ConversationState;
+  ex: Extracted;
+  extractProvenance: ExtractProvenance | undefined;
+  inputSource: TurnInputSource;
+  reply: string;
+  failure: Failure;
+}): Promise<void> {
+  const {
+    deps,
+    nd,
+    input: turnInput,
+    state,
+    ex,
+    extractProvenance,
+    inputSource,
+    reply,
+    failure,
+  } = input;
+  const goal: TurnGoal = { kind: 'handoff' };
+  const evidence: EvidenceSet = { tools: [], failure };
+  const ledger = buildLedgerWritePayload({
+    state,
+    ex,
+    goal,
+    evidence,
+    inputSource,
+    ...(extractProvenance ? { extractProvenance } : {}),
+    grounding: 'pass',
+    failures: [failure],
+  });
+
+  await deps.crm
+    .appendTurnLedger({
+      conversationId: nd,
+      turnIndex: state.turnCount,
+      builderId: state.builderId,
+      buyerPhone: state.ndBuyerPhone ?? turnInput.buyerPhone,
+      buyerText: turnInput.text,
+      reply,
+      goal: goal.kind,
+      tools: [],
+      phase: state.phase,
+      snapshotIn: ledger.snapshot_in,
+      resolvedIntent: ledger.resolved_intent,
+      actionPlan: ledger.action_plan,
+      verify: ledger.verify,
+      composer: ledger.composer,
+      toolRuns: ledger.tool_runs,
+      disclosedFacts: ledger.disclosed_facts,
+    })
+    .catch((err) => {
+      console.error('[appendEarlyFailureLedger]', nd, err);
+    });
+
+  deps.emitTurnLog?.(
+    buildTurnLogSnapshot({
+      turnInput,
+      state,
+      ex,
+      goal,
+      debug: withIngressDebug(
+        { phase: state.phase, goal, tools: [], grounding: 'pass' },
+        inputSource,
+        extractProvenance,
+      ),
+      reply,
+      evidence,
+      buyerText: turnInput.text.trim(),
+      failures: [failure],
+      exit: 'ambiguous_opt_out',
+    }),
+  );
 }
 
 async function syncTelemetry(

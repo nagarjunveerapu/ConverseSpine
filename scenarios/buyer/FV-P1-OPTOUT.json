@@ -1,0 +1,36 @@
+{
+  "id": "FV-P1-OPTOUT",
+  "title": "Failure Phase 1: mixed contact scope never deletes on yes",
+  "builder_id": "lokations",
+  "tags": ["failure-value", "phase1", "opt-out"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "don't call me, only chat here",
+      "assert": {
+        "reply_includes": [
+          "stop calling and keep chatting here",
+          "stop all contact and delete your details"
+        ],
+        "reply_excludes": ["removed your details"]
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "reply_includes": [
+          "stop calling and keep chatting here",
+          "stop all contact and delete your details"
+        ],
+        "reply_excludes": ["removed your details"]
+      }
+    },
+    {
+      "text": "keep the chat",
+      "assert": {
+        "reply_includes": ["keep your property search", "haven't deleted"],
+        "reply_excludes": ["removed your details"]
+      }
+    }
+  ]
+}

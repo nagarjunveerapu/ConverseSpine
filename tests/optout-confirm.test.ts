@@ -45,6 +45,12 @@ function harness(convId: string) {
   return { deps, turn };
 }
 
+function phase1Harness(convId: string) {
+  const h = harness(convId);
+  h.deps.failureTools = true;
+  return h;
+}
+
 describe('opt-out confirm flow', () => {
   it('standalone STOP deletes immediately', async () => {
     const { deps, turn } = harness('stop-standalone');
@@ -97,5 +103,67 @@ describe('opt-out confirm flow', () => {
     expect(r.state.phase).not.toBe('handoff');
     expect(r.reply).not.toMatch(/removed your details/i);
     expect(deps.crm.calls).not.toContain('delete-memory');
+  });
+});
+
+describe('Phase 1 destructive-intent gate', () => {
+  it('names both readings for contact-only opt-out and never deletes on "yes"', async () => {
+    const { deps, turn } = phase1Harness('stop-scope-yes');
+    let actionPlan: Record<string, unknown> | undefined;
+    deps.crm.appendTurnLedger = async (entry) => {
+      actionPlan = entry.actionPlan;
+    };
+    await turn('coorg, 50 Lakhs');
+    const ask = await turn("don't call me, only chat here");
+    expect(ask.reply).toMatch(/stop calling and keep chatting here/i);
+    expect(ask.reply).toMatch(/stop all contact and delete your details/i);
+    expect(ask.state.stopConfirmMode).toBe('contact_scope');
+    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(actionPlan).toMatchObject({
+      failures: [
+        {
+          kind: 'ambiguous',
+          stage: 'destructive_gate',
+          subject: 'opt_out',
+        },
+      ],
+    });
+
+    const stillAmbiguous = await turn('yes');
+    expect(stillAmbiguous.reply).toMatch(/stop calling and keep chatting here/i);
+    expect(stillAmbiguous.state.stopConfirmPending).toBe(true);
+    expect(deps.crm.calls).not.toContain('delete-memory');
+  });
+
+  it('keeps the search when the buyer chooses chat-only', async () => {
+    const { deps, turn } = phase1Harness('stop-scope-keep');
+    await turn('coorg, 50 Lakhs');
+    await turn('please stop messaging me on whatsapp');
+    const kept = await turn('keep the chat');
+    expect(kept.reply).toMatch(/keep your property search/i);
+    expect(kept.reply).toMatch(/haven't deleted/i);
+    expect(kept.state.phase).not.toBe('handoff');
+    expect(deps.crm.calls).not.toContain('delete-memory');
+  });
+
+  it('deletes only after the buyer explicitly chooses stop-all', async () => {
+    const { deps, turn } = phase1Harness('stop-scope-delete');
+    await turn('coorg, 50 Lakhs');
+    await turn('please stop messaging me');
+    const deleted = await turn('stop all');
+    expect(deleted.reply).toMatch(/removed your details/i);
+    expect(deleted.state.phase).toBe('handoff');
+    expect(deps.crm.calls).toContain('delete-memory');
+  });
+
+  it('keeps direct delete-my-data on an aligned confirmation path', async () => {
+    const { deps, turn } = phase1Harness('stop-explicit-delete');
+    await turn('coorg, 50 Lakhs');
+    const ask = await turn('delete my data');
+    expect(ask.state.stopConfirmMode).toBe('delete_confirm');
+    expect(ask.reply).toMatch(/reply "yes"/i);
+    const deleted = await turn('yes');
+    expect(deleted.state.phase).toBe('handoff');
+    expect(deps.crm.calls).toContain('delete-memory');
   });
 });

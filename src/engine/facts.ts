@@ -44,6 +44,8 @@ const HINGLISH_LOC_BHK_BUDGET_RE =
 export interface ExtractFactsOptions {
   inputSource?: 'chip' | 'free_text';
   ingressFilledSlots?: ReadonlySet<IngressSlotKey>;
+  /** Phase 1: extract tool inputs without changing flag-off behavior. */
+  failureTools?: boolean;
 }
 
 /** Chip ingress — dialogue signals only; RTI owns slot patches. */
@@ -79,8 +81,15 @@ export async function extractFacts(
 
   const filled = options?.ingressFilledSlots ?? new Set<IngressSlotKey>();
   const t = text.trim();
+  const askTopics = detectTopics(text);
+  const emiPrincipal =
+    options?.failureTools && askTopics.includes('emi')
+      ? parseEmiPrincipal(text)
+      : undefined;
   const budget =
-    isSlotWritable('budget', filled, text) ? parseBudgetToInr(text) : null;
+    isSlotWritable('budget', filled, text) && emiPrincipal === undefined
+      ? parseBudgetToInr(text)
+      : null;
   const budgetPickQuestion = isBudgetPickQuestion(text);
   const budgetFitQuestion = !budgetPickQuestion && isBudgetFitQuestion(text, budget);
   const bhk = isSlotWritable('bhk', filled, text) ? normalizeConfig(text) : undefined;
@@ -97,7 +106,6 @@ export async function extractFacts(
   const purposeKw = isSlotWritable('purpose', filled, text) ? detectPurpose(text) : undefined;
   const transitionKw = detectTransition(text);
   const propertyTypeKw = isSlotWritable('propertyType', filled, text) ? detectPropertyTypes(text) : undefined;
-  const askTopics = detectTopics(text);
   const askTopic = askTopics[0];
   const shownName = detectShownName(text, s);
   const smalltalk = SMALLTALK_RE.test(text) && !budget && !bhk && askTopics.length === 0;
@@ -251,6 +259,8 @@ export async function extractFacts(
     ...(budgetPickQuestion ? { budgetPickQuestion: true, compareAdvice: true } : {}),
     ...(emiRate !== undefined ? { emiRatePercent: emiRate } : {}),
     ...(emiTenure !== undefined ? { emiTenureYears: emiTenure } : {}),
+    ...(emiPrincipal !== undefined ? { emiPrincipalInr: emiPrincipal } : {}),
+    ...(options?.failureTools && askTopics.includes('emi') ? { emiContractV1: true } : {}),
     ...(mediaAssetKind ? { mediaAssetKind } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
   };
@@ -267,12 +277,19 @@ export function extractFactsSync(
   }
 
   const filled = options?.ingressFilledSlots ?? new Set<IngressSlotKey>();
-  const budget = isSlotWritable('budget', filled, text) ? parseBudgetToInr(text) : null;
+  const askTopics = detectTopics(text);
+  const emiPrincipal =
+    options?.failureTools && askTopics.includes('emi')
+      ? parseEmiPrincipal(text)
+      : undefined;
+  const budget =
+    isSlotWritable('budget', filled, text) && emiPrincipal === undefined
+      ? parseBudgetToInr(text)
+      : null;
   const budgetPickQuestion = isBudgetPickQuestion(text);
   const budgetFitQuestion = !budgetPickQuestion && isBudgetFitQuestion(text, budget);
   const constraints: Extracted['constraints'] = {};
   if (budget) constraints.budgetMaxInr = budget.max;
-  const askTopics = detectTopics(text);
   const softPrefsSync = detectSoftPrefs(text);
   const loc =
     !softPrefsSync.priorityFocus && isSlotWritable('location', filled, text)
@@ -295,6 +312,8 @@ export function extractFactsSync(
   const ordinal = detectOrdinal(text);
   const affirm = AFFIRM.test(text.trim());
   const implicitProjectPick = wantsImplicitProjectPick(text, s.discover.lastOffered, s.focus);
+  const emiRate = parseEmiRate(text);
+  const emiTenure = parseEmiTenure(text);
   return {
     constraints,
     transition: transitionKw ?? 'none',
@@ -309,6 +328,10 @@ export function extractFactsSync(
     ...(implicitProjectPick ? { implicitProjectPick: true } : {}),
     ...(budgetPickQuestion ? { budgetPickQuestion: true, compareAdvice: true } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
+    ...(emiPrincipal !== undefined ? { emiPrincipalInr: emiPrincipal } : {}),
+    ...(emiRate !== undefined ? { emiRatePercent: emiRate } : {}),
+    ...(emiTenure !== undefined ? { emiTenureYears: emiTenure } : {}),
+    ...(options?.failureTools && askTopics.includes('emi') ? { emiContractV1: true } : {}),
   };
 }
 
@@ -768,6 +791,44 @@ function parseEmiRate(text: string): number | undefined {
 function parseEmiTenure(text: string): number | undefined {
   const m = text.match(/\b(\d+)\s*(?:year|yr)s?\b/i);
   return m ? parseInt(m[1]!, 10) : undefined;
+}
+
+/**
+ * Explicit EMI loan principal. A monetary token must be attached to EMI/loan
+ * context; rates, tenures, budgets, deposits and income are not candidates.
+ */
+export function parseEmiPrincipal(text: string): number | undefined {
+  if (!/\b(?:emi|monthly\s+payment|installment|loan|principal)\b/i.test(text)) {
+    return undefined;
+  }
+  // "My budget is 85L, what is the EMI?" asks for the focused/project basis;
+  // it does not declare an ₹85L loan principal.
+  if (/\bbudget\b/i.test(text) && !/\b(?:loan\s+(?:of|amount)|principal)\b/i.test(text)) {
+    return undefined;
+  }
+
+  const scrubbed = text
+    .replace(/\b\d+(?:\.\d+)?\s*(?:%|percent)/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:years?|yrs?|months?)\b/gi, ' ');
+  const money = String.raw`(?:₹\s*)?(\d[\d,]*(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|l)?(?!\s*(?:%|percent|years?|yrs?|months?))`;
+  const after = new RegExp(
+    String.raw`\b(?:emi|loan(?:\s+amount)?|principal)\b(?:\s*(?:on|for|of|at|is))?\s*${money}`,
+    'i',
+  ).exec(scrubbed);
+  const before = new RegExp(
+    String.raw`${money}\s*(?:loan|principal|emi)\b`,
+    'i',
+  ).exec(scrubbed);
+  const match = after ?? before;
+  if (!match) return undefined;
+
+  const rawAmount = match[1]?.replace(/,/g, '');
+  const amount = rawAmount ? Number.parseFloat(rawAmount) : NaN;
+  const unit = match[2] ?? '';
+  const full = match[0] ?? '';
+  if (/%|percent|\b(?:years?|yrs?|months?)\b/i.test(full)) return undefined;
+  const inr = toInr(amount, unit.toLowerCase());
+  return inr && inr >= 100_000 ? inr : undefined;
 }
 
 function detectMediaAssetKind(text: string): string | undefined {

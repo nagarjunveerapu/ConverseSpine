@@ -64,6 +64,8 @@ export interface Env {
    * local log without changing goal, evidence, state, or buyer-facing copy.
    */
   FAILURE_LOG?: string;
+  /** Phase 1: EMI input authority and destructive-intent disambiguation. */
+  FAILURE_TOOLS?: string;
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;

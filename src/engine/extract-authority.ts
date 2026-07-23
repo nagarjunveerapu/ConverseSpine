@@ -47,6 +47,7 @@ export interface ExtractTurnDeps {
   /** P6 — optional ExtractTurnFacts caller (tests inject fakes). */
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<BamlExtractResult | null>;
   bamlMode?: BamlExtractMode;
+  failureTools?: boolean;
 }
 
 export interface ExtractTurnOptions {
@@ -104,6 +105,7 @@ export async function extractTurnAuthority(
   const baseRaw = await extractFacts(text, state, deps.llm, {
     inputSource: 'free_text',
     ingressFilledSlots: filled,
+    ...(deps.failureTools ? { failureTools: true } : {}),
   });
   const seeded = applyChipPathSeeds(baseRaw, chipResolution);
   const permitted = applySpeechActPermissions(seeded, chipResolution);
