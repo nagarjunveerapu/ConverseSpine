@@ -58,6 +58,7 @@ export class ConverseRuntime {
             bamlExtract: (input) => extractTurnFactsBaml(env, input),
           }
         : {}),
+      ...(env.FAILURE_LOG === 'true' ? { failureLog: true } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),

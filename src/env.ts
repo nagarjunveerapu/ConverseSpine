@@ -59,6 +59,11 @@ export interface Env {
   LOG_LEVEL?: string;
   /** Local dev: append turn debug JSONL to logs/turn-debug.jsonl */
   LOCAL_TURN_LOG?: string;
+  /**
+   * Failure-as-a-value Phase 0. Records shadow failures in the turn ledger and
+   * local log without changing goal, evidence, state, or buyer-facing copy.
+   */
+  FAILURE_LOG?: string;
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;
