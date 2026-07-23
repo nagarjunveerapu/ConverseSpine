@@ -65,6 +65,15 @@ describe('the ranking comes from the ledger, not from a list', () => {
     const r = rankChips({ phase: 'focused', state: 'answer/overview', evidence: evidence({ focused: detail() }) });
     expect(r.chips.map((c) => c.state)).not.toContain('answer/overview');
   });
+
+  it('DOES offer another search after a search — that is a different action', () => {
+    // recommend -> recommend is the single commonest transition out of a
+    // recommend. Skipping it as a "repeat" left the post-recommend turn with
+    // one chip at 4%, which is the arbitrariness this was built to fix.
+    const r = rankChips({ phase: 'discover', state: 'recommend', evidence: evidence() });
+    expect(r.chips.map((c) => c.label)).toContain('Show me more projects');
+    expect(r.chips.length).toBeGreaterThan(1);
+  });
 });
 
 describe('a chip is never offered for a fact we do not have', () => {

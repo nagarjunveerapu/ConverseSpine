@@ -78,13 +78,14 @@ export function rankChips(input: {
   const suppressed: RankedChip[] = [];
 
   for (const [next, count] of Object.entries(c).sort((a, b) => b[1] - a[1])) {
-    // Self-transitions are real in the data (a buyer asks two price questions
-    // in a row) but offering "ask this again" as the top chip is not a next
-    // step. The state we just answered is never its own chip.
-    if (next === state) continue;
-
     const def = chipFor(next);
     const p = n > 0 ? count / n : 0;
+    // Self-transitions are real in the data — a buyer asks two price questions
+    // in a row — but offering "ask this again" is not a next step. The
+    // exception is a state where repeating means something different: a second
+    // `recommend` is a new search, and the catalogue says so.
+    if (next === state && !def?.repeatable) continue;
+
     if (!def) {
       suppressed.push({ state: next, label: '', p, suppressed: 'no_chip' });
       continue;

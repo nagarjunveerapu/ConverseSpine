@@ -15,7 +15,7 @@ input_source is `chip`, which today are the static chips. It becomes the real
 metric once the ranker drives the UI.
 
 Reported against the same fixed-list baseline the offline evaluation used, so
-the live number is comparable to the 85.4% / 51.5% measured on dev replays.
+the live number is comparable to the 69.8% / 51.5% measured on dev replays.
 """
 import argparse, json, subprocess, sys
 from collections import Counter
@@ -26,7 +26,7 @@ WITH t AS (
          json_extract(action_plan_json,'$.chip_shadow') shadow,
          COALESCE(json_extract(action_plan_json,'$.kind'),'') kind,
          COALESCE(json_extract(action_plan_json,'$.topic'),'') topic,
-         COALESCE(json_extract(snapshot_in,'$.input_source'),'') src
+         COALESCE(json_extract(snapshot_in_json,'$.input_source'),'') src
   FROM turn_ledger WHERE created_at > {since}
 ), s AS (
   SELECT cid, shadow,
@@ -83,7 +83,11 @@ def main():
     print(f'{n} scored turns\n')
     print(f'  next state in top-1   {100*hit1/n:5.1f}%')
     print(f'  next state in top-3   {100*hit3/n:5.1f}%')
-    print(f'  (offline on dev replays: 85.4% top-3 vs 51.5% for one fixed list)\n')
+    print(f'  (offline on dev replays: 69.8% top-3 vs 51.5% for one fixed list)')
+    if n < 200:
+        print(f'  n={n} is too small to read — this needs a few hundred turns\n')
+    else:
+        print()
     if tap_n:
         print(f'  buyer TAPPED a chip   {tap_n} turns — ranked it in top-3 {100*tap_hit/tap_n:5.1f}%')
     else:

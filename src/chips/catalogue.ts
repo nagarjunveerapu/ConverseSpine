@@ -37,6 +37,13 @@ export interface ChipDefinition {
   state: string;
   label: (ev: ChipEvidence) => string;
   available: (ev: ChipEvidence) => Availability;
+  /**
+   * Whether landing on this state again is a DIFFERENT action. Usually not —
+   * offering "ask that again" after answering it is noise. But a second
+   * `recommend` is a new search, not a repeat, and suppressing it left the
+   * post-recommend turn with a single 4% chip.
+   */
+  repeatable?: boolean;
 }
 
 /** A project is in play but we never loaded its facts — say so, do not guess. */
@@ -123,6 +130,26 @@ export const CHIP_CATALOGUE: ChipDefinition[] = [
     state: 'recommend',
     label: () => 'Show me more projects',
     available: () => 'yes',
+    repeatable: true,
+  },
+  // The board-level versions of the same asks — "what do these cost" across
+  // the whole shortlist rather than one project. After a recommend these are
+  // among the commonest next moves, and without them the post-recommend turn
+  // had almost nothing to offer.
+  {
+    state: 'shortlist_answer/price',
+    label: () => 'Starting prices',
+    available: (ev) => (ev.shortlist.length > 0 ? 'yes' : 'no'),
+  },
+  {
+    state: 'shortlist_answer/legal',
+    label: () => 'Legal status',
+    available: (ev) => (ev.shortlist.length > 0 ? 'yes' : 'no'),
+  },
+  {
+    state: 'shortlist_answer/availability',
+    label: () => 'Unit configurations',
+    available: (ev) => (ev.shortlist.length > 0 ? 'yes' : 'no'),
   },
   {
     state: 'visit_ask',
