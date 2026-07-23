@@ -70,6 +70,9 @@ def main():
                 "top_score": bind.get("top_score"),
                 "miss": bind.get("miss_reason"),
                 "fields": prov.get("fields"),
+                # Join key for the Desk ledger, where routing_bind actually
+                # persists — the HTTP debug drops provenance on most paths.
+                "nd_conv": r.get("nd_conversation_id") or r.get("conversation_id"),
                 "reply": (r.get("reply") or "")[:300],
                 "err": r.get("_error"),
             })
