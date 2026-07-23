@@ -122,6 +122,18 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   }
   if (hasNarrowingConstraint(s.constraints)) return { kind: 'recommend' };
 
+  // Below-threshold guard. Everything above failed to route this turn, so the
+  // engine does NOT understand the ask. The remaining fallbacks (greet, orient)
+  // have generative compose contracts — reaching them with a real question is
+  // what produced "Hey there! 👋 Welcome to Naya Advisor" for "is my money safe
+  // with this builder?", and a portfolio pitch plus an invented "great choice
+  // going for an investment property" on the turn after. Ask instead of guess.
+  //
+  // Smalltalk still wins: "hi there" is understood, not a miss. A question we
+  // DID route (askTopic/askTopics) never reaches here.
+  if (ex.isQuestion && !ex.smalltalk && !ex.askTopic && !(ex.askTopics?.length)) {
+    return { kind: 'clarify_intent' };
+  }
   if (s.turnCount === 0) return { kind: 'greet' };
   if (ex.smalltalk) return { kind: 'smalltalk' };
   if (!d.oriented) return { kind: 'orient' };

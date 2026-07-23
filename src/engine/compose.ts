@@ -149,6 +149,12 @@ function describeGoal(g: TurnGoal): string {
       return 'greet and ask what they are looking for';
     case 'orient':
       return 'briefly describe the portfolio and ask area/budget/size';
+    case 'clarify_intent':
+      return (
+        'you did NOT understand what they asked. Say so plainly in one short line and ask ONE ' +
+        'clarifying question. State NO facts, figures, places or claims of any kind — you have ' +
+        'no evidence for this turn. Do not pitch the portfolio and do not guess what they meant'
+      );
     case 'probe':
       return `ask their ${g.slot}`;
     case 'recommend':
@@ -321,6 +327,11 @@ export function fallbackReply(req: ComposeRequest): string {
         ev.catalog && ev.catalog.priceMinInr > 0 ? `, starting from ${formatInr(ev.catalog.priceMinInr)}` : '';
       return `We have ${types} on our books${from}. Which area, budget, and size are you thinking?`;
     }
+    case 'clarify_intent':
+      // Acknowledge-then-orient: admit the miss, then ONE next-step question
+      // that steers to the brief. Asserts nothing — this goal is only ever
+      // reached with no evidence to speak from.
+      return `I'd rather get that right than guess — could you tell me a bit more about what you're after, like the area, budget, or size you have in mind?`;
     case 'probe':
       return probeCopy(goal.slot);
     case 'recommend':

@@ -218,6 +218,18 @@ export type AnswerTopic =
 export type TurnGoal =
   | { kind: 'greet' }
   | { kind: 'orient' }
+  /**
+   * Below-threshold fallback: the buyer asked something the engine could not
+   * confidently route, OR a generative goal was reached with no evidence to
+   * generate from. Acknowledge and ask ONE clarifying question — assert nothing.
+   *
+   * This exists because the alternative fallbacks (greet / orient / an objection
+   * with zero reframe angles) all have GENERATIVE compose contracts, so reaching
+   * them empty-handed is what makes the bot invent ("the hills offer better
+   * views and natural cooling"). Recognition coverage is raised in the embedding
+   * lane; this is what must happen when coverage misses.
+   */
+  | { kind: 'clarify_intent' }
   | { kind: 'probe'; slot: ProbeKind }
   | { kind: 'recommend' }
   | { kind: 'advance'; reason: 'same_set' }
