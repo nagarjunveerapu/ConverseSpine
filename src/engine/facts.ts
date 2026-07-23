@@ -4,7 +4,7 @@
  */
 import type { EngineLlm } from './ports.js';
 import type { IngressSlotKey } from './ingress.js';
-import { isSlotWritable } from './ingress.js';
+import { hasTextOverride, isSlotWritable, stripTextOverride } from './ingress.js';
 import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic, LocationCategoryKey } from './types.js';
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
@@ -145,14 +145,25 @@ export async function extractFacts(
   // location extractor must not eat it as a locality ("green near the hills"
   // bug class: un-understood text stuffed into the location slot).
   const softPrefs = detectSoftPrefs(text);
+  // A location already in state used to be permanent: `!constraints.location`
+  // short-circuited before `isSlotWritable`, so the override path was
+  // unreachable and "actually show me something in Whitefield instead" was
+  // silently ignored — the buyer kept getting Devanahalli. (The SPA grew 11
+  // regexes to paper over exactly this.) An explicit override re-opens the
+  // slot; everything else about the guard is unchanged.
+  const locationWritable = !constraints.location || hasTextOverride(text);
   if (
-    !constraints.location &&
+    locationWritable &&
     !softPrefs.priorityFocus &&
     askTopic !== 'compare' &&
     !isVisitDayUtterance(text) &&
     isSlotWritable('location', filled, text)
   ) {
-    constraints.location = extractLocation(text, locationExtractCtx(s, askTopics, text));
+    const nextLocation = extractLocation(text, locationExtractCtx(s, askTopics, text));
+    // Only REPLACE on a real hit. "actually, change something" carries an
+    // override word and no place — clearing a good location on that would be
+    // worse than ignoring the turn.
+    if (nextLocation) constraints.location = nextLocation;
   }
   if (propertyTypeKw) constraints.propertyType = propertyTypeKw;
   if (purposeKw) constraints.purpose = purposeKw;
@@ -996,7 +1007,26 @@ const LOCALITY_STOP = new Set([
   'only', 'just', 'near', 'nearby', 'around', 'close', 'by', 'to', 'at', 'in', 'of',
   'airport', 'project', 'projects', 'area', 'areas', 'place', 'somewhere', 'anywhere',
   'good', 'nice', 'best', 'us', 'consulate', 'office', 'work', 'my', 'me',
+  // Function words and fillers. An utterance made only of these named nowhere:
+  // "actually can you change something" reduces to "can you something".
+  'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
+  'show', 'looking', 'some', 'any', 'other', 'else', 'something', 'anything', 'please',
 ]);
+
+/**
+ * Peel stopwords off both ends of a captured fragment. `isLocalityNoise` only
+ * rejects a fragment that is ENTIRELY noise, so "I want Whitefield" survived
+ * whole and went to the search as a place name. The place is what's left after
+ * the words that carry no location are taken off the ends.
+ */
+function trimLocalityStops(cleaned: string): string {
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  let lo = 0;
+  let hi = words.length;
+  while (lo < hi && LOCALITY_STOP.has(words[lo].toLowerCase())) lo += 1;
+  while (hi > lo && LOCALITY_STOP.has(words[hi - 1].toLowerCase())) hi -= 1;
+  return words.slice(lo, hi).join(' ');
+}
 
 function isLocalityNoise(cleaned: string): boolean {
   const words = cleaned.toLowerCase().split(/\s+/).filter(Boolean);
@@ -1048,7 +1078,7 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
 
   const acceptLocality = (raw: string | undefined): string | undefined => {
     if (!raw) return undefined;
-    const cleaned = cleanLocalityFragment(raw);
+    const cleaned = trimLocalityStops(cleanLocalityFragment(raw));
     if (!cleaned || GENERIC.test(cleaned)) return undefined;
     // AB-3 — a dialogue capture that is nothing but stopwords/noise is NOT a place.
     // "near the airport" grabbed "the", "only plotted" grabbed "only", "schools near
@@ -1073,21 +1103,27 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     if (loc) return loc;
   }
 
-  const inTail = /\bin\s+(.+?)\s*$/i.exec(text.trim());
+  // Override words frame the turn ("actually … instead"); they are never part of
+  // the place. Strip once here so every capture below sees the locality alone —
+  // otherwise "actually I want Whitefield" is extracted verbatim as the locality.
+  // Guards above still read the original text: a decline is a decline either way.
+  const scan = stripTextOverride(trimmed);
+
+  const inTail = /\bin\s+(.+?)\s*$/i.exec(scan);
   if (inTail?.[1]) {
     const loc = acceptLocality(inTail[1]);
     if (loc) return loc;
   }
 
   const propsIn = /\b(?:properties|property|projects|options|homes)\s+in\s+([A-Za-z][A-Za-z\s]{2,20}?)(?:\s|$|[,.!?])/i.exec(
-    text,
+    scan,
   );
   if (propsIn?.[1]) {
     const loc = acceptLocality(propsIn[1]);
     if (loc) return loc;
   }
 
-  const cityProjects = /^([A-Za-z][A-Za-z\s]{2,24}?)\s+projects?\b/i.exec(trimmed);
+  const cityProjects = /^([A-Za-z][A-Za-z\s]{2,24}?)\s+projects?\b/i.exec(scan);
   if (
     cityProjects?.[1] &&
     !GENERIC.test(cityProjects[1]) &&
@@ -1097,12 +1133,12 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     if (loc) return loc;
   }
 
-  const commaLead = /^([A-Za-z][A-Za-z\s]{2,24}?)\s*,/i.exec(text.trim());
+  const commaLead = /^([A-Za-z][A-Za-z\s]{2,24}?)\s*,/i.exec(scan);
   if (commaLead?.[1] && !/\b(lakhs|crore|bhk|budget)\b/i.test(commaLead[1])) {
     const loc = acceptLocality(commaLead[1]);
     if (loc) return loc;
   }
-  const meinLoc = /\b([A-Za-z][A-Za-z\s]{2,20}?)\s+mein\b/i.exec(text);
+  const meinLoc = /\b([A-Za-z][A-Za-z\s]{2,20}?)\s+mein\b/i.exec(scan);
   if (meinLoc?.[1] && !/\b(lakhs|crore|bhk|budget)\b/i.test(meinLoc[1])) {
     const loc = acceptLocality(meinLoc[1]);
     if (loc) return loc;
@@ -1114,14 +1150,14 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   for (const re of patterns) {
     // AB-3 — scan ALL matches, not just the first: "near the airport / Devanahalli"
     // captures "the" first (noise), and the real locality follows it.
-    for (const m of text.matchAll(re)) {
+    for (const m of scan.matchAll(re)) {
       if (m[1] && !GENERIC.test(m[1]) && !/\b(lakhs|crore|bhk|budget)\b/i.test(m[1])) {
         const loc = acceptLocality(m[1]);
         if (loc) return loc;
       }
     }
   }
-  const bare = text.trim();
+  const bare = scan;
   if (extractDayWord(bare)) return undefined;
   if (/\b(?:tell me about|more about|details? on|info on|about)\b/i.test(bare)) return undefined;
   if (ctx?.phase === 'focused' || ctx?.phase === 'visit') return undefined;
@@ -1137,7 +1173,10 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     !AFFIRM.test(bare) &&
     !DECLINE_UTTERANCE.test(bare)
   ) {
-    return bare;
+    // Through the same gate as every other branch. Returning `bare` raw was how
+    // "can you something" reached the search as a locality — the noise check
+    // existed, this path just walked around it.
+    return acceptLocality(bare);
   }
   return undefined;
 }

@@ -18,6 +18,22 @@ export function hasTextOverride(text: string): boolean {
   return TEXT_OVERRIDE_RE.test(text);
 }
 
+/** Same words as TEXT_OVERRIDE_RE, all occurrences, plus the preposition they
+ *  carry ("change TO Whitefield"). Separate literal because the detector is
+ *  first-match/anchored and this one must sweep. */
+const TEXT_OVERRIDE_STRIP_RE =
+  /\b(?:actually|instead|rather|change|switch|update)\b(?:\s+to\b)?|\bnot\s+\w+\s+but\b/gi;
+
+/**
+ * Override words say "replace what you have" — they are never part of the value
+ * being written. Left in place, a greedy capture reads them as the value itself:
+ * "actually I want Whitefield" extracted as the locality
+ * `actually I want Whitefield`, which then matches no project on earth.
+ */
+export function stripTextOverride(text: string): string {
+  return text.replace(TEXT_OVERRIDE_STRIP_RE, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+
 export function isSlotWritable(
   slot: IngressSlotKey,
   filled: ReadonlySet<IngressSlotKey>,
