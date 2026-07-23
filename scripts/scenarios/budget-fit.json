@@ -1,0 +1,57 @@
+{
+  "name": "Budget fit, wrong answers, and the visit hand-off",
+  "intent": "A 3 BHK buyer with a ₹50–70L ceiling. Every assertion below is a claim the bot should be able to make honestly, or decline. Reproduced from a real dev conversation.",
+  "builder_id": "naya-advisor",
+  "turns": [
+    {
+      "say": "self-use home, budget 50-70L, looking for Apartment, 3 BHK, in Aerospace Park / Devanahalli Corridor",
+      "note": "Brigade Eldorado's 3 BHK is ₹89L–₹166L in unit_configs. ₹31L is its 1 BHK — a configuration this buyer did not ask for.",
+      "expect": [
+        { "kind": "not_contains", "value": "within your budget",
+          "why": "no 3 BHK here is inside ₹50–70L; the fit claim is about a different unit than the one asked for" },
+        { "kind": "max_seconds", "value": 2, "why": "reply target" }
+      ]
+    },
+    { "say": "Tell me about Brigade Eldorado",
+      "expect": [{ "kind": "max_seconds", "value": 2 }] },
+    {
+      "say": "Starting prices for Brigade Cornerstone",
+      "note": "Asked for a price. The dev run answered with stamp duty, registration and GST — on topic, not an answer.",
+      "expect": [
+        { "kind": "contains", "value": "₹", "why": "a price question must come back with a price" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    {
+      "say": "Schools near Brigade Cornerstone",
+      "note": "The dev run replied with an IT park and a mall.",
+      "expect": [
+        { "kind": "contains", "value": "school",
+          "why": "the reply must mention the thing that was asked about" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    { "say": "compare eldorado and cornerstone",
+      "expect": [{ "kind": "max_seconds", "value": 2 }] },
+    {
+      "say": "Possession timeline",
+      "note": "A follow-up inside compare mode. The dev run re-printed the whole comparison verbatim.",
+      "expect": [
+        { "kind": "not_contains", "value": "side-by-side comparison",
+          "why": "a narrowing follow-up should narrow, not repeat the full compare" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    { "say": "i want to visit them",
+      "expect": [{ "kind": "max_seconds", "value": 2 }] },
+    {
+      "say": "Sunday",
+      "note": "Answering 'where are you coming from?' with a day. The dev run took it as the origin: 'From Sunday, Brigade Eldorado is your nearer first stop.'",
+      "expect": [
+        { "kind": "not_contains", "value": "from *sunday*",
+          "why": "a weekday is not a place; the origin slot must reject it and re-ask" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    }
+  ]
+}

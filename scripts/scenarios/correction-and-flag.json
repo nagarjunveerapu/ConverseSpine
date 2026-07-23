@@ -1,0 +1,68 @@
+{
+  "name": "Can the buyer correct us, and can we defend what we said?",
+  "intent": "Reproducing the three moments from the founder's live run that matter most: a chip-set budget corrected in free text, a chip label parsed as a place, and a red flag the bot raised itself and was then asked about. Turn 1 sends the brief the way the SPA does, so the budget is an ingress-filled slot — the same starting condition as the real run.",
+  "builder_id": "naya-advisor",
+  "turns": [
+    {
+      "say": "2 BHK apartment, self-use",
+      "preferences": {
+        "budget": "₹50–70L",
+        "bhk": "2 BHK",
+        "property_type": "Apartment",
+        "purpose": "self_use",
+        "location": "Aerospace Park / Devanahalli Corridor"
+      },
+      "note": "The brief arrives from chips, so budget is ingress-filled and locked against casual overwrite. That lock is correct — the question is whether an explicit correction can still get through."
+    },
+    {
+      "say": "We're a young couple buying our first home. Budget about 90 lakhs, both work in Whitefield, want a 2BHK with good resale.",
+      "note": "No override word. The lock SHOULD hold here — this is a restatement, not a correction, and letting it through is how briefs get silently rewritten.",
+      "expect": [
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    {
+      "say": "Sorry, our budget can actually stretch to 90 lakhs, not 70.",
+      "note": "'actually' is an explicit override. The ceiling must move to ₹90L, and prefs_snapshot must say so — the SPA brief reads from that snapshot, so a silent engine-only change still shows the buyer the wrong number.",
+      "expect": [
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    {
+      "say": "Commute from Whitefield",
+      "action_id": "commute_from_whitefield",
+      "note": "A CHIP. Its meaning is fixed at the source, so its label must never be read as buyer prose. The live run got 'Nothing in Commute from Whitefield starts within ₹70 L' — the label parsed as a place name.",
+      "expect": [
+        { "kind": "not_contains", "value": "nothing in commute",
+          "why": "a chip label is not a locality" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    {
+      "say": "which of these builders is most reliable for on-time possession?",
+      "note": "A builder question, not an area question. The live run opened with 'I couldn't match that area'.",
+      "expect": [
+        { "kind": "not_contains", "value": "couldn't match that area",
+          "why": "no area was asked about" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    {
+      "say": "You mentioned RERA complaints on Brigade Eldorado — what exactly are they about, and should I be worried?",
+      "note": "The bot raised this flag itself while ranking. The live run answered with A-Khata / sanctioned-plan reassurance that never mentioned the complaints. Either explain them or say plainly that the detail is not on file — reassuring past your own warning is the worst of the three.",
+      "expect": [
+        { "kind": "contains", "value": "complaint",
+          "why": "the reply must engage the thing it flagged, even if only to say the detail is not on file" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    },
+    {
+      "say": "What's the exact price per square foot and the monthly maintenance charge for the 2BHK at Brigade Eldorado?",
+      "note": "Two questions. The live run answered maintenance and silently dropped price-per-sqft.",
+      "expect": [
+        { "kind": "contains", "value": "sqft", "why": "both halves must be addressed or explicitly parked" },
+        { "kind": "max_seconds", "value": 2 }
+      ]
+    }
+  ]
+}

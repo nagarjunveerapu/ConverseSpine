@@ -13,6 +13,7 @@ import { extractTurnAuthority } from './extract-authority.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
 import { buildLedgerWritePayload } from './ledger-write.js';
+import { Stopwatch } from './timing.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
 import {
@@ -131,7 +132,9 @@ export interface EngineTurnOutput {
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
+  const sw = new Stopwatch();
   let state = (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId);
+  sw.mark('load_state');
   const inputSource = resolveInputSource(input.action_id);
 
   const trimmedText = input.text.trim();
@@ -339,6 +342,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const catalogForNlu = await deps.data.catalog(state.builderId).catch(() => null);
+  sw.mark('catalog');
   const extractResult = await extractTurnAuthority(trimmedText, state, state.builderId, {
     llm: deps.llm,
     semantic: deps.semantic,
@@ -566,7 +570,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   }
 
+  sw.mark('extract');
   const routing = await classifyTurnRouting(deps.routingEnv, buildTurnRoutingInput(state, ex, trimmedText, inputSource));
+  sw.mark('routing');
   // SIL Phase 0 — surface the semantic-layer verdict per turn in the debug
   // channel that survives the /chat route re-shape (LLD §3.3).
   if (extractProvenance && routing.bind) {
@@ -1291,6 +1297,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     grounding,
   });
 
+  // Everything from here is bookkeeping: the reply text is already final and
+  // none of it changes a word the buyer reads. It is timed separately because
+  // that is the argument for moving it off the critical path.
+  sw.mark('compose');
   await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
   await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
   await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
@@ -1301,6 +1311,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     grounding,
     routing,
   }).catch(() => {});
+  sw.mark('post_reply_writes');
 
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
 
@@ -1313,6 +1324,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       ...(repeat_guard ? { repeat_guard } : {}),
       last_offered_count: state.discover.lastOffered.length,
       last_offered_ids: state.discover.lastOffered.map((o) => o.projectId),
+      timing: sw.summary(),
     },
     inputSource,
     extractProvenance,

@@ -631,6 +631,18 @@ export interface TurnDebug {
   grounding: 'pass' | 'repaired' | 'recomposed';
   /** W3 — repeat guard outcome, present only when the guard fired. */
   repeat_guard?: 'recomposed' | 'template' | 'still_identical';
+  /**
+   * Milliseconds per phase, plus `total` wall clock. Present on every
+   * response, so a test run driving the API captures it with no extra
+   * plumbing.
+   *
+   * There was no timing anywhere in the engine before this: `llm_latency_ms`
+   * is 0 on all 2,953 outbound rows and `tool_runs.latency_ms` is a literal
+   * `0` in the ledger writer, so a 43.9s turn could not be attributed to any
+   * stage. `total` is wall clock and not the sum of the phases — the gap is
+   * time nobody claimed, and that gap is the point.
+   */
+  timing?: import('./timing.js').TurnTiming;
   /** Set at ingress — chip tap vs typed message. */
   input_source?: import('./ingress.js').TurnInputSource;
   /** Per-field extract provenance (free-text funnel). */
