@@ -1011,6 +1011,8 @@ const LOCALITY_STOP = new Set([
   // "actually can you change something" reduces to "can you something".
   'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
   'show', 'looking', 'some', 'any', 'other', 'else', 'something', 'anything', 'please',
+  // Discourse markers buyers open a correction with ("no wait, …", "ok so, …").
+  'no', 'yes', 'yeah', 'yep', 'nope', 'ok', 'okay', 'wait', 'well', 'so', 'sure', 'hmm',
 ]);
 
 /**
@@ -1059,7 +1061,12 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   if (ctx?.askTopics?.length) return undefined;
   if (isVisitDayUtterance(trimmed)) return undefined;
   // Dialogue acts — never invent a locality (HIN-06: "nahi chahiye" ≠ place).
-  if (DECLINE_UTTERANCE.test(trimmed) || AFFIRM.test(trimmed)) return undefined;
+  // Unless the buyer went on to override: "no wait, switch to Budigere Cross"
+  // opens with a decline token but is a correction, and treating it as a bare
+  // refusal dropped the area entirely instead of moving it.
+  if (!hasTextOverride(trimmed) && (DECLINE_UTTERANCE.test(trimmed) || AFFIRM.test(trimmed))) {
+    return undefined;
+  }
   // Project re-focus / switch — not a locality (W1: "back to Ayana").
   if (/\bback\s+to\b/i.test(trimmed)) return undefined;
   if (
@@ -1107,7 +1114,13 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   // the place. Strip once here so every capture below sees the locality alone —
   // otherwise "actually I want Whitefield" is extracted verbatim as the locality.
   // Guards above still read the original text: a decline is a decline either way.
-  const scan = stripTextOverride(trimmed);
+  let scan = stripTextOverride(trimmed);
+  // "no wait, Budigere Cross" — a lead-in segment made ENTIRELY of words that
+  // are never a place is the buyer clearing their throat, not part of the area.
+  // Same all-stopwords test the noise gate uses; a segment carrying anything
+  // real ("3 BHK, under 50L") is left alone.
+  const leadIn = /^([^,]{1,40}),\s*(.+)$/.exec(scan);
+  if (leadIn && isLocalityNoise(leadIn[1])) scan = leadIn[2];
 
   const inTail = /\bin\s+(.+?)\s*$/i.exec(scan);
   if (inTail?.[1]) {

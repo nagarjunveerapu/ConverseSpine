@@ -48,6 +48,28 @@ describe('an explicit override re-opens the location slot', () => {
       expect(await locationOf(phrase, 'Devanahalli'), phrase).toBe('Whitefield');
     }
   });
+
+  it('survives the discourse marker buyers actually open a correction with', async () => {
+    // Verified broken on dev: "no wait, switch to Budigere Cross" opens with a
+    // decline token, so the decline guard returned early — and the area was
+    // dropped altogether rather than moved. Same buyer action, worse outcome
+    // than doing nothing.
+    for (const phrase of [
+      'no wait, switch to Whitefield',
+      'ok actually, Whitefield',
+      'hmm, change to Whitefield',
+    ]) {
+      expect(await locationOf(phrase, 'Devanahalli'), phrase).toBe('Whitefield');
+    }
+  });
+
+  it('a bare decline is still a decline, not a place', async () => {
+    // The guard this narrows exists for HIN-06 ("nahi chahiye" is not a
+    // locality). Without an override, nothing changes.
+    expect(await locationOf('no', 'Devanahalli')).toBeUndefined();
+    expect(await locationOf('nahi chahiye', 'Devanahalli')).toBeUndefined();
+    expect(await locationOf('yes please', 'Devanahalli')).toBeUndefined();
+  });
 });
 
 describe('the guard still holds where it should', () => {
