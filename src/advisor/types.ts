@@ -81,6 +81,13 @@ export interface AdvisorTurnResponse {
   ui_mode?: AdvisorUiMode;
   /** Catalog-backed recovery or widen actions (max 3 on WhatsApp). */
   search_recovery?: SearchRecoveryEnvelope;
+  /**
+   * The engine widened the search, found nothing, or is re-offering after a
+   * rejection — i.e. the buyer should be offered a way to adjust. Always
+   * present so the client can rely on it rather than inferring it from the
+   * reply text. See map-response.ts.
+   */
+  suggest_refine: boolean;
   /** P7 — server-owned board + chips (SPA must apply). */
   nba?: import('./nba.js').AdvisorNba;
   /** P7 — authoritative focus / engaged for board↔chat parity. */
