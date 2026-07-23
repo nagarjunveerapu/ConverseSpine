@@ -40,7 +40,7 @@ WITH t AS (
          kind || CASE WHEN topic <> '' THEN '/'||topic ELSE '' END AS state,
          LEAD(kind || CASE WHEN topic <> '' THEN '/'||topic ELSE '' END)
            OVER (PARTITION BY conversation_id ORDER BY created_at) AS next_state,
-         LEAD(phase) OVER (PARTITION BY conversation_id ORDER BY created_at) AS post_phase
+         phase AS post_phase
   FROM f
 )
 SELECT post_phase ph, state st, next_state nx, COUNT(*) n, COUNT(DISTINCT conversation_id) c
@@ -122,9 +122,15 @@ def main():
  *             resolved_intent.goal instead of action_plan.kind
  * Kept        {total} transitions
  *
+ * Conditioned on the phase recorded on the turn's OWN row. That column is
+ * named snapshot_in but is written from the final state, so it is the phase
+ * AFTER the turn — exactly what is known when chips are served. Conditioning
+ * on the next row's phase instead scored 85.4% top-3, but that is leakage: the
+ * next row's phase already encodes what the buyer did.
+ *
  * THIS IS DEV TRAFFIC — replays and internal test conversations, not buyers.
  * Offline on a conversation-disjoint 5-fold split it predicts the next state
- * at 85.4% top-3 against 51.5% for a single fixed list (+33.8pt). That proves
+ * at 69.8% top-3 against 51.5% for a single fixed list (+18.3pt). That proves
  * the mechanism, not buyer preference. Regenerate on real traffic before these
  * numbers are trusted for anything a buyer sees.
  */

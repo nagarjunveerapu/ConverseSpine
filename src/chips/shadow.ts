@@ -26,7 +26,7 @@ export interface ChipShadowLog {
   /** 'cell' means real evidence for this state; 'phase'/'global' mean we backed off. */
   level: ChipRanking['level'];
   support: number;
-  ranked: Array<{ state: string; label: string; p: number }>;
+  ranked: Array<{ state: string; label: string; p: number; assumed?: boolean }>;
   /** Predicted states we could NOT offer, and why. A state that piles up here
    *  is a catalogue gap or a data gap — both worth seeing. */
   held?: Array<{ state: string; p: number; why: string }>;
@@ -47,7 +47,11 @@ export function buildChipShadow(input: {
 
   const ev: ChipEvidence = {
     ...(evidence.detail ? { focused: evidence.detail } : {}),
-    shortlistSize: state.discover.lastOffered.length,
+    // The name is known whenever a project is in focus; the FACTS are known
+    // only when the turn hydrated the detail. Keeping these separate is what
+    // lets availability say "unknown" instead of lying in either direction.
+    ...(state.focus?.projectName ? { focusName: state.focus.projectName } : {}),
+    shortlist: state.discover.lastOffered.map((o) => o.name),
     ...(state.visitBookedCache?.length ? { visitBooked: true } : {}),
   };
 
@@ -67,6 +71,7 @@ export function buildChipShadow(input: {
       state: c.state,
       label: c.label,
       p: Math.round(c.p * 1000) / 1000,
+      ...(c.assumed ? { assumed: true } : {}),
     })),
     ...(ranking.suppressed.length
       ? {

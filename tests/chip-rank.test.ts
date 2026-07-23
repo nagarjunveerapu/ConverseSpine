@@ -30,7 +30,7 @@ const detail = (over: Partial<ProjectDetail> = {}): ProjectDetail => ({
 });
 
 const evidence = (over: Partial<Parameters<typeof rankChips>[0]['evidence']> = {}) => ({
-  shortlistSize: 3,
+  shortlist: ['Brigade Orchards', 'Brigade Cornerstone', 'Brigade Eldorado'],
   ...over,
 });
 
@@ -96,7 +96,7 @@ describe('a chip is never offered for a fact we do not have', () => {
   });
 
   it('does not offer a comparison of one project', () => {
-    const r = rankChips({ phase: 'discover', state: 'recommend', evidence: evidence({ shortlistSize: 1 }) });
+    const r = rankChips({ phase: 'discover', state: 'recommend', evidence: evidence({ shortlist: ['Brigade Orchards'] }) });
     expect(r.chips.map((c) => c.state)).not.toContain('answer/compare');
   });
 
@@ -104,6 +104,42 @@ describe('a chip is never offered for a fact we do not have', () => {
     const r = rankChips({ phase: 'focused', state: 'answer/overview', evidence: evidence({ focused: detail() }) });
     const price = r.suppressed.find((s) => s.state === 'answer/price');
     expect(price?.suppressed).toBe('no_evidence');
+  });
+
+  it('marks a fact as ASSUMED when the turn never loaded the project', () => {
+    // Caught in shadow on dev: `answer/price` in the focused phase produced
+    // ZERO chips — the engine reporting a project had no price one turn after
+    // quoting it. The turn attaches a full detail only when it needed one, so
+    // "no detail" was being read as "no facts". It is not the same claim.
+    const r = rankChips({
+      phase: 'focused',
+      state: 'answer/price',
+      evidence: evidence({ focusName: 'Brigade Orchards' }), // in focus, detail not hydrated
+      limit: 8, // past the top 3, so the fact chips are in view regardless of table order
+    });
+    expect(r.chips.length).toBeGreaterThan(0);
+    // Fact chips are flagged; an overview needs no facts, so it is not.
+    expect(r.chips.filter((c) => c.assumed).length).toBeGreaterThan(0);
+    expect(r.chips.find((c) => c.state === 'answer/availability')?.assumed).toBe(true);
+    expect(r.chips.find((c) => c.state === 'answer/overview')?.assumed).toBeUndefined();
+  });
+
+  it('does NOT mark facts as assumed once the detail is actually in hand', () => {
+    const r = rankChips({
+      phase: 'focused',
+      state: 'answer/price',
+      evidence: evidence({ focused: detail({ reraNumber: 'PRM/KA/RERA/1' }), focusName: 'Brigade Orchards' }),
+    });
+    expect(r.chips.find((c) => c.state === 'answer/legal')?.assumed).toBeUndefined();
+  });
+
+  it('names the project after a recommend, when nothing is focused yet', () => {
+    // Also caught in shadow: a recommend produced one chip at 4%, because the
+    // commonest next move — an overview — was held for having no focus. After
+    // a recommend the overview the buyer wants is of the first board project.
+    const r = rankChips({ phase: 'discover', state: 'recommend', evidence: evidence() });
+    const overview = r.chips.find((c) => c.state === 'answer/overview');
+    expect(overview?.label).toBe('Tell me about Brigade Orchards');
   });
 
   it('drops a chip the buyer was just shown and did not take', () => {

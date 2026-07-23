@@ -8,110 +8,136 @@
  *
  *     catalogue = states the engine can ANSWER ∩ topics we have evidence for
  *
- * Evidence is checked against the ProjectDetail the turn already loaded, so a
- * chip is never offered for a fact the project does not have. That costs no
- * extra fetch: if the buyer is focused, the detail is in hand.
+ * Availability is THREE-valued, and that is not fussiness. The turn attaches a
+ * full ProjectDetail only when it needed one; a price answered from a cost
+ * sheet leaves `evidence.detail` empty. Collapsing that into "no" produced
+ * turns with zero chips on dev — the engine reporting a project has no price
+ * immediately after quoting its price. "We did not look" is a different claim
+ * from "it is not there", and only one of them should silence a chip.
  *
- * Labels are deliberately the same strings nba.ts already serves. Shadow mode
- * compares what the ranker WOULD show against what the static list DID show,
- * and that comparison is only readable if both speak the same vocabulary.
+ * Labels are deliberately the same strings nba.ts already serves, so shadow
+ * mode compares like with like.
  */
 import type { ProjectDetail } from '../engine/types.js';
 
+/** yes = we hold the fact · no = the project genuinely lacks it · unknown = not loaded. */
+export type Availability = 'yes' | 'no' | 'unknown';
+
 export interface ChipEvidence {
-  /** The project in focus, if any — its detail is what we check facts against. */
+  /** Detail for the project in focus — present only when the turn hydrated it. */
   focused?: ProjectDetail;
-  /** How many projects are on the board; some chips need two to make sense. */
-  shortlistSize: number;
-  /** Whether a visit is already booked — "plan a visit" is noise afterwards. */
+  /** Name of the project in focus even when its detail was not loaded. */
+  focusName?: string;
+  /** Names on the board, best first. */
+  shortlist: readonly string[];
   visitBooked?: boolean;
 }
 
 export interface ChipDefinition {
-  /** The predicted state this chip would satisfy. */
   state: string;
   label: (ev: ChipEvidence) => string;
-  /** False when we would be offering a question we cannot answer. */
-  available: (ev: ChipEvidence) => boolean;
+  available: (ev: ChipEvidence) => Availability;
 }
 
-const hasPrice = (p?: ProjectDetail): boolean =>
-  !!p?.startingPriceDisplay || !!p?.configurations?.some((c) => c.priceMinInr > 0);
+/** A project is in play but we never loaded its facts — say so, do not guess. */
+const unchecked = (ev: ChipEvidence): boolean => !ev.focused && !!ev.focusName;
 
-const hasLegal = (p?: ProjectDetail): boolean =>
-  !!p?.reraNumber || !!p?.khata || !!p?.ecStatus || !!p?.naStatus;
+const factCheck = (ev: ChipEvidence, held: boolean): Availability => {
+  if (ev.focused) return held ? 'yes' : 'no';
+  return unchecked(ev) ? 'unknown' : 'no';
+};
 
-const hasFaq = (p: ProjectDetail | undefined, ...keys: string[]): boolean =>
-  !!p?.faqs?.some((f) => keys.some((k) => f.questionKey.includes(k)));
+const hasPrice = (p: ProjectDetail): boolean =>
+  !!p.startingPriceDisplay || !!p.configurations?.some((c) => c.priceMinInr > 0);
 
-/**
- * Ordered only for readability — rank() sorts by the table, never by this list.
- */
+const hasLegal = (p: ProjectDetail): boolean =>
+  !!p.reraNumber || !!p.khata || !!p.ecStatus || !!p.naStatus;
+
+const hasFaq = (p: ProjectDetail, ...keys: string[]): boolean =>
+  !!p.faqs?.some((f) => keys.some((k) => f.questionKey.includes(k)));
+
+/** Ordered only for readability — rank() sorts by the table, never by this list. */
 export const CHIP_CATALOGUE: ChipDefinition[] = [
   {
     state: 'answer/price',
     label: () => 'Starting prices',
-    available: (ev) => hasPrice(ev.focused) || (!ev.focused && ev.shortlistSize > 0),
+    // On the board rather than in a project, prices are the shortlist's.
+    available: (ev) =>
+      ev.focused ? (hasPrice(ev.focused) ? 'yes' : 'no')
+      : ev.focusName ? 'unknown'
+      : ev.shortlist.length > 0 ? 'yes' : 'no',
   },
   {
     state: 'answer/availability',
     label: () => 'Unit configurations',
-    available: (ev) => (ev.focused?.configurations?.length ?? 0) > 0,
+    available: (ev) => factCheck(ev, (ev.focused?.configurations?.length ?? 0) > 0),
   },
   {
     state: 'answer/legal',
     label: () => 'Legal status',
-    available: (ev) => hasLegal(ev.focused) || hasFaq(ev.focused, 'legal', 'rera'),
+    available: (ev) =>
+      factCheck(ev, !!ev.focused && (hasLegal(ev.focused) || hasFaq(ev.focused, 'legal', 'rera'))),
   },
   {
     state: 'answer/location',
     label: () => 'Location & connectivity',
-    available: (ev) => !!ev.focused?.microMarket || hasFaq(ev.focused, 'location', 'connectivity'),
+    available: (ev) =>
+      factCheck(
+        ev,
+        !!ev.focused && (!!ev.focused.microMarket || hasFaq(ev.focused, 'location', 'connectivity')),
+      ),
   },
   {
     state: 'answer/amenities',
     label: () => 'Amenities',
-    available: (ev) => hasFaq(ev.focused, 'amenit'),
+    available: (ev) => factCheck(ev, !!ev.focused && hasFaq(ev.focused, 'amenit')),
   },
   {
     state: 'answer/emi',
     label: () => 'EMI on this',
     // An EMI needs a number to amortise. No price, no honest EMI.
-    available: (ev) => hasPrice(ev.focused),
+    available: (ev) => factCheck(ev, !!ev.focused && hasPrice(ev.focused)),
   },
   {
     state: 'answer/media',
     label: () => 'Photos & floor plans',
-    available: (ev) => hasFaq(ev.focused, 'brochure', 'floor', 'media', 'plan'),
+    available: (ev) =>
+      factCheck(ev, !!ev.focused && hasFaq(ev.focused, 'brochure', 'floor', 'media', 'plan')),
   },
   {
     state: 'answer/overview',
-    label: (ev) => (ev.focused ? `About ${ev.focused.name}` : 'Tell me more'),
-    available: (ev) => !!ev.focused,
+    // After a recommend there is no focus yet — the overview the buyer wants
+    // is of the first project on the board, and naming it is the whole chip.
+    label: (ev) => {
+      const name = ev.focusName ?? ev.focused?.name ?? ev.shortlist[0];
+      return name ? `Tell me about ${name}` : 'Tell me more';
+    },
+    available: (ev) => (ev.focusName || ev.focused || ev.shortlist.length ? 'yes' : 'no'),
   },
   {
     state: 'answer/compare',
-    label: (ev) => `Compare all ${Math.min(ev.shortlistSize, 3)}`,
-    available: (ev) => ev.shortlistSize >= 2,
+    label: (ev) => `Compare all ${Math.min(ev.shortlist.length, 3)}`,
+    available: (ev) => (ev.shortlist.length >= 2 ? 'yes' : 'no'),
   },
   {
     state: 'recommend',
     label: () => 'Show me more projects',
-    available: () => true,
+    available: () => 'yes',
   },
   {
     state: 'visit_ask',
     label: () => 'Plan a visit day',
-    available: (ev) => !ev.visitBooked && (ev.shortlistSize > 0 || !!ev.focused),
+    available: (ev) =>
+      ev.visitBooked ? 'no' : ev.shortlist.length > 0 || ev.focusName || ev.focused ? 'yes' : 'no',
   },
 ];
 
 const BY_STATE = new Map(CHIP_CATALOGUE.map((c) => [c.state, c]));
 
 /**
- * A state the buyer could not have chosen — outcomes, our own moves, and
- * escalations. Kept explicit so a NEW state defaults to "no chip yet" and
- * shows up in the shadow log as unlabelled, rather than silently vanishing.
+ * Undefined for states a buyer could not have chosen — outcomes, our own
+ * moves, escalations. Kept implicit so a NEW state defaults to "no chip yet"
+ * and surfaces in the shadow log as unlabelled rather than silently vanishing.
  */
 export function chipFor(state: string): ChipDefinition | undefined {
   return BY_STATE.get(state);

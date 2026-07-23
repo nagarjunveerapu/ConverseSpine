@@ -31,7 +31,11 @@ export interface RankedChip {
   label: string;
   /** Share of transitions out of this state. */
   p: number;
-  /** Present when the state ranked but has no chip or no evidence behind it. */
+  /** True when the turn never loaded the project, so the fact is unverified.
+   *  Offered in shadow — suppressing it produced turns with no chips at all —
+   *  but counted, because the count is what decides the go-live policy. */
+  assumed?: boolean;
+  /** Present when the state ranked but could not be offered. */
   suppressed?: 'no_chip' | 'no_evidence' | 'shown_recently';
 }
 
@@ -86,7 +90,8 @@ export function rankChips(input: {
       continue;
     }
     const label = def.label(evidence);
-    if (!def.available(evidence)) {
+    const avail = def.available(evidence);
+    if (avail === 'no') {
       suppressed.push({ state: next, label, p, suppressed: 'no_evidence' });
       continue;
     }
@@ -94,7 +99,7 @@ export function rankChips(input: {
       suppressed.push({ state: next, label, p, suppressed: 'shown_recently' });
       continue;
     }
-    chips.push({ state: next, label, p });
+    chips.push({ state: next, label, p, ...(avail === 'unknown' ? { assumed: true } : {}) });
   }
 
   return {

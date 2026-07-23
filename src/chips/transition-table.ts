@@ -6,102 +6,82 @@
  * is trustworthy, and counts stay auditable against the ledger.
  *
  * Source      naya-db-dev (dev)
- * Built       2026-07-23T13:14:25Z
- * Ledger      12707 turns total
+ * Built       2026-07-23T13:24:52Z
+ * Ledger      12710 turns total
  * Excluded    2372 legacy-composer turns (different engine, different shape)
  *             1792 `commit` turns — on dev these are the not-understood
  *             sink (speech_act=unknown in focused), not buyers committing
  * Recovered   951 turns whose goal an earlier engine wrote to
  *             resolved_intent.goal instead of action_plan.kind
- * Kept        4034 transitions
+ * Kept        4036 transitions
+ *
+ * Conditioned on the phase recorded on the turn's OWN row. That column is
+ * named snapshot_in but is written from the final state, so it is the phase
+ * AFTER the turn — exactly what is known when chips are served. Conditioning
+ * on the next row's phase instead scored 85.4% top-3, but that is leakage: the
+ * next row's phase already encodes what the buyer did.
  *
  * THIS IS DEV TRAFFIC — replays and internal test conversations, not buyers.
  * Offline on a conversation-disjoint 5-fold split it predicts the next state
- * at 85.4% top-3 against 51.5% for a single fixed list (+33.8pt). That proves
+ * at 69.8% top-3 against 51.5% for a single fixed list (+18.3pt). That proves
  * the mechanism, not buyer preference. Regenerate on real traffic before these
  * numbers are trusted for anything a buyer sees.
  */
 
-export const CHIP_TABLE_ID = 'ct-f786b13f7c';
+export const CHIP_TABLE_ID = 'ct-382afafdd9';
 
 export const CHIP_TABLE_META = {
-  built_at: '2026-07-23T13:14:25Z',
+  built_at: '2026-07-23T13:24:52Z',
   source: 'naya-db-dev',
-  transitions: 4034,
-  cells: 66,
+  transitions: 4036,
+  cells: 40,
 } as const;
 
 /** `${phase}|${state}` -> next state -> count. */
 export const CHIP_TRANSITIONS: Record<string, Record<string, number>> = {
   "discover|advance": {
     "recommend": 5,
+    "visit_ask": 5,
+    "answer/overview": 4,
     "advance": 3,
+    "answer": 2,
     "shortlist_answer/emi": 1
   },
   "discover|answer": {
-    "no_fit": 16,
-    "answer": 12,
-    "recommend": 5,
-    "advance": 1
-  },
-  "discover|answer/amenities": {
-    "recommend": 12,
-    "no_fit": 5
-  },
-  "discover|answer/availability": {
-    "recommend": 9,
-    "no_fit": 7
-  },
-  "discover|answer/compare": {
-    "recommend": 17,
-    "answer/compare": 13,
+    "visit_ask": 6,
+    "propose_visit": 3,
+    "answer": 2,
     "advance": 1,
     "no_fit": 1,
+    "recommend": 1,
+    "visit_recall": 1
+  },
+  "discover|answer/compare": {
+    "recommend": 16,
+    "visit_ask": 15,
+    "answer/compare": 14,
+    "answer/overview": 11,
+    "answer/legal": 3,
+    "advance": 1,
     "orient": 1
   },
-  "discover|answer/emi": {
-    "recommend": 2,
-    "no_fit": 1
-  },
-  "discover|answer/legal": {
-    "recommend": 14,
-    "no_fit": 12
-  },
-  "discover|answer/location": {
-    "recommend": 11,
-    "no_fit": 6,
-    "answer/compare": 2
-  },
-  "discover|answer/media": {
-    "no_fit": 8,
-    "recommend": 6
-  },
-  "discover|answer/overview": {
-    "recommend": 126,
-    "no_fit": 66,
-    "answer/compare": 17,
-    "clarify_intent": 3
-  },
-  "discover|answer/price": {
-    "recommend": 44,
-    "no_fit": 23,
-    "answer/compare": 20
-  },
-  "discover|answer/property_type": {
-    "recommend": 3,
-    "no_fit": 2
-  },
   "discover|clarify_project_pick": {
+    "answer/overview": 11,
     "clarify_project_pick": 7,
     "no_fit": 4,
     "recommend": 3,
-    "advance": 1
+    "advance": 2,
+    "answer": 2,
+    "visit_ask": 2
   },
   "discover|greet": {
     "recommend": 527,
+    "answer/overview": 23,
     "no_fit": 18,
     "visit_recall": 16,
     "orient": 15,
+    "answer": 5,
+    "answer/availability": 4,
     "answer/compare": 2,
     "objection/location": 1,
     "smalltalk": 1
@@ -109,33 +89,46 @@ export const CHIP_TRANSITIONS: Record<string, Record<string, number>> = {
   "discover|no_fit": {
     "no_fit": 109,
     "recommend": 27,
+    "answer/legal": 4,
+    "answer": 3,
     "answer/compare": 3,
+    "answer/overview": 3,
+    "answer/price": 3,
     "advance": 2,
-    "clarify_project_pick": 1
-  },
-  "discover|objection/custom": {
-    "recommend": 3
-  },
-  "discover|objection/location": {
-    "orient": 1
+    "clarify_project_pick": 1,
+    "propose_visit": 1
   },
   "discover|orient": {
+    "answer/price": 5,
     "recommend": 2,
     "no_fit": 1,
     "probe": 1
   },
   "discover|recommend": {
+    "answer/overview": 429,
     "recommend": 191,
+    "answer": 106,
     "clarify_project_pick": 39,
+    "answer/availability": 37,
     "advance": 34,
+    "answer/price": 33,
     "no_fit": 29,
+    "visit_ask": 27,
     "shortlist_answer/price": 16,
-    "answer/compare": 13,
-    "answer": 12,
+    "answer/legal": 15,
+    "answer/compare": 14,
     "shortlist_answer/legal": 9,
+    "answer/media": 6,
+    "answer/location": 5,
+    "answer/property_type": 3,
     "objection": 3,
     "shortlist_answer/availability": 3,
+    "visit_propose": 3,
+    "propose_visit": 1,
     "visit_recall": 1
+  },
+  "discover|shortlist_answer/availability": {
+    "answer/overview": 3
   },
   "discover|shortlist_answer/legal": {
     "shortlist_answer/legal": 6,
@@ -149,24 +142,23 @@ export const CHIP_TRANSITIONS: Record<string, Record<string, number>> = {
     "shortlist_answer/price": 4,
     "shortlist_answer/legal": 1
   },
-  "discover|visit_ask": {
-    "answer": 3,
-    "no_fit": 1,
-    "recommend": 1
-  },
-  "discover|visit_booked": {
-    "no_fit": 2
-  },
   "focused|advance": {
-    "answer/overview": 6,
-    "answer": 2
+    "answer/overview": 2,
+    "visit_ask": 1,
+    "visit_propose": 1
   },
   "focused|answer": {
-    "answer": 157,
-    "objection": 1,
-    "visit_recall": 1
+    "answer": 166,
+    "no_fit": 15,
+    "visit_ask": 15,
+    "propose_visit": 4,
+    "recommend": 4,
+    "visit_recall": 2,
+    "objection": 1
   },
   "focused|answer/amenities": {
+    "recommend": 12,
+    "no_fit": 5,
     "answer/amenities": 1,
     "hold_propose": 1
   },
@@ -175,18 +167,29 @@ export const CHIP_TRANSITIONS: Record<string, Record<string, number>> = {
     "answer/overview": 13,
     "answer/availability": 12,
     "answer/legal": 9,
+    "recommend": 9,
     "answer/media": 7,
+    "no_fit": 7,
     "objection/custom": 7,
-    "answer/location": 2
+    "answer/location": 2,
+    "visit_ask": 1
   },
   "focused|answer/compare": {
-    "answer/overview": 12,
-    "answer/legal": 3,
-    "answer/compare": 1
+    "visit_ask": 3,
+    "answer/overview": 1,
+    "no_fit": 1,
+    "recommend": 1
+  },
+  "focused|answer/emi": {
+    "recommend": 2,
+    "no_fit": 1
   },
   "focused|answer/legal": {
     "answer/legal": 62,
     "answer/price": 23,
+    "recommend": 14,
+    "no_fit": 12,
+    "visit_ask": 8,
     "answer/media": 5,
     "answer/compare": 3,
     "answer/overview": 3,
@@ -194,182 +197,136 @@ export const CHIP_TRANSITIONS: Record<string, Record<string, number>> = {
     "answer/property_type": 1
   },
   "focused|answer/location": {
+    "recommend": 11,
     "answer/location": 7,
+    "no_fit": 6,
     "answer/legal": 3,
     "answer/overview": 3,
-    "answer/media": 1
+    "answer/compare": 2,
+    "answer/media": 1,
+    "visit_ask": 1
   },
   "focused|answer/media": {
     "answer/price": 12,
-    "answer/overview": 11,
     "answer/media": 10,
+    "answer/overview": 10,
+    "no_fit": 8,
+    "recommend": 6,
+    "visit_ask": 6,
     "answer/legal": 1
   },
   "focused|answer/overview": {
     "answer/overview": 210,
-    "answer/availability": 172,
-    "answer/price": 141,
+    "answer/availability": 175,
+    "answer/price": 142,
+    "recommend": 126,
     "answer/legal": 105,
-    "answer/media": 77,
+    "answer/media": 80,
+    "no_fit": 66,
+    "visit_ask": 50,
     "answer/amenities": 30,
+    "answer/compare": 23,
     "hold_propose": 16,
     "answer/location": 15,
+    "handoff": 10,
     "answer/emi": 9,
-    "answer/compare": 6,
     "advance": 5,
     "answer/property_type": 4,
     "visit_recall": 4,
-    "objection/location": 1
+    "clarify_intent": 3,
+    "propose_visit": 2,
+    "objection/location": 1,
+    "visit_propose": 1
   },
   "focused|answer/price": {
+    "recommend": 44,
     "answer/overview": 27,
+    "no_fit": 23,
+    "answer/compare": 20,
     "answer/price": 14,
     "answer/availability": 11,
+    "visit_ask": 11,
     "answer/media": 9,
+    "visit_propose": 6,
     "answer/legal": 5,
     "answer/location": 2
   },
-  "focused|clarify_project_pick": {
-    "answer/overview": 11,
-    "answer": 2,
-    "advance": 1
-  },
-  "focused|greet": {
-    "answer/overview": 23,
-    "answer": 5,
-    "answer/availability": 4
+  "focused|answer/property_type": {
+    "recommend": 3,
+    "no_fit": 2
   },
   "focused|hold_propose": {
     "hold_booked": 10,
     "answer/overview": 2,
     "answer/amenities": 1
   },
-  "focused|no_fit": {
-    "answer/legal": 4,
-    "answer": 3,
-    "answer/overview": 3,
-    "answer/price": 3
+  "focused|objection/custom": {
+    "recommend": 3
   },
-  "focused|orient": {
-    "answer/price": 5
-  },
-  "focused|propose_visit": {
-    "answer": 4
-  },
-  "focused|recommend": {
-    "answer/overview": 428,
-    "answer": 94,
-    "answer/availability": 37,
-    "answer/price": 33,
-    "answer/legal": 15,
-    "answer/location": 5,
-    "answer/media": 5,
-    "answer/property_type": 3,
-    "answer/compare": 1
-  },
-  "focused|shortlist_answer/availability": {
-    "answer/overview": 3
-  },
-  "focused|visit_ask": {
-    "answer/overview": 4,
-    "answer": 1
+  "focused|objection/location": {
+    "orient": 1
   },
   "focused|visit_booked": {
-    "answer": 1,
-    "answer/overview": 1
-  },
-  "focused|visit_propose": {
-    "visit_booked": 6
+    "answer/overview": 1,
+    "visit_ask": 1
   },
   "focused|visit_recall": {
     "answer": 1
   },
-  "handoff|answer/overview": {
-    "handoff": 10
-  },
   "handoff|visit_booked": {
-    "handoff": 1
-  },
-  "handoff|visit_propose": {
-    "visit_booked": 8
-  },
-  "visit|advance": {
-    "visit_ask": 6,
-    "visit_propose": 1
+    "handoff": 1,
+    "visit_recall": 1
   },
   "visit|answer": {
-    "visit_ask": 21,
-    "propose_visit": 7,
-    "visit_recall": 2
+    "answer": 1
   },
   "visit|answer/amenities": {
     "visit_ask": 1
   },
   "visit|answer/availability": {
-    "visit_ask": 4
-  },
-  "visit|answer/compare": {
-    "visit_ask": 18
-  },
-  "visit|answer/legal": {
-    "visit_ask": 8
+    "visit_ask": 3
   },
   "visit|answer/location": {
-    "visit_ask": 2,
-    "answer/location": 1
+    "answer/location": 1,
+    "visit_ask": 1
   },
   "visit|answer/media": {
-    "visit_ask": 10,
-    "visit_propose": 1
-  },
-  "visit|answer/overview": {
-    "visit_ask": 50,
-    "answer/availability": 3,
-    "answer/media": 3,
-    "propose_visit": 2,
+    "visit_ask": 4,
+    "answer/overview": 1,
     "visit_propose": 1
   },
   "visit|answer/price": {
-    "visit_ask": 11,
-    "visit_propose": 6,
     "answer/media": 1
-  },
-  "visit|clarify_project_pick": {
-    "visit_ask": 2
-  },
-  "visit|no_fit": {
-    "propose_visit": 1
   },
   "visit|propose_visit": {
     "visit_ask": 5,
-    "propose_visit": 1
-  },
-  "visit|recommend": {
-    "visit_ask": 27,
-    "visit_propose": 3,
-    "answer/media": 1,
+    "answer": 4,
     "propose_visit": 1
   },
   "visit|visit_ask": {
     "visit_ask": 75,
     "visit_propose": 51,
+    "answer": 6,
     "answer/price": 5,
-    "answer": 2,
+    "answer/overview": 4,
     "answer/availability": 2,
     "answer/amenities": 1,
     "answer/legal": 1,
     "answer/location": 1,
     "answer/media": 1,
+    "no_fit": 1,
+    "recommend": 1,
     "visit_recall": 1
   },
   "visit|visit_booked": {
-    "visit_ask": 8,
+    "visit_ask": 7,
     "visit_propose": 6,
-    "answer/location": 1,
-    "visit_recall": 1
+    "no_fit": 2,
+    "answer": 1,
+    "answer/location": 1
   },
   "visit|visit_propose": {
-    "visit_booked": 18,
+    "visit_booked": 32,
     "visit_propose": 8,
     "visit_ask": 6,
     "answer": 1,
@@ -383,72 +340,91 @@ export const CHIP_TRANSITIONS: Record<string, Record<string, number>> = {
 /** Backoff level 2 — everything seen in this phase. */
 export const CHIP_PHASE_PRIOR: Record<string, Record<string, number>> = {
   "discover": {
-    "recommend": 1019,
-    "no_fit": 315,
-    "answer/compare": 70,
+    "recommend": 783,
+    "answer/overview": 484,
+    "no_fit": 166,
+    "answer": 120,
+    "visit_ask": 55,
     "clarify_project_pick": 48,
-    "advance": 45,
-    "answer": 27,
+    "advance": 46,
+    "answer/availability": 41,
+    "answer/price": 41,
+    "answer/compare": 33,
+    "answer/legal": 22,
     "shortlist_answer/price": 20,
-    "orient": 17,
-    "visit_recall": 17,
+    "visit_recall": 18,
+    "orient": 16,
     "shortlist_answer/legal": 16,
-    "clarify_intent": 3,
+    "answer/media": 6,
+    "answer/location": 5,
+    "propose_visit": 5,
+    "answer/property_type": 3,
     "objection": 3,
     "shortlist_answer/availability": 3,
+    "visit_propose": 3,
     "objection/location": 1,
     "probe": 1,
     "shortlist_answer/emi": 1,
     "smalltalk": 1
   },
   "focused": {
-    "answer/overview": 760,
-    "answer/price": 285,
-    "answer": 270,
-    "answer/availability": 237,
-    "answer/legal": 207,
-    "answer/media": 114,
+    "answer/overview": 272,
+    "answer/price": 245,
+    "recommend": 235,
+    "answer/availability": 199,
+    "answer/legal": 185,
+    "answer": 167,
+    "no_fit": 146,
+    "answer/media": 112,
+    "visit_ask": 97,
+    "answer/compare": 48,
     "answer/amenities": 32,
-    "answer/location": 31,
+    "answer/location": 26,
     "hold_propose": 17,
-    "answer/compare": 11,
+    "handoff": 10,
     "hold_booked": 10,
     "answer/emi": 9,
-    "answer/property_type": 8,
+    "visit_propose": 8,
     "objection/custom": 7,
-    "advance": 6,
-    "visit_booked": 6,
-    "visit_recall": 5,
+    "propose_visit": 6,
+    "visit_recall": 6,
+    "advance": 5,
+    "answer/property_type": 5,
+    "clarify_intent": 3,
     "objection": 1,
-    "objection/location": 1
+    "objection/location": 1,
+    "orient": 1
   },
   "handoff": {
-    "handoff": 11,
-    "visit_booked": 8
+    "handoff": 1,
+    "visit_recall": 1
   },
   "visit": {
-    "visit_ask": 255,
-    "visit_propose": 77,
-    "visit_booked": 18,
-    "propose_visit": 12,
-    "answer/media": 6,
-    "answer/availability": 5,
+    "visit_ask": 103,
+    "visit_propose": 66,
+    "visit_booked": 32,
+    "answer": 13,
+    "answer/overview": 5,
     "answer/price": 5,
-    "visit_recall": 5,
-    "answer": 3,
     "answer/location": 3,
+    "no_fit": 3,
+    "answer/availability": 2,
+    "answer/media": 2,
+    "visit_recall": 2,
     "answer/amenities": 1,
-    "answer/legal": 1
+    "answer/legal": 1,
+    "propose_visit": 1,
+    "recommend": 1
   }
 };
 
 /** Backoff level 3 — the whole ledger. Never empty, so ranking always terminates. */
 export const CHIP_GLOBAL_PRIOR: Record<string, number> = {
   "recommend": 1019,
-  "answer/overview": 760,
+  "answer/overview": 761,
   "no_fit": 315,
   "answer": 300,
-  "answer/price": 290,
+  "answer/price": 291,
   "visit_ask": 255,
   "answer/availability": 242,
   "answer/legal": 208,
