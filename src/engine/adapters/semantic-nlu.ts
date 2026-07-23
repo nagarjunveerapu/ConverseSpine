@@ -4,7 +4,9 @@ import { detectTopics, isDetailAskTurn, isLocationCorrectionTurn, looksLikeConfi
 import { getQueryCanonicalizer } from '../../nlu/vocab.js';
 import { buyerCuedOtherProject, facetNameResidue } from '../project_switch.js';
 
-const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
+/** Default only — see classify.ts. env.SIL_EMBED_MODEL is the single source of
+ *  truth so query-side and index-side can never drift apart. */
+const DEFAULT_EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 const TOPIC_THRESHOLD = 0.72;
 const LOCATION_THRESHOLD = 0.78;
 /** Low threshold — project names are short; intent vectors use 0.72. */
@@ -68,9 +70,13 @@ function cosine(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-async function embedTexts(ai: Env['AI'], texts: string[]): Promise<number[][]> {
+async function embedTexts(
+  ai: Env['AI'],
+  texts: string[],
+  model?: string,
+): Promise<number[][]> {
   if (!ai || texts.length === 0) return [];
-  const resp = (await ai.run(EMBED_MODEL, { text: texts })) as { data?: number[][] };
+  const resp = (await ai.run((model || DEFAULT_EMBED_MODEL) as never, { text: texts })) as { data?: number[][] };
   return resp.data ?? [];
 }
 
@@ -103,7 +109,7 @@ async function queryProjectVectors(
   text: string,
   builderId: string,
 ): Promise<ReadonlyArray<{ score?: number; metadata?: Record<string, unknown> }>> {
-  const vectors = await embedTexts(env.AI!, [text]);
+  const vectors = await embedTexts(env.AI!, [text], env.SIL_EMBED_MODEL);
   const query = vectors[0];
   if (!query || !env.PROJECT_VECTORS) return [];
   const results = await env.PROJECT_VECTORS.query(query, {
@@ -303,7 +309,7 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
         const queryText = env.SIL_CANONICAL_EMBED === 'true'
           ? (await getQueryCanonicalizer(env))(text)
           : text;
-        const vectors = await embedTexts(env.AI, [queryText]);
+        const vectors = await embedTexts(env.AI, [queryText], env.SIL_EMBED_MODEL);
         const query = vectors[0];
         if (query) {
           const results = await env.INTENT_VECTORS.query(query, {
@@ -358,7 +364,7 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
           text.trim();
         if (locHint.length >= 3) {
           const batch = [locHint, ...ctx.microMarkets.slice(0, 24)];
-          const vectors = await embedTexts(env.AI, batch);
+          const vectors = await embedTexts(env.AI, batch, env.SIL_EMBED_MODEL);
           if (vectors.length === batch.length) {
             const q = vectors[0]!;
             let bestIdx = -1;

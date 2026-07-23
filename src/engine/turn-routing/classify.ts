@@ -6,7 +6,11 @@ import { hasVisitRoutingContext, mapIntentToRouting, ROUTING_TAU_HIGH } from './
 import { DEFERRABLE_ANSWER_TOPICS, projectRoutingFromSpeechAct } from './from-speech-act.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
 
-const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
+/** Default only — the ACTIVE model is env.SIL_EMBED_MODEL, shared with the
+ *  index rebuild. Query and index MUST embed with the same model: different
+ *  models produce different vector spaces, so a mismatch silently destroys
+ *  retrieval rather than failing loudly. */
+const DEFAULT_EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 
 function primaryTopic(input: TurnRoutingInput): AnswerTopic | undefined {
   const topics = (input.ask_topics ?? []).filter((t) => t !== 'compare');
@@ -68,18 +72,23 @@ interface EmbedderOutcome {
   margin?: number;
   miss_reason?: EmbedMissReason;
   facet?: string;
+  /** Telemetry only: the ranked candidates behind the bind. The bind itself
+   *  still uses matches[0]; this exposes whether a SECOND distinct intent is
+   *  present, which is what a multi-intent turn looks like. */
+  top_matches?: { kind: string; score: number }[];
 }
 
 /** Exported for the embedder-only experiment: run the SAME bind the engine uses,
  *  bypassing the regex ladder that normally gates it. Measurement only. */
 export async function embedderRouting(
-  env: Pick<Env, 'AI' | 'INTENT_VECTORS'>,
+  env: Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL'>,
   input: TurnRoutingInput,
 ): Promise<EmbedderOutcome> {
   if (!env.AI || !env.INTENT_VECTORS) return { result: null, fired: false };
 
   const queryText = buildRoutingQuery(input);
-  const embed = (await env.AI.run(EMBED_MODEL, { text: [queryText] })) as { data?: number[][] };
+  const model = env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
+  const embed = (await env.AI.run(model as never, { text: [queryText] })) as { data?: number[][] };
   const vector = embed.data?.[0];
   if (!vector) return { result: null, fired: false };
 
@@ -93,7 +102,7 @@ export async function embedderRouting(
   for (const scope of scopes) {
     const filter = scope ? { builder_scope: scope } : undefined;
     const results = await env.INTENT_VECTORS.query(vector, {
-      topK: 3,
+      topK: 5,
       returnMetadata: 'all',
       ...(filter ? { filter } : {}),
     }).catch(() => null);
@@ -126,6 +135,7 @@ export async function embedderRouting(
     ...(top ? { top_kind: top.kind, top_score: top.score } : {}),
     ...(top?.facet ? { facet: top.facet } : {}),
     ...(top && second ? { margin: top.score - second.score } : {}),
+    top_matches: matches.slice(0, 5).map((m) => ({ kind: m.kind, score: m.score })),
   };
 
   // SIL Phase 0 — record WHY a fired embedder produced no bind, so an empty/stale
@@ -154,7 +164,7 @@ export async function embedderRouting(
  * Visit follow-up (bare "what about X" with visit context) beats speech-act overview (V02).
  */
 export async function classifyTurnRouting(
-  env: Pick<Env, 'AI' | 'INTENT_VECTORS'> | undefined,
+  env: Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL'> | undefined,
   input: TurnRoutingInput,
 ): Promise<TurnRoutingResult> {
   const pid = input.named_project_ids?.[0];

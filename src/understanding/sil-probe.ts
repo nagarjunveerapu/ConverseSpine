@@ -30,6 +30,9 @@ export interface SilProbeResult {
   miss_reason?: string;
   /** What the embedder verdict would route to, or '' when it binds nothing. */
   routing: string;
+  /** Ranked candidates behind the bind. A distinct SECOND intent above tau is
+   *  what a multi-intent turn looks like, and it is invisible from top_kind. */
+  top_matches?: { kind: string; score: number }[];
 }
 
 export async function runSilProbe(
@@ -59,6 +62,7 @@ export async function runSilProbe(
         ...(r.margin !== undefined ? { margin: r.margin } : {}),
         ...(r.miss_reason !== undefined ? { miss_reason: r.miss_reason } : {}),
         routing: r.result?.routing ?? '',
+        ...(r.top_matches ? { top_matches: r.top_matches } : {}),
       });
     } catch (err) {
       out.push({
