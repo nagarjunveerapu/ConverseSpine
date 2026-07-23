@@ -3,6 +3,7 @@
  * P2c adds disclosed_facts from structured evidence.
  */
 import type { ExtractProvenance } from '../engine/ingress.js';
+import { buildChipShadow } from '../chips/shadow.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
 import type {
   ConversationState,
@@ -86,6 +87,12 @@ export function buildLedgerWritePayload(input: {
     ...('topic' in goal && goal.topic ? { topic: goal.topic } : {}),
     ...('topics' in goal && goal.topics?.length ? { topics: goal.topics } : {}),
     ...('projectId' in goal && goal.projectId ? { project_id: goal.projectId } : {}),
+    // SHADOW ONLY — what the chip ranker would have offered after this turn.
+    // Nothing reads it to build the UI; the next row's `kind` is the truth it
+    // gets scored against. It rides on action_plan because that is where the
+    // turn's outgoing decisions live, and because a reader joining rows for the
+    // prediction and the outcome then needs exactly one column.
+    chip_shadow: buildChipShadow({ state, goal, evidence }),
   };
 
   const fromMatches = evidence.matches?.map((m) => m.projectId) ?? [];
