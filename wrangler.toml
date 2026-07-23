@@ -236,7 +236,7 @@ SIL_INTENT_PROJECTION = "p256-f6665e0b79"
 # Ladder order. "false" = historical (regex ladder pre-empts the embedding);
 # "true" = state-dependent rules only, then the embedding, then regex as the
 # fallback. Flipped per measurement run — see scripts/sil-ladder-ab.py.
-SIL_EMBED_FIRST = "false"
+SIL_EMBED_FIRST = "true"
 
 # ── Production ─────────────────────────────────────────────────────────
 [env.prod]

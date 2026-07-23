@@ -100,3 +100,7 @@ export function mapIntentToRouting(
 
   return null;
 }
+
+/** The kinds INTENT_TO_TOPIC already owns. Exported so the intent-authority
+ *  table can be tested for overlap — one owner per kind, enforced, not hoped. */
+export const INTENT_TO_TOPIC_KEYS: readonly string[] = Object.keys(INTENT_TO_TOPIC);
