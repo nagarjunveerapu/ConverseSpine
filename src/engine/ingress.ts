@@ -36,7 +36,12 @@ export type FieldProvenance =
   | 'chip_skip'
   | 'override'
   | 'chip_resolve'
-  | 'baml';
+  | 'baml'
+  /** The intent embedding, acting as sole owner of a slot nothing else fills
+   *  (turn-routing/intent-authority.ts). Distinct from 'embedder', which is the
+   *  project-name / location vector match, and from 'bridge', the topic
+   *  gap-fill — so the ledger can tell the three apart. */
+  | 'intent';
 
 export interface ExtractProvenance {
   path: 'chip_skip' | 'free_text_funnel';

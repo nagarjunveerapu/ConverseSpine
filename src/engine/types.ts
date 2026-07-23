@@ -580,6 +580,13 @@ export interface Extracted {
   stop?: boolean;
   /** Short ack after visit booked ("okay", "thanks") — not a handoff trigger. */
   postVisitAck?: boolean;
+  /**
+   * Buyer wants a person — escalation, a callback, or a complaint to log.
+   * Written ONLY by the intent authority (turn-routing/intent-authority.ts),
+   * for kinds no other layer owns. Extraction never sets this, so there is no
+   * second writer to arbitrate against.
+   */
+  wantsHuman?: boolean;
   /** "Do they come in 20L?" — feasibility ask, not a project detail follow-up. */
   budgetFitQuestion?: boolean;
   /** "Which fits my budget best?" — compare/advise among shortlist. */
