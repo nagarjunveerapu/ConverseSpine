@@ -453,6 +453,13 @@ export interface ObjectionEvidence {
 export interface EvidenceSet {
   tools: string[];
   matches?: Match[];
+  /**
+   * The buyer named an area we could not match, so the search fell back to an
+   * area-less one. Compose MUST NOT present these matches as fitting that area.
+   * The area string itself is deliberately NOT carried: the capture may be
+   * dialogue noise, and echoing noise back is its own defect.
+   */
+  areaFilterDropped?: boolean;
   catalog?: CatalogEnvelope;
   floor?: { display: string; projectName?: string };
   budgetGap?: {

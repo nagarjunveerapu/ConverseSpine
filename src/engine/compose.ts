@@ -311,7 +311,13 @@ export function fallbackReply(req: ComposeRequest): string {
         .join('; ');
       const sensitivity = sensitivityLine(ms);
       const tail = sensitivity ? ` ${sensitivity}` : '';
-      return `${pre}Here's what fits: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
+      // The area the buyer named could not be matched, so these came from an
+      // area-less fallback search — never announce them as fitting that area.
+      // Phrased without repeating the area: the capture may be dialogue noise.
+      const lead = ev.areaFilterDropped
+        ? `I couldn't match that area — here's what we do have`
+        : `Here's what fits`;
+      return `${pre}${lead}: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
     }
     case 'clarify_project_pick': {
       const ms = (ev.matches ?? []).slice(0, 3);
