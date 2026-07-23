@@ -27,6 +27,13 @@ export interface Env {
    *  raw-model value and does NOT transfer to a projected space. */
   SIL_ROUTING_TAU?: string;
   /**
+   * "true" = ask the intent embedding FIRST and let the regex ladder catch what
+   * it declines. Absent = the historical order, where the ladder pre-empts the
+   * embedding and (measured on 7,694 production turns) leaves it deciding 1.9%
+   * of topic understanding. See turn-routing/classify.ts.
+   */
+  SIL_EMBED_FIRST?: string;
+  /**
    * Understanding Flywheel Wave C — "true" runs the nightly auto-teach: teacher-
    * confident clusters pass an EXACT holdout no-regression gate; safe ones
    * promote as 'flywheel_auto' (one-tap Undo on the Desk board) and ship via an

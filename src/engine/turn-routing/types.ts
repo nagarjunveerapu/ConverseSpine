@@ -22,7 +22,7 @@ export type TurnRoutingConfidence = 'rule' | 'embedder' | 'llm' | 'abstain';
 export interface RoutingBindTelemetry {
   bind_source: 'regex' | 'embed_intent' | 'none';
   embed_fired: boolean;
-  embed_gate?: 'visit_rule' | 'speech_act' | 'rule_bound' | 'act_known' | 'no_env' | 'embed_error';
+  embed_gate?: 'visit_rule' | 'speech_act' | 'rule_bound' | 'act_known' | 'no_env' | 'embed_error' | 'embed_declined';
   /** When the embedder fired but produced no bind, WHY: distinguishes an empty/stale
    *  index (no_match/query_error), a low-confidence result (below_tau), and an
    *  unroutable intent_kind (unmapped_kind). */

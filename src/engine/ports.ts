@@ -335,7 +335,12 @@ export interface EngineDeps {
   /** Optional Maps key for visit route drive-time stagger. */
   maps?: { apiKey?: string };
   /** Workers AI + Vectorize for RTI-3B turn routing. */
-  routingEnv?: Pick<import('../env.js').Env, 'AI' | 'INTENT_VECTORS'>;
+  /** Intent-layer config for classifyTurnRouting. Must carry the SIL_* vars, not
+   *  just the bindings — see runtime/deps.ts. */
+  routingEnv?: Pick<
+    import('../env.js').Env,
+    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST'
+  >;
   /** P6 ExtractTurnFacts — after embedder abstain. */
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<
     import('./extract-baml.js').BamlExtractResult | null

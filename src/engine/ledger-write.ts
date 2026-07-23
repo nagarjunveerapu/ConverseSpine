@@ -66,6 +66,16 @@ export function buildLedgerWritePayload(input: {
               ? { speech_act: extractProvenance.speech_act }
               : {}),
             ...(extractProvenance.baml ? { baml: extractProvenance.baml } : {}),
+            // WHICH LAYER DECIDED THE TURN. turn.ts sets this on the provenance
+            // object, but this projection is hand-picked and was dropping it —
+            // so `bind_source`/`embed_gate` existed in code and in NO durable
+            // store (12,036 ledger rows, every one null). Without it there is
+            // no way to answer "how much of understanding is regex vs the
+            // embedding?" from production, which is the single question the
+            // intent layer is accountable for.
+            ...(extractProvenance.routing_bind
+              ? { routing_bind: extractProvenance.routing_bind }
+              : {}),
           },
         }
       : {}),
