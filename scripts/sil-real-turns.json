@@ -1,0 +1,89 @@
+{
+ "3 BHK Devanahalli 2.5 cr": [
+  "find_projects",
+  "get_price"
+ ],
+ "show me options": [
+  "find_projects",
+  "recommend"
+ ],
+ "tell me about Brigade Orchards": [
+  "get_project_info"
+ ],
+ "price details please": [
+  "get_price"
+ ],
+ "site visit saturday": [
+  "book_visit"
+ ],
+ "compare Brigade Eldorado and Brigade Orchards": [
+  "compare_projects"
+ ],
+ "which is better for families?": [
+  "compare_projects"
+ ],
+ "compare Brigade Eldorado, Brigade Orchards and Brigade Cornerstone": [
+  "compare_projects"
+ ],
+ "what 2 BHK and 3 BHK configurations are available?": [
+  "get_availability",
+  "get_unit_configs"
+ ],
+ "tell me about Brigade Eldorado": [
+  "get_project_info"
+ ],
+ "send me the brochure please": [
+  "get_brochure"
+ ],
+ "can I see the 3 BHK floor plan?": [
+  "get_brochure"
+ ],
+ "tell me about Brigade Cornerstone": [
+  "get_project_info"
+ ],
+ "is it RERA registered?": [
+  "get_legal_info"
+ ],
+ "seems too far from city": [
+  "express_objection",
+  "get_location_info"
+ ],
+ "show me closer options": [
+  "find_projects",
+  "recommend"
+ ],
+ "Devanahalli mein 3 BHK chahiye budget 2 crore": [
+  "find_projects"
+ ],
+ "options dikhao": [
+  "find_projects",
+  "recommend"
+ ],
+ "Orchards ke baare mein batao": [
+  "get_project_info"
+ ],
+ "pricing?": [
+  "get_price"
+ ],
+ "what's the price and are there good schools nearby?": [
+  "get_location_info",
+  "get_price"
+ ],
+ "is it RERA registered and when is possession?": [
+  "ask_delivery_timeline",
+  "get_legal_info"
+ ],
+ "send me the brochure and book a visit for saturday": [
+  "book_visit",
+  "get_brochure"
+ ],
+ "compare Brigade Eldorado and Brigade Orchards and tell me which is cheaper": [
+  "compare_projects",
+  "get_price"
+ ],
+ "3 BHK in Devanahalli under 2.5 crore, and what would the EMI be?": [
+  "compute_emi",
+  "find_projects",
+  "get_price"
+ ]
+}

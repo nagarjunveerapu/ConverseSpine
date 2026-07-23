@@ -3,11 +3,14 @@ import type { AnswerTopic, ConversationState, Extracted, OfferedProject } from '
 import { detectTopics, isDetailAskTurn, isLocationCorrectionTurn, looksLikeConfigAsk } from '../facts.js';
 import { getQueryCanonicalizer } from '../../nlu/vocab.js';
 import { buyerCuedOtherProject, facetNameResidue } from '../project_switch.js';
+import { gapFillTau, projectIntentVector } from '../../nlu/intent-projection.js';
 
 /** Default only — see classify.ts. env.SIL_EMBED_MODEL is the single source of
  *  truth so query-side and index-side can never drift apart. */
 const DEFAULT_EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
-const TOPIC_THRESHOLD = 0.72;
+/** Location and project-name indexes are NOT projected — the learned metric is
+ *  fitted for INTENT separation, and those two match on names. Only the
+ *  INTENT_VECTORS path below goes through the projection. */
 const LOCATION_THRESHOLD = 0.78;
 /** Low threshold — project names are short; intent vectors use 0.72. */
 export const PROJECT_VECTOR_THRESHOLD = 0.65;
@@ -310,7 +313,8 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
           ? (await getQueryCanonicalizer(env))(text)
           : text;
         const vectors = await embedTexts(env.AI, [queryText], env.SIL_EMBED_MODEL);
-        const query = vectors[0];
+        const query = vectors[0] ? projectIntentVector(env, vectors[0]) : undefined;
+        const topicTau = gapFillTau(env);
         if (query) {
           const results = await env.INTENT_VECTORS.query(query, {
             topK: 3,
@@ -337,12 +341,12 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
           const bridgedTopic =
             !topic &&
             namedOnShortlist &&
-            score >= TOPIC_THRESHOLD &&
+            score >= topicTau &&
             (kind === 'find_projects' || kind === 'recommend') &&
             looksLikeConfigAsk(text)
               ? ('availability' as AnswerTopic)
               : topic;
-          if (bridgedTopic && score >= TOPIC_THRESHOLD) {
+          if (bridgedTopic && score >= topicTau) {
             next = {
               ...next,
               askTopic: next.askTopic ?? bridgedTopic,

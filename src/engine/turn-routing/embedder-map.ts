@@ -58,8 +58,12 @@ export function mapIntentToRouting(
   kind: string,
   score: number,
   input: TurnRoutingInput,
+  /** Bind threshold for the ACTIVE vector space. Defaults to the raw-model
+   *  value; a projected deployment passes its own calibrated tau, because a
+   *  cosine of 0.78 means different things in different geometries. */
+  tau: number = ROUTING_TAU_HIGH,
 ): TurnRoutingResult | null {
-  if (score < ROUTING_TAU_HIGH) return null;
+  if (score < tau) return null;
 
   const pid = projectId(input);
   const base = {

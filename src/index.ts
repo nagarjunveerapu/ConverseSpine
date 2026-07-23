@@ -10,6 +10,7 @@ import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 import { rebuildIntentIndex } from './rebuild/intent-index.js';
 import { runSilProbe } from './understanding/sil-probe.js';
+import { runSilEmbed } from './understanding/sil-embed.js';
 import { runAutoTeach } from './understanding/auto-teach.js';
 
 export { TurnDebouncer } from './agent/turn_debouncer.js';
@@ -102,6 +103,18 @@ export default {
         const b = body as { builder_id?: string; items?: Array<{ text: string; expected?: string }> };
         const results = await runSilProbe(env, b.builder_id ?? 'naya-advisor', (b.items ?? []).slice(0, 200));
         return json({ status: 'ok', results });
+      }
+
+      // Raw-vector export (dev-gated). Needed to FIT a better metric offline:
+      // a learned projection can only be trained against real vectors, and the
+      // same export makes a model bake-off a measurement instead of a guess.
+      if (path === '/api/sil/embed' && method === 'POST') {
+        if (env.SIL_EVAL_ENABLED !== 'true') return json({ error: 'not_found' }, 404);
+        let body: unknown;
+        try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+        const b = body as { texts?: string[] };
+        const out = await runSilEmbed(env, (b.texts ?? []).slice(0, 384));
+        return json({ status: 'ok', ...out });
       }
 
       if (path === '/api/advisor/turn' && method === 'POST') {
