@@ -4,6 +4,7 @@
  */
 import type { ExtractProvenance } from '../engine/ingress.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
+import { summarizeFailure, type Failure } from './outcome.js';
 import type {
   ConversationState,
   EvidenceSet,
@@ -30,8 +31,18 @@ export function buildLedgerWritePayload(input: {
   inputSource?: string;
   extractProvenance?: ExtractProvenance;
   grounding?: string;
+  failures?: readonly Failure[];
 }): LedgerWritePayload {
-  const { state, ex, goal, evidence, inputSource, extractProvenance, grounding } = input;
+  const {
+    state,
+    ex,
+    goal,
+    evidence,
+    inputSource,
+    extractProvenance,
+    grounding,
+    failures,
+  } = input;
 
   const snapshot_in: Record<string, unknown> = {
     phase: state.phase,
@@ -86,6 +97,9 @@ export function buildLedgerWritePayload(input: {
     ...('topic' in goal && goal.topic ? { topic: goal.topic } : {}),
     ...('topics' in goal && goal.topics?.length ? { topics: goal.topics } : {}),
     ...('projectId' in goal && goal.projectId ? { project_id: goal.projectId } : {}),
+    ...(failures?.length
+      ? { failures: failures.map(summarizeFailure) }
+      : {}),
   };
 
   const fromMatches = evidence.matches?.map((m) => m.projectId) ?? [];

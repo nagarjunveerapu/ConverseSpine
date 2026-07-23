@@ -42,6 +42,8 @@ export interface LocalTurnLogEntry {
     pending_prompt?: unknown;
   };
   grounding?: string;
+  /** Failure-as-a-value Phase 0 safe summaries; no internal detail/copy. */
+  failures?: import('../engine/outcome.js').FailureSummary[];
   /** Set on early-exit turns (RTI probe, type floor, etc.). */
   exit?: string;
 }

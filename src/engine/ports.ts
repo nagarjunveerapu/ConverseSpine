@@ -346,6 +346,8 @@ export interface EngineDeps {
     import('./extract-baml.js').BamlExtractResult | null
   >;
   bamlMode?: import('./extract-baml.js').BamlExtractMode;
+  /** Failure-as-a-value Phase 0: shadow logging only, never behavior. */
+  failureLog?: boolean;
   /** Local dev JSONL turn log (wrangler dev only). */
   emitTurnLog?: (entry: import('../observability/local-turn-log.js').LocalTurnLogEntry) => void;
 }
