@@ -2,6 +2,7 @@ import type { Env } from '../env.js';
 import { canonicalize, makeCanonicalizer } from '../nlu/canonicalize.js';
 import { getRebuildVocab } from '../nlu/vocab.js';
 import { NayaDeskClient } from '../crm/nayadesk-client.js';
+import { intentSpaceId, projectIntentVector } from '../nlu/intent-projection.js';
 
 /**
  * SIL data pipeline — the weekly incremental rebuild that keeps the Vectorize
@@ -241,7 +242,13 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
       base.errors.push(`desk_promoted_fetch:${(e as Error).message}`);
     }
   }
-  let manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(MANIFEST_KEY)) || '{}');
+  // The manifest is per vector SPACE. Without this, switching the intent
+  // projection on (or re-training it) leaves every row marked "unchanged", so
+  // the new index would stay empty while the query side confidently searched
+  // it. Keying on the space id makes a space change force a full re-embed.
+  const space = intentSpaceId(env);
+  const manifestKey = space === 'identity' ? MANIFEST_KEY : `${MANIFEST_KEY}:${space}`;
+  let manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(manifestKey)) || '{}');
   if (canonicalMode) {
     const prevVocab = await env.TURN_CACHE.get(VOCAB_VERSION_KEY);
     if (prevVocab !== vocabVersion) manifest = {};
@@ -275,12 +282,16 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
       const upserts = batch
         .map((r, j) => ({
           id: r.id,
-          values: vecs[j],
+          // Same projection the live query applies — this IS the invariant that
+          // makes the learned metric work, and stamping the space in metadata
+          // makes a stray vector from another geometry visible on inspection.
+          values: vecs[j] ? projectIntentVector(env, vecs[j]!) : undefined,
           metadata: {
             intent_kind: r.intent_kind,
             is_negative: !!r.is_negative,
             language: r.language ?? 'en',
             embed_model: model,
+            intent_space: space,
           },
         }))
         .filter((u) => Array.isArray(u.values) && u.values.length > 0);
@@ -306,7 +317,7 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
     }
   }
 
-  await env.TURN_CACHE.put(MANIFEST_KEY, JSON.stringify(manifest));
+  await env.TURN_CACHE.put(manifestKey, JSON.stringify(manifest));
   // Record the vocab version this index was built with, so the next rebuild
   // knows whether the catalog vocab changed (→ full re-embed).
   if (canonicalMode) await env.TURN_CACHE.put(VOCAB_VERSION_KEY, vocabVersion);

@@ -17,6 +17,16 @@ export interface Env {
   SIL_EMBED_MODEL?: string;
   SIL_REGISTRY_URL?: string;
   /**
+   * Learned intent metric. Must equal the bundled matrix's own PROJECTION_ID
+   * to take effect — a re-trained matrix therefore cannot silently apply to an
+   * index built in the previous space. Absent = raw model vectors, i.e. exactly
+   * the behaviour before the projection existed. See nlu/intent-projection.ts.
+   */
+  SIL_INTENT_PROJECTION?: string;
+  /** Override the intent bind threshold. Each space has its own; 0.78 is the
+   *  raw-model value and does NOT transfer to a projected space. */
+  SIL_ROUTING_TAU?: string;
+  /**
    * Understanding Flywheel Wave C — "true" runs the nightly auto-teach: teacher-
    * confident clusters pass an EXACT holdout no-regression gate; safe ones
    * promote as 'flywheel_auto' (one-tap Undo on the Desk board) and ship via an

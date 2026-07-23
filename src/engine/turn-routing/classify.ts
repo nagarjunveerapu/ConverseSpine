@@ -2,7 +2,8 @@ import type { Env } from '../../env.js';
 import type { AnswerTopic } from '../types.js';
 import { isVisitFollowUpQuestion } from '../phases/visit.js';
 import { buildRoutingQuery } from './build-query.js';
-import { hasVisitRoutingContext, mapIntentToRouting, ROUTING_TAU_HIGH } from './embedder-map.js';
+import { hasVisitRoutingContext, mapIntentToRouting } from './embedder-map.js';
+import { projectIntentVector, routingTau } from '../../nlu/intent-projection.js';
 import { DEFERRABLE_ANSWER_TOPICS, projectRoutingFromSpeechAct } from './from-speech-act.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
 
@@ -81,7 +82,10 @@ interface EmbedderOutcome {
 /** Exported for the embedder-only experiment: run the SAME bind the engine uses,
  *  bypassing the regex ladder that normally gates it. Measurement only. */
 export async function embedderRouting(
-  env: Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL'>,
+  env: Pick<
+    Env,
+    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU'
+  >,
   input: TurnRoutingInput,
 ): Promise<EmbedderOutcome> {
   if (!env.AI || !env.INTENT_VECTORS) return { result: null, fired: false };
@@ -89,8 +93,12 @@ export async function embedderRouting(
   const queryText = buildRoutingQuery(input);
   const model = env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
   const embed = (await env.AI.run(model as never, { text: [queryText] })) as { data?: number[][] };
-  const vector = embed.data?.[0];
-  if (!vector) return { result: null, fired: false };
+  const raw = embed.data?.[0];
+  if (!raw) return { result: null, fired: false };
+  // Into the learned metric — the index was built the same way, or the
+  // projection is off and this is the identity.
+  const vector = projectIntentVector(env, raw);
+  const tau = routingTau(env);
 
   const scopes = [input.builder_id, ''].filter((s, i, a) => a.indexOf(s) === i);
   // SIL Phase 0 — keep every match (deduped by id: the global query re-returns
@@ -144,10 +152,10 @@ export async function embedderRouting(
   if (!top?.kind) {
     return { result: null, ...telemetry, miss_reason: queryOk ? 'no_match' : 'query_error' };
   }
-  if (top.score < ROUTING_TAU_HIGH) {
+  if (top.score < tau) {
     return { result: null, ...telemetry, miss_reason: 'below_tau' };
   }
-  const result = mapIntentToRouting(top.kind, top.score, input);
+  const result = mapIntentToRouting(top.kind, top.score, input, tau);
   if (!result) {
     return { result: null, ...telemetry, miss_reason: 'unmapped_kind' };
   }

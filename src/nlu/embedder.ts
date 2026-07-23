@@ -1,4 +1,5 @@
 import type { Env } from '../env.js';
+import { gapFillTau, projectIntentVector } from './intent-projection.js';
 
 /** Default only — env.SIL_EMBED_MODEL is the single source of truth so the
  *  query side can never drift from the index side. */
@@ -15,8 +16,9 @@ export class IntentEmbedder {
     const embed = await this.env.AI.run(model as never, { text: [buyerText] }) as {
       data?: number[][];
     };
-    const vector = embed.data?.[0];
-    if (!vector) return null;
+    const raw = embed.data?.[0];
+    if (!raw) return null;
+    const vector = projectIntentVector(this.env, raw);
 
     const results = await this.env.INTENT_VECTORS.query(vector, {
       topK: 3,
@@ -27,7 +29,7 @@ export class IntentEmbedder {
     const top = results.matches?.[0];
     if (!top?.metadata || typeof top.metadata.intent_kind !== 'string') return null;
     const score = top.score ?? 0;
-    if (score < 0.72) return null;
+    if (score < gapFillTau(this.env)) return null;
     return { kind: top.metadata.intent_kind as string, score };
   }
 }

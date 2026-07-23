@@ -113,6 +113,127 @@ remote = true
 binding = "AI"
 remote = true
 
+# ── Learned-metric A/B control (ctrldev) ───────────────────────────────
+# The BASELINE arm. Raw-model vectors (no SIL_INTENT_PROJECTION) over an index
+# holding EXACTLY the same 10,646 corpus rows as the projected arm.
+#
+# The existing dev index would have been the obvious control and the wrong one:
+# it carries ~13.6k vectors from an older seeding, so a comparison against it
+# would measure corpus drift as well as the metric. Same rows, same model, one
+# variable.
+[env.ctrldev]
+name = "converse-spine-ctrldev"
+remote = true
+
+[[env.ctrldev.services]]
+binding = "NAYADESK"
+service = "nayadesk-dev"
+remote = true
+
+[[env.ctrldev.kv_namespaces]]
+binding = "TURN_CACHE"
+id = "66ef723ea8614317b80aac74b77f03d1"
+preview_id = "66ef723ea8614317b80aac74b77f03d1"
+remote = true
+
+[[env.ctrldev.durable_objects.bindings]]
+name = "TURN_DEBOUNCER"
+class_name = "TurnDebouncer"
+
+[[env.ctrldev.vectorize]]
+binding = "INTENT_VECTORS"
+index_name = "naya-intent-ident-ctrl-dev"
+remote = true
+
+[[env.ctrldev.vectorize]]
+binding = "PROJECT_VECTORS"
+index_name = "naya-project-names-dev"
+remote = true
+
+[env.ctrldev.ai]
+binding = "AI"
+remote = true
+
+[env.ctrldev.vars]
+NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
+ADVISOR_BUILDER_ID = "naya-advisor"
+LOG_LEVEL = "info"
+LOCAL_TURN_LOG = "on"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_BUILDER_ID = "lokations"
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
+SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
+SIL_CANONICAL_EMBED = "false"
+UNDERSTANDING_CAPTURE = "false"
+SIL_EVAL_ENABLED = "true"
+UNDERSTANDING_AUTO_TEACH = "false"
+# Deliberately absent: SIL_INTENT_PROJECTION. This arm is the raw model.
+
+# ── Learned-metric A/B (projdev) ───────────────────────────────────────
+# Identical to dev in every respect EXCEPT the intent vector space: the learned
+# projection is on, and INTENT_VECTORS points at the index built in that space.
+# Running it as its own worker rather than flipping dev keeps the raw-model
+# baseline live, so the two can be probed side by side with the same payloads
+# instead of before/after a redeploy.
+#
+# The index name carries the projection id; tests/intent-projection-space.test.ts
+# fails the build if these two ever disagree.
+[env.projdev]
+name = "converse-spine-projdev"
+remote = true
+
+[[env.projdev.services]]
+binding = "NAYADESK"
+service = "nayadesk-dev"
+remote = true
+
+[[env.projdev.kv_namespaces]]
+binding = "TURN_CACHE"
+id = "66ef723ea8614317b80aac74b77f03d1"
+preview_id = "66ef723ea8614317b80aac74b77f03d1"
+remote = true
+
+[[env.projdev.durable_objects.bindings]]
+name = "TURN_DEBOUNCER"
+class_name = "TurnDebouncer"
+
+[[env.projdev.vectorize]]
+binding = "INTENT_VECTORS"
+index_name = "naya-intent-p256-f6665e0b79-dev"
+remote = true
+
+[[env.projdev.vectorize]]
+binding = "PROJECT_VECTORS"
+index_name = "naya-project-names-dev"
+remote = true
+
+[env.projdev.ai]
+binding = "AI"
+remote = true
+
+[env.projdev.vars]
+NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
+ADVISOR_BUILDER_ID = "naya-advisor"
+LOG_LEVEL = "info"
+LOCAL_TURN_LOG = "on"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_BUILDER_ID = "lokations"
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
+SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
+SIL_CANONICAL_EMBED = "false"
+# Capture off here: this env exists to be measured, and its turns should not
+# pour experimental traffic into Desk's understanding queue.
+UNDERSTANDING_CAPTURE = "false"
+SIL_EVAL_ENABLED = "true"
+UNDERSTANDING_AUTO_TEACH = "false"
+# The whole point of this env. Must match the bundled matrix's PROJECTION_ID;
+# anything else (including a stale id) falls back to raw-model vectors.
+SIL_INTENT_PROJECTION = "p256-f6665e0b79"
+
 # ── Production ─────────────────────────────────────────────────────────
 [env.prod]
 name = "converse-spine"

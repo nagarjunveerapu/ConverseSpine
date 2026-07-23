@@ -26,6 +26,7 @@ import type { Env } from '../env.js';
 import { NayaDeskClient } from '../crm/nayadesk-client.js';
 import { getQueryCanonicalizer } from '../nlu/vocab.js';
 import { parseJsonl, rebuildIntentIndex, type RebuildReport } from '../rebuild/intent-index.js';
+import { projectIntentVector, routingTau } from '../nlu/intent-projection.js';
 
 const DEFAULT_MODEL = '@cf/baai/bge-base-en-v1.5';
 const TAU_BIND = 0.78;
@@ -117,7 +118,9 @@ async function embedAll(env: Env, model: string, texts: string[]): Promise<numbe
     const res = (await env.AI!.run(model as never, { text: texts.slice(i, i + EMBED_BATCH) })) as {
       data?: number[][];
     };
-    out.push(...(res.data ?? []));
+    // Project here, once, so every downstream use (index probes AND the exact
+    // nn1 gate's own cosines) is in the same space as the index.
+    out.push(...(res.data ?? []).map((v) => projectIntentVector(env, v)));
   }
   return out;
 }
@@ -204,6 +207,10 @@ export async function runAutoTeach(env: Env): Promise<AutoTeachReport> {
   const verdicts = gateCandidates(
     probes,
     memberList.map((m, i) => ({ cluster_key: m.cluster_key, intent_kind: m.intent_kind, vec: memberVecs[i]! })),
+    // The gate compares against the same threshold the live bind uses, which
+    // is space-dependent. Leaving it pinned at 0.78 under a projection would
+    // wave every candidate through.
+    routingTau(env),
   );
   const safe = verdicts.filter((v) => v.safe);
   const risky = verdicts.filter((v) => !v.safe);

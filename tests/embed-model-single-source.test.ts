@@ -35,6 +35,14 @@ describe('embedding model has a single source of truth', () => {
         if (!line.includes('@cf/baai/')) return;
         // Allowed: the named default constant that sits beside an env read.
         if (/(?:DEFAULT_EMBED_MODEL|DEFAULT_MODEL|SIL_EMBED_MODEL)\s*[:=]/.test(line)) return;
+        // Allowed: PROJECTION_MODEL records which model the learned matrix was
+        // FITTED against. That is a property of the artifact, not a runtime
+        // model choice — and intent-projection.ts refuses to project when the
+        // active model differs from it.
+        if (/PROJECTION_MODEL\s*[:=]/.test(line)) return;
+        // Allowed: prose. Comments naming the model explain why code is shaped
+        // the way it is; they cannot cause query/index drift.
+        if (/^\s*(?:\/\/|\/\*|\*)/.test(line)) return;
         offenders.push(`${file}:${i + 1}  ${line.trim()}`);
       });
     }
