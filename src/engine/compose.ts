@@ -508,7 +508,9 @@ export function fallbackReply(req: ComposeRequest): string {
       // buyer didn't ask. Text-bound misses keep today's card behaviour.
       // Advisory atoms (yield / appreciation) must not be swallowed by the card.
       const advisoryRequired =
-        goal.requires?.some((k) => k === 'rental_yield' || k === 'appreciation') ?? false;
+        goal.requires?.some(
+          (k) => k === 'rental_yield' || k === 'appreciation' || k === 'growth_drivers',
+        ) ?? false;
       if (
         topics[0] === 'overview' &&
         ev.detail &&
@@ -769,7 +771,20 @@ function legalSnapshotLine(
   skipRera = false,
 ): string {
   const bits: string[] = [];
-  if (d.reraNumber && !skipRera) bits.push(`RERA: ${d.reraNumber}`);
+  if (!skipRera) {
+    const phaseReras = (d.phases ?? []).filter((p) => p.reraNumber?.trim());
+    if (phaseReras.length > 1) {
+      bits.push(
+        `RERA by phase: ${phaseReras
+          .map((p) => `${p.phaseLabel} ${p.reraNumber}`)
+          .join('; ')}`,
+      );
+    } else if (d.reraNumber) {
+      bits.push(`RERA: ${d.reraNumber}`);
+    } else if (phaseReras[0]?.reraNumber) {
+      bits.push(`RERA: ${phaseReras[0].reraNumber}`);
+    }
+  }
   if (d.khata) bits.push(`Khata: ${d.khata}`);
   if (d.naStatus) bits.push(`NA: ${d.naStatus}`);
   if (d.ecStatus) bits.push(`EC: ${d.ecStatus}`);
@@ -811,7 +826,16 @@ function legalTitleSnapshot(
   faqs: ReadonlyArray<{ questionKey: string }>,
 ): string {
   const bits: string[] = [];
-  if (d.reraNumber) bits.push(`RERA: ${d.reraNumber}`);
+  const phaseReras = (d.phases ?? []).filter((p) => p.reraNumber?.trim());
+  if (phaseReras.length > 1) {
+    bits.push(
+      `RERA by phase: ${phaseReras.map((p) => `${p.phaseLabel} ${p.reraNumber}`).join('; ')}`,
+    );
+  } else if (d.reraNumber) {
+    bits.push(`RERA: ${d.reraNumber}`);
+  } else if (phaseReras[0]?.reraNumber) {
+    bits.push(`RERA: ${phaseReras[0].reraNumber}`);
+  }
   if (d.khata) bits.push(`Khata: ${d.khata}`);
   if (d.naStatus) bits.push(`NA: ${d.naStatus}`);
   if (d.ecStatus) bits.push(`EC: ${d.ecStatus}`);

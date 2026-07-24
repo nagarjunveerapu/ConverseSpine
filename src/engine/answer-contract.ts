@@ -17,6 +17,11 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   // detail; otherwise no_data (C1: never invent a %).
   { key: 'rental_yield', pattern: /\b(?:rental\s+yield|yield|roi|return\s+on\s+investment|rental\s+returns?|rental\s+income)\b/i },
   { key: 'appreciation', pattern: /\b(?:appreciat\w*|how\s+much\s+has\s+(?:this\s+)?(?:area|corridor)\s+grown|corridor\s+growth)\b/i },
+  {
+    key: 'growth_drivers',
+    pattern:
+      /\b(?:what(?:'s|\s+is)\s+driving|growth\s+drivers?|why\s+is\s+(?:this\s+)?(?:area|corridor)\s+growing|infra(?:structure)?\s+(?:pipeline|coming)|upcoming\s+(?:metro|airport|ring\s*road))\b/i,
+  },
 ];
 
 export function answerRequirements(text: string): FactKey[] {
@@ -80,6 +85,9 @@ export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
   }
   if (hasAppreciation(evidence.detail?.marketIntel)) {
     delivered.push('appreciation');
+  }
+  if ((evidence.detail?.marketIntel?.drivers.length ?? 0) > 0) {
+    delivered.push('growth_drivers');
   }
   return delivered;
 }

@@ -237,7 +237,9 @@ export type FactKey =
   | 'flood_zone'
   | 'rental_yield'
   /** Corridor appreciation from approved micro_market_intel. */
-  | 'appreciation';
+  | 'appreciation'
+  /** Corridor growth drivers from approved micro_market_intel. */
+  | 'growth_drivers';
 
 export type TurnGoal =
   | { kind: 'greet' }
@@ -451,6 +453,16 @@ export interface ProjectDetail {
   }>;
   /** W7 — one buyer-ready phase caveat ("Phase 2 is pre-RERA — booking opens at registration"). */
   phaseNote?: string;
+  /** Active phases with per-phase RERA/possession when Desk ships them. */
+  phases?: Array<{
+    phaseId: string;
+    phaseLabel: string;
+    stage: string;
+    possession?: string;
+    reraNumber?: string;
+  }>;
+  /** Distinct media asset_kind values on the focused project (inventory gate). */
+  mediaKinds?: string[];
   location?: {
     connectivitySummary?: string;
     microMarketOverview?: string;

@@ -222,6 +222,28 @@ export function advisoryFactLines(
     }
   }
 
+  const wantDrivers =
+    requires?.includes('growth_drivers') ||
+    (!requires?.length &&
+      /\b(?:what(?:'s|\s+is)\s+driving|growth\s+drivers?|why\s+is\s+(?:this\s+)?(?:area|corridor)\s+growing|infra(?:structure)?\s+(?:pipeline|coming)|upcoming\s+(?:metro|airport|ring\s*road))\b/i.test(
+        buyerText,
+      ));
+  if (wantDrivers && mi && mi.drivers.length) {
+    const events = mi.drivers
+      .slice(0, 4)
+      .map((d) => {
+        const when = d.date ? ` (${d.date})` : '';
+        return `${d.event}${when}`;
+      })
+      .join('; ');
+    const maturity = mi.corridorMaturity?.trim()
+      ? ` Corridor maturity on file: ${mi.corridorMaturity.trim()}.`
+      : '';
+    lines.push(
+      `Growth drivers on file for *${mi.displayName}*: ${events}.${maturity} ${mi.provenanceLabel}`.trim(),
+    );
+  }
+
   if (
     /\b(?:operator|who\s+operates|revenue\s+model|maintenance\s+model|managed)\b/i.test(buyerText) &&
     inv

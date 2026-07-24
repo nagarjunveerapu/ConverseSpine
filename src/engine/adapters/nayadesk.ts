@@ -19,6 +19,7 @@ import {
   mapInvestmentFromProject,
   mapVisitLogisticsFromProject,
 } from '../market-intel.js';
+import { uniqueMediaKinds } from '../media-asset.js';
 
 async function resolveMarketIntel(
   crm: NayaDeskClient,
@@ -48,6 +49,36 @@ function catalogExtras(p: NdProjectSummary): Pick<
     ...(investment ? { investment } : {}),
     ...(visitLogistics ? { visitLogistics } : {}),
     ...(amenities ? { amenities } : {}),
+  };
+}
+
+/** Map Desk phase_journeys → ProjectDetail.phases + primary reraNumber fallback. */
+export function mapPhasesFromJourneys(
+  journeys:
+    | Array<{
+        phase_id: string;
+        phase_label: string;
+        stage: string;
+        possession_date?: string;
+        rera_number?: string;
+      }>
+    | null
+    | undefined,
+): Pick<ProjectDetail, 'phases' | 'reraNumber'> {
+  if (!journeys?.length) return {};
+  const phases = journeys.map((j) => ({
+    phaseId: j.phase_id,
+    phaseLabel: j.phase_label,
+    stage: j.stage,
+    ...(j.possession_date
+      ? { possession: formatPossession(formatYearMonth(j.possession_date)) }
+      : {}),
+    ...(j.rera_number?.trim() ? { reraNumber: j.rera_number.trim() } : {}),
+  }));
+  const firstRera = phases.find((p) => p.reraNumber)?.reraNumber;
+  return {
+    phases,
+    ...(firstRera ? { reraNumber: firstRera } : {}),
   };
 }
 
@@ -249,6 +280,8 @@ export function nayadeskData(
           // W7 — one buyer-ready phase caveat from the journey composer output
           // (pre-RERA phases can hold/EOI but not book).
           const phaseNote = phaseNoteFrom(ctx.phase_journeys);
+          const phaseMapped = mapPhasesFromJourneys(ctx.phase_journeys);
+          const mediaKinds = uniqueMediaKinds(ctx.media);
           const location = mapLocationIntel(ctx.location_intelligence);
           const marketIntel = await resolveMarketIntel(
             crm,
@@ -256,12 +289,14 @@ export function nayadeskData(
             p.micro_market,
           );
           const extras = catalogExtras(p);
+          // Project-level RERA wins when set; else first phase with a number.
+          const reraNumber = p.rera_number?.trim() || phaseMapped.reraNumber;
           return {
             projectId: p.project_id,
             name: p.name,
             microMarket: p.micro_market,
             ...(p.summary ? { summary: p.summary } : {}),
-            ...(p.rera_number ? { reraNumber: p.rera_number } : {}),
+            ...(reraNumber ? { reraNumber } : {}),
             // W4 — free-text possession normalised (no double periods/run-ons).
             ...(p.possession_date ? { possession: formatPossession(formatYearMonth(p.possession_date)) } : {}),
             ...(p.khata_type ? { khata: p.khata_type } : {}),
@@ -276,6 +311,8 @@ export function nayadeskData(
             ),
             ...(configurations.length ? { configurations } : {}),
             ...(phaseNote ? { phaseNote } : {}),
+            ...(phaseMapped.phases?.length ? { phases: phaseMapped.phases } : {}),
+            ...(mediaKinds ? { mediaKinds } : {}),
             ...(location ? { location } : {}),
             ...extras,
             ...(marketIntel ? { marketIntel } : {}),

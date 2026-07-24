@@ -105,10 +105,14 @@ export interface NdContextBundle {
     phase_label: string;
     stage: string;
     possession_date?: string;
+    /** Per-phase RERA (Desk CRM activation follow-on). */
+    rera_number?: string;
     modules: string[];
     money_allowed: boolean;
     primary: string;
   }>;
+  /** Focused-project media metadata (kinds only — bytes via media/share). */
+  media?: Array<{ asset_kind?: string; title?: string; is_active?: number }>;
   location_intelligence?: NdLocationIntelRow | null;
   /** Approved corridor intel (Desk CRM activation) — null when absent/unapproved. */
   market_intel?: NdMarketIntel | null;
