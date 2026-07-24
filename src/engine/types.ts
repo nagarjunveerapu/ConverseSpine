@@ -235,7 +235,9 @@ export type FactKey =
   | 'project_type'
   | 'price'
   | 'flood_zone'
-  | 'rental_yield';
+  | 'rental_yield'
+  /** Corridor appreciation from approved micro_market_intel. */
+  | 'appreciation';
 
 export type TurnGoal =
   | { kind: 'greet' }
@@ -385,6 +387,44 @@ export interface CompareEvidence {
   matrix?: CompareMatrixPayload;
 }
 
+/** Approved corridor intel — CS-gated by confidence ≥ τ before attach. */
+export interface ProjectMarketIntel {
+  displayName: string;
+  appreciation3yrPct?: number;
+  appreciation5yrPct?: number;
+  corridorMaturity?: string;
+  rentBands: Array<{ unitType?: string; rentMinInr?: number; rentMaxInr?: number }>;
+  drivers: Array<{ event: string; date?: string; note?: string }>;
+  provenance: { source: string; asOf: string; confidence: number };
+  /** Buyer-ready provenance tag, e.g. "(99acres, 2026-Q2)". */
+  provenanceLabel: string;
+}
+
+export interface ProjectInvestment {
+  expectedRoi?: string;
+  revenueModel?: string;
+  operatorBrand?: string;
+  guaranteedPayment?: string;
+  maintenanceModel?: string;
+  targetBuyerProfiles?: string[];
+  categoryTags?: string[];
+  landClassification?: string;
+  buildCoverage?: string;
+  launchStage?: string;
+}
+
+export interface ProjectVisitLogistics {
+  pickupMode?: string;
+  pickupOriginCities?: string;
+  pickupRadiusKm?: number;
+  pickupCostNote?: string;
+  parkingOnSite?: string;
+  foodOffered?: string;
+  accommodationOffered?: string;
+  visitDurationNote?: string;
+  siteVisitHours?: string;
+}
+
 export interface ProjectDetail {
   projectId: string;
   name: string;
@@ -417,6 +457,13 @@ export interface ProjectDetail {
     nearbyPois?: string[];
     driveTimes?: string[];
   } & LocationPoiCategories;
+  /** Approved micro-market intel (yield / appreciation / drivers). */
+  marketIntel?: ProjectMarketIntel;
+  /** Project investment / operator fields from the catalog row. */
+  investment?: ProjectInvestment;
+  visitLogistics?: ProjectVisitLogistics;
+  /** Parsed from project.spec_json when structured. */
+  amenities?: string[];
 }
 
 /** One named place from Desk location_intelligence — always Desk-verified, never invented. */

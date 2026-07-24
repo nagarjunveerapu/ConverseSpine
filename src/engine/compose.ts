@@ -38,6 +38,7 @@ import { isInventoryAsk } from './facts.js';
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
 import { speakEducation } from './education.js';
+import { advisoryFactLines } from './market-intel.js';
 import {
   collapseCoverageMarkets,
   inventoryNoun,
@@ -505,11 +506,30 @@ export function fallbackReply(req: ComposeRequest): string {
       // A TAUGHT facet miss also falls through (to the honest-miss line): the
       // bind read the ask's meaning, so the card would answer a question the
       // buyer didn't ask. Text-bound misses keep today's card behaviour.
-      if (topics[0] === 'overview' && ev.detail && !ev.detail.faqs?.length && !ev.faqMiss?.taught) {
+      // Advisory atoms (yield / appreciation) must not be swallowed by the card.
+      const advisoryRequired =
+        goal.requires?.some((k) => k === 'rental_yield' || k === 'appreciation') ?? false;
+      if (
+        topics[0] === 'overview' &&
+        ev.detail &&
+        !ev.detail.faqs?.length &&
+        !ev.faqMiss?.taught &&
+        !advisoryRequired
+      ) {
         return overviewCard(ev.detail);
       }
 
       const chunks: string[] = [];
+
+      if (ev.detail) {
+        for (const line of advisoryFactLines(ev.detail, goal.requires, context.buyerText ?? '')) {
+          chunks.push(line);
+        }
+      }
+
+      if (topics.includes('amenities') && ev.detail?.amenities?.length) {
+        chunks.push(`Amenities on file: ${ev.detail.amenities.slice(0, 8).join(', ')}`);
+      }
 
       if (topics.includes('price') && ev.pricing && !suppressPrice) {
         const p = ev.pricing;
@@ -1049,7 +1069,7 @@ function compareAdviceLine(
   if (/\binvest/i.test(buyerText)) {
     const cheaper =
       (a?.starting_price_lakhs ?? 0) <= (b?.starting_price_lakhs ?? 0) ? a : b;
-    return `For investment, *${cheaper?.name}* has the lower entry point on our catalog — happy to walk through yields on a call.`;
+    return `For investment framing, *${cheaper?.name}* has the lower entry point on our catalog — open a project for stated ROI or corridor rent bands when we have them on file (never a promised return).`;
   }
   if (/\bfamil/i.test(buyerText)) {
     return `For families, compare location fit and configuration — both are in the table below. Tell me your must-haves and I can steer you.`;

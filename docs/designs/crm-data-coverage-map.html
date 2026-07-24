@@ -1,0 +1,57 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>CRM data coverage — what the bot can reach</title><style>
+:root{--bg:#fbfbfa;--ink:#1c1917;--mut:#6b6560;--line:#e2ded8;--card:#fff;--ok:#0f7a5c;--part:#c07a1a;--dead:#c0392b}
+@media(prefers-color-scheme:dark){:root{--bg:#17150f;--ink:#f2ede3;--mut:#a89f92;--line:#332f27;--card:#201d16}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 'Helvetica Neue',Helvetica,Arial,sans-serif;padding:28px}
+.w{max-width:1080px;margin:0 auto}h1{font-size:24px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 18px}
+h2{font-size:16px;margin:26px 0 8px}.tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;color:#fff}
+.v{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 18px}
+.v.dead{border-left:4px solid var(--dead)} .v.ok{border-left:4px solid var(--ok)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mut);font-weight:600}
+.s{font-weight:700;white-space:nowrap}.s.ok{color:var(--ok)}.s.part{color:var(--part)}.s.dead{color:var(--dead)}
+code{background:rgba(128,128,128,.15);padding:1px 5px;border-radius:4px;font-size:11.5px}
+.q{color:var(--mut);font-style:italic}
+.big{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--dead);border-radius:10px;padding:15px 17px;margin:0 0 20px}
+</style></head><body><div class=w>
+<h1>CRM project-data coverage — what the bot can actually reach</h1>
+<p class=sub>NayaDesk holds ~45 project dimensions across 9 tables. ConverseSpine surfaces ~20. The unreached half is the <b>advisory / investment intelligence</b> — the "advisor, not chatbot" differentiator. Sample questions per row = a ready deep/adversarial test set. · 2026-07-25</p>
+
+<div class=big><b>The headline:</b> the bot answers the <b>catalog facts</b> (price, RERA, possession, configs, location POIs) well — but it is <b>blind to the market/investment layer the CRM already stores</b>: appreciation %, rental yield bands, corridor maturity, market drivers, expected ROI, revenue/operator model. That layer is <b>dead data</b> — not shipped by Desk's <code>conversationContext</code> and/or not mapped by the bot's adapter. It's why the bot <b>fabricated a rental yield</b> (C1): the real, sourced number exists in <code>micro_market_intel</code>, just unwired. Wiring it (with its <code>confidence</code> + <code>as_of</code>) turns a decline/fabrication into an honest grounded advisory answer.</div>
+
+<h2>✅ Covered — CRM has it, the bot surfaces it (test for correctness/honesty)</h2>
+<div class="v ok"><table>
+<tr><th>dimension</th><th>CRM source</th><th style=width:15%>bot</th><th>a deep test</th></tr>
+<tr><td>Identity / type / summary</td><td><code>projects</code> name, micro_market, project_type, summary</td><td class="s ok">✅ surfaces</td><td class=q>"tell me about X" — right name, area, type</td></tr>
+<tr><td>Price + full cost sheet</td><td><code>unit_configs</code> price + <code>cost_sheet_items</code></td><td class="s ok">✅ surfaces</td><td class=q>"break down every charge — GST, parking, club, registration"</td></tr>
+<tr><td>Legal / approvals</td><td>rera_number, khata_type, na_status, ec_status, loan_eligibility</td><td class="s ok">✅ surfaces</td><td class=q>"EC status? which banks approved? khata type?"</td></tr>
+<tr><td>Possession (incl. phase-wise)</td><td>possession_date + <code>project_phases</code></td><td class="s ok">✅ surfaces</td><td class=q>"exact possession for Dioro block vs the ready phases"</td></tr>
+<tr><td>Configs / sizes / availability</td><td><code>unit_configs</code> + hold counts</td><td class="s ok">✅ surfaces</td><td class=q>"3 BHK sizes and how many are still available"</td></tr>
+<tr><td>Location POIs</td><td><code>location_intelligence</code> metro/schools/hospitals/IT-parks/malls/airports</td><td class="s ok">✅ surfaces</td><td class=q>"nearest metro? good schools? distance to the airport?"</td></tr>
+<tr><td>Curated FAQs</td><td><code>faqs</code> (approved Q&A)</td><td class="s ok">✅ surfaces</td><td class=q>anything with an approved answer on file</td></tr>
+</table></div>
+
+<h2>🔴 Dead data — CRM has it, the bot canNOT reach it (wire, then test)</h2>
+<div class="v dead"><table>
+<tr><th>dimension</th><th>CRM source</th><th style=width:15%>bot</th><th>a deep test (fails today)</th></tr>
+<tr><td><b>Appreciation history</b></td><td><code>micro_market_intel</code> appreciation_3yr/5yr_pct, corridor_maturity</td><td class="s dead">❌ dead — not shipped</td><td class=q>"how much has this corridor appreciated in 3 years?"</td></tr>
+<tr><td><b>Rental yield / rent bands</b></td><td><code>micro_market_intel</code> rent_bands_json</td><td class="s dead">❌ dead → fabricated (C1)</td><td class=q>"what rent would a 2 BHK fetch? what's the yield?"</td></tr>
+<tr><td><b>Market drivers</b></td><td><code>micro_market_intel</code> drivers_json (metro/airport/ring-road events)</td><td class="s dead">❌ dead</td><td class=q>"what's driving growth in this area?"</td></tr>
+<tr><td><b>Expected ROI / returns</b></td><td><code>projects</code> expected_roi, guaranteed_payment</td><td class="s dead">❌ dropped by adapter; topic deflects</td><td class=q>"what ROI does the builder project? any guaranteed return?"</td></tr>
+<tr><td><b>Managed-asset model</b></td><td>revenue_model, operator_brand, maintenance_model, build_coverage</td><td class="s dead">❌ dropped by adapter</td><td class=q>"who operates it? what's the revenue-share / maintenance model?"</td></tr>
+<tr><td><b>Who it's for</b></td><td>target_buyer_profiles, category_tags, land_classification</td><td class="s dead">❌ dropped</td><td class=q>"is this more for end-use or investors?"</td></tr>
+<tr><td>Visit logistics</td><td>pickup_mode/cities/radius/cost, parking_on_site, food_offered, accommodation_offered, visit_duration, site_visit_hours</td><td class="s dead">❌ dropped</td><td class=q>"do you arrange pickup? is parking/food available on a site visit?"</td></tr>
+<tr><td>Per-unit inventory detail</td><td><code>units</code> floor, facing, carpet_area_sqft (per unit)</td><td class="s part">⚠️ config-level only</td><td class=q>"a north-facing unit on a high floor with X carpet"</td></tr>
+<tr><td>Upcoming infra / POIs detail</td><td><code>location_intelligence</code> upcoming_infra, pois</td><td class="s part">⚠️ partial (POIs mapped, upcoming_infra not)</td><td class=q>"any upcoming metro/road that will lift this area?"</td></tr>
+<tr><td>Amenities / specs</td><td><code>projects</code> spec_json</td><td class="s part">⚠️ generic definition, not project data</td><td class=q>"list this project's amenities — clubhouse, pool, gym?"</td></tr>
+</table></div>
+
+<h2>What this means for testing & quality</h2>
+<div class=v>
+<ul>
+<li><b>The adversarial suite tested the covered half</b> (honesty on price/RERA/possession) — and it's now solid. The <b>deep-conversation quality gap is the dead half:</b> a buyer asking real advisory questions (yield, appreciation, ROI, "is this a good investment", "who operates it") gets a deflection or a fabrication, not the truth the CRM holds.</li>
+<li><b>Highest-leverage next move:</b> wire <code>micro_market_intel</code> (appreciation + rent bands + drivers, carrying <code>confidence</code> + <code>as_of</code>) and the project investment fields through Desk's <code>conversationContext</code> → the bot's adapter → an honest advisory answer. This is a two-repo change (Desk ships it, CS reads it) and it converts C1's fabrication into a grounded answer.</li>
+<li><b>Then the deep/adversarial tests write themselves</b> — each 🔴 row's sample question becomes a test: does the bot now answer from real data (with the source/date), decline honestly when a specific project lacks it, and never fabricate?</li>
+</ul>
+</div>
+</div></body></html>

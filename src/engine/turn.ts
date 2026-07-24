@@ -2993,7 +2993,11 @@ async function fetchAnswer(
     ? [taughtKey, ...resolvedKeys.filter((k) => k !== taughtKey)]
     : resolvedKeys;
   const faqHits: Array<{ questionKey: string; question: string; answer: string }> = [];
+  // CRM activation / C1: yield + appreciation are owned by gated market intel
+  // (or honest decline) — never by a project FAQ that can invent a %.
+  const faqBlockedForIntel = new Set(['rental_yield', 'resale_value']);
   for (const key of faqKeys) {
+    if (deps.failureAnswer && faqBlockedForIntel.has(key)) continue;
     const faq = await deps.data.faqLookup(goal.projectId, key).catch(() => null);
     if (faq?.answer) {
       faqHits.push({ questionKey: key, question: faq.question, answer: faq.answer });

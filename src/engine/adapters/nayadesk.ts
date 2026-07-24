@@ -1,12 +1,55 @@
-import { NayaDeskError, type NayaDeskClient, type NdLocationIntelRow } from '../../crm/nayadesk-client.js';
+import {
+  NayaDeskError,
+  type NayaDeskClient,
+  type NdLocationIntelRow,
+  type NdMarketIntel,
+  type NdProjectSummary,
+} from '../../crm/nayadesk-client.js';
 import type { EngineCrm, EngineData, StoredVisit } from '../ports.js';
-import type { LocationPoi, LocationPoiCategories } from '../types.js';
+import type { LocationPoi, LocationPoiCategories, ProjectDetail } from '../types.js';
 import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom, phaseNoteFrom } from '../compose.js';
 import {
   mapEnrichmentSummaryToUnitConfigs,
   mapLegacyUnitsToUnitConfigs,
 } from '../unit-config.js';
 import { educationSearch as searchEducation } from '../education.js';
+import {
+  gateMarketIntel,
+  mapAmenitiesFromSpec,
+  mapInvestmentFromProject,
+  mapVisitLogisticsFromProject,
+} from '../market-intel.js';
+
+async function resolveMarketIntel(
+  crm: NayaDeskClient,
+  nested: NdMarketIntel | null | undefined,
+  microMarket: string,
+): Promise<ReturnType<typeof gateMarketIntel>> {
+  if (nested) return gateMarketIntel(nested);
+  const q = microMarket.trim();
+  if (!q) return undefined;
+  try {
+    const r = await crm.marketIntel(q);
+    return gateMarketIntel(r.intel ?? null);
+  } catch {
+    return undefined;
+  }
+}
+
+function catalogExtras(p: NdProjectSummary): Pick<
+  ProjectDetail,
+  'investment' | 'visitLogistics' | 'amenities' | 'projectType'
+> {
+  const investment = mapInvestmentFromProject(p);
+  const visitLogistics = mapVisitLogisticsFromProject(p);
+  const amenities = mapAmenitiesFromSpec(p.spec_json);
+  return {
+    ...(p.project_type ? { projectType: p.project_type } : {}),
+    ...(investment ? { investment } : {}),
+    ...(visitLogistics ? { visitLogistics } : {}),
+    ...(amenities ? { amenities } : {}),
+  };
+}
 
 function splitCsv(s: string): string[] {
   return s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -207,6 +250,12 @@ export function nayadeskData(
           // (pre-RERA phases can hold/EOI but not book).
           const phaseNote = phaseNoteFrom(ctx.phase_journeys);
           const location = mapLocationIntel(ctx.location_intelligence);
+          const marketIntel = await resolveMarketIntel(
+            crm,
+            ctx.market_intel,
+            p.micro_market,
+          );
+          const extras = catalogExtras(p);
           return {
             projectId: p.project_id,
             name: p.name,
@@ -228,6 +277,8 @@ export function nayadeskData(
             ...(configurations.length ? { configurations } : {}),
             ...(phaseNote ? { phaseNote } : {}),
             ...(location ? { location } : {}),
+            ...extras,
+            ...(marketIntel ? { marketIntel } : {}),
           };
         }
       } catch {
@@ -239,6 +290,8 @@ export function nayadeskData(
         // when conversation context is unavailable (e.g. advisor-door sessions
         // whose Desk conversation row differs from the engine's nd).
         const location = mapLocationIntel(p.location_intelligence);
+        const marketIntel = await resolveMarketIntel(crm, p.market_intel, p.micro_market);
+        const extras = catalogExtras(p);
         return {
           projectId: p.project_id,
           name: p.name,
@@ -256,6 +309,8 @@ export function nayadeskData(
           ecStatus: p.ec_status,
           loanEligibility: p.loan_eligibility,
           ...(location ? { location } : {}),
+          ...extras,
+          ...(marketIntel ? { marketIntel } : {}),
         };
       } catch {
         return null;

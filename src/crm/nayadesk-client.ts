@@ -42,6 +42,28 @@ export interface NdProjectSummary {
   ec_status?: string;
   loan_eligibility?: string;
   summary?: string;
+  project_type?: string;
+  /** Investment / managed-asset fields (Desk projects SELECT *). */
+  expected_roi?: string;
+  revenue_model?: string;
+  operator_brand?: string;
+  guaranteed_payment?: string;
+  maintenance_model?: string;
+  target_buyer_profiles?: string;
+  category_tags?: string;
+  land_classification?: string;
+  build_coverage?: string;
+  launch_stage?: string;
+  spec_json?: string;
+  pickup_mode?: string;
+  pickup_origin_cities?: string;
+  pickup_radius_km?: number;
+  pickup_cost_note?: string;
+  parking_on_site?: string;
+  food_offered?: string;
+  accommodation_offered?: string;
+  visit_duration_note?: string;
+  site_visit_hours?: string;
 }
 
 /**
@@ -88,6 +110,8 @@ export interface NdContextBundle {
     primary: string;
   }>;
   location_intelligence?: NdLocationIntelRow | null;
+  /** Approved corridor intel (Desk CRM activation) — null when absent/unapproved. */
+  market_intel?: NdMarketIntel | null;
   builder: {
     name: string;
     bot_name: string;
@@ -454,42 +478,35 @@ export class NayaDeskClient {
     return this.call('POST', '/api/projects/search', req);
   }
 
-  getProject(project_id: string): Promise<{
-    project_id: string;
-    name: string;
-    micro_market: string;
-    project_type?: string;
-    summary?: string;
-    possession_date?: string;
-    rera_number?: string;
-    entry_price_band?: string;
-    khata_type?: string;
-    na_status?: string;
-    ec_status?: string;
-    loan_eligibility?: string;
-    builder_id: string;
-    /** S1 — Desk serves the LI row alongside the project (sibling key, merged here). */
-    location_intelligence?: NdLocationIntelRow | null;
-  }> {
+  getProject(project_id: string): Promise<
+    NdProjectSummary & {
+      builder_id: string;
+      /** S1 — Desk serves the LI row alongside the project (sibling key, merged here). */
+      location_intelligence?: NdLocationIntelRow | null;
+      market_intel?: NdMarketIntel | null;
+    }
+  > {
     return this.call('GET', `/api/projects/${encodeURIComponent(project_id)}`).then(
       (raw) => {
         const wrapped = raw as {
-          project?: typeof raw;
+          project?: NdProjectSummary & { builder_id: string };
           location_intelligence?: NdLocationIntelRow | null;
+          market_intel?: NdMarketIntel | null;
         };
-        const project = (wrapped.project ?? raw) as {
-          project_id: string;
-          name: string;
-          micro_market: string;
-          rera_number?: string;
-          entry_price_band?: string;
+        const project = (wrapped.project ?? raw) as NdProjectSummary & {
           builder_id: string;
           location_intelligence?: NdLocationIntelRow | null;
+          market_intel?: NdMarketIntel | null;
         };
-        // Sibling key on the response envelope (kept out of the projects row);
-        // merge so the adapter reads one shape from either endpoint.
-        if (wrapped.project && wrapped.location_intelligence !== undefined) {
-          return { ...project, location_intelligence: wrapped.location_intelligence };
+        // Sibling keys on the response envelope; merge for one adapter shape.
+        if (wrapped.project) {
+          return {
+            ...project,
+            ...(wrapped.location_intelligence !== undefined
+              ? { location_intelligence: wrapped.location_intelligence }
+              : {}),
+            ...(wrapped.market_intel !== undefined ? { market_intel: wrapped.market_intel } : {}),
+          };
         }
         return project;
       },
