@@ -9,6 +9,7 @@ import { overRateLimit } from './channel/ingress-guard.js';
 import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 import { rebuildIntentIndex } from './rebuild/intent-index.js';
+import { rebuildEducationIndex } from './rebuild/education-index.js';
 import { runSilProbe } from './understanding/sil-probe.js';
 import { runSilEmbed } from './understanding/sil-embed.js';
 import {
@@ -119,6 +120,17 @@ export default {
         const b = body as { texts?: string[] };
         const out = await runSilEmbed(env, (b.texts ?? []).slice(0, 384));
         return json({ status: 'ok', ...out });
+      }
+
+      // Buyer-education Vectorize rebuild (dedicated index — not INTENT_VECTORS).
+      // Secret-gated; approve/retire in Desk should call this (or wait for cron).
+      if (path === '/internal/education-rebuild' && method === 'POST') {
+        const secret = request.headers.get('x-bot-secret');
+        if (!env.BOT_SHARED_SECRET || secret !== env.BOT_SHARED_SECRET) {
+          return json({ error: 'forbidden' }, 403);
+        }
+        const report = await rebuildEducationIndex(env);
+        return json({ status: report.ok ? 'ok' : 'error', report }, report.ok ? 200 : 500);
       }
 
       // THE single writer to the intent vector index. Desk owns the truth
@@ -242,6 +254,8 @@ export default {
       (async () => {
         const report = await rebuildIntentIndex(env);
         console.log('[sil-intent-rebuild]', JSON.stringify(report));
+        const edu = await rebuildEducationIndex(env);
+        console.log('[buyer-education-rebuild]', JSON.stringify(edu));
       })(),
     );
   },

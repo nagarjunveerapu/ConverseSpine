@@ -6,6 +6,7 @@ import type { ExtractProvenance } from '../engine/ingress.js';
 import { buildChipShadow } from '../chips/shadow.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
 import { summarizeFailure, type Failure } from './outcome.js';
+import { answerRequirements, deliveredFactKeys } from './answer-contract.js';
 import type {
   ConversationState,
   EvidenceSet,
@@ -33,6 +34,8 @@ export function buildLedgerWritePayload(input: {
   extractProvenance?: ExtractProvenance;
   grounding?: string;
   failures?: readonly Failure[];
+  /** Buyer text for over-answer telemetry (asked vs delivered). */
+  buyerText?: string;
 }): LedgerWritePayload {
   const {
     state,
@@ -43,6 +46,7 @@ export function buildLedgerWritePayload(input: {
     extractProvenance,
     grounding,
     failures,
+    buyerText,
   } = input;
 
   const snapshot_in: Record<string, unknown> = {
@@ -93,6 +97,17 @@ export function buildLedgerWritePayload(input: {
       : {}),
   };
 
+  const topicsAsked = [
+    ...(ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []),
+    ...(buyerText ? answerRequirements(buyerText) : []),
+  ];
+  const factsDelivered = [
+    ...deliveredFactKeys(evidence),
+    ...(evidence.education ? (['education'] as const) : []),
+  ];
+  const faqKeysDelivered =
+    evidence.detail?.faqs?.map((f) => f.questionKey.toLowerCase()) ?? [];
+
   const action_plan: Record<string, unknown> = {
     kind: goal.kind,
     ...('topic' in goal && goal.topic ? { topic: goal.topic } : {}),
@@ -106,6 +121,21 @@ export function buildLedgerWritePayload(input: {
     chip_shadow: buildChipShadow({ state, goal, evidence }),
     ...(failures?.length
       ? { failures: failures.map(summarizeFailure) }
+      : {}),
+    ...(evidence.education ||
+    (failures?.some(
+      (f) =>
+        f.subject === 'education_explainer' ||
+        (f.detail as { policy?: string } | undefined)?.policy === 'definition',
+    ))
+      ? {
+          education: {
+            kb_hit: Boolean(evidence.education),
+            topic_key: evidence.education?.topicKey ?? null,
+            jurisdiction: evidence.education?.jurisdiction ?? null,
+            match: evidence.education?.match ?? null,
+          },
+        }
       : {}),
   };
 
@@ -125,7 +155,16 @@ export function buildLedgerWritePayload(input: {
       success: true,
       latency_ms: 0,
     })),
-    verify: { grounding: grounding ?? 'pass' },
+    verify: {
+      grounding: grounding ?? 'pass',
+      // v1 instrument only — dump = delivered ≫ asked. Gate later.
+      over_answer: {
+        topics_asked: topicsAsked,
+        facts_delivered: factsDelivered,
+        faq_keys_delivered: faqKeysDelivered,
+        education_delivered: Boolean(evidence.education),
+      },
+    },
     composer: 'converse_engine',
   };
 }

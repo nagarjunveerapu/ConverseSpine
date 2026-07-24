@@ -99,3 +99,39 @@ export function applyIntentAuthority(
   }
   return { ex: next, wrote, kind };
 }
+
+/**
+ * Embedder abstention is the authority for the unknown recovery. Structured
+ * extraction suppresses it when another owner already understood the turn.
+ */
+export function shouldSurfaceUnknownIntent(
+  ex: Extracted,
+  routing: TurnRoutingResult | undefined,
+  authorityClaimed: boolean,
+): boolean {
+  if (authorityClaimed || routing?.routing !== 'defer') return false;
+  const miss = routing.bind?.miss_reason;
+  if (
+    !routing.bind?.embed_fired ||
+    (miss !== 'below_tau' && miss !== 'no_match' && miss !== 'unmapped_kind')
+  ) {
+    return false;
+  }
+  if (ex.speechAct && ex.speechAct !== 'unknown') return false;
+  if (
+    ex.smalltalk ||
+    ex.affirm ||
+    ex.decline ||
+    ex.recall ||
+    ex.wantsMore ||
+    ex.askTopic ||
+    ex.askTopics?.length ||
+    ex.namedProjects?.length ||
+    ex.pickName ||
+    (ex.transition && ex.transition !== 'none') ||
+    Object.keys(ex.constraints).length
+  ) {
+    return false;
+  }
+  return true;
+}

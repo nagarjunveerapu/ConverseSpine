@@ -10,6 +10,8 @@ export interface Env {
   INTENT_VECTORS?: VectorizeIndex;
   /** Project-name resolution index (NayaDesk → Vectorize). */
   PROJECT_VECTORS?: VectorizeIndex;
+  /** Platform buyer-education corpus (dedicated — not INTENT_VECTORS). */
+  EDUCATION_VECTORS?: VectorizeIndex;
   /** Workers AI for embeddings when Vectorize query needs live embed. */
   AI?: Ai;
 
@@ -66,6 +68,12 @@ export interface Env {
   FAILURE_LOG?: string;
   /** Phase 1: EMI input authority and destructive-intent disambiguation. */
   FAILURE_TOOLS?: string;
+  /** Phase 2: embedding-routed unsupported/definition/about-us outcomes. */
+  FAILURE_ROUTING?: string;
+  /** Phase 3: durable geography authority and honest search relaxation. */
+  FAILURE_SEARCH?: string;
+  /** Phase 4: answer delivery requirements and partial no-data outcomes. */
+  FAILURE_ANSWER?: string;
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;

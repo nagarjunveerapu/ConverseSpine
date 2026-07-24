@@ -376,6 +376,56 @@ export class NayaDeskClient {
     return this.call('GET', `/api/market-intel?q=${encodeURIComponent(q)}`);
   }
 
+  buyerEducationCorpus(): Promise<{
+    entries: Array<{
+      entry_id: string;
+      topic_key: string;
+      jurisdiction: 'india' | 'karnataka';
+      domain?: string;
+      canonical_question: string;
+      approved_answer: string;
+      what_to_check?: string;
+      disclaimer?: string;
+      examples?: Array<{ example_id: string; phrasing: string; language?: string }>;
+    }>;
+  }> {
+    return this.call('GET', '/api/buyer-education/corpus?status=approved');
+  }
+
+  buyerEducationLookup(input: {
+    q?: string;
+    topic_key?: string;
+    jurisdiction?: 'india' | 'karnataka';
+  }): Promise<{
+    entry: {
+      entry_id: string;
+      topic_key: string;
+      jurisdiction: 'india' | 'karnataka';
+      domain?: string;
+      canonical_question: string;
+      approved_answer: string;
+      what_to_check?: string;
+      disclaimer?: string;
+    } | null;
+    match?: string | null;
+    score?: number;
+  }> {
+    const params = new URLSearchParams();
+    if (input.topic_key) params.set('topic_key', input.topic_key);
+    if (input.q) params.set('q', input.q);
+    if (input.jurisdiction) params.set('jurisdiction', input.jurisdiction);
+    return this.call('GET', `/api/buyer-education/lookup?${params.toString()}`);
+  }
+
+  enqueueBuyerEducationMiss(body: {
+    buyer_text: string;
+    suggested_topic?: string;
+    source?: 'education_miss' | 'unknown' | 'understanding' | 'manual';
+    conversation_id?: string;
+  }): Promise<{ ok: boolean; queue_id: string }> {
+    return this.call('POST', '/api/buyer-education/queue', body);
+  }
+
   searchProjects(req: {
     builder_id: string;
     search_text?: string;
@@ -767,6 +817,9 @@ export class NayaDeskClient {
     lat?: number;
     lng?: number;
     radius_km?: number;
+    area_name?: string;
+    source?: 'area_registry' | 'cache' | 'geocoder';
+    reason?: 'geocoder_not_configured' | 'no_geocode_result';
   }> {
     return this.call('POST', '/api/engine/geo/resolve', { text });
   }

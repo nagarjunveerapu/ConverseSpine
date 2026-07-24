@@ -31,6 +31,9 @@ export interface Constraints {
   commuteDeclined?: boolean;
 }
 
+export type ConstraintAuthorityKey = 'location' | 'propertyType' | 'bhk' | 'budget';
+export type ConstraintAuthority = 'declared' | 'inferred';
+
 /** One ranked-dimension receipt from the Desk re-rank (see Desk
  *  advisor_rerank.ts DimensionFit) — evidence-grade, speakable verbatim. */
 export interface DimensionFitReceipt {
@@ -148,6 +151,8 @@ export interface ConversationState {
   phase: Phase;
   buyerName?: string;
   constraints: Constraints;
+  /** Durable origin strength used by the per-turn relaxation planner. */
+  constraintAuthority?: Partial<Record<ConstraintAuthorityKey, ConstraintAuthority>>;
   discover: DiscoverState;
   focus?: FocusState;
   visit?: VisitState;
@@ -215,7 +220,21 @@ export type AnswerTopic =
   | 'media'
   | 'overview'
   | 'property_type'
-  | 'compare';
+  | 'compare'
+  /** Platform buyer-education literacy answer (not a project FAQ). */
+  | 'education';
+
+export type FactKey =
+  | 'carpet_area'
+  | 'built_up_area'
+  | 'possession'
+  | 'rera'
+  | 'khata'
+  | 'ec_status'
+  | 'loan_eligibility'
+  | 'project_type'
+  | 'price'
+  | 'flood_zone';
 
 export type TurnGoal =
   | { kind: 'greet' }
@@ -240,7 +259,13 @@ export type TurnGoal =
   | { kind: 'no_fit' }
   | { kind: 'ack_reject_recommend' }
   | { kind: 'objection'; topic: ObjectionTopic; projectId?: string }
-  | { kind: 'answer'; topic: AnswerTopic; projectId: string; topics?: AnswerTopic[] }
+  | {
+      kind: 'answer';
+      topic: AnswerTopic;
+      projectId: string;
+      topics?: AnswerTopic[];
+      requires?: FactKey[];
+    }
   /** EMI from a buyer-stated principal; no project pick or price lookup required. */
   | { kind: 'emi_calculate' }
   /** Facet ask over a multi-project shortlist with no pick — answer the facet
@@ -477,7 +502,7 @@ export interface ObjectionEvidence {
  * filter that is never relaxed (padding a "villa" list with a plantation
  * misleads), so it can never appear here.
  */
-export type RelaxedDimension = 'area' | 'size' | 'budget';
+export type RelaxedDimension = 'type' | 'area' | 'size' | 'budget';
 
 export interface EvidenceSet {
   tools: string[];
@@ -543,8 +568,14 @@ export interface EvidenceSet {
    *  taught: the missed key came from a human-taught facet bind (not buyer
    *  text) — the floor renders the honest miss instead of the overview card. */
   faqMiss?: { keys: string[]; taught?: boolean };
+  /** Platform buyer-education hit (definition policy class). Not detail.faqs. */
+  education?: import('./education.js').EducationEvidence;
   /** Terminal stage failure; the single failure speaker owns buyer copy. */
   failure?: import('./outcome.js').Failure;
+  /** Supported atoms actually present in structured evidence. */
+  deliveredFacts?: FactKey[];
+  /** Missing atoms on a partial-success answer; fixed copy comes from speakFailure. */
+  notices?: import('./outcome.js').Failure[];
   /** Per-project values for a facet asked across the whole shortlist
    *  (shortlist_answer). Empty `value` = honestly not on file for that project. */
   shortlistFacet?: ShortlistFacetEvidence;

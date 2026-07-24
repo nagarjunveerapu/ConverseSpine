@@ -22,7 +22,11 @@ export class ConverseRuntime {
     this.trace = new LangfuseTracer(env);
     const bamlMode = resolveBamlExtractMode(env);
     this.engine = {
-      data: nayadeskData(this.crm),
+      data: nayadeskData(this.crm, {
+        AI: env.AI,
+        EDUCATION_VECTORS: env.EDUCATION_VECTORS,
+        SIL_EMBED_MODEL: env.SIL_EMBED_MODEL,
+      }),
       llm: makeEngineLlm(env),
       semantic: makeSemanticNlu(env),
       crm: nayadeskCrm(this.crm, { understandingCapture: env.UNDERSTANDING_CAPTURE === 'true' }),
@@ -50,6 +54,7 @@ export class ConverseRuntime {
               SIL_INTENT_PROJECTION: env.SIL_INTENT_PROJECTION,
               SIL_ROUTING_TAU: env.SIL_ROUTING_TAU,
               SIL_EMBED_FIRST: env.SIL_EMBED_FIRST,
+              FAILURE_ROUTING: env.FAILURE_ROUTING,
             }
           : undefined,
       ...(bamlMode !== 'off'
@@ -60,6 +65,9 @@ export class ConverseRuntime {
         : {}),
       ...(env.FAILURE_LOG === 'true' ? { failureLog: true } : {}),
       ...(env.FAILURE_TOOLS === 'true' ? { failureTools: true } : {}),
+      ...(env.FAILURE_ROUTING === 'true' ? { failureRouting: true } : {}),
+      ...(env.FAILURE_SEARCH === 'true' ? { failureSearch: true } : {}),
+      ...(env.FAILURE_ANSWER === 'true' ? { failureAnswer: true } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),

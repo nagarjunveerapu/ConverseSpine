@@ -185,9 +185,31 @@ export interface EngineData {
     ledgerPrior?: import('./ledger-read.js').LedgerPriorRow | null;
   }>;
   geoAreasInRegion(region: string, builderId: string): Promise<Array<{ name: string; distanceKm: number }>>;
+  /** Desk-owned durable-locality boundary. Transport failure is not evidence
+   * that a buyer's place is invalid, so it remains a distinct third state. */
+  resolveLocation(text: string): Promise<
+    | { status: 'resolved'; canonical: string; lat: number; lng: number }
+    | { status: 'unresolved' }
+    | { status: 'unavailable' }
+  >;
   resolveGeo(text: string): Promise<{ lat: number; lng: number } | null>;
   projectCoords(builderId: string): Promise<ReadonlyArray<{ projectId: string; lat: number; lng: number }>>;
   faqLookup(projectId: string, questionKey: string): Promise<{ question: string; answer: string } | null>;
+  /**
+   * Platform buyer-education KB (definition asks). Dedicated education index /
+   * Desk corpus — never project FAQs. Null = miss (speakable no_data + queue).
+   */
+  educationSearch(
+    text: string,
+    opts?: { jurisdiction?: 'india' | 'karnataka' },
+  ): Promise<import('./education.js').EducationEvidence | null>;
+  /** Fire-and-forget miss → Desk curation queue. */
+  enqueueEducationMiss(input: {
+    buyerText: string;
+    conversationId?: string;
+    suggestedTopic?: string;
+    source?: 'education_miss' | 'unknown' | 'understanding' | 'manual';
+  }): Promise<void>;
   getProfile(builderId: string, buyerPhone: string): Promise<Record<string, unknown>>;
 }
 
@@ -339,7 +361,7 @@ export interface EngineDeps {
    *  just the bindings — see runtime/deps.ts. */
   routingEnv?: Pick<
     import('../env.js').Env,
-    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST'
+    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING'
   >;
   /** P6 ExtractTurnFacts — after embedder abstain. */
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<
@@ -350,6 +372,12 @@ export interface EngineDeps {
   failureLog?: boolean;
   /** Failure-as-a-value Phase 1 behavior gate. */
   failureTools?: boolean;
+  /** Failure-as-a-value Phase 2 behavior gate. */
+  failureRouting?: boolean;
+  /** Failure-as-a-value Phase 3 behavior gate. */
+  failureSearch?: boolean;
+  /** Failure-as-a-value Phase 4 behavior gate. */
+  failureAnswer?: boolean;
   /** Local dev JSONL turn log (wrangler dev only). */
   emitTurnLog?: (entry: import('../observability/local-turn-log.js').LocalTurnLogEntry) => void;
 }

@@ -1,4 +1,13 @@
-import type { ConversationState, Constraints, DiscoverState, Extracted, Match, OfferedProject } from './types.js';
+import type {
+  ConstraintAuthority,
+  ConstraintAuthorityKey,
+  ConversationState,
+  Constraints,
+  DiscoverState,
+  Extracted,
+  Match,
+  OfferedProject,
+} from './types.js';
 
 export function initState(convId: string, builderId: string): ConversationState {
   return {
@@ -71,6 +80,10 @@ export function applyExtracted(
   s: ConversationState,
   ex: Extracted,
   skipKeys?: ReadonlySet<'bhk' | 'location' | 'propertyType' | 'budget'>,
+  options?: {
+    locationValidated?: boolean;
+    authority?: Partial<Record<ConstraintAuthorityKey, ConstraintAuthority>>;
+  },
 ): ConversationState {
   const incoming = pruneUndefined(ex.constraints);
   if (skipKeys?.has('bhk')) delete incoming.bhk;
@@ -80,7 +93,7 @@ export function applyExtracted(
     delete incoming.budgetMaxInr;
     delete incoming.budgetMinInr;
   }
-  if (incoming.location && !isPlausibleLocation(incoming.location)) {
+  if (incoming.location && !options?.locationValidated && !isPlausibleLocation(incoming.location)) {
     delete incoming.location;
   }
   if (incoming.location && s.constraints.location) {
@@ -107,6 +120,23 @@ export function applyExtracted(
     delete constraints.budgetMinInr;
   }
   const buyerName = ex.nameIntro ?? s.buyerName;
+  const constraintAuthority = { ...(s.constraintAuthority ?? {}) };
+  if (incoming.location && options?.authority?.location) {
+    constraintAuthority.location = options.authority.location;
+  }
+  if (incoming.propertyType && options?.authority?.propertyType) {
+    constraintAuthority.propertyType = options.authority.propertyType;
+  }
+  if (incoming.bhk && options?.authority?.bhk) {
+    constraintAuthority.bhk = options.authority.bhk;
+  }
+  if (
+    (incoming.budgetMaxInr !== undefined || incoming.budgetMinInr !== undefined) &&
+    options?.authority?.budget
+  ) {
+    constraintAuthority.budget = options.authority.budget;
+  }
+  for (const key of skipKeys ?? []) delete constraintAuthority[key];
 
   let rejected = s.discover.rejectedProjectIds;
   if (ex.rejected) {
@@ -118,6 +148,7 @@ export function applyExtracted(
     ...s,
     ...(buyerName ? { buyerName } : {}),
     constraints,
+    constraintAuthority,
     discover: { ...s.discover, rejectedProjectIds: rejected },
   };
 }

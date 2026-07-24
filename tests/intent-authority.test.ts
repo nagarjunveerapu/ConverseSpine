@@ -3,6 +3,7 @@ import {
   INTENT_EFFECTS,
   applyIntentAuthority,
   isUnclaimedIntent,
+  shouldSurfaceUnknownIntent,
 } from '../src/engine/turn-routing/intent-authority.js';
 import { INTENT_TO_TOPIC_KEYS } from '../src/engine/turn-routing/embedder-map.js';
 import type { Extracted } from '../src/engine/types.js';
@@ -74,5 +75,47 @@ describe('applyIntentAuthority', () => {
   it('ignores kinds it does not own', () => {
     expect(applyIntentAuthority(EX, unclaimed('get_amenities')).wrote).toEqual([]);
     expect(applyIntentAuthority(EX, unclaimed('find_projects')).wrote).toEqual([]);
+  });
+});
+
+describe('unknown recovery authority', () => {
+  it('surfaces only an embedding miss that no structured owner claimed', () => {
+    expect(
+      shouldSurfaceUnknownIntent(
+        EX,
+        routing({ miss_reason: 'below_tau', top_kind: 'other' }),
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      shouldSurfaceUnknownIntent(
+        EX,
+        routing({ miss_reason: 'unmapped_kind', top_kind: 'opt_out' }),
+        true,
+      ),
+    ).toBe(false);
+  });
+
+  it('does not steal acknowledgements, smalltalk, or extracted constraints', () => {
+    const miss = routing({ miss_reason: 'below_tau', top_kind: 'other' });
+    expect(shouldSurfaceUnknownIntent({ constraints: {}, affirm: true }, miss, false)).toBe(false);
+    expect(shouldSurfaceUnknownIntent({ constraints: {}, smalltalk: true }, miss, false)).toBe(false);
+    expect(
+      shouldSurfaceUnknownIntent(
+        { constraints: { location: 'Whitefield' } },
+        miss,
+        false,
+      ),
+    ).toBe(false);
+  });
+
+  it('does not turn an embedder outage into a buyer misunderstanding', () => {
+    expect(
+      shouldSurfaceUnknownIntent(
+        EX,
+        routing({ miss_reason: 'query_error' }),
+        false,
+      ),
+    ).toBe(false);
   });
 });

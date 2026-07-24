@@ -338,6 +338,27 @@ export function fakeData(): EngineData & {
     async geoAreasInRegion(_region) {
       return [{ name: 'Sakleshpur', distanceKm: 0 }];
     },
+    async resolveLocation(text) {
+      const canonical = text.trim();
+      const key = canonical.toLowerCase();
+      const geocoded: Record<string, string> = {
+        whitefield: 'Whitefield',
+        yelahanka: 'Yelahanka',
+        'north bangalore': 'North Bangalore',
+      };
+      if (geocoded[key]) {
+        return { status: 'resolved', canonical: geocoded[key], lat: 12.97, lng: 77.59 };
+      }
+      const known = LOKATIONS.find(
+        (p) =>
+          p.market.toLowerCase().includes(key) ||
+          key.includes(p.market.toLowerCase()),
+      );
+      if (known) {
+        return { status: 'resolved', canonical: known.market, lat: 12.97, lng: 77.59 };
+      }
+      return { status: 'unresolved' };
+    },
     async resolveGeo(text) {
       const key = text.trim().toLowerCase();
       if (key.includes('yelahanka')) return { lat: 13.1007, lng: 77.5963 };
@@ -364,6 +385,51 @@ export function fakeData(): EngineData & {
         return { question: 'When is possession?', answer: 'Possession is phased through 2028.' };
       }
       return null;
+    },
+    async educationSearch(text) {
+      const t = text.toLowerCase();
+      if (/\bbhk\b/.test(t)) {
+        return {
+          entryId: 'edu:bhk:india',
+          topicKey: 'bhk',
+          jurisdiction: 'india' as const,
+          domain: 'property_type',
+          question: 'What does BHK mean?',
+          answer:
+            'BHK means Bedroom, Hall, and Kitchen. A 2 BHK typically has two bedrooms, one living hall, and a kitchen.',
+          whatToCheck: 'Confirm configuration labels on the unit plan.',
+          disclaimer: 'General definition, not a project promise.',
+          match: 'lookup' as const,
+        };
+      }
+      if (/plotted/.test(t)) {
+        return {
+          entryId: 'edu:plotted_development:india',
+          topicKey: 'plotted_development',
+          jurisdiction: 'india' as const,
+          domain: 'property_type',
+          question: 'What is plotted development?',
+          answer:
+            'Plotted development is land divided into plots for buyers to build later, often with shared roads and amenities planned by the developer.',
+          match: 'lookup' as const,
+        };
+      }
+      if (/site visit|what happens on a site/.test(t)) {
+        return {
+          entryId: 'edu:site_visit:india',
+          topicKey: 'site_visit_expect',
+          jurisdiction: 'india' as const,
+          domain: 'buying_journey',
+          question: 'What happens on a site visit?',
+          answer:
+            'A site visit is a guided look at the project location, sample/unit context, access roads, and surroundings.',
+          match: 'lookup' as const,
+        };
+      }
+      return null;
+    },
+    async enqueueEducationMiss() {
+      /* no-op in fakes */
     },
     async getProfile() {
       return {};
