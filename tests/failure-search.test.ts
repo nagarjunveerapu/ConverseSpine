@@ -323,10 +323,11 @@ describe('Phase 3 turn behavior', () => {
     expect(result.state.constraints.location).toBeUndefined();
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
     expect(result.reply).toMatch(/don't have anything in \*Gurgaon\*/i);
-    expect(result.reply).toMatch(/currently cover/i);
-    // Inventory-hub ranking — Bangalore corridors before hill-station Set order.
-    expect(result.reply).not.toMatch(/currently cover Sakleshpur/i);
-    expect(result.reply).toMatch(/North Bangalore|Devanahalli/i);
+    // City-level cover bit from Desk servedCities — not corridor dump.
+    expect(result.reply).toMatch(/only serve .+ micro-markets/i);
+    expect(result.reply).toMatch(/Bengaluru/i);
+    expect(result.reply).not.toMatch(/currently cover/i);
+    expect(result.reply).not.toMatch(/Budigere|Yelahanka|Sakleshpur/i);
     expect(result.reply).not.toMatch(/Gurugram/i);
   });
 

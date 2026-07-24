@@ -188,6 +188,8 @@ export function fakeData(): EngineData & {
         priceMaxInr: Math.max(...prices),
         projectTypes: ['plantation', 'villa', 'apartment'],
         microMarkets: [...new Set(LOKATIONS.map((p) => p.market))],
+        // Mirrors Desk cityFromLocation on fake markets (Bangalore / Hassan / Kodagu).
+        servedCities: ['Bengaluru', 'Hassan', 'Kodagu'],
         total: LOKATIONS.length,
         sample: LOKATIONS.map((p) => ({ name: p.name, startingPriceDisplay: p.display })),
       };

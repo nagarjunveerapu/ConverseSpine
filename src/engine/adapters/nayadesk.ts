@@ -158,11 +158,15 @@ export function nayadeskData(
     async catalog(builderId) {
       const resp = await crm.searchProjects({ builder_id: builderId, max_results: 50 });
       const prices = resp.matches.map((m) => m.starting_price_inr).filter((p) => p > 0);
+      const servedCities = Array.isArray(resp.served_cities)
+        ? resp.served_cities.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+        : [];
       return {
         priceMinInr: prices.length ? Math.min(...prices) : 0,
         priceMaxInr: prices.length ? Math.max(...prices) : 0,
         projectTypes: [...new Set(resp.matches.map((m) => m.project_type ?? 'project'))],
         microMarkets: [...new Set(resp.matches.map((m) => m.micro_market))],
+        ...(servedCities.length ? { servedCities } : {}),
         total: resp.matches.length,
         sample: resp.matches.slice(0, 10).map((m) => ({
           name: m.name,

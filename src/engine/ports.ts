@@ -96,6 +96,7 @@ export interface EngineData {
     priceMaxInr: number;
     projectTypes: string[];
     microMarkets: string[];
+    servedCities?: string[];
     total: number;
     sample: Array<{ name: string; startingPriceDisplay: string }>;
   }>;

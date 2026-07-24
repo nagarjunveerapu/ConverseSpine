@@ -217,13 +217,40 @@ export function matchServedMarket(
   return best;
 }
 
-/** Buyer-facing outside-served reply — cover bit is always from live catalog. */
+/** City-level cover bit for outside-served (wrong metro). Null if no cities. */
+export function coverageCityCoverBit(cities: readonly string[]): string | null {
+  const clean = [
+    ...new Set(cities.map((c) => c.trim()).filter(Boolean)),
+  ];
+  if (!clean.length) return null;
+  const joined =
+    clean.length === 1
+      ? clean[0]!
+      : clean.length === 2
+        ? `${clean[0]} and ${clean[1]}`
+        : `${clean.slice(0, -1).join(', ')}, and ${clean[clean.length - 1]}`;
+  return `I only serve ${joined} micro-markets right now`;
+}
+
+export type OutsideServedOpts = CoverageOrderOpts & {
+  /** Desk-derived served cities — preferred over corridor list. */
+  servedCities?: readonly string[];
+};
+
+/**
+ * Buyer-facing outside-served reply.
+ * Prefer city-level coverage from Desk; fall back to nearest micro-markets.
+ */
 export function outsideServedReply(
   asked: string,
   markets: readonly string[],
-  opts?: CoverageOrderOpts,
+  opts?: OutsideServedOpts,
 ): string {
   const loc = asked.trim() || 'that area';
+  const cityBit = coverageCityCoverBit(opts?.servedCities ?? []);
+  if (cityBit) {
+    return `I don't have anything in *${loc}* — ${cityBit}. Want to look there?`;
+  }
   const coverBit = coverageCoverBit(markets, opts);
   return `I don't have anything in *${loc}* — ${coverBit}. Want to adjust budget, area, or property type?`;
 }

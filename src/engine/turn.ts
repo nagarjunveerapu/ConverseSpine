@@ -163,6 +163,7 @@ export interface EngineTurnOutput {
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
+  const _t0 = Date.now();
   let state = (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId);
   const inputSource = resolveInputSource(input.action_id);
 
@@ -763,7 +764,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
               ask: askGeo,
               projectCoords: coordRows,
             });
-            const reply = outsideServedReply(asked, markets, orderOpts);
+            const reply = outsideServedReply(asked, markets, {
+              ...orderOpts,
+              servedCities: cat?.servedCities ?? [],
+            });
             state = {
               ...state,
               constraints: {
@@ -1907,6 +1911,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ? deriveShadowFailures({ goal, evidence, droppedLocation })
     : [];
 
+  const _tBeforeTail = Date.now();
   await deps.store.save(state);
   await deps.store.logTurn({
     convId: state.convId,

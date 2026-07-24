@@ -333,6 +333,8 @@ export interface CatalogEnvelope {
   priceMaxInr: number;
   projectTypes: string[];
   microMarkets: string[];
+  /** Desk cityFromLocation aggregate — outside-served city cover bit. */
+  servedCities?: string[];
   total: number;
   sample: Array<{ name: string; startingPriceDisplay: string }>;
 }
