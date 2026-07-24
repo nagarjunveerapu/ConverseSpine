@@ -584,7 +584,12 @@ function toInr(n: number, unit: string): number | null {
   const u = unit.trim();
   if (u === 'cr' || u.startsWith('crore')) return Math.round(n * 10_000_000);
   if (u === 'l' || u.startsWith('lakh') || u.startsWith('lac')) return Math.round(n * 100_000);
-  return n < 100 ? Math.round(n * 100_000) : Math.round(n);
+  // A bare unitless number < 100 is the buyer's natural "70" = ₹70 L. A bare
+  // number >= 100 is a literal rupee amount ("5000000" = ₹50 L) — but only if it
+  // clears a plausibility floor of ₹1 L. Below that it is a misparse (a stray
+  // "12345" in gibberish, a pincode, a phone fragment) and must NEVER become a
+  // budget (C6: "asdfghjkl 12345 qwerty zxcvbn" → a ₹0.12 L budget).
+  return n < 100 ? Math.round(n * 100_000) : n >= 100_000 ? Math.round(n) : null;
 }
 
 export function normalizeConfig(raw: string): string | null {

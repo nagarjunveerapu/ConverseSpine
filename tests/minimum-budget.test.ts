@@ -56,4 +56,13 @@ describe('parseBudgetToInr — narrative money never becomes a budget', () => {
     expect(parseBudget4q('70')?.max).toBe(7_000_000);
     expect(parseBudget4q('under 1.2 cr')?.max).toBe(12_000_000);
   });
+
+  it('gibberish / sub-lakh bare numbers never become a budget (C6)', () => {
+    // the live boundary: a stray number in gibberish coerced to ₹0.12 L
+    expect(parseBudget4q('asdfghjkl 12345 qwerty zxcvbn')).toBeNull();
+    expect(parseBudget4q('50000')).toBeNull(); // ₹50k is not a home budget
+    expect(parseBudget4q('150')).toBeNull(); // ambiguous bare mid-number — don't coerce
+    // a literal full-rupee amount above the ₹1 L floor still parses
+    expect(parseBudget4q('5000000')?.max).toBe(5_000_000);
+  });
 });
