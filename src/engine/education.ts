@@ -2,6 +2,8 @@ import type { Env } from '../env.js';
 import type { NayaDeskClient } from '../crm/nayadesk-client.js';
 import { EDUCATION_TAU } from '../rebuild/education-index.js';
 
+const DEFAULT_EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
+
 export interface EducationEvidence {
   entryId: string;
   topicKey: string;
@@ -49,7 +51,7 @@ export async function educationSearch(
 
   if (env?.AI && env.EDUCATION_VECTORS) {
     try {
-      const model = env.SIL_EMBED_MODEL || '@cf/baai/bge-base-en-v1.5';
+      const model = env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
       const embedded = (await env.AI.run(model as never, { text: [q] })) as { data?: number[][] };
       const vector = embedded.data?.[0];
       if (vector?.length) {

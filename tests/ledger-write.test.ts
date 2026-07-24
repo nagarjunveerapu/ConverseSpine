@@ -88,7 +88,13 @@ describe('buildLedgerWritePayload — P2a / SA-5', () => {
     });
     expect(payload.offered_project_ids).toContain('brigade-eldorado');
     expect(payload.tool_runs.map((t) => t.name)).toEqual(['listUnits', 'detail']);
-    expect(payload.verify).toEqual({ grounding: 'pass' });
+    expect(payload.verify).toMatchObject({
+      grounding: 'pass',
+      over_answer: {
+        topics_asked: ['availability'],
+        education_delivered: false,
+      },
+    });
     expect(payload.disclosed_facts.some((f) => f.kind === 'availability')).toBe(true);
   });
 });
