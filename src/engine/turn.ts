@@ -707,15 +707,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
             if (ex.constraints.location) {
               ex = {
                 ...ex,
-                constraints: { ...ex.constraints, location: served },
+                constraints: { ...ex.constraints, location: served.name },
               };
             }
             state = {
               ...state,
-              constraints: { ...state.constraints, location: served },
+              constraints: { ...state.constraints, location: served.name },
               constraintAuthority: {
                 ...(state.constraintAuthority ?? {}),
-                location: 'declared',
+                // Score 3/2 → declared (hard). Score 1 (token/typo) → inferred
+                // so Phase-3 relaxation can still release a weak adopt.
+                location: served.authority,
               },
             };
           } else {

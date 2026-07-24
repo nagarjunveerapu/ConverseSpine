@@ -1073,6 +1073,8 @@ const LOCALITY_STOP = new Set([
   'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
   'show', 'looking', 'some', 'any', 'other', 'else', 'something', 'anything', 'please',
   // Transaction verbs — "Buy, 70 lakh" is not a place named Buy.
+  // INTERIM denylist (§4.1 prefers the served-market resolver as the real gate;
+  // this only stops the known capture until non-place extract is closed properly).
   'buy', 'sell', 'rent', 'lease',
   // Discourse markers buyers open a correction with ("no wait, …", "ok so, …").
   'no', 'yes', 'yeah', 'yep', 'nope', 'ok', 'okay', 'wait', 'well', 'so', 'sure', 'hmm',

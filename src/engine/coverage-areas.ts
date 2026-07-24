@@ -34,31 +34,83 @@ export function coverageCoverBit(markets: readonly string[]): string {
     : 'I can help with areas where I have projects on file';
 }
 
-/** Match a buyer locality against live served micro-markets (catalog / area registry). */
+export type ServedMarketMatch = {
+  name: string;
+  /** 3 exact · 2 containment · 1 token/typo — weak matches stay releasable. */
+  score: 1 | 2 | 3;
+  authority: 'declared' | 'inferred';
+};
+
+function editDistance(a: string, b: string, max = 2): number {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const prev = new Array(b.length + 1);
+  const cur = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    let rowMin = cur[0];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      if (cur[j] < rowMin) rowMin = cur[j];
+    }
+    if (rowMin > max) return max + 1;
+    for (let j = 0; j <= b.length; j++) prev[j] = cur[j];
+  }
+  return prev[b.length];
+}
+
+/**
+ * Match a buyer locality against live served micro-markets (catalog).
+ * No metro hardcoding. Substring over-match is gated; weak hits are inferred
+ * so Phase-3 relaxation can still release them.
+ */
 export function matchServedMarket(
   candidate: string,
   markets: readonly string[],
-): string | undefined {
+): ServedMarketMatch | undefined {
   const needle = candidate.toLowerCase().trim().replace(/\s+/g, ' ');
   if (needle.length < 3 || !markets.length) return undefined;
 
-  let best: { name: string; score: number } | undefined;
+  let best: ServedMarketMatch | undefined;
+  const consider = (name: string, score: 1 | 2 | 3) => {
+    const authority = score >= 2 ? 'declared' : 'inferred';
+    if (!best || score > best.score) best = { name, score, authority };
+  };
+
   for (const raw of markets) {
     const primary = (raw.split(/\s*\/\s*/)[0] ?? raw).trim();
     if (!primary) continue;
     const key = primary.toLowerCase().replace(/\s+/g, ' ');
-    let score = 0;
-    if (key === needle) score = 3;
-    else if (key.includes(needle) || needle.includes(key)) score = 2;
-    else {
-      const tokens = needle.split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
-      if (tokens.some((t) => key.includes(t))) score = 1;
+    if (key === needle) {
+      consider(primary, 3);
+      continue;
     }
-    if (score > 0 && (!best || score > best.score)) {
-      best = { name: primary, score };
+    // Containment: needle inside key is safe at ≥4 chars. Reverse only when the
+    // market token is long enough that it isn't a trivial substring of the ask.
+    if (needle.length >= 4 && key.includes(needle)) {
+      consider(primary, 2);
+      continue;
+    }
+    if (key.length >= 5 && needle.includes(key)) {
+      consider(primary, 2);
+      continue;
+    }
+    const tokens = needle.split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+    if (tokens.some((t) => key.includes(t))) {
+      consider(primary, 1);
+      continue;
+    }
+    // Light typo pass against primary label tokens (not the full "X Road" string).
+    if (needle.length >= 5) {
+      const keyTokens = key.split(/[^a-z0-9]+/).filter((t) => t.length >= 5);
+      if (keyTokens.some((t) => editDistance(needle, t, 2) <= 2)) {
+        consider(primary, 1);
+      }
     }
   }
-  return best?.name;
+  return best;
 }
 
 /** Buyer-facing outside-served reply — cover bit is always from live catalog. */

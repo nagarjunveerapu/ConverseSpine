@@ -303,12 +303,6 @@ index_name = "naya-buyer-education"
 binding = "AI"
 
 [env.prod.vars]
-# Failure-as-a-value Phases 0–4 — prod mirrors soaked-on-dev contract.
-FAILURE_LOG = "true"
-FAILURE_TOOLS = "true"
-FAILURE_ROUTING = "true"
-FAILURE_SEARCH = "true"
-FAILURE_ANSWER = "true"
 LOG_LEVEL = "info"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
