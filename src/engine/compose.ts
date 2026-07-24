@@ -38,6 +38,11 @@ import { isInventoryAsk } from './facts.js';
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
 import { speakEducation } from './education.js';
+import {
+  collapseCoverageMarkets,
+  inventoryNoun,
+  joinPlaceLabels,
+} from './coverage-areas.js';
 
 export function buildComposeRequest(
   goal: TurnGoal,
@@ -376,6 +381,22 @@ export function fallbackReply(req: ComposeRequest): string {
         .join('; ');
       const sensitivity = sensitivityLine(ms);
       const tail = sensitivity ? ` ${sensitivity}` : '';
+      // Empty-locality widen: speak MARKETS (Devanahalli), never project names
+      // as if they were places (Eldorado is a project).
+      if (ev.localityWiden?.asked) {
+        const markets = collapseCoverageMarkets(
+          ev.localityWiden.nearbyAreas?.length
+            ? ev.localityWiden.nearbyAreas
+            : ms.map((m) => m.microMarket),
+          3,
+        );
+        const noun = inventoryNoun(
+          context.constraints.propertyType,
+          context.constraints.bhk,
+        );
+        const places = joinPlaceLabels(markets) || 'nearby areas I cover';
+        return `${pre}I don't have ${noun} in *${ev.localityWiden.asked}* — I do have ${noun} in ${places}. Want me to show those?`;
+      }
       // Some part of the ask had to be relaxed for this list to exist, so it is
       // NOT a fit — say which dimension gave. Dimensions only, never the buyer's
       // raw values: a location capture may be dialogue noise.

@@ -112,15 +112,15 @@ describe('orderCoverageMarkets', () => {
 });
 
 describe('coverageCityCoverBit / outsideServedReply', () => {
-  it('formats one or more served cities', () => {
-    expect(coverageCityCoverBit(['Bengaluru'])).toBe(
-      'I only serve Bengaluru micro-markets right now',
+  it('speaks inventory in served cities — not project lists', () => {
+    expect(coverageCityCoverBit(['Bengaluru'], 'apartment')).toBe(
+      'I have apartments in Bengaluru',
     );
-    expect(coverageCityCoverBit(['Bengaluru', 'Kodagu'])).toBe(
-      'I only serve Bengaluru and Kodagu micro-markets right now',
+    expect(coverageCityCoverBit(['Bengaluru', 'Kodagu'], 'villa')).toBe(
+      'I have villas in Bengaluru and Kodagu',
     );
     expect(coverageCityCoverBit(['Bengaluru', 'Hassan', 'Kodagu'])).toBe(
-      'I only serve Bengaluru, Hassan, and Kodagu micro-markets right now',
+      'I have homes in Bengaluru, Hassan, and Kodagu',
     );
   });
 
@@ -129,17 +129,18 @@ describe('coverageCityCoverBit / outsideServedReply', () => {
     const reply = outsideServedReply('Gurgaon', ['North Bangalore', 'Sakleshpur'], {
       servedCities: [],
     });
+    expect(reply).toMatch(/don't have homes in \*Gurgaon\*/i);
     expect(reply).toMatch(/currently cover North Bangalore/);
-    expect(reply).toMatch(/adjust budget/);
   });
 
-  it('prefers city-level copy over corridor list', () => {
-    const reply = outsideServedReply('Gurgaon', ['Sakleshpur', 'North Bangalore'], {
+  it('prefers city inventory copy over corridor list', () => {
+    const reply = outsideServedReply('Delhi', ['Sakleshpur', 'North Bangalore'], {
       servedCities: ['Bengaluru'],
+      propertyType: 'apartment',
     });
     expect(reply).toBe(
-      "I don't have anything in *Gurgaon* — I only serve Bengaluru micro-markets right now. Want to look there?",
+      "I don't have apartments in *Delhi* — I have apartments in Bengaluru. Want to look there?",
     );
-    expect(reply).not.toMatch(/Sakleshpur|currently cover/);
+    expect(reply).not.toMatch(/Sakleshpur|Eldorado|currently cover|micro-markets/i);
   });
 });
