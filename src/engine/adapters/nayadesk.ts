@@ -615,7 +615,12 @@ export function nayadeskData(
         const resp = await crm.searchProjects({ builder_id: builderId, max_results: 50 });
         return (resp.matches ?? [])
           .filter((m) => m.lat != null && m.lng != null)
-          .map((m) => ({ projectId: m.project_id, lat: m.lat!, lng: m.lng! }));
+          .map((m) => ({
+            projectId: m.project_id,
+            lat: m.lat!,
+            lng: m.lng!,
+            ...(m.micro_market ? { microMarket: m.micro_market } : {}),
+          }));
       } catch {
         return [];
       }

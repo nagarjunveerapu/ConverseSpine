@@ -378,10 +378,10 @@ export function fakeData(): EngineData & {
     },
     async projectCoords(_builderId) {
       return [
-        { projectId: 'cornerstone', lat: 13.18, lng: 77.68 },
-        { projectId: 'eldorado', lat: 13.139, lng: 77.658 },
-        { projectId: 'ayana', lat: 12.944, lng: 75.784 },
-        { projectId: 'krishnaja', lat: 12.254, lng: 75.923 },
+        { projectId: 'cornerstone', lat: 13.18, lng: 77.68, microMarket: 'Devanahalli' },
+        { projectId: 'eldorado', lat: 13.139, lng: 77.658, microMarket: 'North Bangalore' },
+        { projectId: 'ayana', lat: 12.944, lng: 75.784, microMarket: 'Sakleshpur' },
+        { projectId: 'krishnaja', lat: 12.254, lng: 75.923, microMarket: 'Virajpet' },
       ];
     },
     async faqLookup(_pid, key) {

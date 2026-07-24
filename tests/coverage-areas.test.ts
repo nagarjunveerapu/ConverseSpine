@@ -3,6 +3,7 @@ import {
   collapseCoverageMarkets,
   coverageCoverBit,
   matchServedMarket,
+  orderCoverageMarkets,
 } from '../src/engine/coverage-areas.js';
 
 describe('collapseCoverageMarkets', () => {
@@ -60,5 +61,50 @@ describe('collapseCoverageMarkets', () => {
     expect(
       matchServedMarket('zzzzzzzz', ['Sarjapur Road', 'Whitefield']),
     ).toBeUndefined();
+  });
+});
+
+describe('orderCoverageMarkets', () => {
+  const markets = [
+    'Sakleshpur',
+    'Virajpet',
+    'North Bangalore',
+    'Coorg',
+    'Devanahalli',
+  ];
+  const anchors = [
+    { microMarket: 'Sakleshpur', lat: 12.944, lng: 75.784 },
+    { microMarket: 'Virajpet', lat: 12.254, lng: 75.923 },
+    { microMarket: 'North Bangalore', lat: 13.139, lng: 77.658 },
+    { microMarket: 'Devanahalli', lat: 13.18, lng: 77.68 },
+  ];
+
+  it('prefers markets nearest the asked place when ask coords exist', () => {
+    // Gurgaon — NCR; Bangalore inventory is closer than Western Ghats.
+    const ordered = orderCoverageMarkets(markets, {
+      ask: { lat: 28.46, lng: 77.03 },
+      anchors,
+    });
+    const top = ordered.slice(0, 2);
+    expect(top).toContain('North Bangalore');
+    expect(top).toContain('Devanahalli');
+    expect(ordered.indexOf('North Bangalore')).toBeLessThan(ordered.indexOf('Sakleshpur'));
+    expect(ordered.indexOf('Devanahalli')).toBeLessThan(ordered.indexOf('Sakleshpur'));
+  });
+
+  it('falls back to inventory-hub nearest when ask has no coords', () => {
+    const ordered = orderCoverageMarkets(markets, { anchors });
+    expect(ordered.indexOf('North Bangalore')).toBeLessThan(ordered.indexOf('Sakleshpur'));
+    expect(ordered.indexOf('Devanahalli')).toBeLessThan(ordered.indexOf('Virajpet'));
+  });
+
+  it('keeps catalog order when there is nothing to rank with', () => {
+    expect(orderCoverageMarkets(markets)).toEqual(markets);
+  });
+
+  it('surfaces Bangalore corridors first in the cover bit under inventory hub', () => {
+    const bit = coverageCoverBit(markets, { anchors });
+    expect(bit).toMatch(/^I currently cover North Bangalore, Devanahalli/);
+    expect(bit).not.toMatch(/^I currently cover Sakleshpur/);
   });
 });

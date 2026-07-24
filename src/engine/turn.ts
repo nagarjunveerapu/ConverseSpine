@@ -16,7 +16,14 @@ import { buildLedgerWritePayload } from './ledger-write.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
-import { collapseCoverageMarkets, coverageCoverBit, matchServedMarket, outsideServedReply } from './coverage-areas.js';
+import {
+  collapseCoverageMarkets,
+  coverageCoverBit,
+  coverageOrderOptsFrom,
+  matchServedMarket,
+  orderCoverageMarkets,
+  outsideServedReply,
+} from './coverage-areas.js';
 import { looksLikePlaceFramedAsk } from './place-frame.js';
 import {
   enforceAnswerContract,
@@ -748,7 +755,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
               stage: 'search',
               subject: 'area',
             };
-            const reply = outsideServedReply(asked, markets);
+            const [askGeo, coordRows] = await Promise.all([
+              deps.data.resolveGeo(asked).catch(() => null),
+              deps.data.projectCoords(state.builderId).catch(() => []),
+            ]);
+            const orderOpts = coverageOrderOptsFrom({
+              ask: askGeo,
+              projectCoords: coordRows,
+            });
+            const reply = outsideServedReply(asked, markets, orderOpts);
             state = {
               ...state,
               constraints: {
@@ -2116,9 +2131,18 @@ async function fetchRecommend(
     }
     if (failure.subject === 'area') {
       const loc = s.constraints.location?.trim() || 'that area';
-      const cat = await deps.data.catalog(s.builderId).catch(() => null);
-      const coverage = collapseCoverageMarkets(cat?.microMarkets ?? []);
-      const coverBit = coverageCoverBit(cat?.microMarkets ?? []);
+      const [cat, askGeo, coordRows] = await Promise.all([
+        deps.data.catalog(s.builderId).catch(() => null),
+        deps.data.resolveGeo(loc).catch(() => null),
+        deps.data.projectCoords(s.builderId).catch(() => []),
+      ]);
+      const markets = cat?.microMarkets ?? [];
+      const orderOpts = coverageOrderOptsFrom({
+        ask: askGeo,
+        projectCoords: coordRows,
+      });
+      const coverage = collapseCoverageMarkets(orderCoverageMarkets(markets, orderOpts));
+      const coverBit = coverageCoverBit(markets, orderOpts);
       return {
         goal: { kind: 'no_fit' },
         evidence: {
