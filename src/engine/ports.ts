@@ -193,7 +193,9 @@ export interface EngineData {
     | { status: 'unavailable' }
   >;
   resolveGeo(text: string): Promise<{ lat: number; lng: number } | null>;
-  projectCoords(builderId: string): Promise<ReadonlyArray<{ projectId: string; lat: number; lng: number }>>;
+  projectCoords(builderId: string): Promise<
+    ReadonlyArray<{ projectId: string; lat: number; lng: number; microMarket?: string }>
+  >;
   faqLookup(projectId: string, questionKey: string): Promise<{ question: string; answer: string } | null>;
   /**
    * Platform buyer-education KB (definition asks). Dedicated education index /

@@ -1,3 +1,5 @@
+import { haversineKm } from './geo.js';
+
 /**
  * Collapse catalog micro-market labels into short, distinct coverage names
  * for empty-locality recovery copy.
@@ -27,11 +29,107 @@ export function collapseCoverageMarkets(
   return out;
 }
 
-export function coverageCoverBit(markets: readonly string[]): string {
-  const coverage = collapseCoverageMarkets(markets);
+export type CoverageAnchor = {
+  microMarket: string;
+  lat: number;
+  lng: number;
+};
+
+export type CoverageOrderOpts = {
+  /** Asked place when Desk/geocode has coords — prefer nearest served markets. */
+  ask?: { lat: number; lng: number } | null;
+  /** Live project coords + micro_market — build market centroids / inventory hub. */
+  anchors?: readonly CoverageAnchor[];
+};
+
+function primaryMarketKey(raw: string): string {
+  return (raw.split(/\s*\/\s*/)[0] ?? raw).trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Rank catalog micro-markets for cover-bit copy.
+ * - With ask coords: nearest market centroid first.
+ * - Else with project anchors: nearest to inventory hub (mean of project coords)
+ *   so dense builder corridors beat far outliers in raw Set order.
+ * - Else: preserve catalog order.
+ * Does not change search filters or Desk geography authority.
+ */
+export function orderCoverageMarkets(
+  markets: readonly string[],
+  opts?: CoverageOrderOpts,
+): string[] {
+  if (!markets.length) return [];
+  const anchors = opts?.anchors ?? [];
+  if (!anchors.length && !opts?.ask) return [...markets];
+
+  const centroids = new Map<string, { lat: number; lng: number; n: number }>();
+  for (const a of anchors) {
+    const key = primaryMarketKey(a.microMarket);
+    if (!key) continue;
+    const prev = centroids.get(key);
+    if (prev) {
+      prev.lat += a.lat;
+      prev.lng += a.lng;
+      prev.n += 1;
+    } else {
+      centroids.set(key, { lat: a.lat, lng: a.lng, n: 1 });
+    }
+  }
+  for (const c of centroids.values()) {
+    c.lat /= c.n;
+    c.lng /= c.n;
+  }
+
+  let hub = opts?.ask ?? null;
+  if (!hub && anchors.length) {
+    let lat = 0;
+    let lng = 0;
+    for (const a of anchors) {
+      lat += a.lat;
+      lng += a.lng;
+    }
+    hub = { lat: lat / anchors.length, lng: lng / anchors.length };
+  }
+  if (!hub) return [...markets];
+
+  return markets
+    .map((raw, index) => {
+      const c = centroids.get(primaryMarketKey(raw));
+      const dist = c
+        ? haversineKm(hub!.lat, hub!.lng, c.lat, c.lng)
+        : Number.POSITIVE_INFINITY;
+      return { raw, index, dist };
+    })
+    .sort((a, b) => a.dist - b.dist || a.index - b.index)
+    .map((row) => row.raw);
+}
+
+export function coverageCoverBit(
+  markets: readonly string[],
+  opts?: CoverageOrderOpts,
+): string {
+  const coverage = collapseCoverageMarkets(orderCoverageMarkets(markets, opts));
   return coverage.length
     ? `I currently cover ${coverage.join(', ')}`
     : 'I can help with areas where I have projects on file';
+}
+
+/** Build ranking opts from optional ask geo + projectCoords rows. */
+export function coverageOrderOptsFrom(input: {
+  ask?: { lat: number; lng: number } | null;
+  projectCoords?: ReadonlyArray<{ microMarket?: string; lat: number; lng: number }>;
+}): CoverageOrderOpts | undefined {
+  const anchors: CoverageAnchor[] = [];
+  for (const row of input.projectCoords ?? []) {
+    const mm = row.microMarket?.trim();
+    if (!mm) continue;
+    anchors.push({ microMarket: mm, lat: row.lat, lng: row.lng });
+  }
+  if (!input.ask && !anchors.length) return undefined;
+  return {
+    ...(input.ask ? { ask: input.ask } : {}),
+    ...(anchors.length ? { anchors } : {}),
+  };
 }
 
 export type ServedMarketMatch = {
@@ -120,8 +218,12 @@ export function matchServedMarket(
 }
 
 /** Buyer-facing outside-served reply — cover bit is always from live catalog. */
-export function outsideServedReply(asked: string, markets: readonly string[]): string {
+export function outsideServedReply(
+  asked: string,
+  markets: readonly string[],
+  opts?: CoverageOrderOpts,
+): string {
   const loc = asked.trim() || 'that area';
-  const coverBit = coverageCoverBit(markets);
+  const coverBit = coverageCoverBit(markets, opts);
   return `I don't have anything in *${loc}* — ${coverBit}. Want to adjust budget, area, or property type?`;
 }

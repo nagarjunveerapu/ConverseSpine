@@ -324,6 +324,9 @@ describe('Phase 3 turn behavior', () => {
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
     expect(result.reply).toMatch(/don't have anything in \*Gurgaon\*/i);
     expect(result.reply).toMatch(/currently cover/i);
+    // Inventory-hub ranking — Bangalore corridors before hill-station Set order.
+    expect(result.reply).not.toMatch(/currently cover Sakleshpur/i);
+    expect(result.reply).toMatch(/North Bangalore|Devanahalli/i);
     expect(result.reply).not.toMatch(/Gurugram/i);
   });
 
