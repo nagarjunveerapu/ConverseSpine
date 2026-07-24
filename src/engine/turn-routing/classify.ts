@@ -187,12 +187,16 @@ export async function embedderRouting(
   // Tie-break: identical phrasings taught under several doors score equal;
   // the copy carrying a taught facet is strictly more information (facets are
   // only taught when one FAQ key owns the meaning catalog-wide), so it wins.
-  // Class-balanced definition candidates at ≥0.8 outrank denser availability.
+  // Class-balanced definition candidates at ≥0.8 outrank denser availability
+  // only on literacy asks — not on "N BHK in <place>" search briefs.
+  const definitionBoostOk = looksLikeDefinitionAsk(input.text);
   matches.sort((a, b) => {
     const aBalanced =
+      definitionBoostOk &&
       (DEFINITION_INTENT_KINDS as readonly string[]).includes(a.kind) &&
       a.score >= 0.8;
     const bBalanced =
+      definitionBoostOk &&
       (DEFINITION_INTENT_KINDS as readonly string[]).includes(b.kind) &&
       b.score >= 0.8;
     if (aBalanced !== bBalanced) return aBalanced ? -1 : 1;
@@ -201,7 +205,9 @@ export async function embedderRouting(
   const top = matches[0];
   const second = matches[1];
   const margin =
-    top && (DEFINITION_INTENT_KINDS as readonly string[]).includes(top.kind)
+    top &&
+    definitionBoostOk &&
+    (DEFINITION_INTENT_KINDS as readonly string[]).includes(top.kind)
       ? top.score - 0.8
       : top && second
         ? top.score - second.score
@@ -223,26 +229,37 @@ export async function embedderRouting(
     return { result: null, ...telemetry, miss_reason: queryOk ? 'no_match' : 'query_error' };
   }
   const failureRouting = env.FAILURE_ROUTING === 'true';
+  // Walk score order. A declined definition on a search brief must not abort
+  // the whole embedder bind when find_projects is still in the candidate set.
+  for (const candidate of matches) {
+    if (!candidate.kind) continue;
+    const bindTau = bindTauForIntent(candidate.kind, tau, failureRouting);
+    if (candidate.score < bindTau) continue;
+    const mapped = mapIntentToRouting(
+      candidate.kind,
+      candidate.score,
+      input,
+      tau,
+      failureRouting,
+    );
+    if (!mapped) continue;
+    return {
+      result: candidate.facet
+        ? { ...mapped, embedder_facet: candidate.facet }
+        : mapped,
+      fired: true,
+      top_kind: candidate.kind,
+      top_score: candidate.score,
+      ...(candidate.facet ? { facet: candidate.facet } : {}),
+      ...(margin !== undefined ? { margin } : {}),
+      top_matches: telemetry.top_matches,
+    };
+  }
   const bindTau = bindTauForIntent(top.kind, tau, failureRouting);
   if (top.score < bindTau) {
     return { result: null, ...telemetry, miss_reason: 'below_tau' };
   }
-  const result = mapIntentToRouting(
-    top.kind,
-    top.score,
-    input,
-    tau,
-    failureRouting,
-  );
-  if (!result) {
-    return { result: null, ...telemetry, miss_reason: 'unmapped_kind' };
-  }
-  // Taught sub-intent rides the winning vector's metadata (Desk mirrors the
-  // facet the human picked on the board) — carry it for the compose consumer.
-  return {
-    result: top.facet ? { ...result, embedder_facet: top.facet } : result,
-    ...telemetry,
-  };
+  return { result: null, ...telemetry, miss_reason: 'unmapped_kind' };
 }
 
 /**

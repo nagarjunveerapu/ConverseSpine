@@ -353,6 +353,9 @@ export function fakeData(): EngineData & {
         whitefield: 'Whitefield',
         yelahanka: 'Yelahanka',
         jayanagar: 'Jayanagar',
+        gurgaon: 'Gurugram',
+        gurugram: 'Gurugram',
+        mumbai: 'Mumbai',
         'north bangalore': 'North Bangalore',
       };
       if (geocoded[key]) {

@@ -3,6 +3,7 @@ import { runEngineTurn } from '../src/engine/turn.js';
 import { speakFailure } from '../src/engine/speak-failure.js';
 import { embedderRouting } from '../src/engine/turn-routing/classify.js';
 import {
+  looksLikeSearchBrief,
   mapIntentToRouting,
   POLICY_INTENT_KEYS,
 } from '../src/engine/turn-routing/embedder-map.js';
@@ -64,6 +65,57 @@ describe('embedding-owned failure routing', () => {
     expect(
       mapIntentToRouting('about_ai', 0.819, INPUT, 0.83, true),
     ).toBeNull();
+  });
+
+  it('does not bind definition_bhk on a search brief like 3 BHK in Mumbai', () => {
+    expect(looksLikeSearchBrief('3 BHK in Mumbai')).toBe(true);
+    expect(
+      mapIntentToRouting(
+        'definition_bhk',
+        0.92,
+        { ...INPUT, text: '3 BHK in Mumbai' },
+        0.83,
+        true,
+      ),
+    ).toBeNull();
+    expect(
+      mapIntentToRouting(
+        'definition_bhk',
+        0.92,
+        { ...INPUT, text: 'what is BHK' },
+        0.83,
+        true,
+      ),
+    ).toMatchObject({ routing: 'unsupported', policy: 'definition', subject: 'bhk' });
+  });
+
+  it('does not let class-balanced definition boost steal a search-shaped BHK turn', async () => {
+    const result = await embedderRouting(
+      {
+        SIL_ROUTING_TAU: '0.83',
+        FAILURE_ROUTING: 'true',
+        AI: { run: async () => ({ data: [[0.1, 0.2, 0.3]] }) },
+        INTENT_VECTORS: {
+          query: async () => ({
+            matches: [
+              {
+                id: 'definition',
+                score: 0.91,
+                metadata: { intent_kind: 'definition_bhk' },
+              },
+              {
+                id: 'search',
+                score: 0.86,
+                metadata: { intent_kind: 'find_projects' },
+              },
+            ],
+          }),
+        },
+      } as never,
+      { ...INPUT, text: '3 BHK in Mumbai' },
+    );
+    expect(result.result).toMatchObject({ routing: 'search_pivot' });
+    expect(result.top_kind).toBe('find_projects');
   });
 
   it('uses class-balanced BHK semantics without stealing search-shaped BHK turns', async () => {
@@ -271,5 +323,22 @@ describe('Phase 2 turn contract', () => {
 
     expect(result.reply).toMatch(/keep your property search/i);
     expect(result.reply).not.toMatch(/rephrase it/i);
+  });
+
+  it('keeps 3 BHK in Mumbai on search / empty-coverage, not BHK definition', async () => {
+    const deps = harness('definition_bhk');
+    const result = await runEngineTurn(
+      {
+        convId: 'fv2-mumbai-bhk',
+        builderId: 'lokations',
+        text: '3 BHK in Mumbai',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+    expect(result.reply).not.toMatch(/BHK means Bedroom/i);
+    expect(result.state.constraints.location).toBe('Mumbai');
+    expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
+    expect(result.reply).toMatch(/don't have anything in \*Mumbai\*/i);
   });
 });

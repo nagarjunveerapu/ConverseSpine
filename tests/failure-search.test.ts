@@ -313,6 +313,25 @@ describe('Phase 3 turn behavior', () => {
     expect(result.reply).not.toMatch(/couldn't match that (property type|size|area)/i);
   });
 
+  it('treats an unserved real city like Gurgaon as empty coverage, not unresolvable', async () => {
+    const deps = fakeDeps();
+    deps.failureSearch = true;
+    const result = await runEngineTurn(
+      {
+        convId: 'fv3-gurgaon',
+        builderId: 'lokations',
+        text: '2 BHK in Gurgaon',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+    expect(result.reply).not.toMatch(/couldn't identify that location/i);
+    expect(result.state.constraints.location).toMatch(/Gurugram|Gurgaon/i);
+    expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
+    expect(result.reply).toMatch(/don't have anything in \*(Gurugram|Gurgaon)\*/i);
+    expect(result.reply).toMatch(/currently cover/i);
+  });
+
   it('does not release a buyer-declared property type', async () => {
     const deps = fakeDeps();
     deps.failureSearch = true;
