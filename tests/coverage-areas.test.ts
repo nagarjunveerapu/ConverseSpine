@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   collapseCoverageMarkets,
+  coverageCityCoverBit,
   coverageCoverBit,
   matchServedMarket,
   orderCoverageMarkets,
+  outsideServedReply,
 } from '../src/engine/coverage-areas.js';
 
 describe('collapseCoverageMarkets', () => {
@@ -106,5 +108,38 @@ describe('orderCoverageMarkets', () => {
     const bit = coverageCoverBit(markets, { anchors });
     expect(bit).toMatch(/^I currently cover North Bangalore, Devanahalli/);
     expect(bit).not.toMatch(/^I currently cover Sakleshpur/);
+  });
+});
+
+describe('coverageCityCoverBit / outsideServedReply', () => {
+  it('formats one or more served cities', () => {
+    expect(coverageCityCoverBit(['Bengaluru'])).toBe(
+      'I only serve Bengaluru micro-markets right now',
+    );
+    expect(coverageCityCoverBit(['Bengaluru', 'Kodagu'])).toBe(
+      'I only serve Bengaluru and Kodagu micro-markets right now',
+    );
+    expect(coverageCityCoverBit(['Bengaluru', 'Hassan', 'Kodagu'])).toBe(
+      'I only serve Bengaluru, Hassan, and Kodagu micro-markets right now',
+    );
+  });
+
+  it('returns null when no cities — outsideServed falls back to corridors', () => {
+    expect(coverageCityCoverBit([])).toBeNull();
+    const reply = outsideServedReply('Gurgaon', ['North Bangalore', 'Sakleshpur'], {
+      servedCities: [],
+    });
+    expect(reply).toMatch(/currently cover North Bangalore/);
+    expect(reply).toMatch(/adjust budget/);
+  });
+
+  it('prefers city-level copy over corridor list', () => {
+    const reply = outsideServedReply('Gurgaon', ['Sakleshpur', 'North Bangalore'], {
+      servedCities: ['Bengaluru'],
+    });
+    expect(reply).toBe(
+      "I don't have anything in *Gurgaon* — I only serve Bengaluru micro-markets right now. Want to look there?",
+    );
+    expect(reply).not.toMatch(/Sakleshpur|currently cover/);
   });
 });
