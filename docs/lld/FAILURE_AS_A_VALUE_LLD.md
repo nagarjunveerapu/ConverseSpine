@@ -388,6 +388,15 @@ failure from buyer text or low confidence. Ambiguous opt-out, EMI principal
 authority, and unsupported routing are instrumented by their owning phases once
 their contracts exist.
 
+**Production.** All `FAILURE_*` prod flags stay unset until MVP. Prod has no
+users pre-MVP; enabling behaviour there spends risk for no benefit. At MVP,
+enable in order — `FAILURE_LOG` first (observability, zero behaviour change),
+then `TOOLS` → `ROUTING` → `SEARCH` → `ANSWER`. `FAILURE_ANSWER` is never the
+first prod flag: its `no_data` path is invisible without `FAILURE_LOG`, and its
+kill switch is a redeploy, not a runtime toggle. Until then, soak Phase 4 on
+**dev only** (where all five flags may be on) and watch unmet `requires` /
+over-answer in the ledger.
+
 ---
 
 ## 8. Test plan
