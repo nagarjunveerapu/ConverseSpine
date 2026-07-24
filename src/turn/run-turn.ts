@@ -27,6 +27,7 @@ export async function runTurn(
       // behavior change for existing doors.
       channel: input.channel === 'advisor_web' ? 'advisor_web' : 'whatsapp',
       action_id: input.action_id,
+      ...(ctx ? { waitUntil: ctx.waitUntil.bind(ctx) } : {}),
     },
     engine,
   );

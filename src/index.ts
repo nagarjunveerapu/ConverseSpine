@@ -167,7 +167,7 @@ export default {
         }
 
         const rt = createWorkerRuntime(env);
-        const result = await handleAdvisorTurn(rt, body as Parameters<typeof handleAdvisorTurn>[1]);
+        const result = await handleAdvisorTurn(rt, body as Parameters<typeof handleAdvisorTurn>[1], ctx);
         const status =
           result.status === 'error' &&
           (result.error === 'text_required' || result.error === 'session_id_required')
