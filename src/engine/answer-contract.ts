@@ -12,6 +12,13 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
   { key: 'flood_zone', pattern: /\b(?:flood|flooding|flood[- ]?zone)\b/i },
+  // Investment-metric facet (rental yield / ROI / returns / rental income). No
+  // project carries a yield atom and `deliveredFactKeys` never delivers it (same
+  // as carpet_area) — so this is ALWAYS a no_data decline. Closes the C1
+  // fabrication: an un-required facet fell through to freeform compose and the
+  // bot invented "3-4% net yield". The grounding gate can't catch a fabricated
+  // percentage; declining at the contract is the structural fix (failure-as-value).
+  { key: 'rental_yield', pattern: /\b(?:rental\s+yield|yield|roi|return\s+on\s+investment|rental\s+returns?|rental\s+income)\b/i },
 ];
 
 export function answerRequirements(text: string): FactKey[] {

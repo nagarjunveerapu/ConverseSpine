@@ -234,7 +234,8 @@ export type FactKey =
   | 'loan_eligibility'
   | 'project_type'
   | 'price'
-  | 'flood_zone';
+  | 'flood_zone'
+  | 'rental_yield';
 
 export type TurnGoal =
   | { kind: 'greet' }

@@ -84,6 +84,24 @@ describe('answer delivery contract', () => {
     expect(result.failure).toBeUndefined();
     expect(result.deliveredFacts).toContain('possession');
   });
+
+  it('declines rental yield / ROI as no_data — no catalog atom exists', () => {
+    expect(answerRequirements('what is the rental yield?')).toContain('rental_yield');
+    expect(answerRequirements('what ROI can I expect?')).toContain('rental_yield');
+    // legit facets are untouched by the new pattern
+    expect(answerRequirements('what is the price?')).toEqual(['price']);
+    const out = enforceAnswerContract(
+      withAnswerRequirements(
+        { kind: 'answer', topic: 'overview', projectId: 'eldorado' },
+        'what is the rental yield on Brigade Eldorado?',
+      ),
+      {
+        tools: ['projectDetail'],
+        detail: { projectId: 'eldorado', name: 'Brigade Eldorado', microMarket: 'North Bangalore' },
+      },
+    );
+    expect(out.failure).toMatchObject({ kind: 'no_data', subject: 'rental_yield' });
+  });
 });
 
 describe('Phase 4 turn behavior', () => {
@@ -140,5 +158,13 @@ describe('Phase 4 turn behavior', () => {
     const { turn } = await focusedHarness('fv4-dark', false);
     const result = await turn('what is the carpet area?');
     expect(result.reply).not.toMatch(/don't have carpet area on file/i);
+  });
+
+  it('declines rental yield instead of fabricating a % or rents (C1 boundary)', async () => {
+    const { turn } = await focusedHarness('fv4-yield');
+    const result = await turn('what is the rental yield?');
+    expect(result.reply).toMatch(/don't have rental yield on file/i);
+    // the fabrication that leaked live: a yield % and per-month rent figures
+    expect(result.reply).not.toMatch(/\d+\s*%|per\s+month|\/month/i);
   });
 });
