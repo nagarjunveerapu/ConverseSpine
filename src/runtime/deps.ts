@@ -10,6 +10,7 @@ import type { EngineDeps } from '../engine/ports.js';
 import { LangfuseTracer } from '../observability/langfuse.js';
 import { emitLocalTurnLog, localTurnLogEnabled } from '../observability/local-turn-log.js';
 import { classifyTurnIntent } from '../engine/turn-intent/classify.js';
+import { engineDepsWithRuntimeFlags } from './failure-flags.js';
 
 /** ConverseEngine runtime — wires NayaDesk + KV state + LLM compose. */
 export class ConverseRuntime {
@@ -76,6 +77,11 @@ export class ConverseRuntime {
 
   defaultBuilderId(): string {
     return this.env.DEFAULT_BUILDER_ID ?? 'lokations';
+  }
+
+  /** Per-turn deps with KV force-off overlay for Failure flags (kill without redeploy). */
+  async engineForTurn(): Promise<EngineDeps> {
+    return engineDepsWithRuntimeFlags(this.env, this.engine);
   }
 }
 

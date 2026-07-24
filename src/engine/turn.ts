@@ -17,6 +17,7 @@ import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
 import { collapseCoverageMarkets, coverageCoverBit, matchServedMarket, outsideServedReply } from './coverage-areas.js';
+import { looksLikePlaceFramedAsk } from './place-frame.js';
 import {
   enforceAnswerContract,
   withAnswerRequirements,
@@ -720,6 +721,26 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
                 location: served.authority,
               },
             };
+          } else if (!looksLikePlaceFramedAsk(input.text)) {
+            // Unresolved + not place-framed ("Buy, 70 lakh") — drop locality,
+            // continue with the rest of the brief. Outside-served is for
+            // explicit in/near asks, not a denylist of transaction verbs.
+            if (ex.constraints.location) {
+              const { location: _drop, ...constraints } = ex.constraints;
+              ex = { ...ex, constraints };
+            }
+            state = {
+              ...state,
+              constraints: {
+                ...state.constraints,
+                ...(durableConstraintsBeforeTurn.location
+                  ? { location: durableConstraintsBeforeTurn.location }
+                  : {}),
+              },
+            };
+            if (!durableConstraintsBeforeTurn.location) {
+              delete state.constraints.location;
+            }
           } else {
             const asked = locationCandidate.trim();
             const failure: Failure = {

@@ -392,10 +392,16 @@ their contracts exist.
 users pre-MVP; enabling behaviour there spends risk for no benefit. At MVP,
 enable in order — `FAILURE_LOG` first (observability, zero behaviour change),
 then `TOOLS` → `ROUTING` → `SEARCH` → `ANSWER`. `FAILURE_ANSWER` is never the
-first prod flag: its `no_data` path is invisible without `FAILURE_LOG`, and its
-kill switch is a redeploy, not a runtime toggle. Until then, soak Phase 4 on
-**dev only** (where all five flags may be on) and watch unmet `requires` /
-over-answer in the ledger.
+first prod flag: its `no_data` path is invisible without `FAILURE_LOG`. Until
+then, soak Phase 4 on **dev only** (where all five flags may be on) and watch
+unmet `requires` / over-answer in the ledger.
+
+**Runtime force-off (dev/prod once enabled).** Wrangler vars turn flags on.
+`TURN_CACHE` key `runtime:failure_flags` may force individual flags **off**
+(JSON `{ "FAILURE_ANSWER": false, ... }` — `false` only; never force-on).
+Applied per turn via `engineForTurn()`. Use this to kill a bad soak without a
+code change; clearing the key (or setting values other than `false`) restores
+wrangler defaults after the next turn.
 
 ---
 
