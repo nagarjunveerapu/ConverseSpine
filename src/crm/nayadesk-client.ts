@@ -818,7 +818,7 @@ export class NayaDeskClient {
     lng?: number;
     radius_km?: number;
     area_name?: string;
-    source?: 'area_registry' | 'cache' | 'geocoder';
+    source?: 'area_registry' | 'cache' | 'geocoder' | 'gazetteer';
     reason?: 'geocoder_not_configured' | 'no_geocode_result';
   }> {
     return this.call('POST', '/api/engine/geo/resolve', { text });

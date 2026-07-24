@@ -99,6 +99,19 @@ export function looksLikeDefinitionAsk(text: string): boolean {
   );
 }
 
+/**
+ * Search brief with a configuration + place cue — not a literacy ask.
+ * "3 BHK in Mumbai" must stay on discover/search, not definition_bhk.
+ */
+export function looksLikeSearchBrief(text: string): boolean {
+  if (looksLikeDefinitionAsk(text)) return false;
+  const hasConfig =
+    /\b\d+\s*bhk\b/i.test(text) ||
+    /\b(?:villas?|apartments?|flats?|plots?|houses?|homes?)\b/i.test(text);
+  const hasPlaceCue = /\b(?:in|near|around|at|within)\s+[a-z\u00c0-\u024f]/i.test(text);
+  return hasConfig && hasPlaceCue;
+}
+
 export function hasVisitRoutingContext(input: TurnRoutingInput): boolean {
   return (
     input.phase === 'visit' ||
@@ -140,6 +153,14 @@ export function mapIntentToRouting(
         ? { policy: 'out_of_scope' as const, subject: 'discount' }
         : undefined);
     if (policyIntent) {
+      // Definition doors are literacy asks. A search brief that merely mentions
+      // "3 BHK in Mumbai" must not early-exit into educationSearch.
+      if (
+        policyIntent.policy === 'definition' &&
+        looksLikeSearchBrief(input.text)
+      ) {
+        return null;
+      }
       return {
         routing: 'unsupported',
         policy: policyIntent.policy,

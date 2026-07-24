@@ -353,6 +353,8 @@ export function fakeData(): EngineData & {
         whitefield: 'Whitefield',
         yelahanka: 'Yelahanka',
         jayanagar: 'Jayanagar',
+        // Gurgaon/Mumbai intentionally absent — outside-served uses live catalog,
+        // not a hardcoded metro resolve list.
         'north bangalore': 'North Bangalore',
       };
       if (geocoded[key]) {

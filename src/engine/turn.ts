@@ -16,7 +16,7 @@ import { buildLedgerWritePayload } from './ledger-write.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
-import { collapseCoverageMarkets, coverageCoverBit } from './coverage-areas.js';
+import { collapseCoverageMarkets, coverageCoverBit, matchServedMarket, outsideServedReply } from './coverage-areas.js';
 import {
   enforceAnswerContract,
   withAnswerRequirements,
@@ -696,51 +696,87 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
             }
           }
         } else {
-          const reply = speakFailure(resolved.failure);
-          state = {
-            ...state,
-            constraints: {
-              ...state.constraints,
-              ...(durableConstraintsBeforeTurn.location
-                ? { location: durableConstraintsBeforeTurn.location }
-                : {}),
-            },
-            turnCount: state.turnCount + 1,
-          };
-          if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
-          await deps.store.save(state);
-          await deps.crm
-            .appendMessage(nd || input.convId, 'inbound', input.text)
-            .catch(() => {});
-          await deps.crm
-            .appendMessage(nd || input.convId, 'outbound', reply, {
-              replyKey: 'failure:locality',
-            })
-            .catch(() => {});
-          await appendEarlyFailureLedger({
-            deps,
-            nd: nd || input.convId,
-            input,
-            state,
-            ex,
-            extractProvenance,
-            inputSource,
-            reply,
-            failure: resolved.failure,
-          });
-          return {
-            reply,
-            state,
-            debug: withIngressDebug(
-              {
-                phase: state.phase,
-                goal: { kind: 'clarify_intent' },
-                tools: [],
-                grounding: 'pass',
+          // Desk did not resolve this place (registry/cache/geocode miss).
+          // Served list = live catalog micro-markets — never a hardcoded metro list.
+          // Soft-match → adopt. Else → outside coverage from that same catalog.
+          const cat = await deps.data.catalog(state.builderId).catch(() => null);
+          const markets = cat?.microMarkets ?? [];
+          const served = matchServedMarket(locationCandidate, markets);
+          if (served) {
+            locationValidated = true;
+            if (ex.constraints.location) {
+              ex = {
+                ...ex,
+                constraints: { ...ex.constraints, location: served.name },
+              };
+            }
+            state = {
+              ...state,
+              constraints: { ...state.constraints, location: served.name },
+              constraintAuthority: {
+                ...(state.constraintAuthority ?? {}),
+                // Score 3/2 → declared (hard). Score 1 (token/typo) → inferred
+                // so Phase-3 relaxation can still release a weak adopt.
+                location: served.authority,
               },
+            };
+          } else {
+            const asked = locationCandidate.trim();
+            const failure: Failure = {
+              kind: 'no_match',
+              stage: 'search',
+              subject: 'area',
+            };
+            const reply = outsideServedReply(asked, markets);
+            state = {
+              ...state,
+              constraints: {
+                ...state.constraints,
+                ...(durableConstraintsBeforeTurn.location
+                  ? { location: durableConstraintsBeforeTurn.location }
+                  : {}),
+              },
+              turnCount: state.turnCount + 1,
+            };
+            if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
+            if (ex.constraints.location) {
+              const { location: _drop, ...constraints } = ex.constraints;
+              ex = { ...ex, constraints };
+            }
+            await deps.store.save(state);
+            await deps.crm
+              .appendMessage(nd || input.convId, 'inbound', input.text)
+              .catch(() => {});
+            await deps.crm
+              .appendMessage(nd || input.convId, 'outbound', reply, {
+                replyKey: 'failure:outside_served',
+              })
+              .catch(() => {});
+            await appendEarlyFailureLedger({
+              deps,
+              nd: nd || input.convId,
+              input,
+              state,
+              ex,
+              extractProvenance,
               inputSource,
-            ),
-          };
+              reply,
+              failure,
+            });
+            return {
+              reply,
+              state,
+              debug: withIngressDebug(
+                {
+                  phase: state.phase,
+                  goal: { kind: 'no_fit' },
+                  tools: ['catalog'],
+                  grounding: 'pass',
+                },
+                inputSource,
+              ),
+            };
+          }
         }
       } else {
         locationValidated = true;
