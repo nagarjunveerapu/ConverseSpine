@@ -319,7 +319,7 @@ describe('Phase 3 turn behavior', () => {
       deps,
     );
     expect(result.reply).not.toMatch(/couldn't identify that location/i);
-    // Outside the live catalog — coverage bit comes from served micro-markets only.
+    // Outside the live catalog — city-level cover bit from servedCities.
     expect(result.state.constraints.location).toBeUndefined();
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
     expect(result.reply).toMatch(/don't have anything in \*Gurgaon\*/i);
