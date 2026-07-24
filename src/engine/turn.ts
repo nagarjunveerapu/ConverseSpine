@@ -98,6 +98,7 @@ import {
   shouldSurfaceUnknownIntent,
 } from './turn-routing/intent-authority.js';
 import { failureFromUnsupportedRouting } from './turn-routing/unsupported-outcome.js';
+import { detectProtectedIdentityFilter } from './turn-routing/fair-housing.js';
 import { silDecision } from '../understanding/capture.js';
 import { buildTurnRoutingInput, type TurnRoutingResult } from './turn-routing/types.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
@@ -890,9 +891,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     },
   };
 
-  const unsupportedFailure = deps.failureRouting
-    ? failureFromUnsupportedRouting(routing)
-    : undefined;
+  // Fair-housing refusals always speak — even if FAILURE_ROUTING is off.
+  // A miss here is complying with a discriminatory ask, not "no answer".
+  const unsupportedFailure =
+    (deps.failureRouting ? failureFromUnsupportedRouting(routing) : undefined) ??
+    (detectProtectedIdentityFilter(trimmedText)
+      ? ({
+          kind: 'unsupported',
+          stage: 'route',
+          subject: 'protected_identity_filter',
+          detail: { policy: 'prohibited', floor: 'keyword' },
+        } satisfies Failure)
+      : undefined);
   if (unsupportedFailure) {
     // Education resolver lives ONLY inside Phase-2 definition ownership —
     // not a second early owner before geo/search.

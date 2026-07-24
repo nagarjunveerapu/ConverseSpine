@@ -9,6 +9,10 @@ import {
   looksLikeDefinitionAsk,
   mapIntentToRouting,
 } from './embedder-map.js';
+import {
+  detectProtectedIdentityFilter,
+  fairHousingRouting,
+} from './fair-housing.js';
 import { projectIntentVector, routingTau } from '../../nlu/intent-projection.js';
 import { DEFERRABLE_ANSWER_TOPICS, projectRoutingFromSpeechAct } from './from-speech-act.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
@@ -304,6 +308,12 @@ export async function classifyTurnRouting(
     | undefined,
   input: TurnRoutingInput,
 ): Promise<TurnRoutingResult> {
+  // Fair-housing floor — safety backstop, not understanding. Must win before
+  // embedder/search can shortlist a discriminatory filter ask.
+  if (detectProtectedIdentityFilter(input.text)) {
+    return fairHousingRouting();
+  }
+
   const stateRule = stateDependentRouting(input);
   if (stateRule) return stateRule;
 
