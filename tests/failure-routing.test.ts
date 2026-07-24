@@ -340,9 +340,8 @@ describe('Phase 2 turn contract', () => {
     // Mumbai is outside the fake catalog — city-level cover bit from servedCities.
     expect(result.state.constraints.location).toBeUndefined();
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
-    expect(result.reply).toMatch(/don't have anything in \*Mumbai\*/i);
-    expect(result.reply).toMatch(/only serve .+ micro-markets/i);
-    expect(result.reply).toMatch(/Bengaluru/i);
-    expect(result.reply).not.toMatch(/currently cover/i);
+    expect(result.reply).toMatch(/don't have .+ in \*Mumbai\*/i);
+    expect(result.reply).toMatch(/I have .+ in Bengaluru/i);
+    expect(result.reply).not.toMatch(/currently cover|micro-markets|Eldorado/i);
   });
 });

@@ -22,6 +22,7 @@ import {
   coverageCityCoverBit,
   coverageCoverBit,
   coverageOrderOptsFrom,
+  inventoryNoun,
   matchServedMarket,
   orderCoverageMarkets,
   outsideServedReply,
@@ -769,6 +770,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
             const reply = outsideServedReply(asked, markets, {
               ...orderOpts,
               servedCities: cat?.servedCities ?? [],
+              propertyType:
+                ex.constraints.propertyType ?? state.constraints.propertyType,
+              bhk: ex.constraints.bhk ?? state.constraints.bhk,
             });
             state = {
               ...state,
@@ -2165,8 +2169,13 @@ async function fetchRecommend(
       });
 
       if (widen?.matches.length) {
-        // Do not attach Failure here — terminalFailure would speakFailure and
-        // bury the disclosed nearby shortlist.
+        // Markets for copy; matches kept for Advisor cards after disclosure.
+        const marketLabels = collapseCoverageMarkets(
+          widen.nearbyAreas.length
+            ? widen.nearbyAreas
+            : widen.matches.map((m) => m.microMarket),
+          3,
+        );
         return {
           goal: base.kind === 'recommend' || base.kind === 'ack_reject_recommend' ? base : { kind: 'recommend' },
           evidence: {
@@ -2175,7 +2184,7 @@ async function fetchRecommend(
             relaxed: ['area'],
             localityWiden: {
               asked: loc,
-              ...(widen.nearbyAreas.length ? { nearbyAreas: widen.nearbyAreas } : {}),
+              nearbyAreas: marketLabels,
             },
           },
         };
@@ -2192,7 +2201,9 @@ async function fetchRecommend(
         projectCoords: coordRows,
       });
       const coverage = collapseCoverageMarkets(orderCoverageMarkets(markets, orderOpts));
-      const cityBit = coverageCityCoverBit(cat?.servedCities ?? []);
+      const propType = s.constraints.propertyType;
+      const bhk = s.constraints.bhk;
+      const cityBit = coverageCityCoverBit(cat?.servedCities ?? [], propType, bhk);
       const coverBit = cityBit ?? coverageCoverBit(markets, orderOpts);
       return {
         goal: { kind: 'no_fit' },
@@ -2200,7 +2211,7 @@ async function fetchRecommend(
           tools: ['search'],
           failure,
           noMatch: {
-            reasoning: `I don't have anything in *${loc}* — ${coverBit}`,
+            reasoning: `I don't have ${inventoryNoun(propType, bhk)} in *${loc}* — ${coverBit}`,
             nearby: coverage,
           },
         },

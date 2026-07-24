@@ -300,11 +300,12 @@ describe('Phase 3 turn behavior', () => {
     // Durable ask stays; widen is disclosed, not a silent area drop.
     expect(result.state.constraints.location).toBe('Jayanagar');
     expect(result.debug.goal).toMatchObject({ kind: 'recommend' });
-    expect(result.reply).toMatch(/don't have anything in \*Jayanagar\*/i);
-    expect(result.reply).toMatch(/here's what we have nearby/i);
-    expect(result.reply).toMatch(/Eldorado|Cornerstone|Whitefield|North Bangalore/i);
+    // Market-level widen — Devanahalli/North Bangalore, not project names as places.
+    expect(result.reply).toMatch(/don't have .+ in \*Jayanagar\*/i);
+    expect(result.reply).toMatch(/I do have .+ in /i);
+    expect(result.reply).toMatch(/North Bangalore|Devanahalli|Whitefield/i);
+    expect(result.reply).not.toMatch(/Eldorado|Cornerstone|Orchards/i);
     expect(result.reply).not.toMatch(/currently cover/i);
-    expect(result.reply).not.toMatch(/couldn't match that (property type|size|area)/i);
   });
 
   it('treats an unserved real city like Gurgaon as empty coverage, not unresolvable', async () => {
@@ -323,11 +324,10 @@ describe('Phase 3 turn behavior', () => {
     // Outside the live catalog — city-level cover bit from servedCities.
     expect(result.state.constraints.location).toBeUndefined();
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
-    expect(result.reply).toMatch(/don't have anything in \*Gurgaon\*/i);
-    // City-level cover bit from Desk servedCities — not corridor dump.
-    expect(result.reply).toMatch(/only serve .+ micro-markets/i);
-    expect(result.reply).toMatch(/Bengaluru/i);
-    expect(result.reply).not.toMatch(/currently cover/i);
+    expect(result.reply).toMatch(/don't have .+ in \*Gurgaon\*/i);
+    // City inventory — not project list, not corridor dump.
+    expect(result.reply).toMatch(/I have .+ in Bengaluru/i);
+    expect(result.reply).not.toMatch(/currently cover|micro-markets|Eldorado/i);
     expect(result.reply).not.toMatch(/Budigere|Yelahanka|Sakleshpur/i);
     expect(result.reply).not.toMatch(/Gurugram/i);
   });

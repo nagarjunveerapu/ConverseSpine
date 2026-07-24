@@ -217,29 +217,55 @@ export function matchServedMarket(
   return best;
 }
 
-/** City-level cover bit for outside-served (wrong metro). Null if no cities. */
-export function coverageCityCoverBit(cities: readonly string[]): string | null {
-  const clean = [
-    ...new Set(cities.map((c) => c.trim()).filter(Boolean)),
-  ];
-  if (!clean.length) return null;
-  const joined =
-    clean.length === 1
-      ? clean[0]!
-      : clean.length === 2
-        ? `${clean[0]} and ${clean[1]}`
-        : `${clean.slice(0, -1).join(', ')}, and ${clean[clean.length - 1]}`;
-  return `I only serve ${joined} micro-markets right now`;
+/** Buyer-facing inventory noun from property type (BHK ⇒ apartments when type empty). */
+export function inventoryNoun(
+  propertyType?: string | null,
+  bhk?: string | null,
+): string {
+  const t = (propertyType ?? '').toLowerCase();
+  if (/\bapartment|flat\b/.test(t)) return 'apartments';
+  if (/\bvilla\b/.test(t)) return 'villas';
+  if (/\bplot|plotted\b/.test(t)) return 'plots';
+  if (/plantation/.test(t)) return 'plantation options';
+  if (bhk?.trim()) return 'apartments';
+  return 'homes';
+}
+
+/** Join 1–n place labels for cover copy. */
+export function joinPlaceLabels(names: readonly string[]): string {
+  const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  if (!clean.length) return '';
+  if (clean.length === 1) return clean[0]!;
+  if (clean.length === 2) return `${clean[0]} and ${clean[1]}`;
+  return `${clean.slice(0, -1).join(', ')}, and ${clean[clean.length - 1]}`;
+}
+
+/**
+ * Outside-served inventory bit — cities we sell in, not project names.
+ * Null if no cities.
+ */
+export function coverageCityCoverBit(
+  cities: readonly string[],
+  propertyType?: string | null,
+  bhk?: string | null,
+): string | null {
+  const joined = joinPlaceLabels(cities);
+  if (!joined) return null;
+  const noun = inventoryNoun(propertyType, bhk);
+  return `I have ${noun} in ${joined}`;
 }
 
 export type OutsideServedOpts = CoverageOrderOpts & {
   /** Desk-derived served cities — preferred over corridor list. */
   servedCities?: readonly string[];
+  /** Optional type so Delhi + apartment → "apartments in Bengaluru". */
+  propertyType?: string | null;
+  bhk?: string | null;
 };
 
 /**
  * Buyer-facing outside-served reply.
- * Prefer city-level coverage from Desk; fall back to nearest micro-markets.
+ * City inventory only — never a project list.
  */
 export function outsideServedReply(
   asked: string,
@@ -247,10 +273,15 @@ export function outsideServedReply(
   opts?: OutsideServedOpts,
 ): string {
   const loc = asked.trim() || 'that area';
-  const cityBit = coverageCityCoverBit(opts?.servedCities ?? []);
+  const noun = inventoryNoun(opts?.propertyType, opts?.bhk);
+  const cityBit = coverageCityCoverBit(
+    opts?.servedCities ?? [],
+    opts?.propertyType,
+    opts?.bhk,
+  );
   if (cityBit) {
-    return `I don't have anything in *${loc}* — ${cityBit}. Want to look there?`;
+    return `I don't have ${noun} in *${loc}* — ${cityBit}. Want to look there?`;
   }
   const coverBit = coverageCoverBit(markets, opts);
-  return `I don't have anything in *${loc}* — ${coverBit}. Want to adjust budget, area, or property type?`;
+  return `I don't have ${noun} in *${loc}* — ${coverBit}. Want to adjust budget, area, or property type?`;
 }
