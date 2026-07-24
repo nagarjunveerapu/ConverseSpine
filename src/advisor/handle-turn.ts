@@ -28,6 +28,7 @@ const DEFAULT_ADVISOR_BUILDER = 'naya-advisor';
 export async function handleAdvisorTurn(
   rt: ConverseRuntime,
   body: AdvisorTurnRequest,
+  ctx?: ExecutionContext,
 ): Promise<AdvisorTurnResponse> {
   const session_id = body.session_id?.trim() ?? '';
   const text = (body.text ?? body.message ?? '').trim();
@@ -224,6 +225,7 @@ export async function handleAdvisorTurn(
         ingressFilledSlots,
         ingressFailure,
         briefExtract: body.brief_extract === true,
+        ...(ctx ? { waitUntil: ctx.waitUntil.bind(ctx) } : {}),
       },
       engine,
     );

@@ -153,6 +153,12 @@ export interface EngineTurnInput {
    * authority. See handle-turn `brief_extract`.
    */
   briefExtract?: boolean;
+  /**
+   * Cloudflare `ctx.waitUntil` — defers the post-reply Desk/telemetry tail off
+   * the buyer's critical path (Bridge Stage 2). Absent in CLI/eval, where the
+   * tail is awaited instead (unchanged behaviour).
+   */
+  waitUntil?: (p: Promise<unknown>) => void;
 }
 
 export interface EngineTurnOutput {
@@ -166,7 +172,6 @@ export interface EngineTurnOutput {
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
-  const _t0 = Date.now();
   let state = (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId);
   const inputSource = resolveInputSource(input.action_id);
 
@@ -1921,29 +1926,40 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ? deriveShadowFailures({ goal, evidence, droppedLocation })
     : [];
 
-  const _tBeforeTail = Date.now();
+  // store.save stays AWAITED — it is the KV state the next turn reads (store.load).
   await deps.store.save(state);
-  await deps.store.logTurn({
-    convId: state.convId,
-    turnIndex: state.turnCount,
-    buyerText: input.text,
-    reply,
-    phase: state.phase,
-    goal: goal.kind,
-    grounding,
-  });
 
-  await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
-  await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
-  await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
-  await syncTelemetry(deps, nd, input, goal, evidence, state, reply, {
-    ex,
-    extractProvenance,
-    inputSource,
-    grounding,
-    routing,
-    failures,
-  }).catch(() => {});
+  // The post-reply tail (turn ledger, transcript append, CRM facts, telemetry)
+  // is read by an agent later, NEVER by the next turn, and mutates no state the
+  // response depends on (reply + state are already frozen above). So it rides
+  // ctx.waitUntil off the buyer's critical path — Bridge Stage 2, ~1s. CLI/eval
+  // pass no waitUntil, so there the tail is awaited exactly as before.
+  const _tail = (async () => {
+    await deps.store
+      .logTurn({
+        convId: state.convId,
+        turnIndex: state.turnCount,
+        buyerText: input.text,
+        reply,
+        phase: state.phase,
+        goal: goal.kind,
+        grounding,
+      })
+      .catch(() => {});
+    await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+    await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
+    await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
+    await syncTelemetry(deps, nd, input, goal, evidence, state, reply, {
+      ex,
+      extractProvenance,
+      inputSource,
+      grounding,
+      routing,
+      failures,
+    }).catch(() => {});
+  })();
+  if (input.waitUntil) input.waitUntil(_tail);
+  else await _tail;
 
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
 
