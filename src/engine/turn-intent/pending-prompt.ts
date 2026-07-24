@@ -26,6 +26,16 @@ export function buildPendingPrompt(
   turnCount: number,
   focus?: { projectId: string; projectName: string } | null,
 ): PendingPrompt | undefined {
+  // Empty-locality widen CTA ("Want me to show those?") — keep markets, not
+  // project chips. Affirm → apply_recovery_patch with these targets.
+  if (evidence.localityWiden?.asked && (evidence.localityWiden.nearbyAreas?.length ?? 0) > 0) {
+    return {
+      kind: 'location_broaden',
+      location_target: evidence.localityWiden.nearbyAreas!.join(','),
+      asked_at_turn: turnCount,
+    };
+  }
+
   // shortlist_answer ends on the same "open any one of them?" fork — a bare
   // ordinal/name reply must resolve as a pick (bare "yes" still probes).
   if (goal.kind === 'clarify_project_pick' || goal.kind === 'shortlist_answer') {
@@ -135,8 +145,8 @@ export function defaultProbePrompt(
   }
   if (kind === 'location_broaden') {
     return chipCount > 0
-      ? 'Want to search all Bangalore? Pick an option below or say yes.'
-      : 'Want to search all Bangalore instead of this corridor?';
+      ? 'Want me to show those nearby areas? Pick an option below or say yes.'
+      : 'Want me to show those?';
   }
   if (chipCount > 0) {
     return channel === 'whatsapp'
@@ -168,9 +178,11 @@ export function buildRtiStateUpdate(input: {
     input.goal.kind === 'commit' ||
     input.goal.kind === 'advance' ||
     (input.evidence.matches?.length ?? 0) > 0;
-  // offer_pricing is a successful focused answer that still needs dialogue memory.
+  // offer_pricing / location_broaden succeed with matches but still need a CTA bind.
   const keepPending =
-    pendingPrompt?.kind === 'offer_pricing' || (!successTurn && Boolean(pendingPrompt));
+    pendingPrompt?.kind === 'offer_pricing' ||
+    pendingPrompt?.kind === 'location_broaden' ||
+    (!successTurn && Boolean(pendingPrompt));
   const suggestedActions = input.searchRecovery?.suggested_actions.length
     ? input.searchRecovery.suggested_actions
     : input.previousRti?.lastSuggestedActions;

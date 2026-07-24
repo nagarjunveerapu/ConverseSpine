@@ -306,6 +306,40 @@ describe('Phase 3 turn behavior', () => {
     expect(result.reply).toMatch(/North Bangalore|Devanahalli|Whitefield/i);
     expect(result.reply).not.toMatch(/Eldorado|Cornerstone|Orchards/i);
     expect(result.reply).not.toMatch(/currently cover/i);
+    expect(result.state.rti?.pendingPrompt).toMatchObject({
+      kind: 'location_broaden',
+    });
+    expect(result.state.rti?.pendingPrompt?.location_target).toMatch(/North Bangalore|Whitefield|Devanahalli/i);
+  });
+
+  it('yes / show those after locality widen lists projects without re-asking', async () => {
+    const deps = fakeDeps();
+    deps.failureSearch = true;
+    const first = await runEngineTurn(
+      {
+        convId: 'fv3-jayanagar-affirm',
+        builderId: 'lokations',
+        text: '2 BHK in Jayanagar',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+    expect(first.state.rti?.pendingPrompt?.kind).toBe('location_broaden');
+
+    const yes = await runEngineTurn(
+      {
+        convId: 'fv3-jayanagar-affirm',
+        builderId: 'lokations',
+        text: 'show those',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+    expect(yes.state.constraints.location).toMatch(/North Bangalore|Whitefield|Devanahalli/i);
+    expect(yes.debug.goal).toMatchObject({ kind: 'recommend' });
+    expect(yes.reply).toMatch(/Eldorado|Cornerstone|Orchards/i);
+    expect(yes.reply).not.toMatch(/Want me to show those/i);
+    expect(yes.reply).not.toMatch(/don't have .+ in \*Jayanagar\*/i);
   });
 
   it('treats an unserved real city like Gurgaon as empty coverage, not unresolvable', async () => {

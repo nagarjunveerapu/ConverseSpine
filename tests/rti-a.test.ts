@@ -87,6 +87,35 @@ describe('RTI-A pending probing', () => {
     expect(rti.lastSuggestedActions).toEqual(chipActions);
   });
 
+  it('keeps location_broaden pending on locality-widen recommend', () => {
+    const rti = buildRtiStateUpdate({
+      goal: { kind: 'recommend' },
+      evidence: {
+        tools: ['search', 'geoAreasInRegion'],
+        matches: [
+          {
+            projectId: 'eldorado',
+            name: 'Brigade Eldorado',
+            microMarket: 'North Bangalore',
+            startingPriceInr: 6_500_000,
+            startingPriceDisplay: '₹65 L',
+          },
+        ],
+        localityWiden: {
+          asked: 'Jayanagar',
+          nearbyAreas: ['North Bangalore', 'Whitefield'],
+        },
+      },
+      reply: 'I do have apartments in North Bangalore. Want me to show those?',
+      uiMode: 'matches_hub',
+      turnCount: 3,
+    });
+    expect(rti.pendingPrompt).toMatchObject({
+      kind: 'location_broaden',
+      location_target: 'North Bangalore,Whitefield',
+    });
+  });
+
   it('yes after offer_project focuses project without no_fit loop', async () => {
     const deps = fakeDeps();
     let state = initState('rti-yes', 'lokations');

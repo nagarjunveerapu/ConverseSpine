@@ -28,6 +28,9 @@ const REFINE_CONTINUE =
   /\b(?:keep|continue)\s+refining(?:\s+(?:the|my))?\s+search\b|\brefine(?:\s+(?:the|my))?\s+search\b/i;
 const LIST_AT_BUDGET =
   /\b(?:what|which)\s+options?\b.{0,40}\bbudget\b|\boptions?\s+(?:do you have|at|within|for)\b.{0,30}\bbudget\b/i;
+/** Affirm the locality-widen CTA — "show those" / "yes show me". */
+const SHOW_WIDENED =
+  /^(?:yes[,.]?\s+)?(?:please\s+)?(?:show|list|see)(?:\s+me)?(?:\s+(?:those|them|that|it))?(?:\s+please)?\.?!?\s*$/i;
 
 /** Free-text that should re-run search/list — not contextual yes/no probe. */
 export function shouldPassthroughRecoverySearch(text: string): boolean {
@@ -146,6 +149,15 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
     return { kind: 'reject_and_widen', confidence: 'rule' };
   }
 
+  // Before passthrough "show options" — affirm the widen CTA with stored markets.
+  if (pending?.kind === 'location_broaden' && (AFFIRM_ONLY.test(t) || SHOW_WIDENED.test(t))) {
+    return {
+      kind: 'apply_recovery_patch',
+      confidence: 'rule',
+      patch: { location: pending.location_target ?? 'Bangalore' },
+    };
+  }
+
   if (REFINE_CONTINUE.test(t)) {
     return { kind: 'continue_search', confidence: 'rule' };
   }
@@ -188,13 +200,6 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
         confidence: 'rule',
         ask_topic: pending.topic ?? 'price',
         ...(pending.project_id ? { focus_project_id: pending.project_id } : {}),
-      };
-    }
-    if (pending?.kind === 'location_broaden') {
-      return {
-        kind: 'apply_recovery_patch',
-        confidence: 'rule',
-        patch: { location: pending.location_target ?? 'Bangalore' },
       };
     }
     return {
