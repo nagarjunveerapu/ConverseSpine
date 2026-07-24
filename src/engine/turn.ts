@@ -16,8 +16,10 @@ import { buildLedgerWritePayload } from './ledger-write.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
+import { searchLocalityWiden } from './locality-widen.js';
 import {
   collapseCoverageMarkets,
+  coverageCityCoverBit,
   coverageCoverBit,
   coverageOrderOptsFrom,
   matchServedMarket,
@@ -2136,6 +2138,49 @@ async function fetchRecommend(
     }
     if (failure.subject === 'area') {
       const loc = s.constraints.location?.trim() || 'that area';
+      // Locality intelligence: nearby / in-city inventory with disclosed widen.
+      // Ladder still returned area no_match (no silent release); this is recovery.
+      const widen = await searchLocalityWiden({
+        asked: loc,
+        builderId: s.builderId,
+        filters,
+        rejectedProjectIds: s.discover.rejectedProjectIds,
+        ports: {
+          geoAreasInRegion: (region, builderId) =>
+            deps.data.geoAreasInRegion(region, builderId),
+          resolveGeo: (text) => deps.data.resolveGeo(text),
+          projectCoords: (builderId) => deps.data.projectCoords(builderId),
+          search: async (builderId, candidateFilters) => {
+            const result = await searchWithFilters(deps, builderId, candidateFilters);
+            const { location: _loc, ...constraintsSansArea } = s.constraints;
+            return {
+              matches: discover.filterSearchMatches(
+                rawToMatches(result.matches),
+                constraintsSansArea,
+                s.discover.rejectedProjectIds,
+              ),
+            };
+          },
+        },
+      }).catch(() => null);
+
+      if (widen?.matches.length) {
+        // Do not attach Failure here — terminalFailure would speakFailure and
+        // bury the disclosed nearby shortlist.
+        return {
+          goal: base.kind === 'recommend' || base.kind === 'ack_reject_recommend' ? base : { kind: 'recommend' },
+          evidence: {
+            tools: ['search', 'geoAreasInRegion'],
+            matches: widen.matches,
+            relaxed: ['area'],
+            localityWiden: {
+              asked: loc,
+              ...(widen.nearbyAreas.length ? { nearbyAreas: widen.nearbyAreas } : {}),
+            },
+          },
+        };
+      }
+
       const [cat, askGeo, coordRows] = await Promise.all([
         deps.data.catalog(s.builderId).catch(() => null),
         deps.data.resolveGeo(loc).catch(() => null),
@@ -2147,7 +2192,8 @@ async function fetchRecommend(
         projectCoords: coordRows,
       });
       const coverage = collapseCoverageMarkets(orderCoverageMarkets(markets, orderOpts));
-      const coverBit = coverageCoverBit(markets, orderOpts);
+      const cityBit = coverageCityCoverBit(cat?.servedCities ?? []);
+      const coverBit = cityBit ?? coverageCoverBit(markets, orderOpts);
       return {
         goal: { kind: 'no_fit' },
         evidence: {

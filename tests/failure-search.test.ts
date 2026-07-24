@@ -285,7 +285,7 @@ describe('Phase 3 turn behavior', () => {
     expect(result.reply).not.toMatch(/Sakleshpur|Ayana/i);
   });
 
-  it('speaks empty-locality coverage instead of dumping other corridors', async () => {
+  it('widens empty locality to nearby city inventory with disclosure', async () => {
     const deps = fakeDeps();
     deps.failureSearch = true;
     const result = await runEngineTurn(
@@ -297,12 +297,13 @@ describe('Phase 3 turn behavior', () => {
       },
       deps,
     );
+    // Durable ask stays; widen is disclosed, not a silent area drop.
     expect(result.state.constraints.location).toBe('Jayanagar');
-    expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
+    expect(result.debug.goal).toMatchObject({ kind: 'recommend' });
     expect(result.reply).toMatch(/don't have anything in \*Jayanagar\*/i);
-    expect(result.reply).toMatch(/currently cover/i);
-    expect(result.reply).not.toMatch(/\//);
-    expect(result.reply).not.toMatch(/here's what we do have/i);
+    expect(result.reply).toMatch(/here's what we have nearby/i);
+    expect(result.reply).toMatch(/Eldorado|Cornerstone|Whitefield|North Bangalore/i);
+    expect(result.reply).not.toMatch(/currently cover/i);
     expect(result.reply).not.toMatch(/couldn't match that (property type|size|area)/i);
   });
 

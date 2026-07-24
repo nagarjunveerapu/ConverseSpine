@@ -376,6 +376,11 @@ export function fallbackReply(req: ComposeRequest): string {
         .join('; ');
       const sensitivity = sensitivityLine(ms);
       const tail = sensitivity ? ` ${sensitivity}` : '';
+      // Empty-locality widen names the asked place — buyer must know these are
+      // nearby alternatives, not a fit for that locality.
+      if (ev.localityWiden?.asked) {
+        return `${pre}I don't have anything in *${ev.localityWiden.asked}* — here's what we have nearby: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
+      }
       // Some part of the ask had to be relaxed for this list to exist, so it is
       // NOT a fit — say which dimension gave. Dimensions only, never the buyer's
       // raw values: a location capture may be dialogue noise.

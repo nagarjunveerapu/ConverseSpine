@@ -553,6 +553,11 @@ export interface EvidenceSet {
     configFloorDisplay?: string;
   };
   noMatch?: { reasoning: string; nearby: string[] };
+  /**
+   * Empty-locality widen: nothing in `asked`, but `matches` are nearby /
+   * in-city alternatives. Compose must name the miss — never present as a fit.
+   */
+  localityWiden?: { asked: string; nearbyAreas?: string[] };
   nextSlot?: ProbeKind;
   detail?: ProjectDetail;
   pricing?: PricingEvidence;

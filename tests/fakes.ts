@@ -124,14 +124,20 @@ function filterCatalog(f: SearchFilters): P[] {
     );
   }
   if (f.locations) {
-    const loc = f.locations.toLowerCase();
-    ms = ms.filter(
-      (p) =>
-        p.market.toLowerCase().includes(loc) ||
-        loc.includes(p.market.toLowerCase()) ||
-        loc.includes('coorg') ||
-        (loc.includes('bangalore') && p.market.toLowerCase().includes('bangalore')) ||
-        (loc.includes('coorg') && p.market.toLowerCase().includes('sakleshpur')),
+    const locs = f.locations
+      .toLowerCase()
+      .split(/[,|]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    ms = ms.filter((p) =>
+      locs.some(
+        (loc) =>
+          p.market.toLowerCase().includes(loc) ||
+          loc.includes(p.market.toLowerCase()) ||
+          (loc.includes('bangalore') && p.market.toLowerCase().includes('bangalore')) ||
+          (loc.includes('coorg') &&
+            (p.market.toLowerCase().includes('sakleshpur') || p.market.toLowerCase().includes('coorg'))),
+      ),
     );
   }
   if (f.budgetMaxInr !== undefined) ms = ms.filter((p) => p.priceInr <= f.budgetMaxInr!);
@@ -345,7 +351,22 @@ export function fakeData(): EngineData & {
     async bootstrapContext() {
       return { recentMessages: [], rejectedProjectIds: [], turnIndex: 1 };
     },
-    async geoAreasInRegion(_region) {
+    async geoAreasInRegion(region) {
+      const key = region.toLowerCase();
+      // Bangalore-side empty localities → nearby served corridors (LI).
+      if (
+        key.includes('jayanagar') ||
+        key.includes('whitefield') ||
+        key.includes('yelahanka') ||
+        key.includes('bangalore') ||
+        key.includes('bengaluru')
+      ) {
+        return [
+          { name: 'North Bangalore', distanceKm: 12 },
+          { name: 'Whitefield', distanceKm: 15 },
+          { name: 'Devanahalli', distanceKm: 18 },
+        ];
+      }
       return [{ name: 'Sakleshpur', distanceKm: 0 }];
     },
     async resolveLocation(text) {
@@ -376,6 +397,7 @@ export function fakeData(): EngineData & {
       const key = text.trim().toLowerCase();
       if (key.includes('yelahanka')) return { lat: 13.1007, lng: 77.5963 };
       if (key.includes('whitefield')) return { lat: 12.969, lng: 77.749 };
+      if (key.includes('jayanagar')) return { lat: 12.9308, lng: 77.5838 };
       return null;
     },
     async projectCoords(_builderId) {
