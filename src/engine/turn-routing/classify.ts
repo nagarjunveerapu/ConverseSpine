@@ -86,7 +86,7 @@ interface EmbedderOutcome {
   /** Telemetry only: the ranked candidates behind the bind. The bind itself
    *  still uses matches[0]; this exposes whether a SECOND distinct intent is
    *  present, which is what a multi-intent turn looks like. */
-  top_matches?: { kind: string; score: number }[];
+  top_matches?: { id?: string; kind: string; score: number }[];
 }
 
 /** Exported for the embedder-only experiment: run the SAME bind the engine uses,
@@ -94,7 +94,7 @@ interface EmbedderOutcome {
 export async function embedderRouting(
   env: Pick<
     Env,
-    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU'
+    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'FAILURE_ROUTING'
   >,
   input: TurnRoutingInput,
 ): Promise<EmbedderOutcome> {
@@ -114,7 +114,7 @@ export async function embedderRouting(
   // SIL Phase 0 — keep every match (deduped by id: the global query re-returns
   // scoped rows) so the top-1/top-2 margin is measurable, not just the winner.
   const seen = new Set<string>();
-  const matches: { kind: string; score: number; facet: string }[] = [];
+  const matches: { id?: string; kind: string; score: number; facet: string }[] = [];
   let queryOk = false;
 
   for (const scope of scopes) {
@@ -129,6 +129,7 @@ export async function embedderRouting(
       if (m.id && seen.has(m.id)) continue;
       if (m.id) seen.add(m.id);
       matches.push({
+        ...(m.id ? { id: m.id } : {}),
         kind:
           m.metadata && typeof m.metadata.intent_kind === 'string'
             ? (m.metadata.intent_kind as string)
@@ -153,7 +154,9 @@ export async function embedderRouting(
     ...(top ? { top_kind: top.kind, top_score: top.score } : {}),
     ...(top?.facet ? { facet: top.facet } : {}),
     ...(top && second ? { margin: top.score - second.score } : {}),
-    top_matches: matches.slice(0, 5).map((m) => ({ kind: m.kind, score: m.score })),
+    top_matches: matches
+      .slice(0, 5)
+      .map((m) => ({ ...(m.id ? { id: m.id } : {}), kind: m.kind, score: m.score })),
   };
 
   // SIL Phase 0 — record WHY a fired embedder produced no bind, so an empty/stale
@@ -165,7 +168,13 @@ export async function embedderRouting(
   if (top.score < tau) {
     return { result: null, ...telemetry, miss_reason: 'below_tau' };
   }
-  const result = mapIntentToRouting(top.kind, top.score, input, tau);
+  const result = mapIntentToRouting(
+    top.kind,
+    top.score,
+    input,
+    tau,
+    env.FAILURE_ROUTING === 'true',
+  );
   if (!result) {
     return { result: null, ...telemetry, miss_reason: 'unmapped_kind' };
   }
@@ -236,7 +245,7 @@ function stateDependentRouting(input: TurnRoutingInput): TurnRoutingResult | nul
  */
 export async function classifyTurnRouting(
   env:
-    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST'>
+    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING'>
     | undefined,
   input: TurnRoutingInput,
 ): Promise<TurnRoutingResult> {

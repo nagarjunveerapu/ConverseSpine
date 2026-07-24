@@ -1,5 +1,5 @@
 import type { AnswerTopic } from '../types.js';
-import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
+import type { PolicyClass, TurnRoutingInput, TurnRoutingResult } from './types.js';
 
 export const ROUTING_TAU_HIGH = 0.78;
 export const ROUTING_TAU_LOW = 0.62;
@@ -40,6 +40,21 @@ const ANSWER_INTENTS = new Set([
   'ask_investment_return',
 ]);
 
+const POLICY_INTENTS: Readonly<
+  Record<string, { policy: PolicyClass; subject: string }>
+> = Object.freeze({
+  policy_prohibited: { policy: 'prohibited', subject: 'protected_identity_filter' },
+  policy_investment_metric: { policy: 'out_of_scope', subject: 'investment_return' },
+  policy_internal_instructions: {
+    policy: 'out_of_scope',
+    subject: 'internal_instructions',
+  },
+  definition_bhk: { policy: 'definition', subject: 'bhk' },
+  definition_ready_to_move: { policy: 'definition', subject: 'ready_to_move' },
+  about_ai: { policy: 'about_us', subject: 'identity' },
+  about_data: { policy: 'about_us', subject: 'data_collection' },
+});
+
 export function hasVisitRoutingContext(input: TurnRoutingInput): boolean {
   return (
     input.phase === 'visit' ||
@@ -50,7 +65,7 @@ export function hasVisitRoutingContext(input: TurnRoutingInput): boolean {
 }
 
 function projectId(input: TurnRoutingInput): string | undefined {
-  return input.named_project_ids[0];
+  return input.named_project_ids?.[0];
 }
 
 /** Map Vectorize intent_kind + score to coarse routing (RTI-3B enforce). */
@@ -62,6 +77,7 @@ export function mapIntentToRouting(
    *  value; a projected deployment passes its own calibrated tau, because a
    *  cosine of 0.78 means different things in different geometries. */
   tau: number = ROUTING_TAU_HIGH,
+  failureRouting = false,
 ): TurnRoutingResult | null {
   if (score < tau) return null;
 
@@ -72,6 +88,22 @@ export function mapIntentToRouting(
     embedder_score: score,
     ...(pid ? { project_id: pid } : {}),
   };
+
+  if (failureRouting) {
+    const policyIntent =
+      POLICY_INTENTS[kind] ??
+      (kind === 'negotiate_price'
+        ? { policy: 'out_of_scope' as const, subject: 'discount' }
+        : undefined);
+    if (policyIntent) {
+      return {
+        routing: 'unsupported',
+        policy: policyIntent.policy,
+        subject: policyIntent.subject,
+        ...base,
+      };
+    }
+  }
 
   if (kind === 'book_visit') {
     return { routing: 'visit_schedule_stop', ...base };
@@ -104,3 +136,4 @@ export function mapIntentToRouting(
 /** The kinds INTENT_TO_TOPIC already owns. Exported so the intent-authority
  *  table can be tested for overlap — one owner per kind, enforced, not hoped. */
 export const INTENT_TO_TOPIC_KEYS: readonly string[] = Object.keys(INTENT_TO_TOPIC);
+export const POLICY_INTENT_KEYS: readonly string[] = Object.keys(POLICY_INTENTS);

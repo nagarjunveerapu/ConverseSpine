@@ -1,0 +1,31 @@
+[
+  {
+    "id": "FV-P3-INVALID-LOCALITY",
+    "title": "Failure Phase 3: unresolved locality never reaches durable state",
+    "builder_id": "lokations",
+    "tags": ["failure-value", "phase3", "geography"],
+    "turns": [
+      {
+        "text": "Buy, 70 lakh, 2 BHK",
+        "assert": {
+          "reply_includes": ["couldn't identify that location"],
+          "reply_excludes": ["here's what fits", "Buy is"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FV-P3-DECLARED-TYPE",
+    "title": "Failure Phase 3: declared project type is never relaxed",
+    "builder_id": "brigade-group",
+    "tags": ["failure-value", "phase3", "relaxation"],
+    "turns": [
+      {
+        "text": "show me plotted projects in North Bangalore under 70 lakh",
+        "assert": {
+          "reply_excludes": ["Eldorado", "Cornerstone", "apartment"]
+        }
+      }
+    ]
+  }
+]

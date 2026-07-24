@@ -767,6 +767,9 @@ export class NayaDeskClient {
     lat?: number;
     lng?: number;
     radius_km?: number;
+    area_name?: string;
+    source?: 'area_registry' | 'cache' | 'geocoder';
+    reason?: 'geocoder_not_configured' | 'no_geocode_result';
   }> {
     return this.call('POST', '/api/engine/geo/resolve', { text });
   }

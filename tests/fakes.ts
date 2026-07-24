@@ -338,6 +338,27 @@ export function fakeData(): EngineData & {
     async geoAreasInRegion(_region) {
       return [{ name: 'Sakleshpur', distanceKm: 0 }];
     },
+    async resolveLocation(text) {
+      const canonical = text.trim();
+      const key = canonical.toLowerCase();
+      const geocoded: Record<string, string> = {
+        whitefield: 'Whitefield',
+        yelahanka: 'Yelahanka',
+        'north bangalore': 'North Bangalore',
+      };
+      if (geocoded[key]) {
+        return { status: 'resolved', canonical: geocoded[key], lat: 12.97, lng: 77.59 };
+      }
+      const known = LOKATIONS.find(
+        (p) =>
+          p.market.toLowerCase().includes(key) ||
+          key.includes(p.market.toLowerCase()),
+      );
+      if (known) {
+        return { status: 'resolved', canonical: known.market, lat: 12.97, lng: 77.59 };
+      }
+      return { status: 'unresolved' };
+    },
     async resolveGeo(text) {
       const key = text.trim().toLowerCase();
       if (key.includes('yelahanka')) return { lat: 13.1007, lng: 77.5963 };

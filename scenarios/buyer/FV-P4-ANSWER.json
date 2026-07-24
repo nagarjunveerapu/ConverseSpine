@@ -1,0 +1,34 @@
+[
+  {
+    "id": "FV-P4-CARPET",
+    "title": "Failure Phase 4: carpet-area miss cannot substitute pricing rows",
+    "builder_id": "brigade-group",
+    "tags": ["failure-value", "phase4", "answer-contract"],
+    "turns": [
+      { "text": "Brigade Eldorado", "assert": { "reply_includes": ["Eldorado"] } },
+      {
+        "text": "what is the carpet area?",
+        "assert": {
+          "reply_includes": ["don't have carpet area on file"],
+          "reply_excludes": ["stamp duty", "registration", "base price"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FV-P4-PARTIAL",
+    "title": "Failure Phase 4: supported and missing facts share one honest answer",
+    "builder_id": "brigade-group",
+    "tags": ["failure-value", "phase4", "partial-answer"],
+    "turns": [
+      { "text": "Brigade Eldorado", "assert": { "reply_includes": ["Eldorado"] } },
+      {
+        "text": "what is the RERA number and carpet area?",
+        "assert": {
+          "reply_includes": ["don't have carpet area on file", "PRM/KA/RERA"],
+          "reply_excludes": ["stamp duty", "registration"]
+        }
+      }
+    ]
+  }
+]

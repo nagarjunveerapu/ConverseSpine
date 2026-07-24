@@ -10,9 +10,16 @@ export type TurnRoutingKind =
   | 'visit_reschedule'
   | 'search_pivot'
   | 'compare_offered'
+  | 'unsupported'
   | 'defer';
 
 export type TurnRoutingConfidence = 'rule' | 'embedder' | 'llm' | 'abstain';
+export type PolicyClass =
+  | 'prohibited'
+  | 'out_of_scope'
+  | 'definition'
+  | 'about_us'
+  | 'unknown';
 
 /**
  * SIL Phase 0 — per-turn semantic-layer telemetry (SEMANTIC_INTENT_LAYER_LLD §3.3).
@@ -23,7 +30,15 @@ export type TurnRoutingConfidence = 'rule' | 'embedder' | 'llm' | 'abstain';
 export interface RoutingBindTelemetry {
   bind_source: 'regex' | 'embed_intent' | 'none';
   embed_fired: boolean;
-  embed_gate?: 'visit_rule' | 'speech_act' | 'rule_bound' | 'act_known' | 'no_env' | 'embed_error' | 'embed_declined' | 'chip';
+  embed_gate?:
+    | 'visit_rule'
+    | 'speech_act'
+    | 'rule_bound'
+    | 'act_known'
+    | 'no_env'
+    | 'embed_error'
+    | 'embed_declined'
+    | 'chip';
   /** When the embedder fired but produced no bind, WHY: distinguishes an empty/stale
    *  index (no_match/query_error), a low-confidence result (below_tau), and an
    *  unroutable intent_kind (unmapped_kind). */
@@ -48,6 +63,8 @@ export interface TurnRoutingResult {
    *  human attached at teach time. Consumed at compose (fetchAnswer) to pin
    *  the exact FAQ row on the focused project. */
   embedder_facet?: string;
+  policy?: PolicyClass;
+  subject?: string;
   abstain_reason?: string;
   bind?: RoutingBindTelemetry;
 }
@@ -70,6 +87,10 @@ export interface TurnRoutingInput {
   transition?: Extracted['transition'];
   /** SA-4: resolved speech act — routing projects from this when known. */
   speech_act?: Extracted['speechAct'];
+  /** Structured extraction signals used only to suppress false unknown recovery. */
+  smalltalk?: boolean;
+  affirm?: boolean;
+  decline?: boolean;
   /**
    * How this turn arrived. A chip tap is a BUTTON with a constant payload, not
    * ambiguous language: its meaning is already known at the source, so the
@@ -109,6 +130,9 @@ export function buildTurnRoutingInput(
     ...(ex.askTopics?.length ? { ask_topics: ex.askTopics } : {}),
     named_project_ids: (ex.namedProjects ?? []).map((p) => p.projectId),
     ...(ex.speechAct ? { speech_act: ex.speechAct } : {}),
+    ...(ex.smalltalk ? { smalltalk: true } : {}),
+    ...(ex.affirm ? { affirm: true } : {}),
+    ...(ex.decline ? { decline: true } : {}),
     ...(inputSource ? { input_source: inputSource } : {}),
   };
 }

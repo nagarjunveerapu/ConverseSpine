@@ -32,7 +32,7 @@ export interface SilProbeResult {
   routing: string;
   /** Ranked candidates behind the bind. A distinct SECOND intent above tau is
    *  what a multi-intent turn looks like, and it is invisible from top_kind. */
-  top_matches?: { kind: string; score: number }[];
+  top_matches?: { id?: string; kind: string; score: number }[];
 }
 
 export async function runSilProbe(

@@ -68,6 +68,12 @@ LOCAL_TURN_LOG = "on"
 FAILURE_LOG = "true"
 # Failure-as-a-value Phase 1: EMI authority + destructive-intent disambiguation.
 FAILURE_TOOLS = "true"
+# Failure-as-a-value Phase 2: embedding-routed policy and definition outcomes.
+FAILURE_ROUTING = "true"
+# Failure-as-a-value Phase 3: geography authority + non-persistent relaxation.
+FAILURE_SEARCH = "true"
+# Failure-as-a-value Phase 4: required facts + partial no-data outcomes.
+FAILURE_ANSWER = "true"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"

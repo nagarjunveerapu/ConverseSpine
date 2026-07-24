@@ -37,6 +37,7 @@ export function deriveShadowFailures(input: {
   if (evidence.failure) {
     failures.push(evidence.failure);
   }
+  failures.push(...(evidence.notices ?? []));
 
   if (relaxed.size) {
     failures.push({

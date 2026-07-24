@@ -20,6 +20,8 @@ import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
 import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../engine/phases/visit.js';
 import type { AdvisorTurnRequest, AdvisorTurnResponse } from './types.js';
 import { sessionToConvId, sessionToPhone } from './session.js';
+import { resolveDurableLocation } from '../engine/geography-authority.js';
+import type { Failure } from '../engine/outcome.js';
 
 const DEFAULT_ADVISOR_BUILDER = 'naya-advisor';
 
@@ -57,6 +59,7 @@ export async function handleAdvisorTurn(
 
   let preferenceClears: import('../engine/turn-intent/types.js').PatchClearKey[] | undefined;
   let ingressFilledSlots: import('../engine/ingress.js').IngressSlotKey[] | undefined;
+  let ingressFailure: Failure | undefined;
 
   const projectId = body.project_id?.trim();
   const projectName = body.project_name?.trim();
@@ -81,17 +84,46 @@ export async function handleAdvisorTurn(
       ? advisorPrefsDelta(existing.advisorPrefsSnapshot, body.preferences)
       : body.preferences;
     if (Object.keys(effectivePrefs).length > 0) {
-      preferenceClears = preferenceClearsFromPatch(effectivePrefs);
-      ingressFilledSlots = ingressFilledSlotsFromPreferences(effectivePrefs);
+      const acceptedPrefs = { ...effectivePrefs };
+      if (rt.engine.failureSearch && acceptedPrefs.location?.trim()) {
+        const resolved = await resolveDurableLocation(
+          acceptedPrefs.location,
+          rt.engine.data,
+        );
+        if (!resolved.ok) {
+          ingressFailure = resolved.failure;
+          delete acceptedPrefs.location;
+        } else {
+          acceptedPrefs.location = resolved.value.value;
+        }
+      }
+      preferenceClears = preferenceClearsFromPatch(acceptedPrefs);
+      ingressFilledSlots = ingressFilledSlotsFromPreferences(acceptedPrefs);
       existing = {
         ...existing,
-        constraints: mergeAdvisorPreferences(existing.constraints, effectivePrefs),
+        constraints: mergeAdvisorPreferences(existing.constraints, acceptedPrefs),
+        constraintAuthority: {
+          ...(existing.constraintAuthority ?? {}),
+          ...(acceptedPrefs.location?.trim()
+            ? { location: 'declared' as const }
+            : {}),
+          ...(acceptedPrefs.property_type?.trim()
+            ? { propertyType: 'declared' as const }
+            : {}),
+          ...(acceptedPrefs.bhk?.trim() ? { bhk: 'declared' as const } : {}),
+          ...(acceptedPrefs.budget?.trim()
+            ? { budget: 'declared' as const }
+            : {}),
+        },
         discover: { ...existing.discover, oriented: true },
-        advisorPrefsSnapshot: advisorPrefsSnapshot(body.preferences, existing.advisorPrefsSnapshot),
+        advisorPrefsSnapshot: advisorPrefsSnapshot(
+          acceptedPrefs,
+          existing.advisorPrefsSnapshot,
+        ),
       };
       await rt.engine.store.save(existing);
     }
-    if (!inRecovery) {
+    if (!inRecovery && !ingressFailure) {
 
       // Trade-off Advisor: one-time priority ask, exactly between brief-merge
       // and the first shortlist. Advisor-door pre-turn (same class as the
@@ -189,6 +221,7 @@ export async function handleAdvisorTurn(
         action_id: body.action_id?.trim(),
         preferenceClears,
         ingressFilledSlots,
+        ingressFailure,
         briefExtract: body.brief_extract === true,
       },
       rt.engine,

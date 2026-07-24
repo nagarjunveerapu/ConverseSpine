@@ -14,6 +14,12 @@ import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
 import { buildLedgerWritePayload } from './ledger-write.js';
 import { deriveShadowFailures } from './failure-shadow.js';
+import { resolveDurableLocation } from './geography-authority.js';
+import { searchWithAuthorityRelaxation } from './search-outcome.js';
+import {
+  enforceAnswerContract,
+  withAnswerRequirements,
+} from './answer-contract.js';
 import type { Failure } from './outcome.js';
 import {
   contactScopeFailure,
@@ -86,7 +92,11 @@ import {
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
-import { applyIntentAuthority } from './turn-routing/intent-authority.js';
+import {
+  applyIntentAuthority,
+  shouldSurfaceUnknownIntent,
+} from './turn-routing/intent-authority.js';
+import { failureFromUnsupportedRouting } from './turn-routing/unsupported-outcome.js';
 import { silDecision } from '../understanding/capture.js';
 import { buildTurnRoutingInput, type TurnRoutingResult } from './turn-routing/types.js';
 import type { PatchClearKey, TurnIntentChannel } from './turn-intent/types.js';
@@ -118,6 +128,8 @@ export interface EngineTurnInput {
   preferenceClears?: PatchClearKey[];
   /** Slots pre-filled by advisor UI this turn — extract skips re-parsing them. */
   ingressFilledSlots?: IngressSlotKey[];
+  /** A channel writer rejected a value at the shared authority boundary. */
+  ingressFailure?: Failure;
   /**
    * Brief-phase free text: run the full extraction funnel and merge constraints,
    * then STOP — no goal selection, search, or compose. The merged constraints
@@ -197,7 +209,46 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  if (deps.failureSearch && input.ingressFailure) {
+    const reply = speakFailure(input.ingressFailure);
+    state = { ...state, turnCount: state.turnCount + 1 };
+    await deps.store.save(state);
+    await deps.crm
+      .appendMessage(nd || input.convId, 'inbound', input.text)
+      .catch(() => {});
+    await deps.crm
+      .appendMessage(nd || input.convId, 'outbound', reply, {
+        replyKey: `failure:${input.ingressFailure.subject}`,
+      })
+      .catch(() => {});
+    await appendEarlyFailureLedger({
+      deps,
+      nd: nd || input.convId,
+      input,
+      state,
+      ex: { constraints: {} },
+      extractProvenance: undefined,
+      inputSource,
+      reply,
+      failure: input.ingressFailure,
+    });
+    return {
+      reply,
+      state,
+      debug: withIngressDebug(
+        {
+          phase: state.phase,
+          goal: { kind: 'clarify_intent' },
+          tools: [],
+          grounding: 'pass',
+        },
+        inputSource,
+      ),
+    };
+  }
+
   const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
+  const durableConstraintsBeforeTurn = { ...state.constraints };
   const ingressFilled = new Set<IngressSlotKey>(input.ingressFilledSlots ?? []);
   const uiModeHint = state.phase === 'focused' ? focusedUiMode(state) : recoveryUiMode(state);
   const clearedKeys = new Set<PatchClearKey>(input.preferenceClears ?? []);
@@ -539,9 +590,166 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ex = { ...ex, askTopics: [...(ex.askTopics ?? []), 'location'] };
   }
 
+  let prevalidatedCatalogHit:
+    | { projectId: string; name: string }
+    | undefined;
+  if (
+    deps.failureSearch &&
+    ex.constraints.location &&
+    !state.stopConfirmPending &&
+    !(ex.namedProjects?.length)
+  ) {
+    const names = await deps.data
+      .projectNames(state.builderId)
+      .catch(() => [] as Array<{ projectId: string; name: string }>);
+    prevalidatedCatalogHit =
+      resolveCatalogNameHit(trimmedText, names) ?? undefined;
+    if (prevalidatedCatalogHit) {
+      ex = {
+        ...ex,
+        namedProjects: [prevalidatedCatalogHit],
+      };
+    }
+  }
+
+  // Route the final extracted turn before geography persistence when Phase 3
+  // is live. This does not mutate state; it lets semantic owners reject a
+  // spurious location capture before the Desk is asked to validate it.
+  let precomputedRouting: TurnRoutingResult | undefined;
+  if (deps.failureSearch) {
+    precomputedRouting = await classifyTurnRouting(
+      deps.routingEnv,
+      buildTurnRoutingInput(state, ex, trimmedText, inputSource),
+    );
+  }
+  if (ex.constraints.location) {
+    const namedProjectEcho =
+      ex.namedProjects?.some((project) =>
+        locationEchoesProjectName(ex.constraints.location!, [project.name]),
+      ) ?? false;
+    if (
+      namedProjectEcho ||
+      state.stopConfirmPending ||
+      precomputedRouting?.routing === 'unsupported'
+    ) {
+      const { location: _ignored, ...constraints } = ex.constraints;
+      ex = { ...ex, constraints };
+    }
+  }
+
+  let locationValidated = false;
+  if (deps.failureSearch) {
+    const locationCandidate =
+      ex.constraints.location ??
+      (state.constraints.location !== durableConstraintsBeforeTurn.location
+        ? state.constraints.location
+        : undefined);
+    if (locationCandidate) {
+      const resolved = await resolveDurableLocation(locationCandidate, deps.data);
+      if (!resolved.ok) {
+        const reply = speakFailure(resolved.failure);
+        state = {
+          ...state,
+          constraints: {
+            ...state.constraints,
+            ...(durableConstraintsBeforeTurn.location
+              ? { location: durableConstraintsBeforeTurn.location }
+              : {}),
+          },
+          turnCount: state.turnCount + 1,
+        };
+        if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
+        await deps.store.save(state);
+        await deps.crm
+          .appendMessage(nd || input.convId, 'inbound', input.text)
+          .catch(() => {});
+        await deps.crm
+          .appendMessage(nd || input.convId, 'outbound', reply, {
+            replyKey: 'failure:locality',
+          })
+          .catch(() => {});
+        await appendEarlyFailureLedger({
+          deps,
+          nd: nd || input.convId,
+          input,
+          state,
+          ex,
+          extractProvenance,
+          inputSource,
+          reply,
+          failure: resolved.failure,
+        });
+        return {
+          reply,
+          state,
+          debug: withIngressDebug(
+            {
+              phase: state.phase,
+              goal: { kind: 'clarify_intent' },
+              tools: [],
+              grounding: 'pass',
+            },
+            inputSource,
+          ),
+        };
+      }
+      locationValidated = true;
+      if (ex.constraints.location) {
+        ex = {
+          ...ex,
+          constraints: {
+            ...ex.constraints,
+            location: resolved.value.value,
+          },
+        };
+      } else {
+        state = {
+          ...state,
+          constraints: {
+            ...state.constraints,
+            location: resolved.value.value,
+          },
+          constraintAuthority: {
+            ...(state.constraintAuthority ?? {}),
+            location: 'declared',
+          },
+        };
+      }
+    }
+  }
+
   const prevConstraints = state.constraints;
   const prevLoc = state.constraints.location;
-  state = applyExtracted(state, ex, clearedKeys);
+  state = applyExtracted(state, ex, clearedKeys, {
+    locationValidated,
+    authority: {
+      ...(ex.constraints.location ? { location: 'declared' as const } : {}),
+      ...(ex.constraints.propertyType
+        ? {
+            propertyType:
+              detectPropertyTypes(trimmedText) ||
+              ingressFilled.has('propertyType')
+                ? ('declared' as const)
+                : ('inferred' as const),
+          }
+        : state.constraints.propertyType !==
+            durableConstraintsBeforeTurn.propertyType
+          ? { propertyType: 'declared' as const }
+        : {}),
+      ...(ex.constraints.bhk ||
+      state.constraints.bhk !== durableConstraintsBeforeTurn.bhk
+        ? { bhk: 'declared' as const }
+        : {}),
+      ...(ex.constraints.budgetMaxInr !== undefined ||
+      ex.constraints.budgetMinInr !== undefined ||
+      state.constraints.budgetMaxInr !==
+        durableConstraintsBeforeTurn.budgetMaxInr ||
+      state.constraints.budgetMinInr !==
+        durableConstraintsBeforeTurn.budgetMinInr
+        ? { budget: 'declared' as const }
+        : {}),
+    },
+  });
 
   // W2: constraint pivot invalidates stale shortlist — no catalog names; delta-driven.
   if (
@@ -576,7 +784,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   }
 
-  const routing = await classifyTurnRouting(deps.routingEnv, buildTurnRoutingInput(state, ex, trimmedText, inputSource));
+  let routing =
+    precomputedRouting ??
+    (await classifyTurnRouting(
+      deps.routingEnv,
+      buildTurnRoutingInput(state, ex, trimmedText, inputSource),
+    ));
   // SIL Phase 0 — surface the semantic-layer verdict per turn in the debug
   // channel that survives the /chat route re-shape (LLD §3.3).
   if (extractProvenance && routing.bind) {
@@ -588,8 +801,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // authority. Placed here deliberately: after routing, and BEFORE the ex.stop
   // branch below, so an embedding-recognised opt-out reuses the existing
   // confirm-before-delete gate instead of inventing a second destructive path.
+  let authorityClaimed = false;
   if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
     const claimed = applyIntentAuthority(ex, routing);
+    authorityClaimed = claimed.wrote.length > 0;
     if (claimed.wrote.length) {
       ex = claimed.ex;
       // Stamp the slot, not a synthetic key, so the ledger's existing
@@ -599,6 +814,25 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       }
     }
   }
+  if (
+    deps.failureRouting &&
+    !state.stopConfirmPending &&
+    shouldSurfaceUnknownIntent(ex, routing, authorityClaimed)
+  ) {
+    routing = {
+      routing: 'unsupported',
+      confidence: 'abstain',
+      policy: 'unknown',
+      subject: 'unknown_request',
+      ...(routing.embedder_intent_kind
+        ? { embedder_intent_kind: routing.embedder_intent_kind }
+        : {}),
+      ...(routing.embedder_score !== undefined
+        ? { embedder_score: routing.embedder_score }
+        : {}),
+      ...(routing.bind ? { bind: routing.bind } : {}),
+    };
+  }
 
   state = {
     ...state,
@@ -607,6 +841,47 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       lastRouting: routing,
     },
   };
+
+  const unsupportedFailure = deps.failureRouting
+    ? failureFromUnsupportedRouting(routing)
+    : undefined;
+  if (unsupportedFailure) {
+    const reply = speakFailure(unsupportedFailure);
+    state = { ...state, turnCount: state.turnCount + 1 };
+    await deps.store.save(state);
+    await deps.crm
+      .appendMessage(nd || input.convId, 'inbound', input.text)
+      .catch(() => {});
+    await deps.crm
+      .appendMessage(nd || input.convId, 'outbound', reply, {
+        replyKey: `failure:${unsupportedFailure.subject}`,
+      })
+      .catch(() => {});
+    await appendEarlyFailureLedger({
+      deps,
+      nd: nd || input.convId,
+      input,
+      state,
+      ex,
+      extractProvenance,
+      inputSource,
+      reply,
+      failure: unsupportedFailure,
+    });
+    return {
+      reply,
+      state,
+      debug: withIngressDebug(
+        {
+          phase: state.phase,
+          goal: { kind: 'clarify_intent' },
+          tools: [],
+          grounding: 'pass',
+        },
+        inputSource,
+      ),
+    };
+  }
 
   const locationBroaden =
     !isDetailAskTurn(ex) &&
@@ -961,8 +1236,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     (ex.namedProjects?.length ?? 0) < 2 &&
     (ex.isQuestion || isDetailAskTurn(ex) || /^(?:is|are|does|do|what|which|how|can|tell me)\b/i.test(trimmedText));
   if (coldNameEligible) {
-    const names = await deps.data.projectNames(state.builderId).catch(() => [] as Array<{ projectId: string; name: string }>);
-    const hit = resolveCatalogNameHit(trimmedText, names);
+    const hit =
+      prevalidatedCatalogHit ??
+      resolveCatalogNameHit(
+        trimmedText,
+        await deps.data
+          .projectNames(state.builderId)
+          .catch(() => [] as Array<{ projectId: string; name: string }>),
+      );
     goal = hit ? discover.commitPickWithFollowUp(hit, ex) : await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
   } else {
     goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
@@ -987,6 +1268,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (!namedOk) {
       goal = { ...answerGoal, projectId: state.focus.projectId };
     }
+  }
+  if (deps.failureAnswer && goal.kind === 'answer') {
+    goal = withAnswerRequirements(goal, trimmedText);
   }
 
   let evidence: EvidenceSet = { tools: [] };
@@ -1045,12 +1329,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     await deps.crm.commitProject(nd, goal.projectId).catch(() => {});
     if (goal.followUp || goal.followUpTopics?.length) {
       state = commitTo(state, goal.projectId, goal.projectName);
-      const answerGoal: Extract<TurnGoal, { kind: 'answer' }> = {
+      const rawAnswerGoal: Extract<TurnGoal, { kind: 'answer' }> = {
         kind: 'answer',
         topic: goal.followUp ?? goal.followUpTopics![0]!,
         projectId: goal.projectId,
         ...(goal.followUpTopics?.length ? { topics: goal.followUpTopics } : {}),
       };
+      const answerGoal = deps.failureAnswer
+        ? withAnswerRequirements(rawAnswerGoal, trimmedText)
+        : rawAnswerGoal;
       evidence = await fetchAnswer(answerGoal, state, ex, deps, nd, trimmedText);
       goal = answerGoal;
     }
@@ -1089,6 +1376,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     evidence = await fetchVisitRecall(state, deps, nd);
   } else {
     evidence = await fetchEvidence(goal, state, deps);
+  }
+  if (deps.failureAnswer && goal.kind === 'answer') {
+    evidence = enforceAnswerContract(goal, evidence);
   }
 
   const alreadyShownSameSet = evidence.matches ? isSameAsLast(state, evidence.matches) : false;
@@ -1175,6 +1465,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       ...(terminalFailure.subject === 'emi.principal'
         ? { subjectLabel: 'a loan amount (for example, ₹85 lakh)' }
         : {}),
+      ...(terminalFailure.subject === 'budget' &&
+      state.constraints.budgetMaxInr !== undefined
+        ? { buyerValue: formatInr(state.constraints.budgetMaxInr) }
+        : {}),
+      alternatives: failureAlternatives(terminalFailure, evidence),
     });
   } else if (templateLocked) {
     draft = fallbackReply(req);
@@ -1195,7 +1490,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const stripped = stripComposerDirectives(stripBanned(draft));
   let reply = stripped.trim() ? stripped : fallbackReply(req);
   let grounding: TurnDebug['grounding'] = 'pass';
-  const g1 = checkGrounding(reply, evidence, input.text);
+  const g1 = terminalFailure
+    ? { grounded: true, unbacked: [] }
+    : checkGrounding(reply, evidence, input.text);
   // Placeholder-leak guard (dev: "[real starting point]" reached a buyer):
   // an LLM draft containing bracketed template-speak is treated exactly like
   // a grounding failure — one repair retry, then the template floor.
@@ -1235,7 +1532,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       reply = fallbackReply(req); // the floor never moves
       grounding = 'repaired';
     }
-  } else if (needsStructuredRepair(goal, evidence, reply, disclosedForCompose, input.text)) {
+  } else if (
+    !terminalFailure &&
+    needsStructuredRepair(goal, evidence, reply, disclosedForCompose, input.text)
+  ) {
     // Structured repair is topic-shape enforcement — the template IS the
     // intended output; no retry.
     reply = fallbackReply(req);
@@ -1274,6 +1574,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       repeat_guard = sameLine(floor, state.lastReply) ? 'still_identical' : 'template';
       if (repeat_guard === 'template') reply = floor;
     }
+  }
+
+  if (evidence.notices?.length) {
+    const failureCopy = evidence.notices
+      .map((failure) =>
+        speakFailure(failure, {
+          alternatives: failureAlternatives(failure, evidence),
+        }),
+      )
+      .join(' ');
+    reply = `${failureCopy} ${reply}`.trim();
   }
 
   if (goal.kind === 'visit_booked') {
@@ -1393,7 +1704,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       .catch(() => false);
   }
 
-  const failures = deps.failureLog
+  const failures =
+    deps.failureLog || evidence.failure || evidence.notices?.length
     ? deriveShadowFailures({ goal, evidence, droppedLocation })
     : [];
 
@@ -1574,6 +1886,41 @@ async function fetchRecommend(
     if (prefs.askSizeSqft) filters = { ...filters, askSizeSqft: prefs.askSizeSqft };
   }
   let strictSearch = await searchWithFilters(deps, s.builderId, filters);
+
+  if (deps.failureSearch && strictSearch.matches.length === 0) {
+    const outcome = await searchWithAuthorityRelaxation({
+      filters,
+      constraints: s.constraints,
+      authority: s.constraintAuthority,
+      rejectedProjectIds: s.discover.rejectedProjectIds,
+      search: async (candidateFilters) => {
+        const result = await searchWithFilters(deps, s.builderId, candidateFilters);
+        return {
+          matches: rawToMatches(result.matches),
+          ...(result.recognizedLocations
+            ? { recognizedLocations: result.recognizedLocations }
+            : {}),
+        };
+      },
+    });
+    if (outcome.ok) {
+      return {
+        goal: base,
+        evidence: {
+          tools: ['search'],
+          matches: outcome.value.matches,
+          relaxed: outcome.value.relaxed,
+        },
+      };
+    }
+    return {
+      goal: base,
+      evidence: {
+        tools: ['search'],
+        failure: outcome.failure,
+      },
+    };
+  }
 
   // Provisional locality — the Desk is the locality authority (area registry +
   // catalog identity + geocoder). Zero matches AND none of the sent locations
@@ -2120,6 +2467,28 @@ async function fetchShortlistAnswer(
 function cleanShortlistFacetValue(v: string | undefined): string {
   const t = (v ?? '').trim();
   return t === '—' ? '' : t;
+}
+
+function failureAlternatives(
+  failure: Failure,
+  evidence: EvidenceSet,
+): string[] {
+  if (
+    failure.subject === 'carpet_area' ||
+    failure.subject === 'built_up_area'
+  ) {
+    return [
+      ...(evidence.units?.length ? ['the published configuration sizes'] : []),
+      ...(evidence.pricing || evidence.landedCost ? ['the cost sheet'] : []),
+    ];
+  }
+  if (failure.subject === 'flood_zone') {
+    return [
+      ...(evidence.detail?.reraNumber ? ['the RERA status'] : []),
+      ...(evidence.detail?.ecStatus ? ['the title and encumbrance status'] : []),
+    ];
+  }
+  return [];
 }
 
 async function fetchAnswer(

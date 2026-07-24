@@ -580,6 +580,22 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
       }
     },
 
+    async resolveLocation(text) {
+      try {
+        const r = await crm.resolveGeo(text);
+        if (!r.resolved) return { status: 'unresolved' };
+        if (r.lat == null || r.lng == null) return { status: 'unavailable' };
+        return {
+          status: 'resolved',
+          canonical: r.area_name?.trim() || text.trim(),
+          lat: r.lat,
+          lng: r.lng,
+        };
+      } catch {
+        return { status: 'unavailable' };
+      }
+    },
+
     async resolveGeo(text) {
       try {
         const r = await crm.resolveGeo(text);

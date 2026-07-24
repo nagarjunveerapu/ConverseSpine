@@ -13,6 +13,7 @@ import type {
 
 /** Buyer-facing noun for a relaxed dimension — never their raw value. */
 const RELAXED_NOUN: Record<RelaxedDimension, string> = {
+  type: 'that property type',
   area: 'that area',
   size: 'that size',
   budget: 'that budget',
@@ -114,6 +115,11 @@ export function renderComposePrompt(req: ComposeRequest): string {
   if (goal.kind === 'answer' && evidence.faqMiss?.keys.length) {
     lines.push(
       `The buyer asked about ${evidence.faqMiss.keys.join(', ')} but there is NO FAQ answer in EVIDENCE. Say you don't have that detail on file yet — offer pricing, a site visit, or another facet. Do NOT invent payment plans, yields, loan terms, or possession dates.`,
+    );
+  }
+  if (goal.kind === 'answer' && evidence.notices?.length) {
+    lines.push(
+      `These required facts are NOT in evidence and will be disclosed by the fixed failure speaker: ${evidence.notices.map((f) => f.subject).join(', ')}. Do NOT answer or substitute for them; answer only the supported required facts.`,
     );
   }
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
@@ -237,6 +243,9 @@ function renderEvidence(ev: EvidenceSet): string {
   }
   if (ev.faqMiss?.keys.length) {
     out.push(`faq miss (no Desk row): ${ev.faqMiss.keys.join(', ')}`);
+  }
+  if (ev.notices?.length) {
+    out.push(`required facts unavailable: ${ev.notices.map((f) => f.subject).join(', ')}`);
   }
   if (ev.location) {
     const l = ev.location;
@@ -447,6 +456,9 @@ export function fallbackReply(req: ComposeRequest): string {
         : 'I need a loan amount before I can calculate the EMI.';
     case 'answer': {
       const topics = goal.topics?.length ? goal.topics : [goal.topic];
+      const unmet = new Set(ev.notices?.map((failure) => failure.subject) ?? []);
+      const suppressPrice =
+        unmet.has('carpet_area') || unmet.has('built_up_area');
 
       // Over-answer fix — a primary "tell me about X" gets the compact card,
       // never the chunk assembly (and never FAQ text): sizes, one price band,
@@ -460,7 +472,7 @@ export function fallbackReply(req: ComposeRequest): string {
 
       const chunks: string[] = [];
 
-      if (topics.includes('price') && ev.pricing) {
+      if (topics.includes('price') && ev.pricing && !suppressPrice) {
         const p = ev.pricing;
         // AB-1 — an asked component ("club membership fee?") leads alone.
         const asked = componentsForAsk(context.buyerText ?? '', p.components);
@@ -468,7 +480,7 @@ export function fallbackReply(req: ComposeRequest): string {
         const parts = shown.map(formatPriceComponent).join(', ');
         chunks.push(`*Pricing — ${p.projectName}:* ${parts || formatStartingPrice(p.startingDisplay) || 'on file'}`);
       }
-      if (topics.includes('price') && ev.landedCost) {
+      if (topics.includes('price') && ev.landedCost && !suppressPrice) {
         chunks.push(landedCostLine(ev.landedCost));
       }
       if (topics.includes('property_type') && ev.detail?.projectType) {
@@ -540,10 +552,10 @@ export function fallbackReply(req: ComposeRequest): string {
         return `${chunks[0]}. Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`;
       }
 
-      if (goal.topic === 'price' && ev.landedCost) {
+      if (goal.topic === 'price' && ev.landedCost && !suppressPrice) {
         return `${landedCostLine(ev.landedCost)}. Want anything else on *${ev.landedCost.projectName}*, or a visit?`;
       }
-      if (goal.topic === 'price' && ev.pricing) {
+      if (goal.topic === 'price' && ev.pricing && !suppressPrice) {
         const p = ev.pricing;
         const asked = componentsForAsk(context.buyerText ?? '', p.components);
         const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 3);
