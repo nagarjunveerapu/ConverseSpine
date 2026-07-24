@@ -16,6 +16,7 @@ import { buildLedgerWritePayload } from './ledger-write.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
+import { collapseCoverageMarkets, coverageCoverBit } from './coverage-areas.js';
 import {
   enforceAnswerContract,
   withAnswerRequirements,
@@ -2059,10 +2060,8 @@ async function fetchRecommend(
     if (failure.subject === 'area') {
       const loc = s.constraints.location?.trim() || 'that area';
       const cat = await deps.data.catalog(s.builderId).catch(() => null);
-      const coverage = (cat?.microMarkets ?? []).filter(Boolean).slice(0, 5);
-      const coverBit = coverage.length
-        ? `I currently cover ${coverage.join(', ')}`
-        : 'I can help with areas where I have projects on file';
+      const coverage = collapseCoverageMarkets(cat?.microMarkets ?? []);
+      const coverBit = coverageCoverBit(cat?.microMarkets ?? []);
       return {
         goal: { kind: 'no_fit' },
         evidence: {
