@@ -28,6 +28,7 @@ import {
   resolvePendingStop,
 } from './optout-confirm.js';
 import { speakFailure } from './speak-failure.js';
+import { speakEducation } from './education.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
 import {
@@ -616,11 +617,22 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // is live. This does not mutate state; it lets semantic owners reject a
   // spurious location capture before the Desk is asked to validate it.
   let precomputedRouting: TurnRoutingResult | undefined;
+  let authorityClaimed = false;
   if (deps.failureSearch) {
     precomputedRouting = await classifyTurnRouting(
       deps.routingEnv,
       buildTurnRoutingInput(state, ex, trimmedText, inputSource),
     );
+    if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
+      const claimed = applyIntentAuthority(ex, precomputedRouting);
+      authorityClaimed = claimed.wrote.length > 0;
+      if (claimed.wrote.length) {
+        ex = claimed.ex;
+        for (const slot of claimed.wrote) {
+          if (extractProvenance) extractProvenance.fields[slot] = 'intent';
+        }
+      }
+    }
   }
   if (ex.constraints.location) {
     const namedProjectEcho =
@@ -630,6 +642,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (
       namedProjectEcho ||
       state.stopConfirmPending ||
+      ex.stop ||
+      ex.wantsHuman ||
       precomputedRouting?.routing === 'unsupported'
     ) {
       const { location: _ignored, ...constraints } = ex.constraints;
@@ -647,73 +661,108 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (locationCandidate) {
       const resolved = await resolveDurableLocation(locationCandidate, deps.data);
       if (!resolved.ok) {
-        const reply = speakFailure(resolved.failure);
-        state = {
-          ...state,
-          constraints: {
-            ...state.constraints,
-            ...(durableConstraintsBeforeTurn.location
-              ? { location: durableConstraintsBeforeTurn.location }
-              : {}),
-          },
-          turnCount: state.turnCount + 1,
-        };
-        if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
-        await deps.store.save(state);
-        await deps.crm
-          .appendMessage(nd || input.convId, 'inbound', input.text)
-          .catch(() => {});
-        await deps.crm
-          .appendMessage(nd || input.convId, 'outbound', reply, {
-            replyKey: 'failure:locality',
-          })
-          .catch(() => {});
-        await appendEarlyFailureLedger({
-          deps,
-          nd: nd || input.convId,
-          input,
-          state,
-          ex,
-          extractProvenance,
-          inputSource,
-          reply,
-          failure: resolved.failure,
-        });
-        return {
-          reply,
-          state,
-          debug: withIngressDebug(
-            {
-              phase: state.phase,
-              goal: { kind: 'clarify_intent' },
-              tools: [],
-              grounding: 'pass',
+        const locationOwnedByTurn =
+          precomputedRouting?.routing === 'search_pivot' ||
+          ex.speechAct === 'search' ||
+          ingressFilled.has('location') ||
+          Boolean(
+            ex.constraints.bhk ||
+              ex.constraints.propertyType ||
+              ex.constraints.budgetMaxInr !== undefined ||
+              ex.constraints.budgetMinInr !== undefined,
+          );
+        if (!locationOwnedByTurn) {
+          if (ex.constraints.location) {
+            const { location: _ignored, ...constraints } = ex.constraints;
+            ex = { ...ex, constraints };
+          }
+          if (
+            state.constraints.location !==
+            durableConstraintsBeforeTurn.location
+          ) {
+            state = {
+              ...state,
+              constraints: {
+                ...state.constraints,
+                ...(durableConstraintsBeforeTurn.location
+                  ? { location: durableConstraintsBeforeTurn.location }
+                  : {}),
+              },
+            };
+            if (!durableConstraintsBeforeTurn.location) {
+              delete state.constraints.location;
+            }
+          }
+        } else {
+          const reply = speakFailure(resolved.failure);
+          state = {
+            ...state,
+            constraints: {
+              ...state.constraints,
+              ...(durableConstraintsBeforeTurn.location
+                ? { location: durableConstraintsBeforeTurn.location }
+                : {}),
             },
+            turnCount: state.turnCount + 1,
+          };
+          if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
+          await deps.store.save(state);
+          await deps.crm
+            .appendMessage(nd || input.convId, 'inbound', input.text)
+            .catch(() => {});
+          await deps.crm
+            .appendMessage(nd || input.convId, 'outbound', reply, {
+              replyKey: 'failure:locality',
+            })
+            .catch(() => {});
+          await appendEarlyFailureLedger({
+            deps,
+            nd: nd || input.convId,
+            input,
+            state,
+            ex,
+            extractProvenance,
             inputSource,
-          ),
-        };
-      }
-      locationValidated = true;
-      if (ex.constraints.location) {
-        ex = {
-          ...ex,
-          constraints: {
-            ...ex.constraints,
-            location: resolved.value.value,
-          },
-        };
+            reply,
+            failure: resolved.failure,
+          });
+          return {
+            reply,
+            state,
+            debug: withIngressDebug(
+              {
+                phase: state.phase,
+                goal: { kind: 'clarify_intent' },
+                tools: [],
+                grounding: 'pass',
+              },
+              inputSource,
+            ),
+          };
+        }
       } else {
-        state = {
-          ...state,
-          constraints: {
-            ...state.constraints,
-            location: resolved.value.value,
-          },
-          constraintAuthority: {
-            ...(state.constraintAuthority ?? {}),
-            location: 'declared',
-          },
-        };
+        locationValidated = true;
+        if (ex.constraints.location) {
+          ex = {
+            ...ex,
+            constraints: {
+              ...ex.constraints,
+              location: resolved.value.value,
+            },
+          };
+        } else {
+          state = {
+            ...state,
+            constraints: {
+              ...state.constraints,
+              location: resolved.value.value,
+            },
+            constraintAuthority: {
+              ...(state.constraintAuthority ?? {}),
+              location: 'declared',
+            },
+          };
+        }
       }
     }
   }
@@ -801,10 +850,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // authority. Placed here deliberately: after routing, and BEFORE the ex.stop
   // branch below, so an embedding-recognised opt-out reuses the existing
   // confirm-before-delete gate instead of inventing a second destructive path.
-  let authorityClaimed = false;
   if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
     const claimed = applyIntentAuthority(ex, routing);
-    authorityClaimed = claimed.wrote.length > 0;
+    authorityClaimed = authorityClaimed || claimed.wrote.length > 0;
     if (claimed.wrote.length) {
       ex = claimed.ex;
       // Stamp the slot, not a synthetic key, so the ledger's existing
@@ -846,7 +894,60 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ? failureFromUnsupportedRouting(routing)
     : undefined;
   if (unsupportedFailure) {
-    const reply = speakFailure(unsupportedFailure);
+    // Education resolver lives ONLY inside Phase-2 definition ownership —
+    // not a second early owner before geo/search.
+    const definitionPolicy =
+      unsupportedFailure.kind === 'unsupported' &&
+      unsupportedFailure.detail &&
+      typeof unsupportedFailure.detail === 'object' &&
+      (unsupportedFailure.detail as { policy?: string }).policy === 'definition';
+
+    let reply: string;
+    let evidence: EvidenceSet = { tools: [], failure: unsupportedFailure };
+    let goal: TurnGoal = { kind: 'clarify_intent' };
+    let replyKey = `failure:${unsupportedFailure.subject}`;
+    let failureForLedger: Failure = unsupportedFailure;
+
+    if (definitionPolicy) {
+      const edu = await deps.data
+        .educationSearch(input.text, { jurisdiction: 'karnataka' })
+        .catch(() => null);
+      if (edu) {
+        evidence = { tools: ['educationSearch'], education: edu };
+        goal = {
+          kind: 'answer',
+          topic: 'education',
+          projectId: state.focus?.projectId ?? '',
+        };
+        reply = speakEducation(edu);
+        replyKey = `education:${edu.topicKey}`;
+        failureForLedger = unsupportedFailure; // routed as definition; KB answered
+      } else {
+        await deps.data
+          .enqueueEducationMiss({
+            buyerText: input.text,
+            conversationId: nd || input.convId,
+            suggestedTopic: unsupportedFailure.subject,
+            source: 'education_miss',
+          })
+          .catch(() => {});
+        failureForLedger = {
+          kind: 'no_data',
+          stage: 'tool',
+          subject: 'education_explainer',
+          detail: {
+            policy: 'definition',
+            routed_subject: unsupportedFailure.subject,
+          },
+        };
+        evidence = { tools: ['educationSearch'], failure: failureForLedger };
+        reply = speakFailure(failureForLedger);
+        replyKey = 'failure:education_explainer';
+      }
+    } else {
+      reply = speakFailure(unsupportedFailure);
+    }
+
     state = { ...state, turnCount: state.turnCount + 1 };
     await deps.store.save(state);
     await deps.crm
@@ -854,7 +955,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       .catch(() => {});
     await deps.crm
       .appendMessage(nd || input.convId, 'outbound', reply, {
-        replyKey: `failure:${unsupportedFailure.subject}`,
+        replyKey,
       })
       .catch(() => {});
     await appendEarlyFailureLedger({
@@ -866,7 +967,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       extractProvenance,
       inputSource,
       reply,
-      failure: unsupportedFailure,
+      failure: failureForLedger,
+      ...(evidence.education ? { evidence } : {}),
+      goal,
     });
     return {
       reply,
@@ -874,8 +977,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       debug: withIngressDebug(
         {
           phase: state.phase,
-          goal: { kind: 'clarify_intent' },
-          tools: [],
+          goal,
+          tools: evidence.tools,
           grounding: 'pass',
         },
         inputSource,
@@ -3083,6 +3186,8 @@ async function appendEarlyFailureLedger(input: {
   inputSource: TurnInputSource;
   reply: string;
   failure: Failure;
+  evidence?: EvidenceSet;
+  goal?: TurnGoal;
 }): Promise<void> {
   const {
     deps,
@@ -3095,8 +3200,8 @@ async function appendEarlyFailureLedger(input: {
     reply,
     failure,
   } = input;
-  const goal: TurnGoal = { kind: 'handoff' };
-  const evidence: EvidenceSet = { tools: [], failure };
+  const goal: TurnGoal = input.goal ?? { kind: 'handoff' };
+  const evidence: EvidenceSet = input.evidence ?? { tools: [], failure };
   const ledger = buildLedgerWritePayload({
     state,
     ex,
@@ -3105,7 +3210,8 @@ async function appendEarlyFailureLedger(input: {
     inputSource,
     ...(extractProvenance ? { extractProvenance } : {}),
     grounding: 'pass',
-    failures: [failure],
+    failures: evidence.education ? [] : [failure],
+    buyerText: turnInput.text,
   });
 
   await deps.crm
@@ -3117,7 +3223,7 @@ async function appendEarlyFailureLedger(input: {
       buyerText: turnInput.text,
       reply,
       goal: goal.kind,
-      tools: [],
+      tools: evidence.tools,
       phase: state.phase,
       snapshotIn: ledger.snapshot_in,
       resolvedIntent: ledger.resolved_intent,
@@ -3138,14 +3244,14 @@ async function appendEarlyFailureLedger(input: {
       ex,
       goal,
       debug: withIngressDebug(
-        { phase: state.phase, goal, tools: [], grounding: 'pass' },
+        { phase: state.phase, goal, tools: evidence.tools, grounding: 'pass' },
         inputSource,
         extractProvenance,
       ),
       reply,
       evidence,
       buyerText: turnInput.text.trim(),
-      failures: [failure],
+      failures: evidence.education ? [] : [failure],
       exit: 'ambiguous_opt_out',
     }),
   );
@@ -3179,6 +3285,7 @@ async function syncTelemetry(
         inputSource: opts.inputSource,
         extractProvenance: opts.extractProvenance,
         grounding: opts.grounding,
+        buyerText: input.text,
         ...(opts.failures?.length ? { failures: opts.failures } : {}),
       })
     : null;

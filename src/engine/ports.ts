@@ -195,6 +195,21 @@ export interface EngineData {
   resolveGeo(text: string): Promise<{ lat: number; lng: number } | null>;
   projectCoords(builderId: string): Promise<ReadonlyArray<{ projectId: string; lat: number; lng: number }>>;
   faqLookup(projectId: string, questionKey: string): Promise<{ question: string; answer: string } | null>;
+  /**
+   * Platform buyer-education KB (definition asks). Dedicated education index /
+   * Desk corpus — never project FAQs. Null = miss (speakable no_data + queue).
+   */
+  educationSearch(
+    text: string,
+    opts?: { jurisdiction?: 'india' | 'karnataka' },
+  ): Promise<import('./education.js').EducationEvidence | null>;
+  /** Fire-and-forget miss → Desk curation queue. */
+  enqueueEducationMiss(input: {
+    buyerText: string;
+    conversationId?: string;
+    suggestedTopic?: string;
+    source?: 'education_miss' | 'unknown' | 'understanding' | 'manual';
+  }): Promise<void>;
   getProfile(builderId: string, buyerPhone: string): Promise<Record<string, unknown>>;
 }
 

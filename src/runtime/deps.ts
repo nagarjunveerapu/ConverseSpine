@@ -22,7 +22,11 @@ export class ConverseRuntime {
     this.trace = new LangfuseTracer(env);
     const bamlMode = resolveBamlExtractMode(env);
     this.engine = {
-      data: nayadeskData(this.crm),
+      data: nayadeskData(this.crm, {
+        AI: env.AI,
+        EDUCATION_VECTORS: env.EDUCATION_VECTORS,
+        SIL_EMBED_MODEL: env.SIL_EMBED_MODEL,
+      }),
       llm: makeEngineLlm(env),
       semantic: makeSemanticNlu(env),
       crm: nayadeskCrm(this.crm, { understandingCapture: env.UNDERSTANDING_CAPTURE === 'true' }),

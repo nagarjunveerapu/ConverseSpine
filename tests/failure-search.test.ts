@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveDurableLocation } from '../src/engine/geography-authority.js';
 import { searchWithAuthorityRelaxation } from '../src/engine/search-outcome.js';
 import { runEngineTurn } from '../src/engine/turn.js';
+import type { EngineDeps } from '../src/engine/ports.js';
 import type { Match, SearchFilters } from '../src/engine/types.js';
 import { fakeDeps } from './fakes.js';
 
@@ -131,6 +132,61 @@ describe('authority-aware zero-match relaxation', () => {
 });
 
 describe('Phase 3 turn behavior', () => {
+  function withIntent(kind: string, score: number): EngineDeps {
+    const deps = fakeDeps();
+    deps.failureSearch = true;
+    deps.failureRouting = true;
+    deps.failureTools = true;
+    deps.routingEnv = {
+      SIL_EMBED_FIRST: 'true',
+      SIL_ROUTING_TAU: '0.83',
+      FAILURE_ROUTING: 'true',
+      AI: { run: async () => ({ data: [[0.1, 0.2, 0.3]] }) },
+      INTENT_VECTORS: {
+        query: async () => ({
+          matches: [
+            {
+              id: `fixture-${kind}`,
+              score,
+              metadata: { intent_kind: kind },
+            },
+          ],
+        }),
+      },
+    } as unknown as NonNullable<EngineDeps['routingEnv']>;
+    return deps;
+  }
+
+  it('drops a rejected speculative locality and lets unknown recovery speak', async () => {
+    const result = await runEngineTurn(
+      {
+        convId: 'fv3-joke-not-place',
+        builderId: 'lokations',
+        text: 'tell me a joke',
+        channel: 'advisor_web',
+      },
+      withIntent('get_brochure', 0.78),
+    );
+    expect(result.reply).toMatch(/not sure what you'd like help with/i);
+    expect(result.reply).not.toMatch(/identify that location/i);
+    expect(result.state.constraints.location).toBeUndefined();
+  });
+
+  it('lets current-turn opt-out ownership beat speculative geography', async () => {
+    const result = await runEngineTurn(
+      {
+        convId: 'fv3-current-optout',
+        builderId: 'lokations',
+        text: 'I do not want any calls, only chat',
+        channel: 'advisor_web',
+      },
+      withIntent('opt_out', 0.84),
+    );
+    expect(result.reply).toMatch(/stop calling|stop all contact/i);
+    expect(result.reply).not.toMatch(/identify that location/i);
+    expect(result.state.constraints.location).toBeUndefined();
+  });
+
   it('lets a catalog project name reach project ownership before geography validation', async () => {
     const deps = fakeDeps();
     deps.failureSearch = true;

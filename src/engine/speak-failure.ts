@@ -41,6 +41,9 @@ export function speakFailure(failure: Failure, ctx: SpeakContext = {}): string {
     case 'missing_input':
       return `I need ${subject} before I can work that out.`;
     case 'no_data':
+      if (failure.subject === 'education_explainer') {
+        return "I don't have a short explainer for that yet — ask me about property types, buying steps, or buyer documents, or name a project.";
+      }
       return `I don't have ${subject} on file.${ctx.alternatives?.length ? ` I do have ${ctx.alternatives.join(' and ')}.` : ''}`;
     case 'no_match':
       return failure.nearest

@@ -51,9 +51,53 @@ const POLICY_INTENTS: Readonly<
   },
   definition_bhk: { policy: 'definition', subject: 'bhk' },
   definition_ready_to_move: { policy: 'definition', subject: 'ready_to_move' },
+  // Wave-1 recognition doors only — curriculum answers live in Desk education KB.
+  definition_property_type: { policy: 'definition', subject: 'property_type' },
+  definition_buying_journey: { policy: 'definition', subject: 'buying_journey' },
+  definition_documents: { policy: 'definition', subject: 'documents' },
   about_ai: { policy: 'about_us', subject: 'identity' },
   about_data: { policy: 'about_us', subject: 'data_collection' },
 });
+
+const CALIBRATED_POLICY_KINDS = new Set([
+  'policy_prohibited',
+  'definition_bhk',
+  'definition_ready_to_move',
+  'definition_property_type',
+  'definition_buying_journey',
+  'definition_documents',
+]);
+
+/**
+ * Narrow policy classes use calibrated floors. The projected index can put a
+ * clear protected-identity or Wave-1 definition request just below the general
+ * routing tau; abstaining there is more harmful than binding the already-winning
+ * policy class.
+ */
+export function bindTauForIntent(
+  kind: string,
+  tau: number,
+  failureRouting: boolean,
+): number {
+  return failureRouting && CALIBRATED_POLICY_KINDS.has(kind)
+    ? Math.min(tau, 0.8)
+    : tau;
+}
+
+/** Recognition kinds that answer from the Desk education KB once Phase 2 binds. */
+export const DEFINITION_INTENT_KINDS = Object.freeze([
+  'definition_bhk',
+  'definition_ready_to_move',
+  'definition_property_type',
+  'definition_buying_journey',
+  'definition_documents',
+] as const);
+
+export function looksLikeDefinitionAsk(text: string): boolean {
+  return /\b(?:what\s+is|what'?s|meaning|mean(?:s|ing)?|explain|define|definition|matlab|bolte|terminology|how\s+does\s+.+\s+work)\b/i.test(
+    text,
+  );
+}
 
 export function hasVisitRoutingContext(input: TurnRoutingInput): boolean {
   return (
@@ -79,7 +123,7 @@ export function mapIntentToRouting(
   tau: number = ROUTING_TAU_HIGH,
   failureRouting = false,
 ): TurnRoutingResult | null {
-  if (score < tau) return null;
+  if (score < bindTauForIntent(kind, tau, failureRouting)) return null;
 
   const pid = projectId(input);
   const base = {

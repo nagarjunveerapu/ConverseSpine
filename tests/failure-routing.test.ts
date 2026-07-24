@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runEngineTurn } from '../src/engine/turn.js';
 import { speakFailure } from '../src/engine/speak-failure.js';
+import { embedderRouting } from '../src/engine/turn-routing/classify.js';
 import {
   mapIntentToRouting,
   POLICY_INTENT_KEYS,
@@ -45,6 +46,70 @@ describe('embedding-owned failure routing', () => {
 
   it('does not bypass the embedding confidence threshold', () => {
     expect(mapIntentToRouting('policy_prohibited', 0.5, INPUT, 0.68, true)).toBeNull();
+  });
+
+  it('uses calibrated policy floors without lowering unrelated intents', () => {
+    expect(
+      mapIntentToRouting('policy_prohibited', 0.819, INPUT, 0.83, true),
+    ).toMatchObject({
+      routing: 'unsupported',
+      policy: 'prohibited',
+    });
+    expect(
+      mapIntentToRouting('definition_bhk', 0.819, INPUT, 0.83, true),
+    ).toMatchObject({
+      routing: 'unsupported',
+      policy: 'definition',
+    });
+    expect(
+      mapIntentToRouting('about_ai', 0.819, INPUT, 0.83, true),
+    ).toBeNull();
+  });
+
+  it('uses class-balanced BHK semantics without stealing search-shaped BHK turns', async () => {
+    const classify = async (definitionScore: number) =>
+      embedderRouting(
+        {
+          SIL_ROUTING_TAU: '0.83',
+          FAILURE_ROUTING: 'true',
+          AI: { run: async () => ({ data: [[0.1, 0.2, 0.3]] }) },
+          INTENT_VECTORS: {
+            query: async (_vector: number[], options: { filter?: Record<string, unknown> }) => ({
+              matches: options.filter?.intent_kind
+                ? [
+                    {
+                      id: 'definition',
+                      score: definitionScore,
+                      metadata: { intent_kind: 'definition_bhk' },
+                    },
+                  ]
+                : [
+                    {
+                      id: 'availability',
+                      score: 0.874,
+                      metadata: { intent_kind: 'get_availability' },
+                    },
+                  ],
+            }),
+          },
+        } as never,
+        { ...INPUT, text: 'what is this bhk you people say' },
+      );
+
+    await expect(classify(0.805)).resolves.toMatchObject({
+      result: {
+        routing: 'unsupported',
+        subject: 'bhk',
+      },
+      top_kind: 'definition_bhk',
+    });
+    await expect(classify(0.739)).resolves.toMatchObject({
+      result: {
+        routing: 'answer_on_project',
+        answer_topic: 'availability',
+      },
+      top_kind: 'get_availability',
+    });
   });
 
   it('routes the existing discount intent through the same deterministic consequence', () => {

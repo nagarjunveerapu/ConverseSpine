@@ -25,6 +25,10 @@ index_name = "naya-intent-phrasings"
 binding = "PROJECT_VECTORS"
 index_name = "naya-project-names"
 
+[[vectorize]]
+binding = "EDUCATION_VECTORS"
+index_name = "naya-buyer-education"
+
 [ai]
 binding = "AI"
 
@@ -131,6 +135,11 @@ remote = true
 [[env.dev.vectorize]]
 binding = "PROJECT_VECTORS"
 index_name = "naya-project-names-dev"
+remote = true
+
+[[env.dev.vectorize]]
+binding = "EDUCATION_VECTORS"
+index_name = "naya-buyer-education-dev"
 remote = true
 
 [env.dev.ai]
@@ -285,6 +294,10 @@ index_name = "naya-intent-phrasings"
 [[env.prod.vectorize]]
 binding = "PROJECT_VECTORS"
 index_name = "naya-project-names"
+
+[[env.prod.vectorize]]
+binding = "EDUCATION_VECTORS"
+index_name = "naya-buyer-education"
 
 [env.prod.ai]
 binding = "AI"

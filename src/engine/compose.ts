@@ -37,6 +37,7 @@ function relaxedLead(relaxed: readonly RelaxedDimension[] | undefined): string {
 import { isInventoryAsk } from './facts.js';
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
+import { speakEducation } from './education.js';
 
 export function buildComposeRequest(
   goal: TurnGoal,
@@ -106,6 +107,11 @@ export function renderComposePrompt(req: ComposeRequest): string {
         `Lead with RERA registration (${evidence.detail.reraNumber}) — do NOT give a generic location/price recap.`,
       );
     }
+  }
+  if (goal.kind === 'answer' && evidence.education) {
+    lines.push(
+      `The buyer asked a literacy/definition question — answer ONLY from evidence.education (platform curriculum). Do NOT search projects or invent locality.`,
+    );
   }
   if (goal.kind === 'answer' && evidence.detail?.faqs?.length) {
     lines.push(
@@ -240,6 +246,13 @@ function renderEvidence(ev: EvidenceSet): string {
           .join('\n')}`,
       );
     }
+  }
+  if (ev.education) {
+    out.push(
+      `buyer education [${ev.education.topicKey}/${ev.education.jurisdiction}]: ${ev.education.answer}` +
+        (ev.education.whatToCheck ? `\n  check: ${ev.education.whatToCheck}` : '') +
+        (ev.education.disclaimer ? `\n  disclaimer: ${ev.education.disclaimer}` : ''),
+    );
   }
   if (ev.faqMiss?.keys.length) {
     out.push(`faq miss (no Desk row): ${ev.faqMiss.keys.join(', ')}`);
@@ -459,6 +472,11 @@ export function fallbackReply(req: ComposeRequest): string {
       const unmet = new Set(ev.notices?.map((failure) => failure.subject) ?? []);
       const suppressPrice =
         unmet.has('carpet_area') || unmet.has('built_up_area');
+
+      if (ev.education || topics.includes('education')) {
+        if (ev.education) return speakEducation(ev.education);
+        return "I don't have a short explainer for that yet — ask me about property types, buying steps, or buyer documents, or name a project.";
+      }
 
       // Over-answer fix — a primary "tell me about X" gets the compact card,
       // never the chunk assembly (and never FAQ text): sizes, one price band,

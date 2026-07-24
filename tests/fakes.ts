@@ -386,6 +386,51 @@ export function fakeData(): EngineData & {
       }
       return null;
     },
+    async educationSearch(text) {
+      const t = text.toLowerCase();
+      if (/\bbhk\b/.test(t)) {
+        return {
+          entryId: 'edu:bhk:india',
+          topicKey: 'bhk',
+          jurisdiction: 'india' as const,
+          domain: 'property_type',
+          question: 'What does BHK mean?',
+          answer:
+            'BHK means Bedroom, Hall, and Kitchen. A 2 BHK typically has two bedrooms, one living hall, and a kitchen.',
+          whatToCheck: 'Confirm configuration labels on the unit plan.',
+          disclaimer: 'General definition, not a project promise.',
+          match: 'lookup' as const,
+        };
+      }
+      if (/plotted/.test(t)) {
+        return {
+          entryId: 'edu:plotted_development:india',
+          topicKey: 'plotted_development',
+          jurisdiction: 'india' as const,
+          domain: 'property_type',
+          question: 'What is plotted development?',
+          answer:
+            'Plotted development is land divided into plots for buyers to build later, often with shared roads and amenities planned by the developer.',
+          match: 'lookup' as const,
+        };
+      }
+      if (/site visit|what happens on a site/.test(t)) {
+        return {
+          entryId: 'edu:site_visit:india',
+          topicKey: 'site_visit_expect',
+          jurisdiction: 'india' as const,
+          domain: 'buying_journey',
+          question: 'What happens on a site visit?',
+          answer:
+            'A site visit is a guided look at the project location, sample/unit context, access roads, and surroundings.',
+          match: 'lookup' as const,
+        };
+      }
+      return null;
+    },
+    async enqueueEducationMiss() {
+      /* no-op in fakes */
+    },
     async getProfile() {
       return {};
     },

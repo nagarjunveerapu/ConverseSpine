@@ -2,7 +2,13 @@ import type { Env } from '../../env.js';
 import type { AnswerTopic } from '../types.js';
 import { isVisitFollowUpQuestion } from '../phases/visit.js';
 import { buildRoutingQuery } from './build-query.js';
-import { hasVisitRoutingContext, mapIntentToRouting } from './embedder-map.js';
+import {
+  bindTauForIntent,
+  DEFINITION_INTENT_KINDS,
+  hasVisitRoutingContext,
+  looksLikeDefinitionAsk,
+  mapIntentToRouting,
+} from './embedder-map.js';
 import { projectIntentVector, routingTau } from '../../nlu/intent-projection.js';
 import { DEFERRABLE_ANSWER_TOPICS, projectRoutingFromSpeechAct } from './from-speech-act.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
@@ -143,17 +149,64 @@ export async function embedderRouting(
     }
   }
 
+  // Definition asks are outnumbered by availability/search rows. Class-balanced
+  // retrieval keeps Wave-1 definition doors in the candidate set; score still wins.
+  if (env.FAILURE_ROUTING === 'true' && looksLikeDefinitionAsk(input.text)) {
+    const kinds = /\bbhk\b/i.test(input.text)
+      ? DEFINITION_INTENT_KINDS
+      : DEFINITION_INTENT_KINDS.filter((k) => k !== 'definition_bhk');
+    for (const kind of kinds) {
+      const definition = await env.INTENT_VECTORS.query(vector, {
+        topK: 1,
+        returnMetadata: 'all',
+        filter: { intent_kind: kind },
+      }).catch((error) => {
+        console.error('[intent-class-filter]', kind, error);
+        return null;
+      });
+      for (const m of definition?.matches ?? []) {
+        if (m.id && seen.has(m.id)) continue;
+        if (m.id) seen.add(m.id);
+        matches.push({
+          ...(m.id ? { id: m.id } : {}),
+          kind:
+            m.metadata && typeof m.metadata.intent_kind === 'string'
+              ? (m.metadata.intent_kind as string)
+              : kind,
+          score: m.score ?? 0,
+          facet: '',
+        });
+      }
+    }
+  }
+
   // Tie-break: identical phrasings taught under several doors score equal;
   // the copy carrying a taught facet is strictly more information (facets are
   // only taught when one FAQ key owns the meaning catalog-wide), so it wins.
-  matches.sort((a, b) => b.score - a.score || (b.facet ? 1 : 0) - (a.facet ? 1 : 0));
+  // Class-balanced definition candidates at ≥0.8 outrank denser availability.
+  matches.sort((a, b) => {
+    const aBalanced =
+      (DEFINITION_INTENT_KINDS as readonly string[]).includes(a.kind) &&
+      a.score >= 0.8;
+    const bBalanced =
+      (DEFINITION_INTENT_KINDS as readonly string[]).includes(b.kind) &&
+      b.score >= 0.8;
+    if (aBalanced !== bBalanced) return aBalanced ? -1 : 1;
+    return b.score - a.score || (b.facet ? 1 : 0) - (a.facet ? 1 : 0);
+  });
   const top = matches[0];
   const second = matches[1];
+  const margin =
+    top && (DEFINITION_INTENT_KINDS as readonly string[]).includes(top.kind)
+      ? top.score - 0.8
+      : top && second
+        ? top.score - second.score
+        : undefined;
   const telemetry = {
     fired: true,
     ...(top ? { top_kind: top.kind, top_score: top.score } : {}),
     ...(top?.facet ? { facet: top.facet } : {}),
-    ...(top && second ? { margin: top.score - second.score } : {}),
+    ...(margin !== undefined ? { margin } : {}),
     top_matches: matches
       .slice(0, 5)
       .map((m) => ({ ...(m.id ? { id: m.id } : {}), kind: m.kind, score: m.score })),
@@ -165,7 +218,9 @@ export async function embedderRouting(
   if (!top?.kind) {
     return { result: null, ...telemetry, miss_reason: queryOk ? 'no_match' : 'query_error' };
   }
-  if (top.score < tau) {
+  const failureRouting = env.FAILURE_ROUTING === 'true';
+  const bindTau = bindTauForIntent(top.kind, tau, failureRouting);
+  if (top.score < bindTau) {
     return { result: null, ...telemetry, miss_reason: 'below_tau' };
   }
   const result = mapIntentToRouting(
@@ -173,7 +228,7 @@ export async function embedderRouting(
     top.score,
     input,
     tau,
-    env.FAILURE_ROUTING === 'true',
+    failureRouting,
   );
   if (!result) {
     return { result: null, ...telemetry, miss_reason: 'unmapped_kind' };

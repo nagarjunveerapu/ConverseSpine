@@ -6,6 +6,7 @@ import {
   mapEnrichmentSummaryToUnitConfigs,
   mapLegacyUnitsToUnitConfigs,
 } from '../unit-config.js';
+import { educationSearch as searchEducation } from '../education.js';
 
 function splitCsv(s: string): string[] {
   return s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -109,7 +110,10 @@ export function mapLocationIntel(raw: NdLocationIntelRow | null | undefined) {
   } as LocationPoiCategories & { nearbyPois?: string[]; driveTimes?: string[] };
 }
 
-export function nayadeskData(crm: NayaDeskClient): EngineData {
+export function nayadeskData(
+  crm: NayaDeskClient,
+  env?: Pick<import('../../env.js').Env, 'AI' | 'EDUCATION_VECTORS' | 'SIL_EMBED_MODEL'>,
+): EngineData {
   return {
     async search(builderId, filters) {
       const resp = await crm.searchProjects({
@@ -627,6 +631,23 @@ export function nayadeskData(crm: NayaDeskClient): EngineData {
         };
       } catch {
         return null;
+      }
+    },
+
+    async educationSearch(text, opts) {
+      return searchEducation(crm, text, { jurisdiction: opts?.jurisdiction, env });
+    },
+
+    async enqueueEducationMiss(input) {
+      try {
+        await crm.enqueueBuyerEducationMiss({
+          buyer_text: input.buyerText,
+          suggested_topic: input.suggestedTopic,
+          source: input.source ?? 'education_miss',
+          conversation_id: input.conversationId,
+        });
+      } catch {
+        /* fire-and-forget */
       }
     },
 

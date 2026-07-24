@@ -10,6 +10,8 @@ export interface Env {
   INTENT_VECTORS?: VectorizeIndex;
   /** Project-name resolution index (NayaDesk → Vectorize). */
   PROJECT_VECTORS?: VectorizeIndex;
+  /** Platform buyer-education corpus (dedicated — not INTENT_VECTORS). */
+  EDUCATION_VECTORS?: VectorizeIndex;
   /** Workers AI for embeddings when Vectorize query needs live embed. */
   AI?: Ai;
 

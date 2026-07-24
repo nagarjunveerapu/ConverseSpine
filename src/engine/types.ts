@@ -220,7 +220,9 @@ export type AnswerTopic =
   | 'media'
   | 'overview'
   | 'property_type'
-  | 'compare';
+  | 'compare'
+  /** Platform buyer-education literacy answer (not a project FAQ). */
+  | 'education';
 
 export type FactKey =
   | 'carpet_area'
@@ -566,6 +568,8 @@ export interface EvidenceSet {
    *  taught: the missed key came from a human-taught facet bind (not buyer
    *  text) — the floor renders the honest miss instead of the overview card. */
   faqMiss?: { keys: string[]; taught?: boolean };
+  /** Platform buyer-education hit (definition policy class). Not detail.faqs. */
+  education?: import('./education.js').EducationEvidence;
   /** Terminal stage failure; the single failure speaker owns buyer copy. */
   failure?: import('./outcome.js').Failure;
   /** Supported atoms actually present in structured evidence. */
