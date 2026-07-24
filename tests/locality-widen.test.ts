@@ -11,32 +11,28 @@ const NB: Match = {
   matchReasons: [],
 };
 
+const CATALOG = ['North Bangalore', 'Whitefield', 'Devanahalli', 'Sakleshpur'];
+
 describe('searchLocalityWiden', () => {
-  it('searches Desk nearby areas after an empty locality', async () => {
-    const calls: string[] = [];
+  it('widens only into catalog-intersecting LI areas (Jayanagar → Devanahalli)', async () => {
     const hit = await searchLocalityWiden({
       asked: 'Jayanagar',
       builderId: 'lokations',
       filters: { bhks: '2 BHK', locations: 'Jayanagar' },
       rejectedProjectIds: [],
+      catalogMarkets: CATALOG,
       ports: {
-        async geoAreasInRegion(region) {
-          calls.push(`geo:${region}`);
+        async geoAreasInRegion() {
           return [
             { name: 'North Bangalore', distanceKm: 12 },
             { name: 'Whitefield', distanceKm: 15 },
+            { name: 'Some Delhi Suburb', distanceKm: 5 },
           ];
         },
-        async resolveGeo() {
-          return null;
-        },
-        async projectCoords() {
-          return [];
-        },
         async search(_b, filters) {
-          calls.push(`search:${filters.locations ?? 'none'}`);
-          if (filters.locations?.includes('North Bangalore')) return { matches: [NB] };
-          return { matches: [] };
+          expect(filters.locations).toMatch(/North Bangalore/);
+          expect(filters.locations).not.toMatch(/Delhi/);
+          return { matches: [NB] };
         },
       },
     });
@@ -44,43 +40,24 @@ describe('searchLocalityWiden', () => {
       matches: [{ name: 'Brigade Eldorado' }],
       nearbyAreas: ['North Bangalore', 'Whitefield'],
     });
-    expect(calls[0]).toBe('geo:Jayanagar');
-    expect(calls[1]).toMatch(/North Bangalore/);
   });
 
-  it('falls back to location-less search ranked by ask distance', async () => {
-    const far: Match = {
-      projectId: 'ayana',
-      name: 'Ayana',
-      microMarket: 'Sakleshpur',
-      startingPriceInr: 2_495_000,
-      startingPriceDisplay: '₹24.95 L',
-      matchReasons: [],
-    };
+  it('returns null for outside metros (Delhi) — no catalog-wide dump', async () => {
     const hit = await searchLocalityWiden({
-      asked: 'Jayanagar',
+      asked: 'Delhi',
       builderId: 'lokations',
-      filters: { locations: 'Jayanagar' },
+      filters: { locations: 'Delhi', projectTypes: 'apartment' },
       rejectedProjectIds: [],
+      catalogMarkets: CATALOG,
       ports: {
         async geoAreasInRegion() {
-          return [];
+          return [{ name: 'Gurugram', distanceKm: 20 }];
         },
-        async resolveGeo() {
-          return { lat: 12.93, lng: 77.58 };
-        },
-        async projectCoords() {
-          return [
-            { projectId: 'eldorado', lat: 13.139, lng: 77.658 },
-            { projectId: 'ayana', lat: 12.944, lng: 75.784 },
-          ];
-        },
-        async search(_b, filters) {
-          expect(filters.locations).toBeUndefined();
-          return { matches: [far, NB] };
+        async search() {
+          throw new Error('must not search when LI misses catalog');
         },
       },
     });
-    expect(hit?.matches[0]?.name).toBe('Brigade Eldorado');
+    expect(hit).toBeNull();
   });
 });

@@ -1643,12 +1643,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // gap, catalog floor, alternate project) — LLM paraphrase of it produced
   // literal prompt echoes on dev ("[real starting point]"). Lock it.
   const noFitDeterministic = goal.kind === 'no_fit';
+  // Empty-locality market widen must stay template-locked — LLM otherwise
+  // lists project names (Eldorado) as if they were places.
+  const localityWidenDeterministic = !!evidence.localityWiden?.asked;
 
   // Template-locked goals: commitments and structured facts that must never be
   // LLM-paraphrased — and (W3) must never be "varied" by the repeat guard.
   const templateLocked =
     !!terminalFailure ||
     noFitDeterministic ||
+    localityWidenDeterministic ||
     visitDeterministic ||
     holdDeterministic ||
     firstShortlistTurn ||
@@ -2144,16 +2148,17 @@ async function fetchRecommend(
       const loc = s.constraints.location?.trim() || 'that area';
       // Locality intelligence: nearby / in-city inventory with disclosed widen.
       // Ladder still returned area no_match (no silent release); this is recovery.
+      const cat = await deps.data.catalog(s.builderId).catch(() => null);
+      const catalogMarkets = cat?.microMarkets ?? [];
       const widen = await searchLocalityWiden({
         asked: loc,
         builderId: s.builderId,
         filters,
         rejectedProjectIds: s.discover.rejectedProjectIds,
+        catalogMarkets,
         ports: {
           geoAreasInRegion: (region, builderId) =>
             deps.data.geoAreasInRegion(region, builderId),
-          resolveGeo: (text) => deps.data.resolveGeo(text),
-          projectCoords: (builderId) => deps.data.projectCoords(builderId),
           search: async (builderId, candidateFilters) => {
             const result = await searchWithFilters(deps, builderId, candidateFilters);
             const { location: _loc, ...constraintsSansArea } = s.constraints;
@@ -2169,13 +2174,7 @@ async function fetchRecommend(
       });
 
       if (widen?.matches.length) {
-        // Markets for copy; matches kept for Advisor cards after disclosure.
-        const marketLabels = collapseCoverageMarkets(
-          widen.nearbyAreas.length
-            ? widen.nearbyAreas
-            : widen.matches.map((m) => m.microMarket),
-          3,
-        );
+        // Market labels only in localityWiden — compose must not speak project names as places.
         return {
           goal: base.kind === 'recommend' || base.kind === 'ack_reject_recommend' ? base : { kind: 'recommend' },
           evidence: {
@@ -2184,27 +2183,28 @@ async function fetchRecommend(
             relaxed: ['area'],
             localityWiden: {
               asked: loc,
-              nearbyAreas: marketLabels,
+              nearbyAreas: widen.nearbyAreas,
             },
           },
         };
       }
 
-      const [cat, askGeo, coordRows] = await Promise.all([
-        deps.data.catalog(s.builderId).catch(() => null),
+      // Outside served geography (or LI miss) — city inventory, no project dump.
+      const [askGeo, coordRows] = await Promise.all([
         deps.data.resolveGeo(loc).catch(() => null),
         deps.data.projectCoords(s.builderId).catch(() => []),
       ]);
-      const markets = cat?.microMarkets ?? [];
       const orderOpts = coverageOrderOptsFrom({
         ask: askGeo,
         projectCoords: coordRows,
       });
-      const coverage = collapseCoverageMarkets(orderCoverageMarkets(markets, orderOpts));
+      const coverage = collapseCoverageMarkets(
+        orderCoverageMarkets(catalogMarkets, orderOpts),
+      );
       const propType = s.constraints.propertyType;
       const bhk = s.constraints.bhk;
       const cityBit = coverageCityCoverBit(cat?.servedCities ?? [], propType, bhk);
-      const coverBit = cityBit ?? coverageCoverBit(markets, orderOpts);
+      const coverBit = cityBit ?? coverageCoverBit(catalogMarkets, orderOpts);
       return {
         goal: { kind: 'no_fit' },
         evidence: {
