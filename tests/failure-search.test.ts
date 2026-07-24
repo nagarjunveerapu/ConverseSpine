@@ -308,6 +308,7 @@ describe('Phase 3 turn behavior', () => {
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
     expect(result.reply).toMatch(/don't have anything in \*Jayanagar\*/i);
     expect(result.reply).toMatch(/currently cover/i);
+    expect(result.reply).not.toMatch(/\//);
     expect(result.reply).not.toMatch(/here's what we do have/i);
     expect(result.reply).not.toMatch(/couldn't match that (property type|size|area)/i);
   });
