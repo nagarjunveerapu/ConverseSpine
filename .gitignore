@@ -8,3 +8,6 @@ scenarios/runs/
 .env
 .dev.vars
 .wrangler/
+
+# macOS
+.DS_Store

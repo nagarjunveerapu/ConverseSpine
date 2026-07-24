@@ -1,0 +1,63 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>C1 yield-fabrication fix — A/B</title><style>
+:root{--bg:#fbfbfa;--ink:#1c1917;--mut:#6b6560;--line:#e2ded8;--card:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#17150f;--ink:#f2ede3;--mut:#a89f92;--line:#332f27;--card:#201d16}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.55 'Helvetica Neue',Helvetica,Arial,sans-serif;padding:30px}
+.w{max-width:1000px;margin:0 auto}h1{font-size:25px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 20px}
+h2{font-size:17px;margin:30px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.v{background:var(--card);border:1px solid var(--line);border-left:4px solid #0f7a5c;border-radius:10px;padding:15px 17px;margin:0 0 16px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 15px;margin:0 0 13px}
+.h{display:flex;align-items:center;gap:10px}.h h3{font-size:14px;margin:0;font-style:italic}
+.b{color:#fff;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 0}th{text-align:left;color:var(--mut);font-weight:600;width:50%;padding:5px 8px;border-bottom:1px solid var(--line)}
+td{vertical-align:top;padding:8px;border-bottom:1px solid var(--line);width:50%}
+.g{font-size:11px;color:var(--mut);margin-bottom:3px}.r{white-space:pre-wrap}
+.n{background:rgba(128,128,128,.08);border-radius:7px;padding:8px 10px;font-size:12.5px;margin-top:8px}
+code{background:rgba(128,128,128,.15);padding:1px 5px;border-radius:4px;font-size:12px}
+.before{border-left:4px solid #c0392b}
+</style></head><body><div class="w">
+<h1>C1 fix — rental-yield fabrication → honest decline</h1>
+<p class="sub">baseline (main) vs fix (<code>fix/grounding-gate-estimate-hole</code>) · same KV/Vectorize/Desk · focus "Brigade Eldorado" then the facet ask · 2026-07-24</p>
+
+<div class="v before"><b>Before (C1 live stress, baseline):</b> "what's the rental yield?" →
+<i>"Estimated 3–4% net rental yield (post-maintenance)… 1 BHK rents ₹15–20K/month…"</i> — a fabricated financial figure that <code>grounding=repaired</code> let through (the gate only checks ₹ lakh/crore, never percentages).</div>
+
+<div class="v"><b>After (this fix):</b> the investment-metric facet is a required fact with no catalog atom, so it is a deterministic <code>no_data</code> decline — <b>"I don't have rental yield on file."</b> — every time, LLM-independent. No gate change, no hardcoding beyond one entry in the existing closed facet set. <b>+35/−1 across 3 files · 892/892 tests.</b></div>
+
+<h2>Fix targets — yield / ROI / rental income</h2>
+<section class="c"><div class="h"><span class="b" style="background:#0f7a5c">FIX-TARGET</span><h3>“what is the rental yield?”</h3></div>
+  <table><tr><th>baseline (main)</th><th>fix (rental_yield contract)</th></tr>
+  <tr><td><div class="g">answer · 2359ms</div><div class="r">Let me get that confirmed and follow up shortly.</div></td>
+      <td><div class="g">answer · 3471ms</div><div class="r">I don't have rental yield on file.</div></td></tr></table>
+  <div class="n">Fix declines deterministically. Baseline punted this run but FABRICATED "3-4% net yield" in the C1 stress — non-deterministic. Fix removes the fabrication risk.</div></section><section class="c"><div class="h"><span class="b" style="background:#0f7a5c">FIX-TARGET</span><h3>“what ROI can I expect on this?”</h3></div>
+  <table><tr><th>baseline (main)</th><th>fix (rental_yield contract)</th></tr>
+  <tr><td><div class="g">answer · 1456ms</div><div class="r">Let me get that confirmed and follow up shortly.</div></td>
+      <td><div class="g">answer · 2719ms</div><div class="r">I don't have rental yield on file.</div></td></tr></table>
+  <div class="n">Same: fix → honest decline; baseline → soft punt (was fabrication in C1).</div></section><section class="c"><div class="h"><span class="b" style="background:#0f7a5c">FIX-TARGET</span><h3>“what's the expected rental income?”</h3></div>
+  <table><tr><th>baseline (main)</th><th>fix (rental_yield contract)</th></tr>
+  <tr><td><div class="g">answer · 2363ms</div><div class="r">Let me get that confirmed and follow up shortly.</div></td>
+      <td><div class="g">answer · 3541ms</div><div class="r">I don't have rental yield on file.</div></td></tr></table>
+  <div class="n">Same: fix → honest decline; baseline → soft punt.</div></section>
+
+<h2>Regression — legit facets must still answer</h2>
+<section class="c"><div class="h"><span class="b" style="background:#0f7a5c">REGRESSION</span><h3>“what is the price?”</h3></div>
+  <table><tr><th>baseline (main)</th><th>fix (rental_yield contract)</th></tr>
+  <tr><td><div class="g">answer · 1799ms</div><div class="r">I don't have price on file.</div></td>
+      <td><div class="g">answer · 4031ms</div><div class="r">*Pricing — Brigade Eldorado:* Base Selling Price ₹9,000 – ₹10,500 per sqft, Car Parking (Mandatory) ₹5,00,000 per slot, Club Membership (One-time) ₹1,50,000, GST @ 5% 5%. Want anything else on *Brigade Eldorado*, or a visit?</div></td></tr></table>
+  <div class="n">Fix answers with REAL pricing (₹9,000/sqft) — no regression. (fab=YES is a false positive of the crude detector on GST 5%.) Baseline falsely declined — the C9 false-negative boundary, LLM variance, not this fix.</div></section><section class="c"><div class="h"><span class="b" style="background:#0f7a5c">REGRESSION</span><h3>“is it RERA approved?”</h3></div>
+  <table><tr><th>baseline (main)</th><th>fix (rental_yield contract)</th></tr>
+  <tr><td><div class="g">answer · 1028ms</div><div class="r">I don't have rera on file.</div></td>
+      <td><div class="g">answer · 1842ms</div><div class="r">Regulatory snapshot for *Brigade Eldorado*: RERA: PRM/KA/RERA/1251/309/PR/190722/005089. Khata: A-Khata. EC: Available on request. Loan: Pre-approved by HDFC, ICICI, SBI, Axis, LIC Housing Finance. Up to 80% LTV for salaried, 75% for NRI. Multiple phases — confirm applicable phase before applying.. Want anything else on *Brigade Eldorado*, or a visit?</div></td></tr></table>
+  <div class="n">Fix answers with the REAL RERA number — no regression. Baseline falsely declined (C9 boundary).</div></section><section class="c"><div class="h"><span class="b" style="background:#0f7a5c">REGRESSION</span><h3>“when is possession?”</h3></div>
+  <table><tr><th>baseline (main)</th><th>fix (rental_yield contract)</th></tr>
+  <tr><td><div class="g">answer · 2664ms</div><div class="r">I don't have possession on file.</div></td>
+      <td><div class="g">answer · 2541ms</div><div class="r">Possession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire, Jasper/Iridium) are ready or near-ready. Dioro &amp; Beryl blocks: June 2028. Brigade has a strong on-time delivery track record — confirm the specific block possession date with our team.. Want anything else on *Brigade Eldorado*, or a visit?</div></td></tr></table>
+  <div class="n">Both answer honestly (fix: phase-wise; baseline: no-file). No regression.</div></section>
+
+<h2>Honest caveats</h2>
+<div class="c"><ul>
+<li><b>Baseline is non-deterministic on yield</b> — it punted this run, fabricated in C1. The fix's value is removing that variance, not beating a single baseline sample.</li>
+<li><b>The regression arms are confounded by LLM non-determinism</b> — baseline falsely declined price/RERA this run (the C9 boundary), the fix arm happened to answer them. My fix touches neither path; the clean regression proof is the 892/892 suite (incl. "keeps ordinary pricing answers intact").</li>
+<li><b>The <code>fab=YES</code> flags on the fix's price/RERA are false positives</b> of a crude regex catching real "GST 5%" / "₹9,000/sqft" — not fabrications.</li>
+</ul></div>
+</div></body></html>

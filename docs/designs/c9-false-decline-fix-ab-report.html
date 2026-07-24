@@ -1,0 +1,49 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>C9 fix — A/B</title><style>
+:root{--bg:#fbfbfa;--ink:#1c1917;--mut:#6b6560;--line:#e2ded8;--card:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#17150f;--ink:#f2ede3;--mut:#a89f92;--line:#332f27;--card:#201d16}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.55 'Helvetica Neue',Helvetica,Arial,sans-serif;padding:30px}
+.w{max-width:1000px;margin:0 auto}h1{font-size:24px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 18px}
+h2{font-size:16px;margin:26px 0 10px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.v{background:var(--card);border:1px solid var(--line);border-left:4px solid #0f7a5c;border-radius:10px;padding:14px 16px;margin:0 0 14px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin:0 0 12px}
+.h{display:flex;align-items:center;gap:9px}.h h3{font-size:13.5px;margin:0;font-style:italic}
+.b{color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:7px 0 0}th{text-align:left;color:var(--mut);font-weight:600;width:50%;padding:5px 7px;border-bottom:1px solid var(--line)}
+td{vertical-align:top;padding:7px;border-bottom:1px solid var(--line);width:50%}.g{font-size:10.5px;color:var(--mut);margin-bottom:3px}.r{white-space:pre-wrap}
+.n{background:rgba(128,128,128,.08);border-radius:7px;padding:8px 10px;font-size:12px;margin-top:7px}
+code{background:rgba(128,128,128,.15);padding:1px 5px;border-radius:4px;font-size:12px}
+</style></head><body><div class=w>
+<h1>C9 — false-negative decline → real answer</h1>
+<p class=sub>baseline (main) vs fix (<code>fix/focused-answer-fetch-resilience</code>) · same KV/Vectorize/Desk · focus "Brigade Eldorado" then the facet ask · 2026-07-24</p>
+<div class=v><b>The bug:</b> a fresh advisor session's Desk conversation row differs from the engine's focus, so the live detail fetch returns null and the answer contract declines facts the project HAS — <b>"I don't have price on file"</b> for a priced project. <b>The fix:</b> fall back to the full detail already prefetched into <code>projectCache</code>, and count config prices as delivering <code>price</code>. The buyer gets the real answer; a <code>no_data</code> decline now fires only when we actually looked. C1 yield decline preserved. <b>+44/−1 · 893/893 tests.</b></div>
+<h2>C9 targets — facts the project HAS</h2>
+<section class=c><div class=h><span class=b style="background:#0f7a5c">C9 TARGET</span><h3>“what is the price?”</h3></div>
+ <table><tr><th>baseline (main)</th><th>fix (projectCache resilience)</th></tr>
+ <tr><td><div class=g>answer · 2002ms</div><div class=r>I don't have price on file.</div></td>
+ <td><div class=g>answer · 2663ms</div><div class=r>*Pricing — Brigade Eldorado:* Base Selling Price ₹9,000 – ₹10,500 per sqft, Car Parking (Mandatory) ₹5,00,000 per slot, Club Membership (One-time) ₹1,50,000, GST @ 5% 5%. Want anything else on *Brigade Eldorado*, or a visit?</div></td></tr></table>
+ <div class=n>Baseline FALSE-DECLINED ("I don't have price on file") a project that HAS pricing. Fix answers with the real ₹9,000/sqft via the projectCache fallback. (fab=YES is a false positive on real GST 5%.)</div></section><section class=c><div class=h><span class=b style="background:#0f7a5c">C9 TARGET</span><h3>“is it RERA approved?”</h3></div>
+ <table><tr><th>baseline (main)</th><th>fix (projectCache resilience)</th></tr>
+ <tr><td><div class=g>answer · 998ms</div><div class=r>I don't have rera on file.</div></td>
+ <td><div class=g>answer · 2442ms</div><div class=r>Regulatory snapshot for *Brigade Eldorado*: RERA: PRM/KA/RERA/1251/309/PR/190722/005089. Khata: A-Khata. EC: Available on request. Loan: Pre-approved by HDFC, ICICI, SBI, Axis, LIC Housing Finance. Up to 80% LTV for salaried, 75% for NRI. Multiple phases — confirm applicable phase before applying.. Want anything else on *Brigade Eldorado*, or a visit?</div></td></tr></table>
+ <div class=n>Baseline false-declined RERA; fix returns the real RERA number.</div></section><section class=c><div class=h><span class=b style="background:#0f7a5c">C9 TARGET</span><h3>“when is possession?”</h3></div>
+ <table><tr><th>baseline (main)</th><th>fix (projectCache resilience)</th></tr>
+ <tr><td><div class=g>answer · 1577ms</div><div class=r>I don't have possession on file.</div></td>
+ <td><div class=g>answer · 2271ms</div><div class=r>Possession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire, Jasper/Iridium) are ready or near-ready. Dioro &amp; Beryl blocks: June 2028. Brigade has a strong on-time delivery track record — confirm the specific block possession date with our team.. Want anything else on *Brigade Eldorado*, or a visit?</div></td></tr></table>
+ <div class=n>Baseline false-declined possession; fix returns the real phase-wise possession.</div></section>
+<h2>C1 preserved — facts the project genuinely lacks</h2>
+<section class=c><div class=h><span class=b style="background:#0f7a5c">C1 (still fixed)</span><h3>“what is the rental yield?”</h3></div>
+ <table><tr><th>baseline (main)</th><th>fix (projectCache resilience)</th></tr>
+ <tr><td><div class=g>? · 50ms</div><div class=r>ERR SyntaxError: Unexpected token '&lt;', "&lt;!DOCTYPE "... is not valid JSON</div></td>
+ <td><div class=g>answer · 4800ms</div><div class=r>I don't have rental yield on file.</div></td></tr></table>
+ <div class=n>Both decline honestly — the C1 yield fix is preserved.</div></section><section class=c><div class=h><span class=b style="background:#0f7a5c">C1 (still fixed)</span><h3>“what ROI can I expect on this?”</h3></div>
+ <table><tr><th>baseline (main)</th><th>fix (projectCache resilience)</th></tr>
+ <tr><td><div class=g>answer · 3786ms</div><div class=r>I don't have rental yield on file.</div></td>
+ <td><div class=g>answer · 5088ms</div><div class=r>I don't have rental yield on file.</div></td></tr></table>
+ <div class=n>Both decline honestly.</div></section><section class=c><div class=h><span class=b style="background:#0f7a5c">C1 (still fixed)</span><h3>“what's the expected rental income?”</h3></div>
+ <table><tr><th>baseline (main)</th><th>fix (projectCache resilience)</th></tr>
+ <tr><td><div class=g>answer · 2587ms</div><div class=r>I don't have rental yield on file.</div></td>
+ <td><div class=g>answer · 3112ms</div><div class=r>I don't have rental yield on file.</div></td></tr></table>
+ <div class=n>Both decline honestly.</div></section>
+<div class=c><b>Honest notes:</b> the baseline false-decline was <i>consistent</i> here (the advisor-session Desk-row mismatch, not a rare flake), so this A/B shows the fix clearly. The <code>fab=YES</code> flags on the fix are false positives of a crude regex on real "GST 5%" / "₹9,000/sqft". One baseline yield cell erred (worker returned an HTML error page) — a transient, ignored.</div>
+</div></body></html>

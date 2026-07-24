@@ -1,0 +1,22 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>C6 fix — gibberish budget coercion</title><style>
+:root{--bg:#fbfbfa;--ink:#1c1917;--mut:#6b6560;--line:#e2ded8;--card:#fff;--red:#c0392b;--grn:#0f7a5c}
+@media(prefers-color-scheme:dark){:root{--bg:#17150f;--ink:#f2ede3;--mut:#a89f92;--line:#332f27;--card:#201d16}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.55 'Helvetica Neue',Helvetica,Arial,sans-serif;padding:30px}
+.w{max-width:900px;margin:0 auto}h1{font-size:23px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 18px}
+.v{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--grn);border-radius:10px;padding:14px 16px;margin:0 0 16px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mut);font-weight:600}.bad{color:var(--red);font-weight:700}.good{color:var(--grn);font-weight:700}
+code{background:rgba(128,128,128,.15);padding:1px 5px;border-radius:4px;font-size:12px}
+</style></head><body><div class=w>
+<h1>C6 — gibberish coerced into a budget</h1>
+<p class=sub>baseline (main) vs fix (<code>fix/budget-plausibility-floor</code>) · same KV/Vectorize/Desk · 2026-07-24</p>
+<div class=v><b>The bug:</b> <code>toInr</code> treated a bare number ≥ 100 as literal rupees, so "asdfghjkl <b>12345</b> qwerty zxcvbn" became a <b>₹0.12 L budget</b> and searched under ₹12k. <b>The fix:</b> a bare literal-rupee number must clear a ₹1 L plausibility floor to be a budget — below it, it's a misparse and is rejected. A bare "70" is still ₹70 L; a real "5000000" is still ₹50 L. <b>+15/−1 · one-line logic change · 893/893 tests.</b></div>
+<table>
+<tr><th>buyer</th><th>baseline (main)</th><th>fix</th></tr>
+<tr><td><i>asdfghjkl 12345 qwerty zxcvbn</i></td><td class=bad>budget = ₹0.12 L → searched (goal no_fit)</td><td class=good>budget = none → clarify ("Could you rephrase it in one sentence?")</td></tr>
+<tr><td><i>3 BHK in Whitefield under 80 lakh</i></td><td>budget = ₹80 L ✓</td><td>budget = ₹80 L ✓ (no regression)</td></tr>
+<tr><td><i>budget 70 lakh, 2 BHK Whitefield</i></td><td>budget = ₹70 L ✓</td><td>budget = ₹70 L ✓ (no regression)</td></tr>
+</table>
+<p class=sub style="margin-top:18px">Bonus: the fix's gibberish handling ("Could you rephrase?") is a better UX than baseline echoing the junk back as a location. All three RED honesty boundaries (C1 fabrication, C9 false-decline, C6 coercion) are now closed.</p>
+</div></body></html>

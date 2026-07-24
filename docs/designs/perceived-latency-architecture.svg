@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="1000" viewBox="0 0 1480 1000" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" role="img">
+  <title>NayaAdvisor perceived-latency architecture</title>
+  <desc>Two-path turn architecture: a fast KV-warm path for chip taps and known asks, and a slow LLM path for novel free text, with a standardised progressive compose and an async Desk tail.</desc>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,1 L9,5 L0,9 Z" fill="#1c1917"/>
+    </marker>
+    <marker id="arrowMute" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,1 L9,5 L0,9 Z" fill="#9b958e"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,1 L9,5 L0,9 Z" fill="#0f7a5c"/>
+    </marker>
+  </defs>
+
+  <rect width="1480" height="1000" fill="#fbfbfa"/>
+
+  <!-- Title -->
+  <text x="48" y="52" font-size="30" font-weight="700" fill="#1c1917">Perceived-latency architecture</text>
+  <text x="48" y="80" font-size="16" fill="#6b6560">Two paths per turn — a warm fast path that never touches the LLM, and the LLM path only for genuinely novel free text.</text>
+
+  <!-- Timing ruler -->
+  <line x1="330" y1="120" x2="1360" y2="120" stroke="#d6d3ce" stroke-width="1.5"/>
+  <g font-size="12.5" fill="#9b958e">
+    <circle cx="360" cy="120" r="3" fill="#9b958e"/><text x="360" y="108" text-anchor="middle">0 ms</text>
+    <circle cx="560" cy="120" r="3" fill="#9b958e"/><text x="560" y="108" text-anchor="middle">~200 ms</text>
+    <circle cx="900" cy="120" r="3" fill="#9b958e"/><text x="900" y="108" text-anchor="middle">~1–2 s</text>
+    <circle cx="1300" cy="120" r="3" fill="#9b958e"/><text x="1300" y="108" text-anchor="middle">~3–4 s</text>
+  </g>
+  <text x="48" y="124" font-size="12.5" font-weight="600" fill="#6b6560">buyer waits →</text>
+
+  <!-- ===================== FAST PATH (green) ===================== -->
+  <text x="48" y="176" font-size="13" font-weight="700" fill="#0b5c45" letter-spacing="0.5">FAST PATH · no LLM · &lt;200 ms</text>
+
+  <!-- Chip tap -->
+  <rect x="48" y="192" width="150" height="72" rx="10" fill="#d9f0e6" stroke="#0f7a5c" stroke-width="1.6"/>
+  <text x="123" y="222" text-anchor="middle" font-size="15" font-weight="700" fill="#0b5c45">Chip tap</text>
+  <text x="123" y="244" text-anchor="middle" font-size="12" fill="#0b5c45">intent is explicit</text>
+
+  <!-- no extract -->
+  <rect x="238" y="192" width="150" height="72" rx="10" fill="#eafaf3" stroke="#0f7a5c" stroke-width="1.4"/>
+  <text x="313" y="222" text-anchor="middle" font-size="14" font-weight="600" fill="#0b5c45">Skip extract</text>
+  <text x="313" y="243" text-anchor="middle" font-size="12" fill="#0b5c45">nothing to understand</text>
+
+  <!-- warm KV read -->
+  <rect x="428" y="192" width="160" height="72" rx="10" fill="#eafaf3" stroke="#0f7a5c" stroke-width="1.4"/>
+  <text x="508" y="222" text-anchor="middle" font-size="14" font-weight="600" fill="#0b5c45">Read warm KV</text>
+  <text x="508" y="243" text-anchor="middle" font-size="12" fill="#0b5c45">zero Desk fetch</text>
+
+  <!-- compose on tap -->
+  <rect x="628" y="192" width="160" height="72" rx="10" fill="#eafaf3" stroke="#0f7a5c" stroke-width="1.4"/>
+  <text x="708" y="222" text-anchor="middle" font-size="14" font-weight="600" fill="#0b5c45">Compose on tap</text>
+  <text x="708" y="243" text-anchor="middle" font-size="12" fill="#0b5c45">template slots</text>
+
+  <!-- reply fast -->
+  <rect x="828" y="192" width="150" height="72" rx="10" fill="#0f7a5c" stroke="#0b5c45" stroke-width="1.6"/>
+  <text x="903" y="222" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Reply</text>
+  <text x="903" y="244" text-anchor="middle" font-size="12" fill="#d9f0e6">&lt;200 ms</text>
+
+  <g stroke="#0f7a5c" stroke-width="1.8" marker-end="url(#arrowGreen)">
+    <line x1="198" y1="228" x2="234" y2="228"/>
+    <line x1="388" y1="228" x2="424" y2="228"/>
+    <line x1="588" y1="228" x2="624" y2="228"/>
+    <line x1="788" y1="228" x2="824" y2="228"/>
+  </g>
+
+  <!-- ===================== SLOW / LLM PATH (amber) ===================== -->
+  <text x="48" y="332" font-size="13" font-weight="700" fill="#8a3f08" letter-spacing="0.5">LLM PATH · only for novel free text · ~3–4 s</text>
+
+  <!-- free text -->
+  <rect x="48" y="348" width="150" height="80" rx="10" fill="#fbe8cf" stroke="#b45309" stroke-width="1.6"/>
+  <text x="123" y="382" text-anchor="middle" font-size="15" font-weight="700" fill="#8a3f08">Free text</text>
+  <text x="123" y="404" text-anchor="middle" font-size="12" fill="#8a3f08">novel ask</text>
+
+  <!-- parallel understand -->
+  <rect x="238" y="336" width="230" height="104" rx="10" fill="#fbe8cf" stroke="#b45309" stroke-width="1.6"/>
+  <text x="353" y="360" text-anchor="middle" font-size="13.5" font-weight="700" fill="#8a3f08">Understand — in parallel</text>
+  <rect x="252" y="372" width="98" height="52" rx="7" fill="#fdf3e6" stroke="#b45309" stroke-width="1.1"/>
+  <text x="301" y="394" text-anchor="middle" font-size="11.5" fill="#8a3f08">embed</text>
+  <text x="301" y="410" text-anchor="middle" font-size="11.5" fill="#8a3f08">route</text>
+  <rect x="356" y="372" width="98" height="52" rx="7" fill="#fdf3e6" stroke="#b45309" stroke-width="1.1"/>
+  <text x="405" y="394" text-anchor="middle" font-size="11.5" fill="#8a3f08">LLM</text>
+  <text x="405" y="410" text-anchor="middle" font-size="11.5" fill="#8a3f08">extract</text>
+
+  <!-- route / decide -->
+  <rect x="508" y="348" width="150" height="80" rx="10" fill="#fdf3e6" stroke="#b45309" stroke-width="1.4"/>
+  <text x="583" y="382" text-anchor="middle" font-size="14" font-weight="600" fill="#8a3f08">Route / decide</text>
+  <text x="583" y="404" text-anchor="middle" font-size="12" fill="#8a3f08">phase goal</text>
+
+  <g stroke="#b45309" stroke-width="1.8" marker-end="url(#arrow)">
+    <line x1="198" y1="388" x2="234" y2="388" stroke="#b45309"/>
+    <line x1="468" y1="388" x2="504" y2="388" stroke="#b45309"/>
+  </g>
+  <line x1="658" y1="388" x2="700" y2="388" stroke="#b45309" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- ===================== COMPOSE (progressive slots) ===================== -->
+  <rect x="716" y="300" width="342" height="248" rx="12" fill="#ffffff" stroke="#4a453f" stroke-width="1.8"/>
+  <text x="736" y="330" font-size="15" font-weight="700" fill="#1c1917">Standardised compose</text>
+  <text x="736" y="350" font-size="12" fill="#6b6560">fixed slots, rendered fastest-first</text>
+
+  <!-- slot 1 -->
+  <rect x="736" y="362" width="302" height="48" rx="8" fill="#d9f0e6" stroke="#0f7a5c" stroke-width="1.3"/>
+  <text x="750" y="382" font-size="13" font-weight="700" fill="#0b5c45">1 · Identity</text>
+  <text x="750" y="399" font-size="11.5" fill="#0b5c45">Brigade Eldorado · Devanahalli · Brigade</text>
+  <text x="1024" y="390" text-anchor="end" font-size="11" font-weight="700" fill="#0f7a5c">KV · 0 ms</text>
+
+  <!-- slot 2 -->
+  <rect x="736" y="418" width="302" height="48" rx="8" fill="#eafaf3" stroke="#0f7a5c" stroke-width="1.1"/>
+  <text x="750" y="438" font-size="13" font-weight="700" fill="#0b5c45">2 · Units / configs</text>
+  <text x="750" y="455" font-size="11.5" fill="#0b5c45">2, 3, 4 BHK · price band</text>
+  <text x="1024" y="446" text-anchor="end" font-size="11" font-weight="700" fill="#0f7a5c">KV · warm</text>
+
+  <!-- slot 3 -->
+  <rect x="736" y="474" width="302" height="56" rx="8" fill="#fbe8cf" stroke="#b45309" stroke-width="1.3"/>
+  <text x="750" y="496" font-size="13" font-weight="700" fill="#8a3f08">3 · The ask</text>
+  <text x="750" y="513" font-size="11.5" fill="#8a3f08">template, or LLM leaf (streamed) — last</text>
+  <text x="1024" y="504" text-anchor="end" font-size="11" font-weight="700" fill="#b45309">last</text>
+
+  <line x1="700" y1="388" x2="712" y2="388" stroke="#b45309" stroke-width="1.8"/>
+  <path d="M708 388 L708 424 L732 424" fill="none" stroke="#b45309" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- reply progressive -->
+  <rect x="1096" y="360" width="150" height="130" rx="10" fill="#1c1917"/>
+  <text x="1171" y="392" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Reply</text>
+  <text x="1171" y="414" text-anchor="middle" font-size="11.5" fill="#d6d3ce">assembles</text>
+  <text x="1171" y="430" text-anchor="middle" font-size="11.5" fill="#d6d3ce">line by line</text>
+  <text x="1171" y="458" text-anchor="middle" font-size="11" fill="#8fd9bf">first paint</text>
+  <text x="1171" y="474" text-anchor="middle" font-size="11" font-weight="700" fill="#8fd9bf">~200 ms</text>
+  <line x1="1058" y1="424" x2="1092" y2="424" stroke="#1c1917" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <!-- fast path also lands into same reply notion -->
+  <path d="M903 264 L903 300 L1171 300 L1171 356" fill="none" stroke="#0f7a5c" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrowGreen)"/>
+
+  <!-- ===================== WARM KV CACHE ===================== -->
+  <rect x="48" y="600" width="360" height="150" rx="12" fill="#d9f0e6" stroke="#0f7a5c" stroke-width="1.8"/>
+  <text x="70" y="632" font-size="16" font-weight="700" fill="#0b5c45">Warm KV cache — TURN_CACHE</text>
+  <text x="70" y="656" font-size="12.5" fill="#0b5c45">All 21 projects · identity + configs + FAQs</text>
+  <text x="70" y="676" font-size="12.5" fill="#0b5c45">Written on catalog publish · a mirror of Desk</text>
+  <text x="70" y="702" font-size="12" font-style="italic" fill="#0b5c45">Honesty: warm identity is fact, not a guess —</text>
+  <text x="70" y="720" font-size="12" font-style="italic" fill="#0b5c45">so painting it before the answer is safe.</text>
+  <text x="70" y="740" font-size="11.5" font-weight="700" fill="#0f7a5c">At 21 projects this cache IS the prefetch.</text>
+
+  <!-- arrows KV feeds fast path + slots -->
+  <path d="M228 600 L228 300 L426 300 L426 264" fill="none" stroke="#0f7a5c" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrowGreen)"/>
+  <path d="M408 660 L680 660 L680 392 L732 386" fill="none" stroke="#0f7a5c" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrowGreen)"/>
+
+  <!-- ===================== ASYNC TAIL ===================== -->
+  <rect x="470" y="600" width="588" height="150" rx="12" fill="#f4f2ef" stroke="#9b958e" stroke-width="1.6" stroke-dasharray="7 5"/>
+  <text x="492" y="632" font-size="15" font-weight="700" fill="#4a453f">After the response is sent — off the critical path</text>
+
+  <rect x="492" y="648" width="240" height="82" rx="9" fill="#eceae7" stroke="#6b6560" stroke-width="1.3"/>
+  <text x="612" y="676" text-anchor="middle" font-size="13" font-weight="700" fill="#3a3630">store.save → KV</text>
+  <text x="612" y="696" text-anchor="middle" font-size="11.5" fill="#4a453f">awaited · next-turn state</text>
+  <text x="612" y="714" text-anchor="middle" font-size="11.5" fill="#4a453f">(this is what turn N+1 reads)</text>
+
+  <rect x="748" y="648" width="288" height="82" rx="9" fill="#eceae7" stroke="#6b6560" stroke-width="1.3" stroke-dasharray="6 4"/>
+  <text x="892" y="674" text-anchor="middle" font-size="13" font-weight="700" fill="#3a3630">ctx.waitUntil</text>
+  <text x="892" y="694" text-anchor="middle" font-size="11.5" fill="#4a453f">syncFacts · syncTelemetry · logTurn</text>
+  <text x="892" y="712" text-anchor="middle" font-size="11.5" fill="#4a453f">Desk dossier · agent reads later, not now</text>
+
+  <line x1="1058" y1="424" x2="1076" y2="424" stroke="#1c1917" stroke-width="0"/>
+  <path d="M1171 490 L1171 575 L892 575 L892 644" fill="none" stroke="#9b958e" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arrowMute)"/>
+
+  <!-- ===================== SPECULATIVE PREFETCH (deferred) ===================== -->
+  <rect x="1096" y="600" width="336" height="150" rx="12" fill="#f4f2ef" stroke="#c9c4bd" stroke-width="1.6" stroke-dasharray="7 5"/>
+  <text x="1116" y="630" font-size="14" font-weight="700" fill="#8a7f74">Speculative chip-prefetch</text>
+  <text x="1116" y="651" font-size="12" fill="#8a7f74">shadow transition table → warm KV</text>
+  <text x="1116" y="669" font-size="12" fill="#8a7f74">the predicted next taps, before the click</text>
+  <rect x="1116" y="686" width="296" height="48" rx="8" fill="#fdeede" stroke="#c48a3a" stroke-width="1.2"/>
+  <text x="1130" y="706" font-size="11.5" font-weight="700" fill="#8a3f08">DEFER — redundant at 21 projects.</text>
+  <text x="1130" y="723" font-size="11.5" fill="#8a3f08">Earns its keep at 100s–1000s of projects.</text>
+  <path d="M1264 600 L1264 500" fill="none" stroke="#c9c4bd" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrowMute)"/>
+
+  <!-- ===================== LEGEND + NOTES ===================== -->
+  <rect x="48" y="800" width="1384" height="164" rx="12" fill="#ffffff" stroke="#e2ded8" stroke-width="1.4"/>
+
+  <text x="72" y="832" font-size="13" font-weight="700" fill="#1c1917">Legend</text>
+  <rect x="72" y="844" width="20" height="14" rx="3" fill="#d9f0e6" stroke="#0f7a5c"/>
+  <text x="100" y="856" font-size="12.5" fill="#3a3630">Instant — served from warm KV, no LLM</text>
+  <rect x="72" y="868" width="20" height="14" rx="3" fill="#fbe8cf" stroke="#b45309"/>
+  <text x="100" y="880" font-size="12.5" fill="#3a3630">LLM — the ~3–4 s cost; only the novel free-text path pays it</text>
+  <line x1="74" y1="900" x2="92" y2="900" stroke="#9b958e" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="100" y="904" font-size="12.5" fill="#3a3630">Async / off the buyer's critical path</text>
+
+  <line x1="560" y1="826" x2="560" y2="946" stroke="#e2ded8" stroke-width="1.2"/>
+
+  <text x="586" y="832" font-size="13" font-weight="700" fill="#1c1917">The one reframe</text>
+  <text x="586" y="856" font-size="12.5" fill="#3a3630">Templating compose is a QUALITY fix, not the latency lever. The ~4 s is</text>
+  <text x="586" y="874" font-size="12.5" fill="#3a3630">mostly understanding the ask (extract + route), which templating does not touch.</text>
+  <text x="586" y="892" font-size="12.5" fill="#3a3630">Latency comes from: warm KV (skip fetch) · chips (skip extract) · parallel</text>
+  <text x="586" y="910" font-size="12.5" fill="#3a3630">extract · async tail · progressive paint. The compose rewrite buys honesty.</text>
+  <text x="586" y="936" font-size="12" font-style="italic" fill="#6b6560">Channel: chip-prefetch + streaming = SPA only. WhatsApp = reveal-early one-shot.</text>
+</svg>

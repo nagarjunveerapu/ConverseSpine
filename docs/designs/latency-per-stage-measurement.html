@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Per-stage latency measurement — Bridge Stage 1</title>
+<style>
+  :root{
+    --bg:#fbfbfa; --ink:#1c1917; --mut:#6b6560; --line:#e2ded8; --card:#ffffff;
+    --extract:#b45309; --fetch:#c48a3a; --compose:#0f7a5c; --tail:#9b958e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#17150f; --ink:#f2ede3; --mut:#a89f92; --line:#332f27; --card:#201d16; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 'Helvetica Neue',Helvetica,Arial,sans-serif;padding:32px}
+  .wrap{max-width:920px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px}
+  .sub{color:var(--mut);margin:0 0 24px}
+  .verdict{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--compose);border-radius:10px;padding:16px 18px;margin:0 0 26px}
+  .verdict b{color:var(--compose)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:0 0 8px}
+  th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+  th{color:var(--mut);font-weight:600}
+  td.total{font-weight:700}
+  .bar{display:flex;height:20px;border-radius:4px;overflow:hidden;min-width:180px}
+  .seg{height:100%}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;color:var(--mut);font-size:12.5px;margin:18px 0 30px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .imp{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .imp h2{font-size:16px;margin:0 0 10px}
+  .imp li{margin:5px 0}
+  code{background:rgba(128,128,128,.14);padding:1px 5px;border-radius:4px;font-size:12.5px}
+  .foot{color:var(--mut);font-size:12px;margin-top:26px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Per-stage latency measurement</h1>
+  <p class="sub">Bridge-to-target-state Stage&nbsp;1 · live on <code>converse-spine-dev</code> · 2026-07-24 · instrumented, measured, reverted clean</p>
+
+  <div class="verdict">
+    <b>Verdict (G1.3):</b> the LLM <b>extract</b> (1.6–4.5&nbsp;s) plus <b>decide+fetch</b> (0.5–2.4&nbsp;s) are the whole turn.
+    <b>Compose is 0–1&nbsp;s and usually near-zero</b> (template-locked). → Standardising compose is a <b>quality</b> play, <b>not a latency lever</b>.
+    The latency budget belongs on: skipping the extract (fast path / chips), the Desk fetch, and the deferrable tail.
+  </div>
+
+  <table>
+    <thead><tr><th>goal</th><th>turn</th><th>total</th><th>extract</th><th>dec+fetch</th><th>compose</th><th>tail</th><th style="width:190px">breakdown</th></tr></thead>
+    <tbody>
+      <tr><td>smalltalk</td><td>"hi"</td><td class="total">4.9s</td><td>2.2s</td><td>0.5s</td><td>1.0s</td><td>1.1s</td>
+        <td><div class="bar"><div class="seg" style="background:var(--extract);width:45%"></div><div class="seg" style="background:var(--fetch);width:11%"></div><div class="seg" style="background:var(--compose);width:20%"></div><div class="seg" style="background:var(--tail);width:23%"></div></div></td></tr>
+      <tr><td>recommend</td><td>"3 BHK apartment in Whitefield under 1.5 cr"</td><td class="total">8.0s</td><td>4.5s</td><td>1.5s</td><td>0.4s</td><td>1.6s</td>
+        <td><div class="bar"><div class="seg" style="background:var(--extract);width:56%"></div><div class="seg" style="background:var(--fetch);width:18%"></div><div class="seg" style="background:var(--compose);width:6%"></div><div class="seg" style="background:var(--tail);width:20%"></div></div></td></tr>
+      <tr><td>answer</td><td>"tell me about Brigade Eldorado"</td><td class="total">6.5s</td><td>4.2s</td><td>1.2s</td><td>0.1s</td><td>1.1s</td>
+        <td><div class="bar"><div class="seg" style="background:var(--extract);width:64%"></div><div class="seg" style="background:var(--fetch);width:18%"></div><div class="seg" style="background:var(--compose);width:2%"></div><div class="seg" style="background:var(--tail);width:16%"></div></div></td></tr>
+      <tr><td>answer</td><td>"is it RERA approved"</td><td class="total">3.5s</td><td>1.8s</td><td>0.6s</td><td>0.0s</td><td>1.1s</td>
+        <td><div class="bar"><div class="seg" style="background:var(--extract);width:51%"></div><div class="seg" style="background:var(--fetch);width:17%"></div><div class="seg" style="background:var(--compose);width:1%"></div><div class="seg" style="background:var(--tail);width:31%"></div></div></td></tr>
+      <tr><td>answer</td><td>"how far is the airport, good schools?"</td><td class="total">3.3s</td><td>1.6s</td><td>0.6s</td><td>0.0s</td><td>1.0s</td>
+        <td><div class="bar"><div class="seg" style="background:var(--extract);width:49%"></div><div class="seg" style="background:var(--fetch);width:19%"></div><div class="seg" style="background:var(--compose);width:1%"></div><div class="seg" style="background:var(--tail);width:31%"></div></div></td></tr>
+    </tbody>
+  </table>
+
+  <div class="legend">
+    <span><i class="sw" style="background:var(--extract)"></i>extract — LLM understanding (DeepSeek)</span>
+    <span><i class="sw" style="background:var(--fetch)"></i>decide + fetch — goal + Desk search</span>
+    <span><i class="sw" style="background:var(--compose)"></i>compose + ground — the reply</span>
+    <span><i class="sw" style="background:var(--tail)"></i>tail — Desk writes (deferrable)</span>
+  </div>
+
+  <div class="imp">
+    <h2>What this reorders in the 8-item plan</h2>
+    <ul>
+      <li><b>Fast path (skip extract) is the #1 lever</b> — extract is 1.6–4.5&nbsp;s and runs on <em>every</em> turn incl. "hi". A chip tap that skips it saves the most of any single change.</li>
+      <li><b>Async tail (Stage 2) is real and safe</b> — a consistent ~1.0–1.6&nbsp;s, post-reply. Confirmed deferrable.</li>
+      <li><b>The compose rewrite (Stage 4-adjacent) is NOT a latency win</b> — ship it for honesty/quality, gated on the persona-family suite, never justified on speed.</li>
+      <li><b>Next latency question:</b> can the extract LLM be made faster / cached / skipped for the known-intent turns? That is where the ~3&nbsp;s lives.</li>
+    </ul>
+  </div>
+
+  <p class="foot">Method: 4 timing marks in <code>runEngineTurn</code> (extract / decide+fetch / compose+ground / tail), surfaced via <code>debug._measure</code>, live turns against dev, then reverted (working tree clean, dev redeployed to baseline). Instrumentation added zero to the reply path (G1.1). Note: two unused marks (<code>_t0</code>, <code>_tBeforeTail</code>) leaked onto the branch from a prior session — a 2-line cleanup, flagged separately.</p>
+</div>
+</body>
+</html>
