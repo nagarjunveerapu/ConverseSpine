@@ -29,9 +29,18 @@ function samePlace(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-function withoutLocation(filters: SearchFilters): SearchFilters {
-  const { locations: _drop, ...rest } = filters;
-  return rest;
+/** Recovery search: drop locality + advisor re-rank knobs that can zero a widen. */
+function recoveryFilters(filters: SearchFilters): SearchFilters {
+  const {
+    locations: _loc,
+    conversationId: _cid,
+    preferenceWeights: _pw,
+    commuteHub: _hub,
+    budgetTargetInr: _bt,
+    askSizeSqft: _sz,
+    ...rest
+  } = filters;
+  return { ...rest, maxResults: filters.maxResults ?? 5 };
 }
 
 function rankByAskDistance(
@@ -77,21 +86,23 @@ export async function searchLocalityWiden(
   const take = (rows: Match[]) =>
     rows.filter((m) => !rejected.has(m.projectId)).slice(0, max);
 
+  const base = recoveryFilters(input.filters);
+
   if (nearbyAreas.length) {
     const resp = await input.ports
       .search(input.builderId, {
-        ...withoutLocation(input.filters),
+        ...base,
         locations: nearbyAreas.join(','),
       })
       .catch(() => ({ matches: [] as Match[] }));
-    const hits = take(resp.matches);
+    const hits = take(resp.matches ?? []);
     if (hits.length) return { matches: hits, nearbyAreas };
   }
 
   const broad = await input.ports
-    .search(input.builderId, withoutLocation(input.filters))
+    .search(input.builderId, base)
     .catch(() => ({ matches: [] as Match[] }));
-  let hits = take(broad.matches);
+  let hits = take(broad.matches ?? []);
   if (!hits.length) return null;
 
   const [askGeo, coords] = await Promise.all([

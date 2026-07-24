@@ -2155,14 +2155,14 @@ async function fetchRecommend(
             const { location: _loc, ...constraintsSansArea } = s.constraints;
             return {
               matches: discover.filterSearchMatches(
-                rawToMatches(result.matches),
+                rawToMatches(result.matches ?? []),
                 constraintsSansArea,
                 s.discover.rejectedProjectIds,
               ),
             };
           },
         },
-      }).catch(() => null);
+      });
 
       if (widen?.matches.length) {
         // Do not attach Failure here — terminalFailure would speakFailure and
