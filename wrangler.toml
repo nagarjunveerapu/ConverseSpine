@@ -303,9 +303,6 @@ index_name = "naya-buyer-education"
 binding = "AI"
 
 [env.prod.vars]
-# Failure-as-a-value Phase 4 only — soaked ondev (carpet no_data, partial miss,
-# price+cost sheet intact). Separate from Phases 0–3; wrangler var change needs redeploy to kill.
-FAILURE_ANSWER = "true"
 LOG_LEVEL = "info"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
