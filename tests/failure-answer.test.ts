@@ -102,6 +102,25 @@ describe('answer delivery contract', () => {
     );
     expect(out.failure).toMatchObject({ kind: 'no_data', subject: 'rental_yield' });
   });
+
+  it('delivers price from config prices on the detail — no false decline when the pricing quote flaked (C9)', () => {
+    const goal = withAnswerRequirements(
+      { kind: 'answer', topic: 'overview', projectId: 'eldorado' },
+      'and the price?',
+    );
+    // no evidence.pricing (the quote missed) but the detail carries config prices
+    const out = enforceAnswerContract(goal, {
+      tools: ['projectDetail'],
+      detail: {
+        projectId: 'eldorado',
+        name: 'Brigade Eldorado',
+        microMarket: 'North Bangalore',
+        configurations: [{ unitType: '2 BHK', priceDisplay: '₹1.2 Cr', priceMinInr: 12000000 }],
+      },
+    });
+    expect(out.failure).toBeUndefined();
+    expect(out.deliveredFacts).toContain('price');
+  });
 });
 
 describe('Phase 4 turn behavior', () => {

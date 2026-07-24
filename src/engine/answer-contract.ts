@@ -64,7 +64,17 @@ export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
     delivered.push('loan_eligibility');
   }
   if (evidence.detail?.projectType) delivered.push('project_type');
-  if (evidence.pricing || evidence.landedCost) delivered.push('price');
+  // Price is delivered by a live pricing quote OR by config prices already on
+  // the detail (incl. the resilient projectCache fallback) — so a flaked
+  // pricingQuote can't produce a false "I don't have price on file" when the
+  // detail we hold carries the config prices.
+  if (
+    evidence.pricing ||
+    evidence.landedCost ||
+    evidence.detail?.configurations?.some((c) => (c.priceMinInr ?? 0) > 0)
+  ) {
+    delivered.push('price');
+  }
   return delivered;
 }
 

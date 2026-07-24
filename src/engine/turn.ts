@@ -1578,6 +1578,20 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   } else {
     evidence = await fetchEvidence(goal, state, deps);
   }
+  // C9 resilience — a focused answer whose live Desk fetch flaked (a transient
+  // conversationContext + getProject miss returns null detail) must NOT
+  // false-decline facts the project HAS ("I don't have price on file" when it
+  // does). Fall back to the full detail we already prefetched into projectCache,
+  // so the buyer gets the real answer. A no_data decline stays honest only when
+  // we actually looked — here we did, on a prior turn.
+  if (
+    goal.kind === 'answer' &&
+    goal.projectId &&
+    !evidence.detail &&
+    state.projectCache?.[goal.projectId]
+  ) {
+    evidence = { ...evidence, detail: state.projectCache[goal.projectId] };
+  }
   if (deps.failureAnswer && goal.kind === 'answer') {
     evidence = enforceAnswerContract(goal, evidence);
   }
