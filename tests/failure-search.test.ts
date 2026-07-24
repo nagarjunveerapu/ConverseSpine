@@ -246,10 +246,6 @@ describe('Phase 3 turn behavior', () => {
   it('rejects an unresolved locality before any extracted value reaches state', async () => {
     const deps = fakeDeps();
     deps.failureSearch = true;
-    let actionPlan: Record<string, unknown> | undefined;
-    deps.crm.appendTurnLedger = async (entry) => {
-      actionPlan = entry.actionPlan;
-    };
     const result = await runEngineTurn(
       {
         convId: 'fv3-invalid-locality',
@@ -259,13 +255,10 @@ describe('Phase 3 turn behavior', () => {
       },
       deps,
     );
-    expect(result.reply).toMatch(/couldn't identify that location/i);
-    expect(result.state.constraints).toEqual({});
-    expect(actionPlan).toMatchObject({
-      failures: [
-        { kind: 'unresolvable', stage: 'extract', subject: 'locality' },
-      ],
-    });
+    // "Buy" is a transaction verb, not a place — do not invent a locality.
+    expect(result.state.constraints.location).toBeUndefined();
+    expect(result.reply).not.toMatch(/couldn't identify that location/i);
+    expect(result.reply).not.toMatch(/don't have anything in \*Buy\*/i);
   });
 
   it('keeps relaxed search constraints durable and discloses locality budget nearest', async () => {
@@ -326,10 +319,12 @@ describe('Phase 3 turn behavior', () => {
       deps,
     );
     expect(result.reply).not.toMatch(/couldn't identify that location/i);
-    expect(result.state.constraints.location).toMatch(/Gurugram|Gurgaon/i);
+    // Outside the live catalog — coverage bit comes from served micro-markets only.
+    expect(result.state.constraints.location).toBeUndefined();
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
-    expect(result.reply).toMatch(/don't have anything in \*(Gurugram|Gurgaon)\*/i);
+    expect(result.reply).toMatch(/don't have anything in \*Gurgaon\*/i);
     expect(result.reply).toMatch(/currently cover/i);
+    expect(result.reply).not.toMatch(/Gurugram/i);
   });
 
   it('does not release a buyer-declared property type', async () => {

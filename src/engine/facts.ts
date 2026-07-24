@@ -1072,6 +1072,8 @@ const LOCALITY_STOP = new Set([
   // "actually can you change something" reduces to "can you something".
   'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
   'show', 'looking', 'some', 'any', 'other', 'else', 'something', 'anything', 'please',
+  // Transaction verbs — "Buy, 70 lakh" is not a place named Buy.
+  'buy', 'sell', 'rent', 'lease',
   // Discourse markers buyers open a correction with ("no wait, …", "ok so, …").
   'no', 'yes', 'yeah', 'yep', 'nope', 'ok', 'okay', 'wait', 'well', 'so', 'sure', 'hmm',
 ]);

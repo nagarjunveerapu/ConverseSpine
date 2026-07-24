@@ -337,8 +337,10 @@ describe('Phase 2 turn contract', () => {
       deps,
     );
     expect(result.reply).not.toMatch(/BHK means Bedroom/i);
-    expect(result.state.constraints.location).toBe('Mumbai');
+    // Mumbai is outside the fake catalog — coverage from served markets, no hardcode.
+    expect(result.state.constraints.location).toBeUndefined();
     expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
     expect(result.reply).toMatch(/don't have anything in \*Mumbai\*/i);
+    expect(result.reply).toMatch(/currently cover/i);
   });
 });

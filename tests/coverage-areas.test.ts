@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collapseCoverageMarkets,
   coverageCoverBit,
+  matchServedMarket,
 } from '../src/engine/coverage-areas.js';
 
 describe('collapseCoverageMarkets', () => {
@@ -34,5 +35,12 @@ describe('collapseCoverageMarkets', () => {
     ]);
     expect(bit).toBe('I currently cover Aerospace Park, Devanahalli');
     expect(bit).not.toMatch(/\//);
+  });
+
+  it('matches buyer text only against live served markets', () => {
+    expect(
+      matchServedMarket('Whitefield', ['Whitefield', 'Sarjapur Road']),
+    ).toBe('Whitefield');
+    expect(matchServedMarket('Gurgaon', ['Whitefield', 'Sarjapur Road'])).toBeUndefined();
   });
 });
