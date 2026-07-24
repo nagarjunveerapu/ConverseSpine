@@ -211,6 +211,7 @@ export async function handleAdvisorTurn(
   }
 
   try {
+    const engine = await rt.engineForTurn();
     const result = await runEngineTurn(
       {
         convId,
@@ -224,7 +225,7 @@ export async function handleAdvisorTurn(
         ingressFailure,
         briefExtract: body.brief_extract === true,
       },
-      rt.engine,
+      engine,
     );
 
     return mapAdvisorTurnResponse({

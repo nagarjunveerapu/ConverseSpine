@@ -13,6 +13,7 @@ export async function runTurn(
 ): Promise<TurnResult> {
   const { conversation_id, buyer_text, builder_id, buyer_phone } = input;
 
+  const engine = await rt.engineForTurn();
   const result = await runEngineTurn(
     {
       convId: conversation_id,
@@ -27,7 +28,7 @@ export async function runTurn(
       channel: input.channel === 'advisor_web' ? 'advisor_web' : 'whatsapp',
       action_id: input.action_id,
     },
-    rt.engine,
+    engine,
   );
 
   rt.trace.traceTurn(ctx, {

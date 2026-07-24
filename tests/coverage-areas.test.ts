@@ -56,9 +56,9 @@ describe('collapseCoverageMarkets', () => {
   });
 
   it('documents residual typo gap: distant misspellings stay outside-served', () => {
-    // Intentionally far from "Sarjapur" — not recovered by ≤2 edit distance.
+    // Intentionally far from "Sarjapur" — beyond ≤3 edit distance on long tokens.
     expect(
-      matchServedMarket('sxrjxpxr', ['Sarjapur Road', 'Whitefield']),
+      matchServedMarket('zzzzzzzz', ['Sarjapur Road', 'Whitefield']),
     ).toBeUndefined();
   });
 });

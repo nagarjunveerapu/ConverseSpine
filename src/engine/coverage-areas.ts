@@ -103,9 +103,15 @@ export function matchServedMarket(
       continue;
     }
     // Light typo pass against primary label tokens (not the full "X Road" string).
+    // Longer tokens allow distance 3 (e.g. stubborn Sarjapur misspellings).
     if (needle.length >= 5) {
       const keyTokens = key.split(/[^a-z0-9]+/).filter((t) => t.length >= 5);
-      if (keyTokens.some((t) => editDistance(needle, t, 2) <= 2)) {
+      if (
+        keyTokens.some((t) => {
+          const max = t.length >= 8 ? 3 : 2;
+          return editDistance(needle, t, max) <= max;
+        })
+      ) {
         consider(primary, 1);
       }
     }
