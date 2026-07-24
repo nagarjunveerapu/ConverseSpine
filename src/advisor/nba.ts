@@ -7,6 +7,9 @@
  * Cap 6. Board owns depth; chips never dump the full tree.
  */
 import type { ConversationState, TurnDebug, TurnGoal } from '../engine/types.js';
+import { rankChips } from '../chips/rank.js';
+import { goalState } from '../chips/shadow.js';
+import type { ChipEvidence } from '../chips/catalogue.js';
 
 export type AdvisorNbaBoard = 'none' | 'matches' | 'project' | 'compare' | 'visit';
 export type AdvisorNbaBoardTab = 'legal' | 'units' | 'price' | 'emi' | 'overview';
@@ -233,11 +236,66 @@ export function mergeChipsWithRails(primary: string[], rails: string[]): string[
   return out;
 }
 
-function chipsForGoal(state: ConversationState, goal: TurnGoal, board: AdvisorNbaBoard): string[] {
-  return mergeChipsWithRails(dimensionAndJourney(state, goal, board), railsFor(board, goal));
+/**
+ * Goals whose primary chips are "what to browse / ask next" — the same job the
+ * transition table was measured on. Interaction-specific goals are left to the
+ * hand-authored chips: clarify needs the project NAMES to pick, visit_* needs
+ * time slots, probe needs "show options", no_fit needs its escape rails. The
+ * ranker's catalogue models none of those, so it must not displace them.
+ */
+const RANKER_GOALS: ReadonlySet<string> = new Set([
+  'recommend',
+  'ack_reject_recommend',
+  'advance',
+  'answer',
+  'shortlist_answer',
+]);
+
+/**
+ * Ranker-ordered content chips (ADR-005). Built from the same evidence the
+ * shadow log used, so the live ordering matches what shadow mode measured. The
+ * labels feed the `primary` slot only — rails are merged in afterward by
+ * chipsForGoal, so navigation can never be displaced by a ranked answer chip.
+ */
+function rankedPrimaryChips(state: ConversationState, goal: TurnGoal, limit: number): string[] {
+  const focusId = state.focus?.projectId;
+  const focused = focusId ? state.projectCache?.[focusId] : undefined;
+  const ev: ChipEvidence = {
+    ...(focused ? { focused } : {}),
+    ...(state.focus?.projectName ? { focusName: state.focus.projectName } : {}),
+    shortlist: state.discover.lastOffered.map((o) => o.name),
+    ...(state.visitBookedCache?.length ? { visitBooked: true } : {}),
+  };
+  const ranked = rankChips({ phase: state.phase, state: goalState(goal), evidence: ev, limit });
+  return ranked.chips.map((c) => c.label);
 }
 
-export function buildAdvisorNba(state: ConversationState, debug: TurnDebug): AdvisorNba {
+function chipsForGoal(
+  state: ConversationState,
+  goal: TurnGoal,
+  board: AdvisorNbaBoard,
+  chipRankLive: boolean,
+): string[] {
+  const rails = railsFor(board, goal);
+  let primary: string[];
+  if (chipRankLive && RANKER_GOALS.has(goal.kind)) {
+    // Leave the rails their reserved slots so the ranked list can't crowd
+    // navigation out; fall back to the hand-authored chips if the table is
+    // empty for this state (the availability check suppressed everything).
+    const budget = Math.max(1, MAX_CHIPS - Math.min(rails.length, 2));
+    const ranked = rankedPrimaryChips(state, goal, budget);
+    primary = ranked.length ? ranked : dimensionAndJourney(state, goal, board);
+  } else {
+    primary = dimensionAndJourney(state, goal, board);
+  }
+  return mergeChipsWithRails(primary, rails);
+}
+
+export function buildAdvisorNba(
+  state: ConversationState,
+  debug: TurnDebug,
+  chipRankLive = false,
+): AdvisorNba {
   const goal = debug.goal;
   const pid = goalProjectId(goal) ?? state.focus?.projectId;
 
@@ -278,7 +336,7 @@ export function buildAdvisorNba(state: ConversationState, debug: TurnDebug): Adv
     board_project_id = undefined;
   }
 
-  const chips = chipsForGoal(state, goal, board);
+  const chips = chipsForGoal(state, goal, board, chipRankLive);
 
   return {
     chips,

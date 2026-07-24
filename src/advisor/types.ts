@@ -114,4 +114,6 @@ export interface AdvisorMapInput {
   };
   searchRecovery?: SearchRecoveryEnvelope;
   uiMode?: AdvisorUiMode;
+  /** ADR-005: rank chips by the transition table instead of the fixed nba list. */
+  chipRankLive?: boolean;
 }

@@ -78,6 +78,8 @@ FAILURE_ROUTING = "true"
 FAILURE_SEARCH = "true"
 # Failure-as-a-value Phase 4: required facts + partial no-data outcomes.
 FAILURE_ANSWER = "true"
+# ADR-005: rank advisor chips by the transition table (out of shadow), dev-first.
+CHIP_RANK_LIVE = "true"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"
