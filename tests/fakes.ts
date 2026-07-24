@@ -43,6 +43,14 @@ const LOKATIONS: readonly P[] = [
   },
   { id: 'eldorado', name: 'Brigade Eldorado', market: 'North Bangalore', type: 'apartment', priceInr: 6_500_000, display: '₹65 L' },
   { id: 'cornerstone', name: 'Brigade Cornerstone', market: 'Devanahalli', type: 'apartment', priceInr: 5_200_000, display: '₹52 L' },
+  {
+    id: 'cornerstone-utopia',
+    name: 'Cornerstone Utopia',
+    market: 'Whitefield',
+    type: 'apartment',
+    priceInr: 10_500_000,
+    display: '₹1.05 Cr',
+  },
   { id: 'orchards', name: 'Brigade Orchards', market: 'Sarjapur', type: 'apartment', priceInr: 8_000_000, display: '₹80 L' },
 ];
 
@@ -344,6 +352,7 @@ export function fakeData(): EngineData & {
       const geocoded: Record<string, string> = {
         whitefield: 'Whitefield',
         yelahanka: 'Yelahanka',
+        jayanagar: 'Jayanagar',
         'north bangalore': 'North Bangalore',
       };
       if (geocoded[key]) {

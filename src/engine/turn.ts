@@ -1512,7 +1512,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ...(ff?.priorReplyExcerpt ? { priorReplyExcerpt: ff.priorReplyExcerpt } : {}),
     ...(disclosedForCompose.length ? { disclosedFacts: disclosedForCompose } : {}),
   });
-  const terminalFailure = evidence.failure;
+  // Phase 3 no_fit may carry both a Failure (ledger) and rich compose evidence
+  // (budgetGap / noMatch / …). Prefer the existing compose templates over the
+  // generic speakFailure sentence so Whitefield nearest / empty-locality copy
+  // stay one family — not a second "Nothing matches …" speaker.
+  const terminalFailure =
+    goal.kind === 'no_fit' &&
+    (evidence.budgetGap ||
+      evidence.noMatch ||
+      evidence.constraintGap ||
+      evidence.propertyTypeGap ||
+      evidence.floor)
+      ? undefined
+      : evidence.failure;
 
   const visitDeterministic =
     goal.kind === 'visit_ask' || goal.kind === 'visit_propose' || goal.kind === 'visit_booked';
@@ -2026,11 +2038,49 @@ async function fetchRecommend(
         },
       };
     }
+
+    const failure = outcome.failure;
+    if (failure.subject === 'budget' && failure.nearest && s.constraints.budgetMaxInr) {
+      return {
+        goal: { kind: 'no_fit' },
+        evidence: {
+          tools: ['search'],
+          failure,
+          budgetGap: {
+            budgetDisplay: formatInr(s.constraints.budgetMaxInr),
+            ...(s.constraints.location ? { location: s.constraints.location } : {}),
+            closestName: failure.nearest.name,
+            closestDisplay: failure.nearest.display,
+            closestProjectId: failure.nearest.projectId,
+          },
+        },
+      };
+    }
+    if (failure.subject === 'area') {
+      const loc = s.constraints.location?.trim() || 'that area';
+      const cat = await deps.data.catalog(s.builderId).catch(() => null);
+      const coverage = (cat?.microMarkets ?? []).filter(Boolean).slice(0, 5);
+      const coverBit = coverage.length
+        ? `I currently cover ${coverage.join(', ')}`
+        : 'I can help with areas where I have projects on file';
+      return {
+        goal: { kind: 'no_fit' },
+        evidence: {
+          tools: ['search'],
+          failure,
+          noMatch: {
+            reasoning: `I don't have anything in *${loc}* — ${coverBit}`,
+            nearby: coverage,
+          },
+        },
+      };
+    }
+
     return {
       goal: base,
       evidence: {
         tools: ['search'],
-        failure: outcome.failure,
+        failure,
       },
     };
   }

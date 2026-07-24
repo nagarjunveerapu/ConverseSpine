@@ -9,7 +9,7 @@ import { fakeDeps } from './fakes.js';
 const MATCH: Match = {
   projectId: 'nearest',
   name: 'Nearest Project',
-  microMarket: 'Nearby',
+  microMarket: 'Whitefield',
   startingPriceInr: 8_000_000,
   startingPriceDisplay: '₹80 L',
   matchReasons: [],
@@ -61,7 +61,7 @@ describe('authority-aware zero-match relaxation', () => {
     rejectedProjectIds: [],
   };
 
-  it('releases inferred type, then size, then area; durable constraints stay untouched', async () => {
+  it('prefers locality budget-nearest over silent area release', async () => {
     const calls: SearchFilters[] = [];
     const constraints = { ...base.constraints };
     const result = await searchWithAuthorityRelaxation({
@@ -76,25 +76,44 @@ describe('authority-aware zero-match relaxation', () => {
       },
       search: async (filters) => {
         calls.push({ ...filters });
-        return {
-          matches: filters.locations
-            ? []
-            : [{ ...MATCH, startingPriceInr: 6_000_000, startingPriceDisplay: '₹60 L' }],
-        };
+        // Locality inventory only when budget is cleared; never invent off-area hits.
+        if (filters.locations && filters.budgetMaxInr === undefined) {
+          return { matches: [MATCH] };
+        }
+        return { matches: [] };
       },
     });
 
-    expect(calls).toHaveLength(3);
-    expect(calls[0]).not.toHaveProperty('projectTypes');
-    expect(calls[0]).toHaveProperty('bhks');
-    expect(calls[1]).not.toHaveProperty('bhks');
-    expect(calls[1]).toHaveProperty('locations');
-    expect(calls[2]).not.toHaveProperty('locations');
+    expect(calls.some((c) => c.locations && c.budgetMaxInr === undefined)).toBe(true);
+    expect(calls.every((c) => c.locations !== undefined || !('locations' in c))).toBe(true);
     expect(result).toMatchObject({
-      ok: true,
-      value: { relaxed: ['type', 'size', 'area'] },
+      ok: false,
+      failure: {
+        kind: 'no_match',
+        subject: 'budget',
+        nearest: { name: 'Nearest Project', display: '₹80 L' },
+      },
     });
     expect(constraints).toEqual(base.constraints);
+  });
+
+  it('returns empty-locality no_match instead of dumping other corridors', async () => {
+    const result = await searchWithAuthorityRelaxation({
+      constraints: {
+        bhk: '2 BHK',
+        location: 'Jayanagar',
+      },
+      rejectedProjectIds: [],
+      filters: {
+        bhks: '2 BHK',
+        locations: 'Jayanagar',
+      },
+      search: async () => ({ matches: [] }),
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      failure: { kind: 'no_match', subject: 'area' },
+    });
   });
 
   it('never releases a declared property type', async () => {
@@ -249,7 +268,7 @@ describe('Phase 3 turn behavior', () => {
     });
   });
 
-  it('keeps relaxed search constraints durable and discloses the broader result', async () => {
+  it('keeps relaxed search constraints durable and discloses locality budget nearest', async () => {
     const deps = fakeDeps();
     deps.failureSearch = true;
     const result = await runEngineTurn(
@@ -266,8 +285,31 @@ describe('Phase 3 turn behavior', () => {
       budgetMaxInr: 7_000_000,
       bhk: '2 BHK',
     });
-    expect(result.reply).toMatch(/couldn't match/i);
-    expect(result.reply).not.toMatch(/here's what fits/i);
+    expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
+    expect(result.reply).toMatch(/Nothing in \*Whitefield\* starts within/i);
+    expect(result.reply).toMatch(/Cornerstone Utopia|₹1\.05 Cr/i);
+    expect(result.reply).not.toMatch(/here's what we do have/i);
+    expect(result.reply).not.toMatch(/Sakleshpur|Ayana/i);
+  });
+
+  it('speaks empty-locality coverage instead of dumping other corridors', async () => {
+    const deps = fakeDeps();
+    deps.failureSearch = true;
+    const result = await runEngineTurn(
+      {
+        convId: 'fv3-jayanagar',
+        builderId: 'lokations',
+        text: '2 BHK in Jayanagar',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+    expect(result.state.constraints.location).toBe('Jayanagar');
+    expect(result.debug.goal).toMatchObject({ kind: 'no_fit' });
+    expect(result.reply).toMatch(/don't have anything in \*Jayanagar\*/i);
+    expect(result.reply).toMatch(/currently cover/i);
+    expect(result.reply).not.toMatch(/here's what we do have/i);
+    expect(result.reply).not.toMatch(/couldn't match that (property type|size|area)/i);
   });
 
   it('does not release a buyer-declared property type', async () => {
