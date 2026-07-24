@@ -2159,6 +2159,8 @@ async function fetchRecommend(
         ports: {
           geoAreasInRegion: (region, builderId) =>
             deps.data.geoAreasInRegion(region, builderId),
+          resolveGeo: (text) => deps.data.resolveGeo(text),
+          projectCoords: (builderId) => deps.data.projectCoords(builderId),
           search: async (builderId, candidateFilters) => {
             const result = await searchWithFilters(deps, builderId, candidateFilters);
             const { location: _loc, ...constraintsSansArea } = s.constraints;

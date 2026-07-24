@@ -14,7 +14,7 @@ const NB: Match = {
 const CATALOG = ['North Bangalore', 'Whitefield', 'Devanahalli', 'Sakleshpur'];
 
 describe('searchLocalityWiden', () => {
-  it('widens only into catalog-intersecting LI areas (Jayanagar → Devanahalli)', async () => {
+  it('widens via LI ∩ catalog (Jayanagar → North Bangalore markets)', async () => {
     const hit = await searchLocalityWiden({
       asked: 'Jayanagar',
       builderId: 'lokations',
@@ -26,23 +26,57 @@ describe('searchLocalityWiden', () => {
           return [
             { name: 'North Bangalore', distanceKm: 12 },
             { name: 'Whitefield', distanceKm: 15 },
-            { name: 'Some Delhi Suburb', distanceKm: 5 },
           ];
+        },
+        async resolveGeo() {
+          return null;
+        },
+        async projectCoords() {
+          return [];
         },
         async search(_b, filters) {
           expect(filters.locations).toMatch(/North Bangalore/);
-          expect(filters.locations).not.toMatch(/Delhi/);
           return { matches: [NB] };
         },
       },
     });
-    expect(hit).toMatchObject({
-      matches: [{ name: 'Brigade Eldorado' }],
-      nearbyAreas: ['North Bangalore', 'Whitefield'],
-    });
+    expect(hit?.nearbyAreas).toEqual(['North Bangalore', 'Whitefield']);
+    expect(hit?.matches[0]?.name).toBe('Brigade Eldorado');
   });
 
-  it('returns null for outside metros (Delhi) — no catalog-wide dump', async () => {
+  it('widens via ask-distance when LI misses but ask is near inventory', async () => {
+    const hit = await searchLocalityWiden({
+      asked: 'Jayanagar',
+      builderId: 'lokations',
+      filters: { locations: 'Jayanagar' },
+      rejectedProjectIds: [],
+      catalogMarkets: CATALOG,
+      ports: {
+        async geoAreasInRegion() {
+          return [];
+        },
+        async resolveGeo() {
+          return { lat: 12.9308, lng: 77.5838 }; // Jayanagar
+        },
+        async projectCoords() {
+          return [
+            { projectId: 'eldorado', lat: 13.139, lng: 77.658, microMarket: 'North Bangalore' },
+            { projectId: 'cornerstone', lat: 13.18, lng: 77.68, microMarket: 'Devanahalli' },
+            { projectId: 'ayana', lat: 12.944, lng: 75.784, microMarket: 'Sakleshpur' },
+          ];
+        },
+        async search(_b, filters) {
+          expect(filters.locations).toMatch(/North Bangalore|Devanahalli/);
+          expect(filters.locations).not.toMatch(/Sakleshpur/);
+          return { matches: [NB] };
+        },
+      },
+    });
+    expect(hit?.nearbyAreas[0]).toBe('North Bangalore');
+    expect(hit?.nearbyAreas).not.toContain('Sakleshpur');
+  });
+
+  it('returns null for Delhi — far from inventory, no catalog dump', async () => {
     const hit = await searchLocalityWiden({
       asked: 'Delhi',
       builderId: 'lokations',
@@ -53,8 +87,16 @@ describe('searchLocalityWiden', () => {
         async geoAreasInRegion() {
           return [{ name: 'Gurugram', distanceKm: 20 }];
         },
+        async resolveGeo() {
+          return { lat: 28.61, lng: 77.21 }; // Delhi
+        },
+        async projectCoords() {
+          return [
+            { projectId: 'eldorado', lat: 13.139, lng: 77.658, microMarket: 'North Bangalore' },
+          ];
+        },
         async search() {
-          throw new Error('must not search when LI misses catalog');
+          throw new Error('must not search for far outside-served asks');
         },
       },
     });
