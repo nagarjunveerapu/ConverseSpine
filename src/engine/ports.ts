@@ -96,6 +96,8 @@ export interface EngineData {
     priceMaxInr: number;
     projectTypes: string[];
     microMarkets: string[];
+    /** Full builder name set — the resolvers' distinctiveness source. */
+    projectNames?: Array<{ projectId: string; name: string }>;
     servedCities?: string[];
     total: number;
     sample: Array<{ name: string; startingPriceDisplay: string }>;

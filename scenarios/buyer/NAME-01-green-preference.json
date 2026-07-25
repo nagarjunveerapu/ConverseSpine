@@ -1,0 +1,16 @@
+{
+  "id": "NAME-01",
+  "title": "PR-1 — a preference word must not open a project (green spaces)",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["pr1", "name-distinctiveness", "seam", "advisor"],
+  "turns": [
+    {
+      "text": "I want green spaces and good schools nearby",
+      "assert": {
+        "goal_kind_not": "commit",
+        "reply_excludes": ["krishnaja", "viva greens"]
+      }
+    }
+  ]
+}

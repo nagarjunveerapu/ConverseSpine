@@ -1,0 +1,11 @@
+{
+  "id": "NAME-02",
+  "title": "PR-1 — naming a project outright still opens it (control)",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["pr1", "name-distinctiveness", "control", "advisor"],
+  "turns": [
+    { "text": "tell me about Krishnaja Greens", "assert": { "reply_includes": ["krishnaja"] } },
+    { "text": "what is the price", "assert": { "reply_includes": ["krishnaja"] } }
+  ]
+}

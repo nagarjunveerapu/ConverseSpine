@@ -44,6 +44,14 @@ export interface ExtractTurnDeps {
   llm: EngineLlm;
   semantic: SemanticNluPort;
   microMarkets: readonly string[];
+  /**
+   * The builder's full catalog names. The precision floor needs them to know
+   * which words actually pick out a project: a LONE embedder proposal has no
+   * sibling in the call to reveal that its token is shared (see name-index.ts).
+   * Already fetched for this turn — `catalog()` reads all 50 rows and used to
+   * discard the names.
+   */
+  catalogNames?: ReadonlyArray<{ projectId?: string; name: string }>;
   /** P6 — optional ExtractTurnFacts caller (tests inject fakes). */
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<BamlExtractResult | null>;
   bamlMode?: BamlExtractMode;
@@ -157,7 +165,7 @@ export async function extractTurnAuthority(
     ...state.discover.lastOffered,
     ...(state.discover.discussedProjects ?? []),
     ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
-  ]);
+  ], deps.catalogNames ?? []);
   // PIV-03: "change to 2BHK under 70L" must recommend, not clarify_project_pick.
   if (isConstraintRefinementTurn(text) && !merged.namedProjects?.length && !merged.pickName) {
     merged = { ...merged, speechAct: 'search' };
@@ -208,7 +216,7 @@ export async function extractTurnAuthority(
         ...state.discover.lastOffered,
         ...(state.discover.discussedProjects ?? []),
         ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
-      ]);
+      ], deps.catalogNames ?? []);
       if (isConstraintRefinementTurn(text) && !promoted.namedProjects?.length && !promoted.pickName) {
         promoted = { ...promoted, speechAct: 'search' };
       }
@@ -416,6 +424,7 @@ export function scrubEmbedderIdentityNoise(
   phase: ConversationState['phase'],
   extracted: Extracted,
   sessionPool?: ReadonlyArray<{ name: string }>,
+  catalogNames: ReadonlyArray<{ projectId?: string; name: string }> = [],
 ): Extracted {
   if (isLocationCorrectionTurn(text)) {
     if (!extracted.namedProjects?.length) return extracted;
@@ -453,6 +462,7 @@ export function scrubEmbedderIdentityNoise(
       text,
       extracted.namedProjects,
       (sessionPool ?? []) as ReadonlyArray<{ projectId?: string; name: string }>,
+      catalogNames,
     );
     if (!filtered.length) {
       const { namedProjects: _n, ...rest } = extracted;
@@ -466,7 +476,11 @@ export function scrubEmbedderIdentityNoise(
   // Keep identity on structural cue, session-pool name, or a fully-typed project name
   // (the floor above already vetoed anything the buyer didn't actually write).
   if (buyerCuedOtherProject(text, sessionPool)) return extracted;
-  if (extracted.namedProjects?.some((p) => nameEvidenceIn(text, p.name) === 'full')) {
+  if (
+    extracted.namedProjects?.some(
+      (p) => nameEvidenceIn(text, p.name, [...catalogNames, ...(sessionPool ?? [])]) === 'full',
+    )
+  ) {
     return extracted;
   }
   if (!extracted.namedProjects?.length && !extracted.pickName) return extracted;

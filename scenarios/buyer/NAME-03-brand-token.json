@@ -1,0 +1,14 @@
+{
+  "id": "NAME-03",
+  "title": "PR-1 — a builder brand is not a project (no sibling steal)",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["pr1", "name-distinctiveness", "advisor"],
+  "turns": [
+    { "text": "tell me about Brigade Cornerstone", "assert": { "reply_includes": ["cornerstone"] } },
+    {
+      "text": "is Brigade a reliable builder",
+      "assert": { "reply_excludes": ["eldorado", "oasis", "meadows", "orchards", "calista", "atmosphere"] }
+    }
+  ]
+}

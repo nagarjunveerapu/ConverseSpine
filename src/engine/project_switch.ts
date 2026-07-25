@@ -3,6 +3,7 @@
  */
 import type { AnswerTopic, ConversationState, Extracted, OfferedProject, TurnGoal } from './types.js';
 import type { EngineDeps } from './ports.js';
+import { bearingTokensOf } from './name-index.js';
 
 export interface SwitchIntent {
   readonly followUp?: AnswerTopic;
@@ -125,8 +126,17 @@ function withinOneEdit(a: string, b: string): boolean {
   return edits + (l.length - j) + (s.length - i) <= 1;
 }
 
-function evidenceTokens(name: string): string[] {
-  return name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+/**
+ * The words that actually name this project, judged against the catalog it lives
+ * in (see name-index.ts). Previously a fixed ≥4-char filter with the first token
+ * dropped — which let the brand token `brigade` stand as evidence for any of ten
+ * Brigade rows, and let `greens` name two different projects at once.
+ */
+function evidenceTokens(
+  name: string,
+  siblings: ReadonlyArray<{ name: string }> = [{ name }],
+): string[] {
+  return bearingTokensOf(name, siblings);
 }
 
 function tokenMatchesWord(word: string, token: string): boolean {
@@ -144,20 +154,21 @@ export type NameEvidence = 'full' | 'partial' | 'none';
  * prices" alone never does. 'full' = every distinctive token present (typo-tolerant);
  * 'partial' = some; 'none' = the buyer never named this project.
  */
-export function nameEvidenceIn(text: string, name: string): NameEvidence {
+export function nameEvidenceIn(
+  text: string,
+  name: string,
+  siblings: ReadonlyArray<{ name: string }> = [{ name }],
+): NameEvidence {
   const words = facetNameResidue(text).split(' ').filter(Boolean);
   if (!words.length) return 'none';
-  const tokens = evidenceTokens(name);
-  if (!tokens.length) return 'none';
-  const distinctive = tokens.length > 1 ? tokens.slice(1) : tokens;
+  // Only name-bearing tokens count. A word shared with an unrelated project
+  // (`greens`, `brigade`) is not evidence for either of them — which is what the
+  // old code's own comment said, while returning 'partial' anyway.
+  const distinctive = evidenceTokens(name, siblings);
+  if (!distinctive.length) return 'none';
   const matched = distinctive.filter((t) => words.some((w) => tokenMatchesWord(w, t)));
   if (matched.length === distinctive.length) return 'full';
-  // A lone brand token ("brigade") is not evidence for one sibling over another.
-  if (matched.length > 0) return 'partial';
-  if (tokens.length > 1 && tokens[0] && words.some((w) => tokenMatchesWord(w, tokens[0]!))) {
-    return 'partial';
-  }
-  return 'none';
+  return matched.length > 0 ? 'partial' : 'none';
 }
 
 /**
@@ -171,8 +182,17 @@ export function filterNamedProjectsByEvidence(
   text: string,
   named: ReadonlyArray<OfferedProject>,
   pool: ReadonlyArray<{ projectId?: string; name: string }>,
+  /**
+   * The builder's full catalog names. Without it a LONE proposal has no sibling
+   * in the call to reveal that its token is shared — the embedder's top hit
+   * "Krishnaja Greens" on "I want green spaces" looked fully named because no
+   * Viva Greens was present to contest `greens`. Optional so every existing
+   * caller keeps working, but the turn pipeline threads it.
+   */
+  catalogNames: ReadonlyArray<{ projectId?: string; name: string }> = [],
 ): OfferedProject[] {
   if (!named.length) return [...named];
+  const siblings = [...catalogNames, ...named, ...pool];
   const inPool = (p: OfferedProject): boolean =>
     pool.some(
       (q) =>
@@ -184,13 +204,31 @@ export function filterNamedProjectsByEvidence(
   const candidates: { p: OfferedProject; ev: NameEvidence; pool: boolean }[] = [];
   const seen = new Set<string>();
   for (const p of named) {
-    candidates.push({ p, ev: nameEvidenceIn(text, p.name), pool: inPool(p) });
+    candidates.push({ p, ev: nameEvidenceIn(text, p.name, siblings), pool: inPool(p) });
     seen.add(p.projectId);
   }
   for (const q of pool) {
     if (!q.projectId || seen.has(q.projectId)) continue;
-    const ev = nameEvidenceIn(text, q.name);
+    const ev = nameEvidenceIn(text, q.name, siblings);
     if (ev === 'full') candidates.push({ p: { projectId: q.projectId, name: q.name }, ev, pool: true });
+  }
+  // Same rescue, widened from the board to the catalog — and only when NOTHING
+  // proposed is fully named. Live repro: the buyer typed "tell me about
+  // cornerstone", the embedder's top hit was *Cornerstone Utopia* (partial —
+  // `utopia` is absent), no board existed to contest it, so the partial
+  // proposal won and the buyer was shown the wrong project. `Brigade
+  // Cornerstone` is fully named by that text and sits in the catalog.
+  //
+  // Still veto-shaped: this can only surface a project the buyer's own words
+  // name in FULL, never a guess.
+  if (!candidates.some((c) => c.ev === 'full')) {
+    for (const q of catalogNames) {
+      const qid = 'projectId' in q ? q.projectId : undefined;
+      if (!qid || seen.has(qid)) continue;
+      if (nameEvidenceIn(text, q.name, siblings) !== 'full') continue;
+      seen.add(qid);
+      candidates.push({ p: { projectId: qid, name: q.name }, ev: 'full', pool: false });
+    }
   }
   let alive = candidates.filter((c) => c.ev !== 'none');
   if (!alive.length) return [];
@@ -200,7 +238,7 @@ export function filterNamedProjectsByEvidence(
   // Cornerstone sibling the same way.
   const words = facetNameResidue(text).split(' ').filter(Boolean);
   const matchedSet = (name: string): string[] =>
-    evidenceTokens(name)
+    evidenceTokens(name, siblings)
       .filter((t) => words.some((w) => tokenMatchesWord(w, t)))
       .sort();
   const matched = new Map<string, string[]>(alive.map((c) => [c.p.projectId, matchedSet(c.p.name)]));

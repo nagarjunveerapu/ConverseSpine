@@ -250,6 +250,9 @@ export function nayadeskData(
         priceMaxInr: prices.length ? Math.max(...prices) : 0,
         projectTypes: [...new Set(resp.matches.map((m) => m.project_type ?? 'project'))],
         microMarkets: [...new Set(resp.matches.map((m) => m.micro_market))],
+        // Free — these rows are already in hand. The name resolvers need the
+        // full set to judge which words name exactly one project.
+        projectNames: resp.matches.map((m) => ({ projectId: m.project_id, name: m.name })),
         ...(servedCities.length ? { servedCities } : {}),
         total: resp.matches.length,
         sample: resp.matches.slice(0, 10).map((m) => ({

@@ -194,6 +194,9 @@ export function fakeData(): EngineData & {
         priceMaxInr: Math.max(...prices),
         projectTypes: ['plantation', 'villa', 'apartment'],
         microMarkets: [...new Set(LOKATIONS.map((p) => p.market))],
+        // The same rows the real adapter already holds — the name resolvers
+        // judge distinctiveness against the full set (name-index.ts).
+        projectNames: LOKATIONS.map((p) => ({ projectId: p.id, name: p.name })),
         // Mirrors Desk cityFromLocation on fake markets (Bangalore / Hassan / Kodagu).
         servedCities: ['Bengaluru', 'Hassan', 'Kodagu'],
         total: LOKATIONS.length,
