@@ -239,7 +239,11 @@ export type FactKey =
   /** Corridor appreciation from approved micro_market_intel. */
   | 'appreciation'
   /** Corridor growth drivers from approved micro_market_intel. */
-  | 'growth_drivers';
+  | 'growth_drivers'
+  /** Operator / revenue / maintenance model from project investment fields. */
+  | 'operator_model'
+  /** Site-visit logistics (pickup, parking, food, hours). */
+  | 'visit_logistics';
 
 export type TurnGoal =
   | { kind: 'greet' }

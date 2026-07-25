@@ -770,7 +770,11 @@ export function detectSoftPrefs(
   if (/\bwalk(?:able|ability)\b|\bwalking\s+distance\b|\beverything\s+within\s+walk/i.test(text)) {
     out.walkabilityMentioned = true;
   }
-  if (/\bresale\b|\bappreciat(?:e|ion)\b|\bhold(?:s)?\s+(?:its\s+)?value\b|\bfuture\s+value\b/i.test(text)) {
+  if (
+    /\bresale\b|\bappreciat(?:e|ion)\b|\bhold(?:s)?\s+(?:its\s+)?value\b|\bfuture\s+value\b|\brental\s+yield\b|\byield\b|\broi\b|\breturn\s+on\s+investment\b/i.test(
+      text,
+    )
+  ) {
     out.valueMentioned = true;
   }
   return out;

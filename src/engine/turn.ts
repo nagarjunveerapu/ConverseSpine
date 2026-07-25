@@ -2122,12 +2122,22 @@ async function fetchRecommend(
   // calls never set either (meaningless there). Advisor-web only — WA must
   // not re-rank on soft NL heuristics.
   if (s.ndConversationId) filters = { ...filters, conversationId: s.ndConversationId };
+  // Soft-rank: full prefs on advisor-web; WA only when the buyer explicitly
+  // weighs value/investment (CRM Phase 4) — never re-rank WA on soft NL heuristics.
+  const prefs = advisorSearchPrefs(s.constraints);
   if (channel === 'advisor_web') {
-    const prefs = advisorSearchPrefs(s.constraints);
     if (prefs.preferenceWeights) filters = { ...filters, preferenceWeights: prefs.preferenceWeights };
     if (prefs.commuteHub) filters = { ...filters, commuteHub: prefs.commuteHub };
     if (prefs.budgetTargetInr) filters = { ...filters, budgetTargetInr: prefs.budgetTargetInr };
     if (prefs.askSizeSqft) filters = { ...filters, askSizeSqft: prefs.askSizeSqft };
+  } else if (
+    (s.constraints.purpose === 'investment' || s.constraints.valueMentioned) &&
+    prefs.preferenceWeights?.value
+  ) {
+    filters = {
+      ...filters,
+      preferenceWeights: { value: prefs.preferenceWeights.value },
+    };
   }
   let strictSearch = await searchWithFilters(deps, s.builderId, filters);
 
@@ -3053,13 +3063,19 @@ async function fetchAnswer(
   }
   if (faqHits.length) {
     tools.push('faqLookup');
+    // Stub name must follow goal.projectId — lagging focus used to print
+    // "Regulatory snapshot for Sanctuary" on an Eldorado FAQ hit.
+    const stubName =
+      (s.focus?.projectId === goal.projectId ? focusName : '') ||
+      s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
+      'this project';
     evidence = {
       ...evidence,
       tools: [...new Set(tools)],
       detail: {
         ...(evidence.detail ?? {
           projectId: goal.projectId,
-          name: focusName,
+          name: stubName,
           microMarket: '',
         }),
         faqs: faqHits,
@@ -3116,6 +3132,19 @@ async function fetchAnswer(
     /\b(?:rera|khata|title|encumbrance|\bec\b|clear\s+title|approval\s+status|plan\s+approval|legal\s+status|legal\s+details?)\b/i.test(
       buyerText ?? '',
     );
+  // CRM advisory atoms live on ProjectDetail — hydrate whenever the contract
+  // requires them, even if topic routing landed elsewhere.
+  const advisoryDetailNeeded = Boolean(
+    deps.failureAnswer &&
+      goal.requires?.some(
+        (k) =>
+          k === 'rental_yield' ||
+          k === 'appreciation' ||
+          k === 'growth_drivers' ||
+          k === 'operator_model' ||
+          k === 'visit_logistics',
+      ),
+  );
   const needsDetail =
     (!faqShapedHit &&
       !faqShapedMiss &&
@@ -3128,7 +3157,8 @@ async function fetchAnswer(
           t === 'availability' ||
           t === 'property_type',
       )) ||
-    legalSnapshotNeeded;
+    legalSnapshotNeeded ||
+    advisoryDetailNeeded;
   if (needsDetail || wantsLocation) {
     let detail = await hydrateProjectDetail(deps, s, goal.projectId);
     if (detail && topics.includes('legal')) {
@@ -3255,9 +3285,12 @@ async function enrichDetailLegal(
 ): Promise<NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>> {
   if (detail.reraNumber?.trim() && detail.phases?.length) return detail;
   const ctx = await deps.data.conversationContext(nd).catch(() => null);
-  if (!ctx) return detail;
+  // Context is Desk-focus-scoped — never overlay another project's RERA/phases.
+  if (!ctx?.project?.project_id || ctx.project.project_id !== detail.projectId) {
+    return detail;
+  }
   let next = detail;
-  const projectRera = ctx.project?.rera_number?.trim();
+  const projectRera = ctx.project.rera_number?.trim();
   if (!next.reraNumber?.trim() && projectRera) {
     next = { ...next, reraNumber: projectRera };
   }

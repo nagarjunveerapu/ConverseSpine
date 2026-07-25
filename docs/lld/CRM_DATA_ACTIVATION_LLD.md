@@ -66,9 +66,13 @@ Coverage audit: bot reaches ~20 of ~45 dimensions. Dead half = advisor different
 - Compare "investment" line: grounded entry + available ROI/yield atoms, no "call me for yields" deflect when data exists.
 - `policy_investment_metric` (CAGR/IRR promises) stays unsupported — separate from catalog ROI bands.
 
-## 5. Part C — Search (Phase 4 · deferred)
+## 5. Part C — Search (Phase 4)
 
-New filter/soft-rank params + taught extraction — not in this change set.
+**Soft-rank only — no hard yield/appreciation filters** (sparse intel → empty shortlists).
+
+- Desk `valueFit`: appreciation (primary) → approved rent bands (secondary) → project `expected_roi` (tertiary).
+- Spine: WA recommend attaches `{ value }` preference weights when `purpose === investment` or `valueMentioned` (yield/ROI/appreciation phrasing); advisor-web keeps full soft prefs.
+- Taught numeric floors (`min_yield` / `min_appreciation`) deferred until buyers state them often enough.
 
 ## 6. Verification
 

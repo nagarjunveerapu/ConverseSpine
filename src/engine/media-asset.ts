@@ -5,7 +5,11 @@
  * letting legal/FAQ bleed into the reply.
  */
 
-/** Desk `AssetKind` values the bot may request via media/share. */
+/**
+ * Desk `AssetKind` values the bot may request via media/share.
+ * Keep in sync with NayaDesk `src/types.ts` (`export type AssetKind` — ~line 402).
+ * Drift degrades to an honest miss (share 400), never fabrication.
+ */
 export const DESK_MEDIA_KINDS = [
   'brochure',
   'floor_plan',

@@ -244,10 +244,11 @@ export function advisoryFactLines(
     );
   }
 
-  if (
-    /\b(?:operator|who\s+operates|revenue\s+model|maintenance\s+model|managed)\b/i.test(buyerText) &&
-    inv
-  ) {
+  const wantOperator =
+    requires?.includes('operator_model') ||
+    (!requires?.length &&
+      /\b(?:operator|who\s+operates|revenue\s+model|maintenance\s+model|managed)\b/i.test(buyerText));
+  if (wantOperator && inv) {
     const bits: string[] = [];
     if (inv.operatorBrand) bits.push(`operated by ${inv.operatorBrand}`);
     if (inv.revenueModel) bits.push(`revenue model: ${inv.revenueModel}`);
@@ -266,10 +267,11 @@ export function advisoryFactLines(
     lines.push(`Amenities on file: ${detail.amenities.slice(0, 8).join(', ')}`);
   }
 
-  if (
-    /\b(?:pickup|parking|site\s+visit|food\s+on\s+(?:site|visit)|accommodation)\b/i.test(buyerText) &&
-    detail.visitLogistics
-  ) {
+  const wantVisit =
+    requires?.includes('visit_logistics') ||
+    (!requires?.length &&
+      /\b(?:pickup|parking|site\s+visit|food\s+on\s+(?:site|visit)|accommodation)\b/i.test(buyerText));
+  if (wantVisit && detail.visitLogistics) {
     const v = detail.visitLogistics;
     const bits: string[] = [];
     if (v.pickupMode) bits.push(`pickup: ${v.pickupMode}`);

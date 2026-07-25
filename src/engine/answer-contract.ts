@@ -22,6 +22,16 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
     pattern:
       /\b(?:what(?:'s|\s+is)\s+driving|growth\s+drivers?|why\s+is\s+(?:this\s+)?(?:area|corridor)\s+growing|infra(?:structure)?\s+(?:pipeline|coming)|upcoming\s+(?:metro|airport|ring\s*road))\b/i,
   },
+  {
+    key: 'operator_model',
+    pattern:
+      /\b(?:operator|who\s+operates|revenue\s+model|maintenance\s+model|managed\s+(?:lease|asset|resort))\b/i,
+  },
+  {
+    key: 'visit_logistics',
+    pattern:
+      /\b(?:pickup|parking\s+on\s+site|site\s+visit\s+hours|food\s+on\s+(?:site|visit)|accommodation\s+(?:on\s+)?(?:site|visit)|do\s+you\s+arrange\s+pickup)\b/i,
+  },
 ];
 
 export function answerRequirements(text: string): FactKey[] {
@@ -88,6 +98,21 @@ export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
   }
   if ((evidence.detail?.marketIntel?.drivers.length ?? 0) > 0) {
     delivered.push('growth_drivers');
+  }
+  const inv = evidence.detail?.investment;
+  if (inv?.operatorBrand || inv?.revenueModel || inv?.maintenanceModel || inv?.guaranteedPayment) {
+    delivered.push('operator_model');
+  }
+  const visit = evidence.detail?.visitLogistics;
+  if (
+    visit &&
+    (visit.pickupMode ||
+      visit.parkingOnSite ||
+      visit.foodOffered ||
+      visit.accommodationOffered ||
+      visit.siteVisitHours)
+  ) {
+    delivered.push('visit_logistics');
   }
   return delivered;
 }
