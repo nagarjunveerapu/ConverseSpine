@@ -189,7 +189,7 @@ export function filterNamedProjectsByEvidence(
    * Viva Greens was present to contest `greens`. Optional so every existing
    * caller keeps working, but the turn pipeline threads it.
    */
-  catalogNames: ReadonlyArray<{ name: string }> = [],
+  catalogNames: ReadonlyArray<{ projectId?: string; name: string }> = [],
 ): OfferedProject[] {
   if (!named.length) return [...named];
   const siblings = [...catalogNames, ...named, ...pool];
@@ -211,6 +211,24 @@ export function filterNamedProjectsByEvidence(
     if (!q.projectId || seen.has(q.projectId)) continue;
     const ev = nameEvidenceIn(text, q.name, siblings);
     if (ev === 'full') candidates.push({ p: { projectId: q.projectId, name: q.name }, ev, pool: true });
+  }
+  // Same rescue, widened from the board to the catalog — and only when NOTHING
+  // proposed is fully named. Live repro: the buyer typed "tell me about
+  // cornerstone", the embedder's top hit was *Cornerstone Utopia* (partial —
+  // `utopia` is absent), no board existed to contest it, so the partial
+  // proposal won and the buyer was shown the wrong project. `Brigade
+  // Cornerstone` is fully named by that text and sits in the catalog.
+  //
+  // Still veto-shaped: this can only surface a project the buyer's own words
+  // name in FULL, never a guess.
+  if (!candidates.some((c) => c.ev === 'full')) {
+    for (const q of catalogNames) {
+      const qid = 'projectId' in q ? q.projectId : undefined;
+      if (!qid || seen.has(qid)) continue;
+      if (nameEvidenceIn(text, q.name, siblings) !== 'full') continue;
+      seen.add(qid);
+      candidates.push({ p: { projectId: qid, name: q.name }, ev: 'full', pool: false });
+    }
   }
   let alive = candidates.filter((c) => c.ev !== 'none');
   if (!alive.length) return [];

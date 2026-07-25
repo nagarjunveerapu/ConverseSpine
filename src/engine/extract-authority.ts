@@ -51,7 +51,7 @@ export interface ExtractTurnDeps {
    * Already fetched for this turn — `catalog()` reads all 50 rows and used to
    * discard the names.
    */
-  catalogNames?: ReadonlyArray<{ name: string }>;
+  catalogNames?: ReadonlyArray<{ projectId?: string; name: string }>;
   /** P6 — optional ExtractTurnFacts caller (tests inject fakes). */
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<BamlExtractResult | null>;
   bamlMode?: BamlExtractMode;
@@ -424,7 +424,7 @@ export function scrubEmbedderIdentityNoise(
   phase: ConversationState['phase'],
   extracted: Extracted,
   sessionPool?: ReadonlyArray<{ name: string }>,
-  catalogNames: ReadonlyArray<{ name: string }> = [],
+  catalogNames: ReadonlyArray<{ projectId?: string; name: string }> = [],
 ): Extracted {
   if (isLocationCorrectionTurn(text)) {
     if (!extracted.namedProjects?.length) return extracted;

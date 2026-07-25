@@ -1,0 +1,16 @@
+{
+  "id": "NAME-04",
+  "title": "PR-1 — superset disambiguation on the buyer's own words",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["pr1", "name-distinctiveness", "advisor"],
+  "turns": [
+    {
+      "text": "tell me about cornerstone",
+      "assert": {
+        "reply_includes": ["cornerstone"],
+        "reply_excludes": ["utopia"]
+      }
+    }
+  ]
+}

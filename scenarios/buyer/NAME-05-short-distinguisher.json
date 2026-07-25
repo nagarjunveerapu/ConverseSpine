@@ -1,0 +1,13 @@
+{
+  "id": "NAME-05",
+  "title": "PR-1 — a 4-character distinguishing word still names its project (Viva)",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["pr1", "name-distinctiveness", "advisor"],
+  "turns": [
+    {
+      "text": "tell me about Viva Greens",
+      "assert": { "reply_includes": ["viva"], "reply_excludes": ["krishnaja"] }
+    }
+  ]
+}
