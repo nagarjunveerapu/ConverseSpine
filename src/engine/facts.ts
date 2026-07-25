@@ -838,9 +838,18 @@ export function parseEmiPrincipal(text: string): number | undefined {
 
 function detectMediaAssetKind(text: string): string | undefined {
   const s = text.toLowerCase();
+  // Return Desk AssetKind values (see media-asset.ts) — aliases like "photo"
+  // used to 400 /api/media/share and drop media evidence entirely.
   if (/\b(?:floor plan|layout|unit plan)\b/.test(s)) return 'floor_plan';
+  if (/\b(?:master\s*plan)\b/.test(s)) return 'master_plan';
   if (/\b(?:video|walkthrough|tour)\b/.test(s)) return 'video';
-  if (/\b(?:photo|image|gallery)\b/.test(s)) return 'photo';
+  if (/\b(?:photo|image|gallery|site\s+photos?)\b/.test(s)) return 'site_image';
+  if (/\b(?:cost\s*sheet|price\s*sheet|pricing\s*sheet|price\s*list)\b/.test(s)) {
+    return 'price_sheet';
+  }
+  if (/\b(?:rera\s*(?:cert(?:ificate)?|document)|ownership\s+cert(?:ificate)?)\b/.test(s)) {
+    return 'ownership_certificate';
+  }
   if (/\b(?:brochure|pdf|e-?brochure)\b/.test(s)) return 'brochure';
   return undefined;
 }

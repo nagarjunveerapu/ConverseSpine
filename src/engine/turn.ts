@@ -93,6 +93,7 @@ import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimu
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
+import { mediaKindMissingFromInventory, normalizeMediaAssetKind } from './media-asset.js';
 import { filterUnitsByBhk, resolveAvailabilityBhkFilter } from './unit-config.js';
 import { planSearchRecovery, type RecoveryHint, type SearchRecoveryEnvelope, type AdvisorUiMode, type SuggestedAction } from './recovery-planner.js';
 import {
@@ -2919,21 +2920,68 @@ async function fetchAnswer(
   }
 
   if (topics.includes('media') || ex.mediaAssetKind) {
-    const assetKind = ex.mediaAssetKind ?? 'brochure';
-    const media = await deps.data.mediaShare(nd, goal.projectId, assetKind, unitType).catch(() => null);
-    if (media) {
+    const rawKind = ex.mediaAssetKind ?? 'brochure';
+    const assetKind = normalizeMediaAssetKind(rawKind) ?? rawKind;
+    const mediaName =
+      (s.focus?.projectId === goal.projectId ? focusName : '') ||
+      s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
+      focusName;
+    const projectName = mediaName || focusName || 'this project';
+    // Inventory gate: when focused detail lists media kinds and the requested
+    // kind is absent, honest miss — do not call share (avoids facet bleed when
+    // Desk would 400 an alias or return a different asset).
+    const cachedKinds =
+      evidence.detail?.projectId === goal.projectId
+        ? evidence.detail.mediaKinds
+        : s.projectCache?.[goal.projectId]?.mediaKinds;
+    let inventoryKinds = cachedKinds;
+    if (inventoryKinds === undefined) {
+      const detailForMedia = await hydrateProjectDetail(deps, s, goal.projectId).catch(() => null);
+      if (detailForMedia) {
+        inventoryKinds = detailForMedia.mediaKinds;
+        if (!evidence.detail) {
+          evidence = { ...evidence, detail: detailForMedia };
+        }
+      }
+    }
+    if (mediaKindMissingFromInventory(assetKind, inventoryKinds)) {
       tools.push('mediaShare');
-      const mediaName =
-        (s.focus?.projectId === goal.projectId ? focusName : '') ||
-        s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
-        focusName;
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
+        media: {
+          assetKind,
+          allowed: false,
+          reason: 'no_matching_asset',
+          projectName,
+        },
+      };
+    } else {
+      const media = await deps.data.mediaShare(nd, goal.projectId, assetKind, unitType).catch(() => null);
+      if (media) {
+        tools.push('mediaShare');
         // Requested `assetKind` first so an honest miss can name it ("floor plan");
         // a successful share carries its own asset_kind in `...media`, which wins.
-        media: { assetKind, ...media, projectName: mediaName || focusName || 'this project' },
-      };
+        evidence = {
+          ...evidence,
+          tools: [...new Set(tools)],
+          media: { assetKind, ...media, projectName },
+        };
+      } else {
+        // API validation/network miss — still attach a media miss so compose
+        // does not fall through to legal/FAQ for a photos/brochure ask.
+        tools.push('mediaShare');
+        evidence = {
+          ...evidence,
+          tools: [...new Set(tools)],
+          media: {
+            assetKind,
+            allowed: false,
+            reason: 'share_unavailable',
+            projectName,
+          },
+        };
+      }
     }
   }
 
@@ -2993,7 +3041,11 @@ async function fetchAnswer(
     ? [taughtKey, ...resolvedKeys.filter((k) => k !== taughtKey)]
     : resolvedKeys;
   const faqHits: Array<{ questionKey: string; question: string; answer: string }> = [];
+  // CRM activation / C1: yield + appreciation are owned by gated market intel
+  // (or honest decline) — never by a project FAQ that can invent a %.
+  const faqBlockedForIntel = new Set(['rental_yield', 'resale_value']);
   for (const key of faqKeys) {
+    if (deps.failureAnswer && faqBlockedForIntel.has(key)) continue;
     const faq = await deps.data.faqLookup(goal.projectId, key).catch(() => null);
     if (faq?.answer) {
       faqHits.push({ questionKey: key, question: faq.question, answer: faq.answer });
@@ -3201,11 +3253,30 @@ async function enrichDetailLegal(
   nd: string,
   detail: NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>,
 ): Promise<NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>> {
-  if (detail.reraNumber?.trim()) return detail;
+  if (detail.reraNumber?.trim() && detail.phases?.length) return detail;
   const ctx = await deps.data.conversationContext(nd).catch(() => null);
-  const rera = ctx?.project?.rera_number?.trim();
-  if (rera) return { ...detail, reraNumber: rera };
-  return detail;
+  if (!ctx) return detail;
+  let next = detail;
+  const projectRera = ctx.project?.rera_number?.trim();
+  if (!next.reraNumber?.trim() && projectRera) {
+    next = { ...next, reraNumber: projectRera };
+  }
+  if (!next.phases?.length && ctx.phase_journeys?.length) {
+    const phases = ctx.phase_journeys.map((j) => ({
+      phaseId: j.phase_id,
+      phaseLabel: j.phase_label,
+      stage: j.stage,
+      ...(j.possession_date ? { possession: j.possession_date } : {}),
+      ...(j.rera_number?.trim() ? { reraNumber: j.rera_number.trim() } : {}),
+    }));
+    const phaseRera = phases.find((p) => p.reraNumber)?.reraNumber;
+    next = {
+      ...next,
+      phases,
+      ...(!next.reraNumber?.trim() && phaseRera ? { reraNumber: phaseRera } : {}),
+    };
+  }
+  return next;
 }
 
 async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineDeps): Promise<EvidenceSet> {

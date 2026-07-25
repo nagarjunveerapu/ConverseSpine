@@ -1,4 +1,4 @@
-import type { ComposeRequest, LocationPoiCategories } from './types.js';
+import type { ComposeRequest, LocationPoiCategories, ProjectDetail } from './types.js';
 import type { EmiFacts } from './emi.js';
 
 export type SignalKind = 'location' | 'property_type' | 'purpose' | 'transition';
@@ -107,25 +107,11 @@ export interface EngineData {
    */
   projectNames(builderId: string): Promise<Array<{ projectId: string; name: string }>>;
   /** conversation-context when focused; getProject fallback otherwise. */
-  projectDetail(builderId: string, ndConversationId: string, projectId: string): Promise<{
-    projectId: string;
-    name: string;
-    microMarket: string;
-    summary?: string;
-    reraNumber?: string;
-    possession?: string;
-    projectType?: string;
-    startingPriceDisplay?: string;
-    khata?: string;
-    naStatus?: string;
-    ecStatus?: string;
-    loanEligibility?: string;
-    faqs?: ProjectFaq[];
-    configurations?: UnitConfig[];
-    /** W7 — one buyer-ready phase caveat (journey composer; pre-RERA gating). */
-    phaseNote?: string;
-    location?: LocationIntel;
-  } | null>;
+  projectDetail(
+    builderId: string,
+    ndConversationId: string,
+    projectId: string,
+  ): Promise<ProjectDetail | null>;
   pricing(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<{
     projectName: string;
     startingDisplay?: string;

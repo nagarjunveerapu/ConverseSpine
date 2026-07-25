@@ -1,4 +1,5 @@
 import type { Failure } from './outcome.js';
+import { hasAppreciation, hasInvestmentRoi, hasRentBands } from './market-intel.js';
 import type { EvidenceSet, FactKey, TurnGoal } from './types.js';
 
 const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
@@ -12,13 +13,15 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
   { key: 'flood_zone', pattern: /\b(?:flood|flooding|flood[- ]?zone)\b/i },
-  // Investment-metric facet (rental yield / ROI / returns / rental income). No
-  // project carries a yield atom and `deliveredFactKeys` never delivers it (same
-  // as carpet_area) — so this is ALWAYS a no_data decline. Closes the C1
-  // fabrication: an un-required facet fell through to freeform compose and the
-  // bot invented "3-4% net yield". The grounding gate can't catch a fabricated
-  // percentage; declining at the contract is the structural fix (failure-as-value).
+  // Advisory atoms — deliver when approved market intel / project ROI is on
+  // detail; otherwise no_data (C1: never invent a %).
   { key: 'rental_yield', pattern: /\b(?:rental\s+yield|yield|roi|return\s+on\s+investment|rental\s+returns?|rental\s+income)\b/i },
+  { key: 'appreciation', pattern: /\b(?:appreciat\w*|how\s+much\s+has\s+(?:this\s+)?(?:area|corridor)\s+grown|corridor\s+growth)\b/i },
+  {
+    key: 'growth_drivers',
+    pattern:
+      /\b(?:what(?:'s|\s+is)\s+driving|growth\s+drivers?|why\s+is\s+(?:this\s+)?(?:area|corridor)\s+growing|infra(?:structure)?\s+(?:pipeline|coming)|upcoming\s+(?:metro|airport|ring\s*road))\b/i,
+  },
 ];
 
 export function answerRequirements(text: string): FactKey[] {
@@ -74,6 +77,17 @@ export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
     evidence.detail?.configurations?.some((c) => (c.priceMinInr ?? 0) > 0)
   ) {
     delivered.push('price');
+  }
+  // CRM activation — deliver yield/ROI only from gated market intel or the
+  // project ROI atom. Never from FAQ/education copy (that was the C1 leak).
+  if (hasRentBands(evidence.detail?.marketIntel) || hasInvestmentRoi(evidence.detail?.investment)) {
+    delivered.push('rental_yield');
+  }
+  if (hasAppreciation(evidence.detail?.marketIntel)) {
+    delivered.push('appreciation');
+  }
+  if ((evidence.detail?.marketIntel?.drivers.length ?? 0) > 0) {
+    delivered.push('growth_drivers');
   }
   return delivered;
 }
