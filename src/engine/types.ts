@@ -433,8 +433,19 @@ export interface ProjectVisitLogistics {
 
 export interface ProjectDetail {
   projectId: string;
+  /**
+   * The project's real name. NEVER the projectId — a slug is not a name, and a
+   * cached one is spoken to the buyer on every later turn.
+   */
   name: string;
   microMarket: string;
+  /**
+   * Identity + units only: built from the search result because Desk's
+   * conversationContext is focus-scoped and this project was not the focus.
+   * Cached like any card, but re-hydrated on the next read so a project that
+   * later becomes the focus picks up its full record.
+   */
+  identityOnly?: boolean;
   summary?: string;
   reraNumber?: string;
   possession?: string;

@@ -1841,9 +1841,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // W3 — remember the outbound line for the repeat guard.
   state = { ...state, lastReply: reply };
   if (evidence.detail && goal.kind === 'answer') {
+    // detail.faqs are "the FAQ answers matched to THIS question" and fetchAnswer
+    // is their only writer (see the adapter's single-owner invariant). Durable
+    // project facts belong in the cache; a question's answer does not. Caching
+    // them made the NEXT turn replay the previous answer — "compare X and Y"
+    // spoke the earlier legal reply verbatim, because compose pushes a present
+    // faqs body into its chunks before it ever reaches the compare branch.
+    const { faqs: _questionScoped, ...durable } = evidence.detail;
     state = {
       ...state,
-      projectCache: { ...(state.projectCache ?? {}), [goal.projectId]: evidence.detail },
+      projectCache: { ...(state.projectCache ?? {}), [goal.projectId]: durable },
     };
   }
   const newlyDisclosed = extractDisclosedFacts({ goal, evidence });

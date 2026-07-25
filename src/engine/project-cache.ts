@@ -1,18 +1,39 @@
 import type { EngineDeps } from './ports.js';
 import type { ConversationState, Match, ProjectDetail } from './types.js';
 
+/**
+ * Identity we already hold for a project. Search results and the focused
+ * project are authoritative for a name; the projectId never is.
+ */
+function knownIdentity(
+  s: ConversationState,
+  projectId: string,
+): { name: string; microMarket: string } | null {
+  const offered = [...s.discover.lastOffered, ...(s.discover.discussedProjects ?? [])].find(
+    (p) => p.projectId === projectId && p.name.trim(),
+  );
+  if (offered) return { name: offered.name, microMarket: offered.microMarket ?? '' };
+  if (s.focus?.projectId === projectId && s.focus.projectName.trim()) {
+    return { name: s.focus.projectName, microMarket: '' };
+  }
+  return null;
+}
+
 export async function hydrateProjectDetail(
   deps: EngineDeps,
   s: ConversationState,
   projectId: string,
 ): Promise<ProjectDetail | null> {
   const cached = s.projectCache?.[projectId];
-  if (cached) return cached;
+  // An identity-only card was built while Desk's focus was a DIFFERENT project.
+  // Re-read it: once this project becomes the focus the live fetch returns the
+  // full record (summary, possession, legal), so the card upgrades itself.
+  if (cached && !cached.identityOnly) return cached;
 
   const nd = s.ndConversationId;
-  if (!nd) return null;
+  if (!nd) return cached ?? null;
 
-  let detail = await deps.data.projectDetail(s.builderId, nd, projectId).catch(() => null);
+  const detail = await deps.data.projectDetail(s.builderId, nd, projectId).catch(() => null);
   const units = await deps.data.listUnits(projectId).catch(() => []);
   const configurations = units
     .filter((u) => u.unitType)
@@ -23,18 +44,24 @@ export async function hydrateProjectDetail(
       ...(u.sizeDisplay ? { sizeDisplay: u.sizeDisplay } : {}),
     }));
 
-  if (configurations.length) {
-    detail = detail
-      ? { ...detail, configurations }
-      : {
-          projectId,
-          name: projectId,
-          microMarket: '',
-          configurations,
-        };
-  }
+  if (detail) return configurations.length ? { ...detail, configurations } : detail;
 
-  return detail;
+  // No live detail: Desk's conversationContext is focus-scoped, so hydrating a
+  // project that is not the current focus (every prefetch past the focused one)
+  // legitimately returns nothing. Units are NOT an identity — naming the card
+  // after the project id is what put "*brigade-eldorado-naya-advisor*" into
+  // buyer replies, and because the card is cached it stayed wrong for the whole
+  // conversation. Use the name the search already gave us, or hold nothing.
+  if (!configurations.length) return cached ?? null;
+  const known = knownIdentity(s, projectId);
+  if (!known) return cached ?? null;
+  return {
+    projectId,
+    name: known.name,
+    microMarket: known.microMarket,
+    identityOnly: true,
+    configurations,
+  };
 }
 
 export async function prefetchProjects(
