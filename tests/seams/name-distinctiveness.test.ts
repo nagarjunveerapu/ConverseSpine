@@ -130,8 +130,17 @@ describe('superset disambiguation applies to the buyer, not only to the bot', ()
   });
 
   it('the floor already gets this right — the two must not disagree', () => {
+    // Judged against the CATALOG, as the turn pipeline does. With only these two
+    // names in scope, `brigade` is shared by both and ordered by ⊆, so it stays
+    // name-bearing and "cornerstone" alone reads as partial for both. Ten
+    // Brigade rows make `brigade` ambiguous, which is the truth of this tenant.
     expect(
-      filterNamedProjectsByEvidence('tell me about cornerstone', [UTOPIA], [CORNERSTONE]),
+      filterNamedProjectsByEvidence(
+        'tell me about cornerstone',
+        [UTOPIA],
+        [CORNERSTONE],
+        CATALOG_NAMES.map((name) => ({ name })),
+      ),
     ).toEqual([CORNERSTONE]);
   });
 });
@@ -159,6 +168,19 @@ describe('seam: a preference word must not commit a project', () => {
         return { ...ex, namedProjects: [KRISHNAJA] };
       },
     };
+    // Model the tenant the defect lives in. The default fake catalog holds one
+    // Greens project, where `greens` genuinely does pick it out — so the shared
+    // token only exists on naya-advisor, and that is the catalog the floor must
+    // be judging against.
+    //
+    // HONEST LIMIT: with a single-Greens catalog this turn would still commit.
+    // Distinctiveness fixes "which project does this word name"; it does not
+    // decide "is this sentence naming a project at all". That is a separate gap.
+    const baseCatalog = deps.data.catalog.bind(deps.data);
+    deps.data.catalog = async (builderId) => ({
+      ...(await baseCatalog(builderId)),
+      projectNames: CATALOG.map((c) => ({ projectId: c.project_id, name: c.name })),
+    });
 
     const r = await runEngineTurn(
       {

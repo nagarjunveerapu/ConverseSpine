@@ -342,6 +342,10 @@ export interface CatalogEnvelope {
   priceMaxInr: number;
   projectTypes: string[];
   microMarkets: string[];
+  /** Every project name for this builder. Free: the same Desk call already
+   *  returns the rows. The name resolvers need the full set to know which words
+   *  pick out one project (name-index.ts). */
+  projectNames?: Array<{ projectId: string; name: string }>;
   /** Desk cityFromLocation aggregate — outside-served city cover bit. */
   servedCities?: string[];
   total: number;

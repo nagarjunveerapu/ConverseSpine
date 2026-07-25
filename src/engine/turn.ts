@@ -424,6 +424,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     llm: deps.llm,
     semantic: deps.semantic,
     microMarkets: catalogForNlu?.microMarkets ?? [],
+    catalogNames: catalogForNlu?.projectNames ?? [],
     ...(deps.failureTools ? { failureTools: true } : {}),
     ...(deps.bamlExtract ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' } : {}),
   }, {
