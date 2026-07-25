@@ -115,3 +115,77 @@ describe('buildAdvisorNba chip taxonomy', () => {
     expect(nba.chips).toContain('Back to my matches');
   });
 });
+
+// ADR-005: the ranker orders the CONTENT chips but must never displace the
+// escape rails. Regression for the live bug where enabling the ranker replaced
+// the whole nba chip list with the top-3 answer chips, dropping navigation so
+// "Back to my matches" / "Refine my brief" only appeared occasionally.
+describe('buildAdvisorNba with chip ranker live (ADR-005)', () => {
+  it('recommend keeps a refine rail when the ranker orders content', () => {
+    const state = initState('advisor:nba-rank-rec', 'naya-advisor');
+    state.discover.lastOffered = [
+      { projectId: 'a', name: 'Alpha', microMarket: 'X', startingPriceDisplay: '₹1' },
+      { projectId: 'b', name: 'Beta', microMarket: 'Y', startingPriceDisplay: '₹2' },
+    ];
+    const debug: TurnDebug = {
+      phase: 'discover',
+      goal: { kind: 'recommend' },
+      tools: ['search'],
+      grounding: 'pass',
+    };
+    const nba = buildAdvisorNba(state, debug, true);
+    expect(nba.chips).toContain('Refine my brief');
+    expect(nba.chips.length).toBeLessThanOrEqual(6);
+  });
+
+  it('focused answer keeps BOTH escape rails with the ranker on', () => {
+    const state = initState('advisor:nba-rank-ans', 'naya-advisor');
+    state.phase = 'focused';
+    state.focus = { projectId: 'cs', projectName: 'Brigade Cornerstone' };
+    state.discover.lastOffered = [
+      { projectId: 'cs', name: 'Brigade Cornerstone', microMarket: 'D', startingPriceDisplay: '₹1' },
+      { projectId: 'el', name: 'Brigade Eldorado', microMarket: 'D', startingPriceDisplay: '₹2' },
+    ];
+    const debug: TurnDebug = {
+      phase: 'focused',
+      goal: { kind: 'answer', topic: 'overview', projectId: 'cs' },
+      tools: [],
+      grounding: 'pass',
+    };
+    const nba = buildAdvisorNba(state, debug, true);
+    expect(nba.chips).toContain('Back to my matches');
+    expect(nba.chips).toContain('Refine my brief');
+    expect(nba.chips.length).toBeLessThanOrEqual(6);
+  });
+
+  it('no_fit stays rails-only — the ranker does not touch it', () => {
+    const state = initState('advisor:nba-rank-nf', 'naya-advisor');
+    const debug: TurnDebug = {
+      phase: 'discover',
+      goal: { kind: 'no_fit' },
+      tools: [],
+      grounding: 'pass',
+    };
+    const nba = buildAdvisorNba(state, debug, true);
+    expect(nba.chips).toEqual(
+      expect.arrayContaining(['Widen my search', 'Change area', 'Adjust budget', 'Start over']),
+    );
+  });
+
+  it('clarify_project_pick still offers the project NAMES, not ranked next-states', () => {
+    const state = initState('advisor:nba-rank-clar', 'naya-advisor');
+    state.discover.lastOffered = [
+      { projectId: 'a', name: 'Alpha Heights', microMarket: 'X', startingPriceDisplay: '₹1' },
+      { projectId: 'b', name: 'Beta Gardens', microMarket: 'Y', startingPriceDisplay: '₹2' },
+    ];
+    const debug: TurnDebug = {
+      phase: 'discover',
+      goal: { kind: 'clarify_project_pick' },
+      tools: [],
+      grounding: 'pass',
+    };
+    const nba = buildAdvisorNba(state, debug, true);
+    expect(nba.chips).toContain('Alpha Heights');
+    expect(nba.chips).toContain('Beta Gardens');
+  });
+});

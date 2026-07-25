@@ -123,8 +123,8 @@ export const CHIP_CATALOGUE: ChipDefinition[] = [
   },
   {
     state: 'answer/compare',
-    label: (ev) => `Compare all ${Math.min(ev.shortlist.length, 3)}`,
-    available: (ev) => (ev.shortlist.length >= 2 ? 'yes' : 'no'),
+    label: (ev) => `Compare all ${Math.min(ev.shortlist?.length ?? 0, 3)}`,
+    available: (ev) => ((ev.shortlist?.length ?? 0) >= 2 ? 'yes' : 'no'),
   },
   {
     state: 'recommend',

@@ -7,7 +7,8 @@ import { buildAdvisorNba, buildChecklistSnapshot } from './nba.js';
 import type { AdvisorMapInput, AdvisorProjectCard, AdvisorTurnResponse } from './types.js';
 
 export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnResponse {
-  const { sessionId, state, reply, debug, compareMatrix, searchRecovery, uiMode } = input;
+  const { sessionId, state, reply, debug, compareMatrix, searchRecovery, uiMode, chipRankLive } =
+    input;
   const projects = mapProjectCards(state);
   const prefs = mapPrefsSnapshot(state);
   const focusId = state.focus?.projectId;
@@ -27,7 +28,11 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
   const visitQueue = mapVisitQueue(state);
   const visitItinerary = mapVisitItinerary(state);
 
-  let nba = buildAdvisorNba(state, debug);
+  // Chip ranker out of shadow (ADR-005, CHIP_RANK_LIVE): the transition table
+  // orders the CONTENT chips inside buildAdvisorNba, which still merges the
+  // escape rails afterward — so "Back to my matches" / "Refine my brief" are
+  // never displaced by a ranked answer chip.
+  let nba = buildAdvisorNba(state, debug, chipRankLive);
   if (compareMatrix) {
     nba = {
       chips: nba.chips.length ? nba.chips : ['Plan a visit day', 'Back to my matches'],

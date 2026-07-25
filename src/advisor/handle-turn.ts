@@ -238,6 +238,7 @@ export async function handleAdvisorTurn(
       compareMatrix: result.compareMatrix,
       searchRecovery: result.searchRecovery,
       uiMode: result.uiMode,
+      chipRankLive: rt.env.CHIP_RANK_LIVE === 'true',
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

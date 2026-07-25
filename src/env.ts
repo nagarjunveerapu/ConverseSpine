@@ -110,4 +110,7 @@ export interface Env {
 
   /** Google Distance Matrix for visit route stagger (same secret as Naya worker). */
   GOOGLE_PLACES_API_KEY?: string;
+
+  /** ADR-005: "true" ranks advisor chips by the transition table (out of shadow). */
+  CHIP_RANK_LIVE?: string;
 }
