@@ -1,0 +1,192 @@
+<title>Progressive answer reveal — Track C mock</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --panel:#ffffff; --ink:#1b1a17; --mut:#6f6a62; --line:#e7e3db;
+    --accent:#2f6f4f; --accent-soft:#e3efe8; --chip:#f1efe9; --chip-ink:#2c2a26;
+    --shimmer:#ece8e0; --shimmer-hi:#f6f3ec; --ok:#2f6f4f; --warn:#b8791f;
+    --user:#e8efe9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14140f; --panel:#1d1c17; --ink:#f0ece2; --mut:#a49d90; --line:#2f2d25;
+      --accent:#7fd0a6; --accent-soft:#1f3a2c; --chip:#26241d; --chip-ink:#e6e2d8;
+      --shimmer:#26241d; --shimmer-hi:#33302700; --ok:#7fd0a6; --warn:#e0a94b;
+      --user:#233329;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f7f6f3; --panel:#ffffff; --ink:#1b1a17; --mut:#6f6a62; --line:#e7e3db;
+    --accent:#2f6f4f; --accent-soft:#e3efe8; --chip:#f1efe9; --chip-ink:#2c2a26;
+    --shimmer:#ece8e0; --shimmer-hi:#f6f3ec; --ok:#2f6f4f; --warn:#b8791f; --user:#e8efe9;
+  }
+  :root[data-theme="dark"]{
+    --bg:#14140f; --panel:#1d1c17; --ink:#f0ece2; --mut:#a49d90; --line:#2f2d25;
+    --accent:#7fd0a6; --accent-soft:#1f3a2c; --chip:#26241d; --chip-ink:#e6e2d8;
+    --shimmer:#26241d; --shimmer-hi:#33302700; --ok:#7fd0a6; --warn:#e0a94b; --user:#233329;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:960px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
+  .sub{color:var(--mut);margin:0 0 22px;font-size:13.5px}
+  .stage{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:760px){.stage{grid-template-columns:1fr}}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+    display:flex;flex-direction:column;min-height:420px}
+  .col h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);
+    margin:0;padding:13px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  .tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px}
+  .tag.now{background:var(--chip);color:var(--mut)}
+  .tag.new{background:var(--accent-soft);color:var(--accent)}
+  .thread{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+  .user{align-self:flex-end;background:var(--user);color:var(--ink);padding:8px 13px;border-radius:14px 14px 4px 14px;font-size:14px;max-width:80%}
+  .bot{align-self:flex-start;max-width:92%;width:100%}
+  .clock{font-variant-numeric:tabular-nums;font-size:11px;color:var(--mut);margin-top:2px}
+
+  /* spinner (current) */
+  .spinner{display:inline-flex;gap:4px;align-items:center;color:var(--mut);font-size:13px;padding:6px 0}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--mut);opacity:.4;animation:blink 1.2s infinite}
+  .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,100%{opacity:.25}50%{opacity:.9}}
+
+  /* progressive card (new) */
+  .card{border:1px solid var(--line);border-radius:13px;padding:0;overflow:hidden;background:var(--panel)}
+  .idline{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px}
+  .idname{font-weight:650;font-size:15px}
+  .idmm{color:var(--mut);font-size:12.5px}
+  .idbadge{margin-left:auto;font-size:10px;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:20px;font-weight:700}
+  .body{padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+  .working{color:var(--mut);font-size:13px;display:flex;align-items:center;gap:7px}
+  .fact{display:flex;gap:9px;font-size:14px;align-items:flex-start}
+  .fact .k{color:var(--mut);min-width:96px;font-size:12.5px;padding-top:1px}
+  .fact .v{font-weight:550}
+  .fact .ic{color:var(--ok);font-weight:700}
+  .closing{color:var(--mut);font-size:13px;padding-top:2px}
+
+  .reveal{animation:rise .34s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .shim{position:relative;color:transparent!important;border-radius:6px;
+    background:linear-gradient(100deg,var(--shimmer) 30%,var(--shimmer-hi) 50%,var(--shimmer) 70%);
+    background-size:200% 100%;animation:sh 1.1s linear infinite}
+  @keyframes sh{from{background-position:200% 0}to{background-position:-200% 0}}
+
+  .controls{display:flex;gap:10px;align-items:center;margin:0 0 18px;flex-wrap:wrap}
+  button.play{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:13.5px;font-weight:600;cursor:pointer}
+  :root[data-theme="dark"] button.play,@media (prefers-color-scheme:dark){button.play{color:#0e1b13}}
+  .legend{color:var(--mut);font-size:12.5px}
+  .note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;padding:12px 15px;margin-top:20px;font-size:13.5px;color:var(--ink)}
+  .note b{color:var(--accent)}
+  .note ul{margin:8px 0 0;padding-left:18px}.note li{margin:3px 0;color:var(--mut)}
+  .note li b{color:var(--ink)}
+  .hidden{display:none}
+</style>
+
+<div class="wrap">
+  <h1>Progressive answer reveal</h1>
+  <p class="sub">Track C mock · the honest substitute for streaming — paint what we already know (identity) instantly, then land the specific answer. Buyer taps <b>“Legal status”</b> on a focused project.</p>
+
+  <div class="controls">
+    <button class="play" id="play">▶ Replay both</button>
+    <span class="legend">Left = today (spinner → dump). Right = proposed (identity now → facts stream).</span>
+  </div>
+
+  <div class="stage">
+    <div class="col">
+      <h2>Today <span class="tag now">one-shot</span></h2>
+      <div class="thread" id="now">
+        <div class="user">Legal status</div>
+      </div>
+    </div>
+    <div class="col">
+      <h2>Proposed <span class="tag new">progressive</span></h2>
+      <div class="thread" id="new">
+        <div class="user">Legal status</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>What the buyer feels:</b> the same grounded answer, but the screen stops being blank.
+    <ul>
+      <li><b>Identity paints at ~0ms</b> — name + micro-market come from the already-warm turn state (<code>state.projectCache</code>), no fetch. Anchors “which project” by construction.</li>
+      <li><b>Facts stream fastest-first</b> — each legal atom appears as its slot fills, instead of a 2.5s blank then a wall of text.</li>
+      <li><b>Honesty unchanged</b> — nothing is painted that isn’t on file; a missing atom is simply never shown (same failure-as-value contract). No guessed project, no fabricated line.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  var T;
+  function clr(id){var e=document.getElementById(id);
+    [].slice.call(e.querySelectorAll(':not(.user)')).forEach(function(n){n.remove()});}
+  function el(html){var d=document.createElement('div');d.innerHTML=html.trim();return d.firstChild;}
+  function at(ms,fn){T.push(setTimeout(fn,ms));}
+
+  function runNow(){
+    var box=document.getElementById('now');
+    var wrap=el('<div class="bot"></div>');
+    var sp=el('<div class="spinner"><span class="dot"></span><span class="dot"></span><span class="dot"></span> pulling the details…</div>');
+    wrap.appendChild(sp);box.appendChild(wrap);
+    // blank for 2.5s, then the whole reply drops at once
+    at(2500,function(){
+      sp.remove();
+      wrap.appendChild(el('<div class="reveal" style="font-size:14px">'+
+        '<b>Brigade Cornerstone</b> — Devanahalli. A-Khata (BBMP-approved). '+
+        'RERA by phase: Phase&nbsp;1 PRM/KA/RERA/1251/446/PR/1, Phase&nbsp;2 …/PR/2. '+
+        'EC clear; sanctioned building plans on file. Legal docs available in the Brigade legal pack. '+
+        'Want pricing, configurations, or a visit?</div>'));
+      wrap.appendChild(el('<div class="clock">— 2.5s, all at once</div>'));
+    });
+  }
+
+  function runNew(){
+    var box=document.getElementById('new');
+    var card=el('<div class="bot"><div class="card">'+
+      '<div class="idline">'+
+        '<span class="idname shim">Brigade Cornerstone</span>'+
+        '<span class="idmm shim">Devanahalli</span>'+
+        '<span class="idbadge" style="visibility:hidden">legal</span>'+
+      '</div>'+
+      '<div class="body"><div class="working">'+
+        '<span class="spinner" style="padding:0"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span> checking the legal pack…'+
+      '</div></div>'+
+    '</div></div>');
+    box.appendChild(card);
+    var idname=card.querySelector('.idname'), idmm=card.querySelector('.idmm'),
+        badge=card.querySelector('.idbadge'), body=card.querySelector('.body'),
+        working=card.querySelector('.working');
+
+    // ~120ms: identity resolves from warm state — de-shimmer instantly
+    at(120,function(){idname.classList.remove('shim');idmm.classList.remove('shim');badge.style.visibility='visible';});
+
+    var facts=[
+      ['Khata','<span class="ic">✓</span> A-Khata — BBMP-approved'],
+      ['RERA','Phase&nbsp;1 …/PR/1 · Phase&nbsp;2 …/PR/2'],
+      ['EC','<span class="ic">✓</span> Clear'],
+      ['Plans','Sanctioned building plans on file'],
+    ];
+    var base=780;
+    facts.forEach(function(f,i){
+      at(base + i*230, function(){
+        if(working){working.remove();working=null;}
+        body.appendChild(el('<div class="fact reveal"><span class="k">'+f[0]+'</span><span class="v">'+f[1]+'</span></div>'));
+      });
+    });
+    at(base + facts.length*230 + 120, function(){
+      body.appendChild(el('<div class="closing reveal">Full legal pack shared at your visit. Want pricing or configurations?</div>'));
+      card.querySelector('.card').appendChild(el('<div class="clock" style="padding:0 14px 11px">identity ~120ms · first fact ~780ms · complete ~1.8s</div>'));
+    });
+  }
+
+  function play(){
+    (T||[]).forEach(clearTimeout);T=[];
+    clr('now');clr('new');
+    runNow();runNew();
+  }
+  document.getElementById('play').addEventListener('click',play);
+  play();
+})();
+</script>
