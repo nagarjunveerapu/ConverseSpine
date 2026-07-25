@@ -1,6 +1,7 @@
 import {
   NayaDeskError,
   type NayaDeskClient,
+  type NdContextBundle,
   type NdLocationIntelRow,
   type NdMarketIntel,
   type NdProjectSummary,
@@ -20,6 +21,15 @@ import {
   mapVisitLogisticsFromProject,
 } from '../market-intel.js';
 import { uniqueMediaKinds } from '../media-asset.js';
+
+/** Conversation context is Desk-focus-scoped — never use it for another project's identity. */
+function ctxForProject(
+  ctx: NdContextBundle | null | undefined,
+  projectId: string,
+): NdContextBundle | null {
+  if (!ctx?.project?.project_id || ctx.project.project_id !== projectId) return null;
+  return ctx;
+}
 
 async function resolveMarketIntel(
   crm: NayaDeskClient,
@@ -361,8 +371,15 @@ export function nayadeskData(
           conversation_id: nd,
           unit_type: unitType,
         });
-        const ctx = await crm.conversationContext(nd).catch(() => null);
-        const name = ctx?.project?.name ?? projectId;
+        const rawCtx = await crm.conversationContext(nd).catch(() => null);
+        const ctx = ctxForProject(rawCtx, projectId);
+        // Name from matching context, else the requested project's catalog row —
+        // never Desk focus when answering a different projectId (cost-sheet bleed).
+        let name = ctx?.project?.name?.trim() || '';
+        if (!name) {
+          const p = await crm.getProject(projectId).catch(() => null);
+          name = p?.name?.trim() || projectId;
+        }
         // W4 — format once, here: raw cost-sheet values ("499", "5") become
         // buyer-ready ("₹499", "5%") before any template sees them.
         const components = (q.components_quoted ?? []).map((c) => ({
@@ -379,6 +396,7 @@ export function nayadeskData(
         // (formatInr), falling back to the band ONLY when no config is priced —
         // the config price must win over the coarse band, not the other way
         // round. Audit P0.2 (previously seeded from raw entry_price_band first).
+        // Units/band only from ID-gated context — never another project's configs.
         const configMinsInr = (ctx?.units ?? []).map((u) =>
           u.price_min_paise ? Math.round(u.price_min_paise / 100) : 0,
         );
@@ -405,9 +423,15 @@ export function nayadeskData(
       try {
         const r = await crm.landedCost({ project_id: projectId, conversation_id: nd, unit_type: unitType });
         if (!r?.base_price_display) return null;
-        const ctx = await crm.conversationContext(nd).catch(() => null);
+        const rawCtx = await crm.conversationContext(nd).catch(() => null);
+        const ctx = ctxForProject(rawCtx, projectId);
+        let projectName = ctx?.project?.name?.trim() || '';
+        if (!projectName) {
+          const p = await crm.getProject(projectId).catch(() => null);
+          projectName = p?.name?.trim() || projectId;
+        }
         return {
-          projectName: ctx?.project?.name ?? projectId,
+          projectName,
           unitType,
           baseDisplay: r.base_price_display,
           oneTime: (r.one_time_charges ?? []).map((c) => ({ label: c.label, display: c.amount_display ?? '' })).filter((c) => c.display),
@@ -459,8 +483,9 @@ export function nayadeskData(
         }
       }
       try {
-        const ctx = await crm.conversationContext(nd);
-        const prices = (ctx.units ?? [])
+        const rawCtx = await crm.conversationContext(nd);
+        const ctx = ctxForProject(rawCtx, projectId);
+        const prices = (ctx?.units ?? [])
           .map((u) => Math.round((u.price_min_paise ?? 0) / 100))
           .filter((p) => p > 0);
         if (prices.length) {

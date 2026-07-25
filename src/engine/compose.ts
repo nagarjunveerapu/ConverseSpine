@@ -509,7 +509,12 @@ export function fallbackReply(req: ComposeRequest): string {
       // Advisory atoms (yield / appreciation) must not be swallowed by the card.
       const advisoryRequired =
         goal.requires?.some(
-          (k) => k === 'rental_yield' || k === 'appreciation' || k === 'growth_drivers',
+          (k) =>
+            k === 'rental_yield' ||
+            k === 'appreciation' ||
+            k === 'growth_drivers' ||
+            k === 'operator_model' ||
+            k === 'visit_logistics',
         ) ?? false;
       if (
         topics[0] === 'overview' &&
