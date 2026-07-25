@@ -3132,6 +3132,19 @@ async function fetchAnswer(
     /\b(?:rera|khata|title|encumbrance|\bec\b|clear\s+title|approval\s+status|plan\s+approval|legal\s+status|legal\s+details?)\b/i.test(
       buyerText ?? '',
     );
+  // CRM advisory atoms live on ProjectDetail — hydrate whenever the contract
+  // requires them, even if topic routing landed elsewhere.
+  const advisoryDetailNeeded = Boolean(
+    deps.failureAnswer &&
+      goal.requires?.some(
+        (k) =>
+          k === 'rental_yield' ||
+          k === 'appreciation' ||
+          k === 'growth_drivers' ||
+          k === 'operator_model' ||
+          k === 'visit_logistics',
+      ),
+  );
   const needsDetail =
     (!faqShapedHit &&
       !faqShapedMiss &&
@@ -3144,7 +3157,8 @@ async function fetchAnswer(
           t === 'availability' ||
           t === 'property_type',
       )) ||
-    legalSnapshotNeeded;
+    legalSnapshotNeeded ||
+    advisoryDetailNeeded;
   if (needsDetail || wantsLocation) {
     let detail = await hydrateProjectDetail(deps, s, goal.projectId);
     if (detail && topics.includes('legal')) {
