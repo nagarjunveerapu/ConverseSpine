@@ -1,0 +1,149 @@
+<title>PR-1 — name distinctiveness · scenario run</title>
+<style>
+:root{--bg:#fbfaf7;--ink:#1a1917;--mut:#6b6660;--line:#e3ded4;--ok:#1f7a4d;--bad:#b3341f;--warn:#8a6d1f;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#141311;--ink:#ece8e1;--mut:#9a938a;--line:#2e2b26;--ok:#5fbf8e;--bad:#e8785f;--warn:#d4b25a;--card:#1c1a17}}
+:root[data-theme=dark]{--bg:#141311;--ink:#ece8e1;--mut:#9a938a;--line:#2e2b26;--ok:#5fbf8e;--bad:#e8785f;--warn:#d4b25a;--card:#1c1a17}
+:root[data-theme=light]{--bg:#fbfaf7;--ink:#1a1917;--mut:#6b6660;--line:#e3ded4;--ok:#1f7a4d;--bad:#b3341f;--warn:#8a6d1f;--card:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:44px 22px 90px}
+h1{font-size:30px;line-height:1.15;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--mut);margin:0 0 30px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 34px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.kpi b{display:block;font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi span{color:var(--mut);font-size:12.5px;text-transform:uppercase;letter-spacing:.06em}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut);margin:38px 0 12px;font-weight:600}
+.sc{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:0 0 12px;overflow:hidden}
+.hd{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.id{font-weight:700;font-variant-numeric:tabular-nums}
+.ti{color:var(--mut);font-size:13.5px}
+.pill{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.05em;padding:2px 8px;border-radius:99px;border:1px solid currentColor}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.tn{padding:11px 16px;border-top:1px solid var(--line)}
+.tn:first-of-type{border-top:0}
+.b{font-weight:600}.b::before{content:"› ";color:var(--mut)}
+.r{color:var(--mut);white-space:pre-wrap;margin-top:4px;font-size:14px}
+.r::before{content:"← ";color:var(--line)}
+.f{color:var(--bad);font-size:13px;margin-top:5px}
+.note{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:8px;padding:13px 16px;margin:0 0 12px;font-size:14px}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 5px;border-radius:4px}
+</style>
+<div class="wrap">
+<h1>PR-1 — a project&rsquo;s name is what the catalog says distinguishes it</h1>
+<p class="sub">Live scenario run against <code>converse-spine-dev</code> · 2026-07-25T16-47-27-030Z</p>
+<div class="grid">
+<div class="kpi"><b>89</b><span>scenarios</span></div>
+<div class="kpi"><b>75</b><span>passed</span></div>
+<div class="kpi"><b>13</b><span>failed</span></div>
+<div class="kpi"><b>0</b><span>regressions</span></div>
+</div>
+<div class="note"><b>Zero regressions.</b> Every failing turn below was reproduced on <code>main</code> deployed to the same worker. The failing-turn sets are identical — nothing this branch changed broke a scenario, and nothing it changed fixed one.</div>
+<h2>PR-1 scenarios</h2>
+<div class="sc"><div class="hd"><span class="id">NAME-01</span><span class="ti">PR-1 — a preference word must not open a project (green spaces)</span><span class="pill ok">PASS</span></div>
+<div class="tn"><div class="b">I want green spaces and good schools nearby</div><div class="r">I&#x27;m not sure what you&#x27;d like help with. Could you rephrase it in one sentence?</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">NAME-02</span><span class="ti">PR-1 — naming a project outright still opens it (control)</span><span class="pill ok">PASS</span></div>
+<div class="tn"><div class="b">tell me about Krishnaja Greens</div><div class="r">*Krishnaja Greens*. Entry Plot (7,000 sqft), Large Plot (13,000–15,000 sqft) &amp; Mid Plot (7,000–13,000 sqft) · from ₹39 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+</div>
+<div class="tn"><div class="b">what is the price</div><div class="r">*Pricing — Krishnaja Greens:* Base plot price From ₹39 L for 7,000 sqft, Stamp Duty 5% of land value, Registration Charges 1% (max ₹15,000 for agricultural land), Land Conversion (10% buildable area) ~₹1.5 L. Want anything else on *Krishnaja Greens*, or a visit?</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">NAME-03</span><span class="ti">PR-1 — a builder brand is not a project (no sibling steal)</span><span class="pill ok">PASS</span></div>
+<div class="tn"><div class="b">tell me about Brigade Cornerstone</div><div class="r">*Brigade Cornerstone*. 1 BHK, 2 BHK, 3 BHK &amp; Studio · from ₹33 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+</div>
+<div class="tn"><div class="b">is Brigade a reliable builder</div><div class="r">*Brigade Cornerstone*. 1 BHK, 2 BHK, 3 BHK &amp; Studio · from ₹33 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">NAME-04</span><span class="ti">PR-1 — superset disambiguation on the buyer&#x27;s own words</span><span class="pill ok">PASS</span></div>
+<div class="tn"><div class="b">tell me about cornerstone</div><div class="r">*Brigade Cornerstone*. 1 BHK, 2 BHK, 3 BHK &amp; Studio · from ₹33 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">NAME-05</span><span class="ti">PR-1 — a 4-character distinguishing word still names its project (Viva)</span><span class="pill ok">PASS</span></div>
+<div class="tn"><div class="b">tell me about Viva Greens</div><div class="r">*Viva Greens*. MUDA Plot · from ₹40 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">NAME-06</span><span class="ti">KNOWN FAIL (pre-existing, not PR-1) — cannot switch to a longer-named sibling</span><span class="pill warn">KNOWN FAIL</span></div>
+<div class="tn"><div class="b">tell me about cornerstone</div><div class="r">*Brigade Cornerstone*. 1 BHK, 2 BHK, 3 BHK &amp; Studio · from ₹33 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+</div>
+<div class="tn"><div class="b">what about cornerstone utopia</div><div class="r">*Brigade Cornerstone*. 1 BHK, 2 BHK, 3 BHK &amp; Studio · from ₹33 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+<div class="f">✗ expected reply to include &quot;utopia&quot;</div>
+</div>
+</div>
+<h2>Pre-existing failures — reproduced on main, not caused here</h2>
+<div class="sc"><div class="hd"><span class="id">ADV-F01</span><span class="ti">Orchards focused facet depth — banks, EC, price (not generic snapshot)</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">what banks approved?</div><div class="r">Yes — A-Khata (BBMP). Each phase has RERA registration and sanctioned building plan. EC available on request. For completed phases, OC has been received and residents are occupying. Legal documents verifiable at sub-registrar and RERA portal.. Want anything else on *Brigade Orchards*, or a visit?</div>
+<div class="f">✗ expected reply to include &quot;home loan&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">ADV-H03</span><span class="ti">CTA → no thanks stays focused (not no_fit apartment)</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">no thanks</div><div class="r">Just so I get this right — do you want me to stop calling and keep chatting here, or stop all contact and delete your details?</div>
+<div class="f">✗ expected reply to include &quot;eldorado&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">ADV-H04</span><span class="ti">Legal → EC clear? facet (not generic essay)</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">is the EC clear?</div><div class="r">I don&#x27;t have ec status on file.</div>
+<div class="f">✗ expected reply to include &quot;ayana&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">BUYER-LOK-01</span><span class="ti">Plantation buyer — multi shortlist clarify, then sizes/legal/visit</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">give me details on the project</div><div class="r">*Ayana* — Sakleshpur. 5,000 sqft Plot, Large Plot (12,000–15,000 sqft) &amp; Quarter-Acre Plot (10,000 sqft) · from ₹24.95 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+<div class="f">✗ expected reply to include &quot;which&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">FAQ-01</span><span class="ti">Focused rental yield uses Desk FAQ (not overview dump)</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">what is the rental yield?</div><div class="r">I don&#x27;t have rental yield on file.</div>
+<div class="f">✗ expected tools to include &quot;faqLookup&quot; (got faqMiss,detail)</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">FAQ-03</span><span class="ti">Focused payment plan ask uses Desk FAQ</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">what is the payment plan?</div><div class="r">*Brigade Eldorado* — Aerospace Park / Devanahalli Corridor. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium &amp; 4 BHK Penthouse · from ₹31 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+<div class="f">✗ expected reply to include &quot;payment&quot;</div>
+<div class="f">✗ expected reply to include &quot;clp&quot;</div>
+<div class="f">✗ expected tools to include &quot;faqLookup&quot; (got faqMiss)</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">FAQ-04</span><span class="ti">Focused home loan ask uses Desk FAQ</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">can I get a home loan?</div><div class="r">I don&#x27;t have loan eligibility on file.</div>
+<div class="f">✗ expected reply to include &quot;bank&quot;</div>
+<div class="f">✗ expected tools to include &quot;faqLookup&quot; (got faqMiss)</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">FV-P3-INVALID-LOCALITY</span><span class="ti">Failure Phase 3: unresolved locality never reaches durable state</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">Buy, 70 lakh, 2 BHK</div><div class="r">I couldn&#x27;t match that size — here&#x27;s what we do have: *Ayana* in Sakleshpur, from ₹24.95 L; *Desire Spaces* in Mysuru, from ₹28 L; *Vanam* in Kanakapura, from ₹30 L. Want details on any of these, or shall I set up a visit?</div>
+<div class="f">✗ expected reply to include &quot;couldn&#x27;t identify that location&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">HOLD-04</span><span class="ti">Weak object — hold one for me uses stated 2 BHK preference (Desk type hold)</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">please hold one for me</div><div class="r">I&#x27;m not sure what you&#x27;d like help with. Could you rephrase it in one sentence?</div>
+<div class="f">✗ expected reply to include &quot;2 BHK&quot;</div>
+<div class="f">✗ expected reply to include &quot;reply yes to confirm&quot;</div>
+<div class="f">✗ goal.kind=clarify_intent want hold_propose</div>
+</div>
+<div class="tn"><div class="b">yes</div><div class="r">Shall I set up a visit to *Brigade Eldorado*, or hold a unit for you while you decide?</div>
+<div class="f">✗ expected reply to include one of: held | just taken</div>
+<div class="f">✗ goal.kind=advance want hold_booked</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">MEM-G01</span><span class="ti">Legal → what banks? uses facet (not generic snapshot)</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">what banks approved?</div><div class="r">Regulatory snapshot for *Ayana*: Configurations: 5,000 sqft Plot — 5000 sqft from ₹24.9L; Large Plot (12,000–15,000 sqft) — 12000-15000 sqft from ₹59.9L—₹74.8L; Quarter-Acre Plot (10,000 sqft) — 10000 sqft from ₹49.9L. Want anything else on *Ayana*, or a visit?</div>
+<div class="f">✗ expected reply to include &quot;home loan&quot;</div>
+<div class="f">✗ expected reply to exclude &quot;regulatory snapshot&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">SA-CLARIFY-PICK</span><span class="ti">Multi shortlist — details ask clarifies which project</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">give me details on the project</div><div class="r">*Ayana* — Sakleshpur. 5,000 sqft Plot, Large Plot (12,000–15,000 sqft) &amp; Quarter-Acre Plot (10,000 sqft) · from ₹24.95 L. Want pricing details, unit configurations, or the legal &amp; RERA picture?</div>
+<div class="f">✗ expected reply to include &quot;which&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">STY-04</span><span class="ti">Off-topic then Eldorado price recovery</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">anyway Eldorado price</div><div class="r">I can share the listed price and cost details, but I can&#x27;t promise or negotiate a discount. I can arrange a callback with the sales team.</div>
+<div class="f">✗ expected reply to include &quot;eldorado&quot;</div>
+</div>
+</div>
+<div class="sc"><div class="hd"><span class="id">SW-04</span><span class="ti">Advisor board hops Cornerstone → Buena Vista via name</span><span class="pill warn">PRE-EXISTING</span></div>
+<div class="tn"><div class="b">Buena Vista instead</div><div class="r">Here&#x27;s what fits: *Brigade Sanctuary* in Sarjapur Road, from ₹79 L; *Brigade Cornerstone Utopia* in Whitefield, from ₹1.05 Cr. Want details on any of these, or shall I set up a visit?</div>
+<div class="f">✗ expected reply to include &quot;buena&quot;</div>
+</div>
+</div>
+</div>
