@@ -169,3 +169,47 @@ const BY_STATE = new Map(CHIP_CATALOGUE.map((c) => [c.state, c]));
 export function chipFor(state: string): ChipDefinition | undefined {
   return BY_STATE.get(state);
 }
+
+/**
+ * Ranker chip state → speech-act catalog action_id (see engine/speech-act/catalog.ts).
+ * A chip that carries its action_id is a DETERMINISTIC tap: the door resolves the
+ * intent from the id and skips the LLM extract (the `chip_skip` path in
+ * extract-authority.ts), ~0.5–1.4s off the turn. Only the content states map;
+ * rails and interaction-specific states (clarify/probe/visit_ask time slots)
+ * stay undefined and fall back to sending the label as free text.
+ */
+export function chipActionId(state: string): string | undefined {
+  // `shortlist_answer/*` shares the `answer_*` id with the focused facet — the
+  // door scopes from turn state, not the id: unfocused + lastOffered resolves to
+  // a board answer (verified live: action_id=answer_price on an unfocused board
+  // → goal `shortlist_answer/price` listing all matches, never a wrong project).
+  switch (state) {
+    case 'answer/price':
+    case 'shortlist_answer/price':
+      return 'answer_price';
+    case 'answer/availability':
+    case 'shortlist_answer/availability':
+      return 'answer_availability';
+    case 'answer/legal':
+    case 'shortlist_answer/legal':
+      return 'answer_legal';
+    case 'answer/location':
+      return 'answer_location';
+    case 'answer/amenities':
+      return 'answer_amenities';
+    case 'answer/emi':
+      return 'answer_emi';
+    case 'answer/media':
+      return 'answer_media';
+    case 'answer/overview':
+      return 'answer_overview';
+    case 'answer/compare':
+      return 'compare_projects';
+    case 'recommend':
+      return 'search';
+    case 'visit_ask':
+      return 'visit_book';
+    default:
+      return undefined;
+  }
+}

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildAdvisorNba, mergeChipsWithRails } from '../src/advisor/nba.js';
+import { chipActionId } from '../src/chips/catalogue.js';
+import { catalogEntryByActionId } from '../src/engine/speech-act/catalog.js';
 import { initState } from '../src/engine/state.js';
 import type { TurnDebug } from '../src/engine/types.js';
 
@@ -187,5 +189,74 @@ describe('buildAdvisorNba with chip ranker live (ADR-005)', () => {
     const nba = buildAdvisorNba(state, debug, true);
     expect(nba.chips).toContain('Alpha Heights');
     expect(nba.chips).toContain('Beta Gardens');
+  });
+});
+
+// ADR-006: content chips carry a deterministic action_id so a tap skips the LLM
+// extract; rails do not. Every action_id the ranker emits must be resolvable by
+// the speech-act catalog, or the door falls back to a slow free-text extract.
+describe('deterministic chip action_ids (ADR-006)', () => {
+  it('maps ranker states to catalog action_ids that resolve', () => {
+    const cases: Array<[string, string]> = [
+      ['answer/price', 'answer_price'],
+      ['answer/availability', 'answer_availability'],
+      ['answer/legal', 'answer_legal'],
+      ['answer/overview', 'answer_overview'],
+      ['answer/compare', 'compare_projects'],
+      ['shortlist_answer/price', 'answer_price'],
+      ['recommend', 'search'],
+      ['visit_ask', 'visit_book'],
+    ];
+    for (const [state, actionId] of cases) {
+      expect(chipActionId(state)).toBe(actionId);
+      // The id must be a real catalog entry — else resolveActionIdToChipPath
+      // returns unknown and the fast path silently degrades.
+      expect(catalogEntryByActionId(actionId)).toBeDefined();
+    }
+    // Interaction-specific / unknown states stay undefined (send as text).
+    expect(chipActionId('clarify_project_pick')).toBeUndefined();
+    expect(chipActionId('probe')).toBeUndefined();
+  });
+
+  it('focused answer turn attaches chip_actions aligned to chips; rails are empty', () => {
+    const state = initState('advisor:nba-actions', 'naya-advisor');
+    state.phase = 'focused';
+    state.focus = { projectId: 'cs', projectName: 'Brigade Cornerstone' };
+    state.discover.lastOffered = [
+      { projectId: 'cs', name: 'Brigade Cornerstone', microMarket: 'D', startingPriceDisplay: '₹1' },
+      { projectId: 'el', name: 'Brigade Eldorado', microMarket: 'D', startingPriceDisplay: '₹2' },
+    ];
+    const debug: TurnDebug = {
+      phase: 'focused',
+      goal: { kind: 'answer', topic: 'overview', projectId: 'cs' },
+      tools: [],
+      grounding: 'pass',
+    };
+    const nba = buildAdvisorNba(state, debug, true);
+    expect(nba.chip_actions).toBeDefined();
+    expect(nba.chip_actions).toHaveLength(nba.chips.length);
+    // Rails carry no action_id.
+    const railIdx = nba.chips.indexOf('Back to my matches');
+    expect(railIdx).toBeGreaterThanOrEqual(0);
+    expect(nba.chip_actions![railIdx]).toBe('');
+    // At least one content chip is deterministic, and every non-empty id resolves.
+    expect(nba.chip_actions!.some((a) => a)).toBe(true);
+    for (const a of nba.chip_actions!) {
+      if (a) expect(catalogEntryByActionId(a)).toBeDefined();
+    }
+  });
+
+  it('omits chip_actions when the ranker is off (no deterministic chips)', () => {
+    const state = initState('advisor:nba-noactions', 'naya-advisor');
+    state.phase = 'focused';
+    state.focus = { projectId: 'cs', projectName: 'Cornerstone' };
+    const debug: TurnDebug = {
+      phase: 'focused',
+      goal: { kind: 'answer', topic: 'overview', projectId: 'cs' },
+      tools: [],
+      grounding: 'pass',
+    };
+    const nba = buildAdvisorNba(state, debug, false);
+    expect(nba.chip_actions).toBeUndefined();
   });
 });

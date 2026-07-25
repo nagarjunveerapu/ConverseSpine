@@ -9,13 +9,20 @@
 import type { ConversationState, TurnDebug, TurnGoal } from '../engine/types.js';
 import { rankChips } from '../chips/rank.js';
 import { goalState } from '../chips/shadow.js';
-import type { ChipEvidence } from '../chips/catalogue.js';
+import { chipActionId, type ChipEvidence } from '../chips/catalogue.js';
 
 export type AdvisorNbaBoard = 'none' | 'matches' | 'project' | 'compare' | 'visit';
 export type AdvisorNbaBoardTab = 'legal' | 'units' | 'price' | 'emi' | 'overview';
 
 export interface AdvisorNba {
   chips: string[];
+  /**
+   * Per-chip action_id aligned by index with `chips` (ADR-006). A non-empty
+   * entry marks a DETERMINISTIC chip: the SPA sends it as `action_id` so the
+   * door skips the LLM extract. Empty string = send the label as free text
+   * (rails and hand-authored chips). Omitted entirely when no chip is deterministic.
+   */
+  chip_actions?: string[];
   board: AdvisorNbaBoard;
   board_tab?: AdvisorNbaBoardTab;
   board_project_id?: string;
@@ -257,7 +264,11 @@ const RANKER_GOALS: ReadonlySet<string> = new Set([
  * labels feed the `primary` slot only — rails are merged in afterward by
  * chipsForGoal, so navigation can never be displaced by a ranked answer chip.
  */
-function rankedPrimaryChips(state: ConversationState, goal: TurnGoal, limit: number): string[] {
+function rankedPrimaryChips(
+  state: ConversationState,
+  goal: TurnGoal,
+  limit: number,
+): Array<{ label: string; actionId?: string }> {
   const focusId = state.focus?.projectId;
   const focused = focusId ? state.projectCache?.[focusId] : undefined;
   const ev: ChipEvidence = {
@@ -267,28 +278,46 @@ function rankedPrimaryChips(state: ConversationState, goal: TurnGoal, limit: num
     ...(state.visitBookedCache?.length ? { visitBooked: true } : {}),
   };
   const ranked = rankChips({ phase: state.phase, state: goalState(goal), evidence: ev, limit });
-  return ranked.chips.map((c) => c.label);
+  // Carry each chip's deterministic action_id (ADR-006) derived from its ranker
+  // state; content chips get one, so a tap can skip the LLM extract.
+  return ranked.chips.map((c) => {
+    const actionId = chipActionId(c.state);
+    return { label: c.label, ...(actionId ? { actionId } : {}) };
+  });
 }
 
+/**
+ * The final chip labels plus an index-aligned action_id array (empty string =
+ * "no action_id, send as text"). Rails and the hand-authored `dimensionAndJourney`
+ * chips carry no action_id; only ranker content chips do.
+ */
 function chipsForGoal(
   state: ConversationState,
   goal: TurnGoal,
   board: AdvisorNbaBoard,
   chipRankLive: boolean,
-): string[] {
+): { chips: string[]; actions: string[] } {
   const rails = railsFor(board, goal);
   let primary: string[];
+  const actionByLabel = new Map<string, string>();
   if (chipRankLive && RANKER_GOALS.has(goal.kind)) {
     // Leave the rails their reserved slots so the ranked list can't crowd
     // navigation out; fall back to the hand-authored chips if the table is
     // empty for this state (the availability check suppressed everything).
     const budget = Math.max(1, MAX_CHIPS - Math.min(rails.length, 2));
     const ranked = rankedPrimaryChips(state, goal, budget);
-    primary = ranked.length ? ranked : dimensionAndJourney(state, goal, board);
+    if (ranked.length) {
+      primary = ranked.map((r) => r.label);
+      for (const r of ranked) if (r.actionId) actionByLabel.set(r.label, r.actionId);
+    } else {
+      primary = dimensionAndJourney(state, goal, board);
+    }
   } else {
     primary = dimensionAndJourney(state, goal, board);
   }
-  return mergeChipsWithRails(primary, rails);
+  const chips = mergeChipsWithRails(primary, rails);
+  const actions = chips.map((c) => actionByLabel.get(c) ?? '');
+  return { chips, actions };
 }
 
 export function buildAdvisorNba(
@@ -336,10 +365,13 @@ export function buildAdvisorNba(
     board_project_id = undefined;
   }
 
-  const chips = chipsForGoal(state, goal, board, chipRankLive);
+  const { chips, actions } = chipsForGoal(state, goal, board, chipRankLive);
 
   return {
     chips,
+    // Only attach chip_actions when at least one chip is deterministic — keeps
+    // the payload unchanged for turns that have no action_id chips.
+    ...(actions.some((a) => a) ? { chip_actions: actions } : {}),
     board,
     ...(board_tab ? { board_tab } : {}),
     ...(board_project_id ? { board_project_id } : {}),
