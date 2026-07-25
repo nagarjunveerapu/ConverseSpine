@@ -179,6 +179,10 @@ export function chipFor(state: string): ChipDefinition | undefined {
  * stay undefined and fall back to sending the label as free text.
  */
 export function chipActionId(state: string): string | undefined {
+  // `shortlist_answer/*` shares the `answer_*` id with the focused facet — the
+  // door scopes from turn state, not the id: unfocused + lastOffered resolves to
+  // a board answer (verified live: action_id=answer_price on an unfocused board
+  // → goal `shortlist_answer/price` listing all matches, never a wrong project).
   switch (state) {
     case 'answer/price':
     case 'shortlist_answer/price':
