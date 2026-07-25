@@ -1,0 +1,2975 @@
+{
+  "builderId": "naya-advisor",
+  "generatedFor": "naya-db-dev",
+  "projects": 21,
+  "rows": [
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:build_coverage",
+      "has": true,
+      "via": "faq",
+      "key": "build_coverage"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:legal_status",
+      "has": true,
+      "via": "faq",
+      "key": "legal_status"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:operator_shutdown_risk",
+      "has": true,
+      "via": "faq",
+      "key": "operator_shutdown_risk"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:plantation_details",
+      "has": true,
+      "via": "faq",
+      "key": "plantation_details"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:plot_sizes",
+      "has": true,
+      "via": "faq",
+      "key": "plot_sizes"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:revenue_model",
+      "has": true,
+      "via": "faq",
+      "key": "revenue_model"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "faq:transport_pickup",
+      "has": true,
+      "via": "faq",
+      "key": "transport_pickup"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "ayana-lokations-naya-advisor",
+      "project": "Ayana",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:community_size",
+      "has": true,
+      "via": "faq",
+      "key": "community_size"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:customization",
+      "has": true,
+      "via": "faq",
+      "key": "customization"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:parking",
+      "has": true,
+      "via": "faq",
+      "key": "parking"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:payment_process",
+      "has": true,
+      "via": "faq",
+      "key": "payment_process"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:pet_policy",
+      "has": true,
+      "via": "faq",
+      "key": "pet_policy"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:private_garden",
+      "has": true,
+      "via": "faq",
+      "key": "private_garden"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:security",
+      "has": true,
+      "via": "faq",
+      "key": "security"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "faq:vastu",
+      "has": true,
+      "via": "faq",
+      "key": "vastu"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-atmosphere-naya-advisor",
+      "project": "Brigade Atmosphere",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:booking_process",
+      "has": true,
+      "via": "faq",
+      "key": "booking_process"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:builder_credibility",
+      "has": true,
+      "via": "faq",
+      "key": "builder_credibility"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:configurations",
+      "has": true,
+      "via": "faq",
+      "key": "configurations"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:khata",
+      "has": true,
+      "via": "faq",
+      "key": "khata"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:nearby_hospitals",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_hospitals"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:payment_process",
+      "has": true,
+      "via": "faq",
+      "key": "payment_process"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:water_power",
+      "has": true,
+      "via": "faq",
+      "key": "water_power"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "faq:whitefield_proximity",
+      "has": true,
+      "via": "faq",
+      "key": "whitefield_proximity"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-buena-vista-naya-advisor",
+      "project": "Brigade Buena Vista",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:booking_process",
+      "has": true,
+      "via": "faq",
+      "key": "booking_process"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:builder_credibility",
+      "has": true,
+      "via": "faq",
+      "key": "builder_credibility"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:compact_units",
+      "has": true,
+      "via": "faq",
+      "key": "compact_units"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:metro_connectivity",
+      "has": true,
+      "via": "faq",
+      "key": "metro_connectivity"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:nearby_hospitals",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_hospitals"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:parking",
+      "has": true,
+      "via": "faq",
+      "key": "parking"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:payment_process",
+      "has": true,
+      "via": "faq",
+      "key": "payment_process"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "faq:water_power",
+      "has": true,
+      "via": "faq",
+      "key": "water_power"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-calista-naya-advisor",
+      "project": "Brigade Calista",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-cornerstone-naya-advisor",
+      "project": "Brigade Cornerstone",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:base_rate",
+      "has": true,
+      "via": "faq",
+      "key": "base_rate"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:builder_credibility",
+      "has": true,
+      "via": "faq",
+      "key": "builder_credibility"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:construction_status",
+      "has": true,
+      "via": "faq",
+      "key": "construction_status"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:khata",
+      "has": true,
+      "via": "faq",
+      "key": "khata"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:metro_connectivity",
+      "has": true,
+      "via": "faq",
+      "key": "metro_connectivity"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:nearby_hospitals",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_hospitals"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "faq:water_power",
+      "has": true,
+      "via": "faq",
+      "key": "water_power"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-cornerstone-utopia-naya-advisor",
+      "project": "Brigade Cornerstone Utopia",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:configurations",
+      "has": true,
+      "via": "faq",
+      "key": "configurations"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:floor_plan",
+      "has": true,
+      "via": "faq",
+      "key": "floor_plan"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:khata",
+      "has": true,
+      "via": "faq",
+      "key": "khata"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:location_schools__retired_eldorado-faq-airport-naya-advisor",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools__retired_eldorado-faq-airport-naya-advisor"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:payment_process",
+      "has": true,
+      "via": "faq",
+      "key": "payment_process"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:township_scale",
+      "has": true,
+      "via": "faq",
+      "key": "township_scale"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "faq:water_power",
+      "has": true,
+      "via": "faq",
+      "key": "water_power"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-eldorado-naya-advisor",
+      "project": "Brigade Eldorado",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:builder_credibility",
+      "has": true,
+      "via": "faq",
+      "key": "builder_credibility"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:configurations",
+      "has": true,
+      "via": "faq",
+      "key": "configurations"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:exit",
+      "has": true,
+      "via": "faq",
+      "key": "exit"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:green_certified",
+      "has": true,
+      "via": "faq",
+      "key": "green_certified"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:khata",
+      "has": true,
+      "via": "faq",
+      "key": "khata"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:location_schools__retired_meadows-faq-connectivity-naya-advisor",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools__retired_meadows-faq-connectivity-naya-advisor"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:metro_connectivity",
+      "has": true,
+      "via": "faq",
+      "key": "metro_connectivity"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:nearby_hospitals",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_hospitals"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:ready_to_move",
+      "has": true,
+      "via": "faq",
+      "key": "ready_to_move"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-meadows-naya-advisor",
+      "project": "Brigade Meadows",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:configurations_summary",
+      "has": true,
+      "via": "faq",
+      "key": "configurations_summary"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:construction_status",
+      "has": true,
+      "via": "faq",
+      "key": "construction_status"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:plan_approval",
+      "has": true,
+      "via": "faq",
+      "key": "plan_approval"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:project_type_summary",
+      "has": true,
+      "via": "faq",
+      "key": "project_type_summary"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:promoter_info",
+      "has": true,
+      "via": "faq",
+      "key": "promoter_info"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "faq:total_units_and_towers",
+      "has": true,
+      "via": "faq",
+      "key": "total_units_and_towers"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-northridge-neo-naya-advisor",
+      "project": "Brigade Northridge Neo",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:booking_process",
+      "has": true,
+      "via": "faq",
+      "key": "booking_process"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:builder_credibility",
+      "has": true,
+      "via": "faq",
+      "key": "builder_credibility"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:construction_rules",
+      "has": true,
+      "via": "faq",
+      "key": "construction_rules"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:exit",
+      "has": true,
+      "via": "faq",
+      "key": "exit"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:khata",
+      "has": true,
+      "via": "faq",
+      "key": "khata"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:nearby_hospitals",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_hospitals"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:plc_premium",
+      "has": true,
+      "via": "faq",
+      "key": "plc_premium"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:plot_security",
+      "has": true,
+      "via": "faq",
+      "key": "plot_security"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:plot_sizes",
+      "has": true,
+      "via": "faq",
+      "key": "plot_sizes"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "faq:water_power",
+      "has": true,
+      "via": "faq",
+      "key": "water_power"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-oasis-naya-advisor",
+      "project": "Brigade Oasis",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:booking_process",
+      "has": true,
+      "via": "faq",
+      "key": "booking_process"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:builder_credibility",
+      "has": true,
+      "via": "faq",
+      "key": "builder_credibility"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:ivory_segment",
+      "has": true,
+      "via": "faq",
+      "key": "ivory_segment"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:khata",
+      "has": true,
+      "via": "faq",
+      "key": "khata"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:location_schools__retired_orchards-faq-airport-naya-advisor",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools__retired_orchards-faq-airport-naya-advisor"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:nearby_hospitals",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_hospitals"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:nri_buying",
+      "has": true,
+      "via": "faq",
+      "key": "nri_buying"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:segments",
+      "has": true,
+      "via": "faq",
+      "key": "segments"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-orchards-naya-advisor",
+      "project": "Brigade Orchards",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:compact_units",
+      "has": true,
+      "via": "faq",
+      "key": "compact_units"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:construction_status",
+      "has": true,
+      "via": "faq",
+      "key": "construction_status"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:gst_registration",
+      "has": true,
+      "via": "faq",
+      "key": "gst_registration"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:investment_case",
+      "has": true,
+      "via": "faq",
+      "key": "investment_case"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:location_schools__retired_sanctuary-faq-itparks-naya-advisor",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools__retired_sanctuary-faq-itparks-naya-advisor"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:maintenance",
+      "has": true,
+      "via": "faq",
+      "key": "maintenance"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:nearby_hospitals",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_hospitals"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:nearby_schools",
+      "has": true,
+      "via": "faq",
+      "key": "nearby_schools"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:parking",
+      "has": true,
+      "via": "faq",
+      "key": "parking"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:payment_process",
+      "has": true,
+      "via": "faq",
+      "key": "payment_process"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:pets_vastu",
+      "has": true,
+      "via": "faq",
+      "key": "pets_vastu"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:project_scale",
+      "has": true,
+      "via": "faq",
+      "key": "project_scale"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:rera_number",
+      "has": true,
+      "via": "faq",
+      "key": "rera_number"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "faq:tower_choice",
+      "has": true,
+      "via": "faq",
+      "key": "tower_choice"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "brigade-sanctuary-naya-advisor",
+      "project": "Brigade Sanctuary",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "century-breeze-lokations-naya-advisor",
+      "project": "Century Breeze",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "faq:project_info",
+      "has": true,
+      "via": "faq",
+      "key": "project_info"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "faq:revenue_model",
+      "has": true,
+      "via": "faq",
+      "key": "revenue_model"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "clarks-exotica-lokations-naya-advisor",
+      "project": "Clarks Exotica",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "desire-spaces-lokations-naya-advisor",
+      "project": "Desire Spaces",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "rera",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "possession",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "earth-aroma-lokations-naya-advisor",
+      "project": "Earth Aroma",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "faq:banks",
+      "has": true,
+      "via": "faq",
+      "key": "banks"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "faq:rental_yield",
+      "has": true,
+      "via": "faq",
+      "key": "rental_yield"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "possession",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "hillside-county-lokations-naya-advisor",
+      "project": "Hillside County",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:airbnb",
+      "has": true,
+      "via": "faq",
+      "key": "airbnb"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:build_coverage",
+      "has": true,
+      "via": "faq",
+      "key": "build_coverage"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:legal_status",
+      "has": true,
+      "via": "faq",
+      "key": "legal_status"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:operator_shutdown_risk",
+      "has": true,
+      "via": "faq",
+      "key": "operator_shutdown_risk"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:plantation_details",
+      "has": true,
+      "via": "faq",
+      "key": "plantation_details"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:plot_sizes",
+      "has": true,
+      "via": "faq",
+      "key": "plot_sizes"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:possession",
+      "has": true,
+      "via": "faq",
+      "key": "possession"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:revenue_model",
+      "has": true,
+      "via": "faq",
+      "key": "revenue_model"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "khata",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "ec_status",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "krishnaja-greens-lokations-naya-advisor",
+      "project": "Krishnaja Greens",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "faq:amenities",
+      "has": true,
+      "via": "faq",
+      "key": "amenities"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "my-sooru-lokations-naya-advisor",
+      "project": "My-Sooru",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "faq:plantation_details",
+      "has": true,
+      "via": "faq",
+      "key": "plantation_details"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "faq:plot_sizes",
+      "has": true,
+      "via": "faq",
+      "key": "plot_sizes"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "faq:site_visit",
+      "has": true,
+      "via": "faq",
+      "key": "site_visit"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "loan_eligibility",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "vanam-lokations-naya-advisor",
+      "project": "Vanam",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "faq:location_schools",
+      "has": true,
+      "via": "faq",
+      "key": "location_schools"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "faq:pricing",
+      "has": true,
+      "via": "faq",
+      "key": "pricing"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "faq:rera_status",
+      "has": true,
+      "via": "faq",
+      "key": "rera_status"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "rera",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "khata",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "ec_status",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "loan_eligibility",
+      "has": false,
+      "via": "column"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "possession",
+      "has": true,
+      "via": "column"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "cost_sheet",
+      "has": true,
+      "via": "cost_sheet"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "location_intel",
+      "has": true,
+      "via": "location_intel"
+    },
+    {
+      "projectId": "viva-greens-lokations-naya-advisor",
+      "project": "Viva Greens",
+      "fact": "unit_configs",
+      "has": true,
+      "via": "units"
+    }
+  ]
+}

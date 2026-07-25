@@ -191,7 +191,14 @@ export function filterNamedProjectsByEvidence(
    */
   catalogNames: ReadonlyArray<{ projectId?: string; name: string }> = [],
 ): OfferedProject[] {
-  if (!named.length) return [...named];
+  // An empty proposal is NOT "the buyer named nothing". The floor is the only
+  // layer that resolves a name against the catalog, so returning early here
+  // dropped projects the buyer named outright whenever the extractor stayed
+  // silent — live: "Buena Vista instead" was answered with two other projects,
+  // "anyway Eldorado price" with a discount deflection. Fall through so the
+  // catalog rescue below can see the text; it still requires FULL evidence, so
+  // an empty proposal on a nameless sentence stays empty.
+  if (!named.length && !catalogNames.length) return [...named];
   const siblings = [...catalogNames, ...named, ...pool];
   const inPool = (p: OfferedProject): boolean =>
     pool.some(

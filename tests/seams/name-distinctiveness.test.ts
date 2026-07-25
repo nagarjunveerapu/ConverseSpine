@@ -221,3 +221,49 @@ describe('seam: a preference word must not commit a project', () => {
     expect(r.state.focus?.projectName).toMatch(/Krishnaja/i);
   });
 });
+
+/**
+ * THE HOLE THE SCENARIOS FOUND.
+ *
+ * The floor is the only layer that resolves a name against the catalog, and it
+ * early-returns when the extractor proposed nothing:
+ *
+ *     if (!named.length) return [...named];
+ *
+ * So the catalog rescue added for "tell me about cornerstone" only fires when
+ * the embedder proposed SOMETHING that was merely partial. When it proposes
+ * nothing at all, a project the buyer named in full is simply lost. Live on dev:
+ *
+ *     "Buena Vista instead"    -> offered Brigade Sanctuary + Cornerstone Utopia
+ *     "anyway Eldorado price"  -> "I can't promise or negotiate a discount"
+ *
+ * Both name a real catalog project. Both are exactly what this PR is named after.
+ */
+describe('a fully-named project survives an empty proposal', () => {
+  const CATALOG_REFS = CATALOG_NAMES.map((name) => ({ projectId: id(name), name }));
+
+  it('names Brigade Buena Vista when the extractor proposed nothing', () => {
+    expect(
+      filterNamedProjectsByEvidence('Buena Vista instead', [], [], CATALOG_REFS).map((p) => p.name),
+    ).toEqual(['Brigade Buena Vista']);
+  });
+
+  it('names Brigade Eldorado from a facet ask with no proposal', () => {
+    expect(
+      filterNamedProjectsByEvidence('anyway Eldorado price', [], [], CATALOG_REFS).map((p) => p.name),
+    ).toEqual(['Brigade Eldorado']);
+  });
+
+  it('still invents nothing when the text names no project', () => {
+    expect(filterNamedProjectsByEvidence('what is the price', [], [], CATALOG_REFS)).toEqual([]);
+    expect(filterNamedProjectsByEvidence('I want green spaces', [], [], CATALOG_REFS)).toEqual([]);
+    expect(filterNamedProjectsByEvidence('is Brigade a reliable builder', [], [], CATALOG_REFS)).toEqual([]);
+  });
+
+  it('a PARTIAL name on an empty proposal is not enough', () => {
+    // "cornerstone" is partial for Utopia; with nothing proposed and no board,
+    // surfacing a guess would be worse than surfacing nothing.
+    const out = filterNamedProjectsByEvidence('tell me about cornerstone', [], [], CATALOG_REFS);
+    expect(out.map((p) => p.name)).toEqual(['Brigade Cornerstone']);
+  });
+});
