@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const SCENARIO_DIR = join(ROOT, 'scenarios', 'buyer');
+const SCENARIO_DIR = join(ROOT, process.env.SCENARIO_DIR ?? join('scenarios', 'buyer'));
 const SPINE = (process.env.CONVERSE_SPINE_URL ?? 'http://127.0.0.1:8789').replace(/\/+$/, '');
 
 interface AssertSpec {
