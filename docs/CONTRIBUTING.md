@@ -10,6 +10,8 @@ Same pattern as [NayaDesk](https://github.com/nagarjunveerapu/NayaDesk): **CI on
 | **Deploy dev** | CI success on `main`, or manual | `wrangler deploy --env dev` → `converse-spine-dev` |
 | **Deploy prod** | Manual only | `wrangler deploy --env prod` → `converse-spine` |
 
+**Production cutover (triad):** see [NayaDesk `docs/PROD_CUTOVER.md`](https://github.com/nagarjunveerapu/NayaDesk/blob/main/docs/PROD_CUTOVER.md). Spine prod must bind `NAYADESK` → **`nayadesk-prod`** (not top-level `nayadesk`). Matching `BOT_SHARED_SECRET` on both workers. FAILURE/SIL/CHIP flags stay off until milestone 2 soak.
+
 ## One-time GitHub setup
 
 1. **Repository secrets** (Settings → Secrets and variables → Actions):

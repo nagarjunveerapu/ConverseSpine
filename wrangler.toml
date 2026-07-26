@@ -281,9 +281,10 @@ name = "converse-spine"
 binding = "TURN_CACHE"
 id = "53df7275a01b4527a3421e36d7586864"
 
+# Must match NayaDesk [env.prod] worker name (nayadesk-prod), not top-level nayadesk.
 [[env.prod.services]]
 binding = "NAYADESK"
-service = "nayadesk"
+service = "nayadesk-prod"
 
 [[env.prod.durable_objects.bindings]]
 name = "TURN_DEBOUNCER"
@@ -311,3 +312,7 @@ DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"
 ADVISOR_BUILDER_ID = "naya-advisor"
 LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
+# HTTP fallback if service binding is cold/misnamed (same pattern as dig).
+NAYADESK_URL = "https://nayadesk-prod.nagarjun-arjun.workers.dev"
+# Milestone 1: FAILURE_*/SIL_*/CHIP_RANK_LIVE stay unset (off). Flag soak = milestone 2.
+# Cutover runbook: NayaDesk docs/PROD_CUTOVER.md
