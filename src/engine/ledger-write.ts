@@ -20,9 +20,36 @@ export interface LedgerWritePayload {
   action_plan: Record<string, unknown>;
   offered_project_ids: string[];
   disclosed_facts: DisclosedFact[];
-  tool_runs: Array<{ name: string; args_summary: string; success: boolean; latency_ms: number }>;
+  tool_runs: Array<{ name: string; args_summary: string; produced_evidence: boolean; latency_ms: number }>;
   verify: Record<string, unknown>;
   composer: string;
+}
+
+/**
+ * Did this tool actually put something in the evidence set?
+ *
+ * Every Desk adapter is `catch { return null }`, so the tool name stays in
+ * `evidence.tools` whether or not the call yielded anything. Comparing the
+ * name against the slot it fills is the only honest signal available before
+ * the ports return discriminated results (Phase 0b).
+ */
+function toolProducedEvidence(name: string, ev: EvidenceSet): boolean {
+  switch (name) {
+    case 'pricing': return Boolean(ev.pricing?.components?.length);
+    case 'landedCost': return Boolean(ev.landedCost);
+    case 'compare': return Boolean(ev.compare?.tableText || ev.compare?.matrix);
+    case 'detail': return Boolean(ev.detail);
+    case 'listUnits': return Boolean(ev.units?.length);
+    case 'mediaShare': return Boolean(ev.media);
+    case 'search': return Boolean(ev.matches?.length);
+    case 'lastOffered': return Boolean(ev.matches?.length);
+    case 'educationSearch': return Boolean(ev.education);
+    case 'faqLookup': return Boolean(ev.detail?.faqs?.length) && !ev.faqMiss;
+    case 'faqMiss': return false;
+    case 'catalog': return Boolean(ev.catalog?.total);
+    case 'geoAreasInRegion': return Boolean(ev.noMatch?.nearby?.length);
+    default: return true;
+  }
 }
 
 export function buildLedgerWritePayload(input: {
@@ -152,7 +179,13 @@ export function buildLedgerWritePayload(input: {
     tool_runs: (evidence.tools ?? []).map((name) => ({
       name,
       args_summary: '',
-      success: true,
+      // OBSERVED, not assumed. `success: true` was hardcoded on every row, so
+      // a swallowed Desk null looked identical to a cost sheet. This reports
+      // only what is checkable without the port change: did the call put
+      // anything in evidence. It deliberately does NOT claim to separate a
+      // legitimate absence from a transport failure -- that is 0b's result
+      // wrappers, and asserting it here would be a new lie for an old one.
+      produced_evidence: toolProducedEvidence(name, evidence),
       latency_ms: 0,
     })),
     verify: {
