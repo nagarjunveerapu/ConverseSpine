@@ -1,0 +1,176 @@
+<title>Are FAQs bound to the project? — a hand-read, 26 Jul 2026</title>
+<style>
+:root{--bg:#fbfaf8;--ink:#191817;--mut:#6d6862;--fade:#928c85;--line:#e5e0d6;--card:#fff;--ok:#1d7a4c;--bad:#b23320;--warn:#8a6a17;--accent:#2b5d8a}
+@media (prefers-color-scheme:dark){:root{--bg:#141312;--ink:#eae6e0;--mut:#9b948c;--fade:#7a736b;--line:#2d2a25;--card:#1c1a18;--ok:#5cbd8b;--bad:#e87a62;--warn:#d3b158;--accent:#7fb0dc}}
+:root[data-theme=dark]{--bg:#141312;--ink:#eae6e0;--mut:#9b948c;--fade:#7a736b;--line:#2d2a25;--card:#1c1a18;--ok:#5cbd8b;--bad:#e87a62;--warn:#d3b158;--accent:#7fb0dc}
+:root[data-theme=light]{--bg:#fbfaf8;--ink:#191817;--mut:#6d6862;--fade:#928c85;--line:#e5e0d6;--card:#fff;--ok:#1d7a4c;--bad:#b23320;--warn:#8a6a17;--accent:#2b5d8a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+.w{max-width:840px;margin:0 auto;padding:40px 20px 100px}
+h1{font-size:29px;line-height:1.12;letter-spacing:-.021em;margin:0 0 8px;font-weight:600;text-wrap:balance}
+.dek{color:var(--mut);margin:0 0 30px;font-size:16.5px}
+h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--fade);margin:44px 0 14px;font-weight:600}
+h3{font-size:17px;margin:26px 0 8px;font-weight:600;letter-spacing:-.01em}
+p{margin:0 0 13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:11px;margin:0 0 8px}
+.k{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+.k b{display:block;font-size:27px;font-variant-numeric:tabular-nums;letter-spacing:-.025em;line-height:1.15}
+.k span{color:var(--fade);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em}
+table{width:100%;border-collapse:collapse;margin:6px 0 16px;font-size:14.5px;display:block;overflow-x:auto}
+th{text-align:left;font-weight:600;color:var(--fade);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;padding:8px 12px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1.5px 5px;border-radius:4px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:13px 15px;overflow-x:auto;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 16px;white-space:pre-wrap}
+.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin:0 0 13px}
+.card.go{border-left:3px solid var(--ok);border-radius:0 11px 11px 0}
+.card.hold{border-left:3px solid var(--warn);border-radius:0 11px 11px 0}
+.card.stop{border-left:3px solid var(--bad);border-radius:0 11px 11px 0}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:2.5px 8px;border-radius:99px;border:1px solid currentColor;margin-left:8px;vertical-align:2px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.br{font:13.5px ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600}
+ul{margin:0 0 14px;padding-left:19px}li{margin:0 0 6px}
+.q{border-left:2px solid var(--line);padding-left:15px;color:var(--mut);margin:0 0 14px;font-style:italic}
+.foot{color:var(--fade);font-size:13.5px;border-top:1px solid var(--line);margin-top:44px;padding-top:18px}
+.b{color:var(--accent);font-weight:600}
+.n{color:var(--ink)}
+.lost{color:var(--bad);font-weight:600}
+.kept{color:var(--ok);font-weight:600}
+</style>
+
+<div class="w">
+
+<h1>Are FAQs bound to the project?</h1>
+<p class="dek">A hand-read of 39 live turns on <code>converse-spine-dev</code>, 26 July 2026. Written because the Ayana card in an earlier transcript looked like cross-project leakage. Every conversation below is real and reproduced verbatim; nothing here is a test assertion.</p>
+
+<div class="kpis">
+<div class="k"><b>39</b><span>turns hand-read</span></div>
+<div class="k"><b>0</b><span>cross-project facts</span></div>
+<div class="k"><b>2</b><span>phrasings that break it</span></div>
+<div class="k"><b>5/8</b><span>lost once poisoned</span></div>
+</div>
+
+<h2>The short answer</h2>
+<div class="card go">
+<h3 style="margin-top:0">FAQs are project-bound<span class="tag ok">verified</span></h3>
+<p>Three independent bindings, all present:</p>
+<pre>src/api/faqs.ts:145   SELECT * FROM faqs WHERE project_id = ? AND question_key = ?
+ports.ts:188          faqLookup(projectId: string, questionKey: string)
+turn.ts:3067          deps.data.faqLookup(goal.projectId, key)</pre>
+<p>And behaviourally: across 39 turns, deliberately including four journeys that ask a project about a concept only a <em>different</em> project has — plantation and coffee yield asked of an apartment tower; operator and revenue model asked of a Bangalore project; towers and club membership asked of a plantation plot — <strong>not one reply contained another project's fact.</strong></p>
+</div>
+
+<h3>So what was the Ayana line?</h3>
+<p>A search-result card, not an FAQ. The annotation comes from NayaDesk's own re-ranker:</p>
+<pre>src/lib/advisor_rerank.ts:305   evidence: `stated ROI on file: ${roi}`
+src/lib/advisor_rerank.ts:433   value:    'no value trend for this area yet'</pre>
+<p>Ayana's ROI was attached to Ayana. Correctly bound. The bug is not <em>what</em> was said about Ayana — it is that <strong>a search ran at all</strong> when the buyer was focused on Brigade Eldorado.</p>
+
+<h2>The real defect, and it is worse</h2>
+
+<div class="card stop">
+<h3 style="margin-top:0">Two phrasings of the same question. One of them destroys the conversation.<span class="tag bad">red</span></h3>
+<p>Fresh conversation each time. Identical first turn. Only the second turn differs.</p>
+<pre><span class="b">B:</span> tell me about brigade eldorado
+<span class="n">N:</span> *Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic,
+   3 BHK Premium &amp; 4 BHK Penthouse · from ₹31 L. Want pricing details, unit
+   configurations, or the legal &amp; RERA picture?
+
+<span class="b">B:</span> when is possession
+<span class="lost">N:</span> Here's what fits: *Ayana* in Sakleshpur, from ₹24.95 L; *Desire Spaces* in
+   Mysuru, from ₹28 L; *Vanam* in Kanakapura, from ₹30 L. Want details on any
+   of these, or shall I set up a visit?</pre>
+<pre><span class="b">B:</span> tell me about brigade eldorado
+<span class="n">N:</span> *Brigade Eldorado*. … from ₹31 L. …
+
+<span class="b">B:</span> what is the possession date
+<span class="kept">N:</span> Possession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire,
+   Jasper/Iridium) are ready or near-ready. Dioro &amp; Beryl blocks: June 2027.</pre>
+<p>The second answer is <strong>excellent</strong> — phase-level detail, real block names, a real date. The data is there and the path to it works. The first phrasing simply never reaches it.</p>
+<p>It is the wrong way round: <em>"when is possession"</em> is what a person types; <em>"what is the possession date"</em> is what a form field is called.</p>
+</div>
+
+<h3>Which phrasings survive a focused project</h3>
+<p>Each row is its own fresh conversation: overview, then that ask alone.</p>
+<table>
+<tr><th>ask</th><th>result</th><th>what came back</th></tr>
+<tr><td><code>when is possession</code></td><td><span class="lost">LOST</span></td><td>3-project shortlist</td></tr>
+<tr><td><code>has this area appreciated</code></td><td><span class="lost">LOST</span></td><td>3-project shortlist</td></tr>
+<tr><td><code>what is the possession date</code></td><td><span class="kept">kept</span></td><td>phase-wise, correct</td></tr>
+<tr><td><code>is it rera approved</code></td><td><span class="kept">kept</span></td><td>real RERA number</td></tr>
+<tr><td><code>what amenities does it have</code></td><td><span class="kept">kept</span></td><td>80+ amenities, correct</td></tr>
+<tr><td><code>what is the price</code></td><td><span class="kept">kept</span></td><td>BSP + parking + club, correct</td></tr>
+<tr><td><code>what are the maintenance charges</code></td><td><span class="kept">kept</span></td><td>overview card — <strong>a non-answer</strong></td></tr>
+<tr><td><code>can I get a home loan</code></td><td><span class="kept">kept</span></td><td>"I don't have loan eligibility on file" — <strong>false</strong></td></tr>
+</table>
+
+<h2>It is contagious — that is the severity</h2>
+<div class="card stop">
+<h3 style="margin-top:0">One bad phrasing poisons every turn after it<span class="tag bad">red</span></h3>
+<p>The same eight asks, in one conversation instead of eight. <code>what is the possession date</code> — which answers perfectly in isolation — is now unreachable, because the focus it needed is gone.</p>
+<pre><span class="b">B:</span> tell me about brigade eldorado          <span class="kept">→ correct overview</span>
+<span class="b">B:</span> when is possession
+<span class="lost">N:</span> Here's what fits: *Ayana* … *Desire Spaces* … *Vanam* …
+<span class="b">B:</span> what is the possession date
+<span class="lost">N:</span> Which one should I open for details — 1) *Ayana*, 2) *Desire Spaces*, 3) *Vanam*?
+<span class="b">B:</span> is it rera approved
+<span class="n">N:</span> I don't have legal &amp; approvals on file for your shortlist yet …
+<span class="b">B:</span> what amenities does it have
+<span class="lost">N:</span> Which one should I open for details — 1) *Ayana*, 2) *Desire Spaces*, 3) *Vanam*?
+<span class="b">B:</span> what are the maintenance charges
+<span class="lost">N:</span> Which one should I open for details — 1) *Ayana*, 2) *Desire Spaces*, 3) *Vanam*?
+<span class="b">B:</span> has this area appreciated
+<span class="n">N:</span> No exact match for those filters.. Want to adjust budget, area, or property type?
+<span class="b">B:</span> what is the price
+<span class="lost">N:</span> Hey! We've got a solid mix—managed plantation estates, plotted land, apartments,
+   villas, and managed villa resorts across Sakleshpur, Mysuru, Kanakapura …</pre>
+<p><strong>Solo: 2 of 8 lost. Chained: 5 of 8.</strong> The buyer named a project in turn one and by turn eight is being pitched the whole portfolio. There is no recovery path — nothing re-anchors the subject, and the shortlist that replaced it becomes the new subject.</p>
+</div>
+
+<h2>A real decline of a fact we hold</h2>
+<div class="card stop">
+<h3 style="margin-top:0"><code>banks</code> — this one is genuine<span class="tag bad">red</span></h3>
+<pre><span class="b">B:</span> tell me about brigade meadows
+<span class="b">B:</span> can I get a home loan
+<span class="lost">N:</span> I don't have loan eligibility on file.
+<span class="b">B:</span> which banks have approved it
+<span class="lost">N:</span> I don't have loan eligibility on file.</pre>
+<p>Desk, same moment:</p>
+<pre>brigade-meadows  banks  "Yes — pre-approved by HDFC, ICICI, SBI, Axis, and PNB
+                         Housing Finance. Ready-to-move means imme…"</pre>
+<p>CS asks for <code>loan_eligibility</code>; Desk stores <code>banks</code>. Pure naming drift, 18 rows. <code>maintenance</code> (16 rows) and <code>payment_process</code> (10 rows) are the same story — <strong>44 rows of a vocabulary mismatch</strong>.</p>
+<p class="q">This is the failure I wrongly pinned on <code>rental_yield</code> this morning. There it was a deliberate guard. Here it is real, and nobody had named it.</p>
+</div>
+
+<h2>Smaller things the read turned up</h2>
+<table>
+<tr><th>conversation</th><th>problem</th></tr>
+<tr><td><code>Vanam</code> → "what is the plot size"</td><td>returns the generic apartment-vs-villa-vs-plot explainer. The buyer asked about a specific plot and got a glossary.</td></tr>
+<tr><td><code>Vanam</code> → "what is the price"</td><td>answers with stamp duty and registration percentages, never the price.</td></tr>
+<tr><td><code>Ayana</code> → "what is the club membership fee"</td><td>answers with land price. Ayana has no club; the reply substitutes a different fact rather than saying so.</td></tr>
+<tr><td><code>Eldorado</code> → "tell me about the plantation here"</td><td>re-serves the overview card. No bleed — but no answer and no decline either.</td></tr>
+<tr><td><code>Ayana</code> → "how many towers are there"</td><td>re-serves the overview card. A plot project has no towers; saying so would be better than repeating.</td></tr>
+</table>
+<p>The pattern across all five: <strong>when the bot cannot answer, its default is to repeat the overview card</strong>. That reads as a non-sequitur, and it is indistinguishable from a bug to the buyer.</p>
+
+<h2>How I graded this</h2>
+<p>I read every reply and asked one question: <em>does it contain the fact the buyer asked for?</em> Not "is it on topic" — the overview-card repeats are all perfectly on topic and answer nothing. The only mechanical check in the probe flags which other catalog project names appear in a reply, and every one of those flags turned out to be a shortlist card, which I then read to confirm.</p>
+
+<div class="card hold">
+<h3 style="margin-top:0">What this run does <em>not</em> cover<span class="tag warn">caveat</span></h3>
+<p><strong>Build under test:</strong> <code>main</code> + #157, version <code>919b512d</code>. PR #157 merged at 14:03 and CI redeployed dev at 14:04, over the top of my <span class="br">fix/intel-gated-decline</span> build from 13:47. So the yield line in these transcripts is the old copy — that is expected, not a regression, and the fix is verified separately on the PR.</p>
+<p><strong>Single tenant:</strong> <code>naya-advisor</code> only. <strong>Single channel:</strong> <code>/chat</code>. Nothing here says anything about WhatsApp or the SPA.</p>
+<p><strong>Not a routing diagnosis.</strong> I have shown <em>which</em> phrasings lose the subject, not <em>why</em>. Naming the mechanism means reading the routing path, and I have been wrong three times today by reasoning ahead of the evidence.</p>
+</div>
+
+<h2>What I would fix, in order</h2>
+<ol>
+<li><strong>The phrasing cliff.</strong> A focused project must survive <code>"when is possession"</code>. This is the one that costs real conversations, and the contagion makes a single miss terminal.</li>
+<li><strong>The 44 orphaned rows.</strong> <code>banks</code> / <code>maintenance</code> / <code>payment_process</code> — the bot declines answers it holds, today, on the most common financial question a buyer asks.</li>
+<li><strong>The overview-card default.</strong> A non-answer dressed as an answer is worse than a decline; the failure-as-value work already has the right shape for this.</li>
+</ol>
+<p class="q">On the original question: the binding is sound. I would not spend anything on it.</p>
+
+<p class="foot">39 turns across 12 journeys, live against <code>converse-spine-dev</code> version <code>919b512d</code>. Probes: <code>bleed-probe.mjs</code> (10 journeys, cross-project concepts) and <code>focus-trigger.mjs</code> (8 asks, solo and chained). Desk claims verified by direct D1 query against <code>naya-db-dev</code>. Every transcript above is verbatim.</p>
+
+</div>
