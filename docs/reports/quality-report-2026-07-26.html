@@ -1,0 +1,169 @@
+<title>Quality report — merge decision, 26 Jul 2026</title>
+<style>
+:root{--bg:#fbfaf8;--ink:#191817;--mut:#6d6862;--fade:#928c85;--line:#e5e0d6;--card:#fff;--ok:#1d7a4c;--bad:#b23320;--warn:#8a6a17;--accent:#2b5d8a}
+@media (prefers-color-scheme:dark){:root{--bg:#141312;--ink:#eae6e0;--mut:#9b948c;--fade:#7a736b;--line:#2d2a25;--card:#1c1a18;--ok:#5cbd8b;--bad:#e87a62;--warn:#d3b158;--accent:#7fb0dc}}
+:root[data-theme=dark]{--bg:#141312;--ink:#eae6e0;--mut:#9b948c;--fade:#7a736b;--line:#2d2a25;--card:#1c1a18;--ok:#5cbd8b;--bad:#e87a62;--warn:#d3b158;--accent:#7fb0dc}
+:root[data-theme=light]{--bg:#fbfaf8;--ink:#191817;--mut:#6d6862;--fade:#928c85;--line:#e5e0d6;--card:#fff;--ok:#1d7a4c;--bad:#b23320;--warn:#8a6a17;--accent:#2b5d8a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+.w{max-width:820px;margin:0 auto;padding:40px 20px 100px}
+h1{font-size:29px;line-height:1.12;letter-spacing:-.021em;margin:0 0 8px;font-weight:600;text-wrap:balance}
+.dek{color:var(--mut);margin:0 0 30px;font-size:16.5px}
+h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--fade);margin:44px 0 14px;font-weight:600}
+h3{font-size:17px;margin:26px 0 8px;font-weight:600;letter-spacing:-.01em}
+p{margin:0 0 13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:11px;margin:0 0 8px}
+.k{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+.k b{display:block;font-size:27px;font-variant-numeric:tabular-nums;letter-spacing:-.025em;line-height:1.15}
+.k span{color:var(--fade);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em}
+table{width:100%;border-collapse:collapse;margin:6px 0 16px;font-size:14.5px;display:block;overflow-x:auto}
+th{text-align:left;font-weight:600;color:var(--fade);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;padding:8px 12px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1.5px 5px;border-radius:4px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:13px 15px;overflow-x:auto;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin:0 0 13px}
+.card.go{border-left:3px solid var(--ok);border-radius:0 11px 11px 0}
+.card.hold{border-left:3px solid var(--warn);border-radius:0 11px 11px 0}
+.card.stop{border-left:3px solid var(--bad);border-radius:0 11px 11px 0}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:2.5px 8px;border-radius:99px;border:1px solid currentColor;margin-left:8px;vertical-align:2px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.br{font:13.5px ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600}
+ul{margin:0 0 14px;padding-left:19px}li{margin:0 0 6px}
+.q{border-left:2px solid var(--line);padding-left:15px;color:var(--mut);margin:0 0 14px;font-style:italic}
+.foot{color:var(--fade);font-size:13.5px;border-top:1px solid var(--line);margin-top:44px;padding-top:18px}
+</style>
+
+<div class="w">
+
+<h1>Quality report — five branches awaiting merge</h1>
+<p class="dek">ConverseSpine, 26 July 2026. Everything below was verified by execution against <code>converse-spine-dev</code>, not by inspection. Where I judged rather than measured, it says so.</p>
+
+<div class="kpis">
+<div class="k"><b>939</b><span>unit tests pass</span></div>
+<div class="k"><b>6</b><span>skipped (spec)</span></div>
+<div class="k"><b>306</b><span>turns pass / 13 fail</span></div>
+<div class="k"><b>0</b><span>new failures</span></div>
+<div class="k"><b>+1</b><span>net scenario fixed</span></div>
+</div>
+
+<h2>The headline</h2>
+<p>Three scenarios that the intent teach broke — <code>EXP-01</code>, <code>FV-P1-OPTOUT</code>, <code>ADV-H02</code> — are <strong>all green again</strong>, with the teach's genuine gains kept. That took three verified index rebuilds and 57 rows rolled back.</p>
+<p>The full 89-scenario run against the merged state finishes <strong>ahead of where it started</strong>: 306 turns pass vs 304 pre-teach, <strong>zero new failures</strong>, and <code>HOLD-04</code> ("please hold one for me" → "yes") recovered on top.</p>
+<pre>vs the pre-teach baseline, turn-level diff:
+  new failures   (none)
+  fixed          HOLD-04 t4, t5</pre>
+
+<pre>EXP-01        "what's the BSP and carpet area and possession date"   ✓
+FV-P1-OPTOUT  "don't call me, only chat here" → yes → keep the chat  ✓
+ADV-H02       "2 BHK configs" → "yeah sure"                          ✓
+HOLD-04       "please hold one for me" → "yes"                       ✓ recovered</pre>
+
+<h2>Merge recommendations</h2>
+
+<div class="card go">
+<h3 style="margin-top:0"><span class="br">phase0a/ledger-truth</span><span class="tag ok">merge</span></h3>
+<p>The ledger stops claiming success it never observed. <code>tool_runs</code> now carries <code>produced_evidence</code>; <code>projects_compared</code> loses its floor of 2.</p>
+<p><strong>Why it matters more than its size:</strong> three failures I confidently labelled "Desk content gaps" were routing bugs — <code>rental_yield</code>, <code>banks</code> and <code>payment_process</code> all hold <em>approved</em> answers while the bot said it had none. With this field that is a query, not a 30,000-line read.</p>
+<p><strong>Deliberate limit:</strong> it is not called <code>success</code>. A legitimate absence and a transport failure both read false — separating them needs Phase 0b's result wrappers. Naming it <code>success</code> would have swapped one lie for a subtler one. Desk's wire schema is unchanged; the adapter maps the field.</p>
+<p>Probes committed red first (5 failing, 1 already correct).</p>
+</div>
+
+<div class="card go">
+<h3 style="margin-top:0"><span class="br">teach/wave1b-hard-negatives</span><span class="tag ok">merge</span></h3>
+<p>Four commits. Net effect is the rollback that restored all three broken scenarios, keeping 12 correctly-labelled negatives that recovered <code>ADV-H02</code>.</p>
+<table>
+<tr><th>rebuild</th><th>result</th><th>why</th></tr>
+<tr><td>+31</td><td><code>pushed 31</code></td><td>negatives for three collisions</td></tr>
+<tr><td>−19</td><td><code>removed 19</code></td><td>I mislabelled the intents (see below)</td></tr>
+<tr><td>−38</td><td><code>removed 38</code></td><td><code>about_data</code> + <code>definition_ready_to_move</code> — cost 2 scenarios, gained nothing measured</td></tr>
+</table>
+<p>Also lands the adversarial probe suite and makes the scenario runner take <code>SCENARIO_DIR</code>.</p>
+</div>
+
+<div class="card go">
+<h3 style="margin-top:0"><span class="br">lld/dialogue-state-architecture</span><span class="tag ok">merge</span></h3>
+<p>Docs only. Your review is folded into the body; the appendix is kept verbatim and marked folded. Both P1s you raised were reproduced before folding — a <code>Map</code>/<code>Set</code> round-trips to <code>{}</code> through <code>store-kv.ts:28</code>, and <code>resolveGeo</code>'s <code>{lat,lng} | null</code> cannot separate "not a place" from "geocoder down".</p>
+</div>
+
+<div class="card go">
+<h3 style="margin-top:0"><span class="br">teach/wave1-gate-results</span><span class="tag ok">merge</span></h3>
+<p>Docs only — the before/after gate report, including its own honest caveat that the 12-probe gate said <em>broke 0</em> while the 89-suite showed −3.</p>
+</div>
+
+<div class="card hold">
+<h3 style="margin-top:0">Already merged: <span class="br">#150</span>, <span class="br">#151</span><span class="tag warn">fyi</span></h3>
+<p><code>#150</code> (name distinctiveness) is clean — zero regressions, proven by deploying <code>main</code> to the same worker and diffing at turn level. <code>#151</code> (teach) is the one that caused the damage the branches above undo.</p>
+</div>
+
+<h2>What the teach actually bought</h2>
+<table>
+<tr><th>kept</th><th>evidence</th></tr>
+<tr><td><code>policy_investment_metric</code> 19→46</td><td>CAGR/IRR asks now decline honestly instead of hitting the clarify floor</td></tr>
+<tr><td><code>definition_bhk</code> 11→34</td><td>"2 vs 3 BHK" answers instead of dumping a compare table</td></tr>
+<tr><td><code>definition_buying_journey</code> 8→34</td><td>first-time-buyer question answered</td></tr>
+<tr><td>+ <code>policy_prohibited</code>, <code>definition_documents</code>, <code>definition_property_type</code>, <code>policy_internal_instructions</code></td><td>internal type-enum leak gone on both inputs that reproduced it</td></tr>
+</table>
+<table>
+<tr><th>pulled</th><th>why</th></tr>
+<tr><td><code>about_data</code> 25 rows</td><td>captured <em>"don't call me, only chat here"</em> at 0.859 — a channel preference, not a privacy question. Gate showed it clean before <em>and</em> after: no measured gain.</td></tr>
+<tr><td><code>definition_ready_to_move</code> 13 rows</td><td>gained <em>"what is possession"</em>, so <em>"…and possession date"</em> got a close definitional neighbour. Same: no measured gain.</td></tr>
+<tr><td>19 of my 31 negatives</td><td>wrong labels — my error, detail below</td></tr>
+</table>
+
+<h2>Open, and deliberately not fixed</h2>
+
+<div class="card">
+<h3 style="margin-top:0">The comparator gives class precedence over score <span class="tag warn">spec, not code</span></h3>
+<p><code>classify.ts:190</code> sorts definition candidates ahead of everything at score ≥0.8, while the comment two lines above says <em>"score still wins"</em>. And <code>looksLikeDefinitionAsk</code> fires on a bare <code>"what's"</code>, so the boost is on for the commonest phrasing of a factual lookup:</p>
+<pre>BOOST  what's the price
+BOOST  what's the RERA number
+BOOST  what's the possession date for Eldorado</pre>
+<p>I implemented a 0.03 margin and <strong>reverted it</strong>: <code>failure-routing.test.ts:121</code> pins a genuine literacy ask with a 0.069 gap that my constant broke. Choosing that constant is a judgement about which utterances are literacy asks — the exact category I got wrong twice today. Parked as a specification with two honest routes: measure the score separation, or state-condition it (LLD Phase 2).</p>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">Channel willingness has no intent <span class="tag warn">needs your call</span></h3>
+<p>Your open/closed framing. <code>StopConfirmMode = 'delete_confirm' | 'contact_scope'</code> already exists as a consumer in <code>optout-confirm.ts</code> — nothing binds to it. That is a taxonomy decision, not a corpus one.</p>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">Area type is a Desk data gap <span class="tag warn">blocks an honest answer</span></h3>
+<p><code>unit_configs</code> carries <code>size_min_sqft</code>/<code>size_max_sqft</code> with <strong>no carpet-vs-super-built-up distinction</strong>. At 25–35% Bangalore loading, quoting an unlabelled sqft as "carpet area" overstates usable space by roughly a third. Until Desk records the measure, the honest reply names the number <em>and</em> its type, or declines.</p>
+</div>
+
+<h2>Pre-existing failures — not caused here, not fixed here</h2>
+<p>Nine scenarios fail on <code>main</code> and still fail. Verified pre-existing by deploying <code>main</code> to the same worker and diffing turn-by-turn.</p>
+<table>
+<tr><th>cluster</th><th>scenarios</th><th>owner</th></tr>
+<tr><td>FAQ routing — approved answers unreachable</td><td><code>FAQ-01</code> <code>FAQ-03</code> <code>FAQ-04</code> <code>ADV-F01</code> <code>MEM-G01</code></td><td>S3 key normalisation</td></tr>
+<tr><td>legal facet</td><td><code>ADV-H04</code></td><td>facet routing</td></tr>
+<tr><td>clarify-pick</td><td><code>BUYER-LOK-01</code> <code>SA-CLARIFY-PICK</code></td><td>LLD Phase 1</td></tr>
+<tr><td>locality</td><td><code>FV-P3-INVALID-LOCALITY</code></td><td>asserts the <em>opposite</em> of <code>failure-search.test.ts</code> — one of the two is stale</td></tr>
+<tr><td>opt-out on friendly sign-off</td><td><code>ADV-H03</code></td><td>the one leak claim that reproduced</td></tr>
+<tr><td>named project lost</td><td><code>STY-04</code> <code>SW-04</code></td><td>"anyway Eldorado price", "Buena Vista instead" — LLD Phase 1</td></tr>
+<tr><td>sibling switch</td><td><code>NAME-06</code></td><td>standing red on purpose</td></tr>
+</table>
+
+<h2>Where I was wrong today</h2>
+<p>Recorded because the pattern matters more than any single fix. My execution-verified work held up; my judgement calls about buyer meaning repeatedly did not.</p>
+<table>
+<tr><th>claim</th><th>reality</th></tr>
+<tr><td>"don't call me, only chat here" is <code>opt_out</code></td><td>channel-scoped willingness. Labelling it <code>opt_out</code> would fire the delete flow on a buyer who said chat is fine.</td></tr>
+<tr><td>"BSP and carpet area and possession date" is a price ask</td><td>three unit-scoped facts. Single-labelling it would answer a third and look fixed.</td></tr>
+<tr><td>"the embedder never ran"</td><td>it bound <code>about_data</code> at 0.859. The telemetry just is not stamped on that lane.</td></tr>
+<tr><td><code>resolveGeo</code> is the geography authority</td><td><code>resolveLocation</code> is, and is tri-state. I had quoted that file's own comment an hour earlier.</td></tr>
+<tr><td>4 probe assertions</td><td>too loose to grade their own answer — <code>reply_includes:["cornerstone"]</code> matched "Cornerstone Utopia"; a bare greet scored ok</td></tr>
+<tr><td>a 12-probe gate is a merge gate</td><td>it said <em>broke 0</em> while the 89-suite showed −3</td></tr>
+</table>
+<p class="q">The rule that follows: intent classification is a domain judgement. Anything I propose there is a proposal needing sign-off, not something to fold silently into a corpus, a probe, or an LLD gate.</p>
+
+<h2>Suggested merge order</h2>
+<pre>1. teach/wave1b-hard-negatives    restores dev to a clean state
+2. phase0a/ledger-truth           the instrument everything else is measured through
+3. lld/dialogue-state-architecture + teach/wave1-gate-results   docs, any time</pre>
+<p>Phase 1 (the entity store) is the next build and is deliberately not started — it is a large refactor across 21 resolvers, and it should sit on a settled base rather than stack on unmerged branches.</p>
+
+<p class="foot">Final run: 89 scenarios · 306 turns pass · 13 fail · 13 scenarios failing, all pre-existing. Evidence: 939 unit tests · 89 live scenarios against <code>converse-spine-dev</code> · three index rebuilds each verified by <code>pushed</code>/<code>removed</code> counts · main-vs-branch turn-level diffs for every regression claim.</p>
+
+</div>

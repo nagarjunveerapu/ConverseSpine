@@ -236,7 +236,10 @@ export interface EngineCrm {
     actionPlan?: Record<string, unknown>;
     verify?: Record<string, unknown>;
     composer?: string;
-    toolRuns?: Array<{ name: string; args_summary: string; success: boolean; latency_ms: number }>;
+    /** `produced_evidence` is OBSERVED (did the call fill its evidence slot);
+     *  the adapter maps it onto Desk's `success` wire field. It is not yet a
+     *  claim about transport success — see Phase 0b. */
+    toolRuns?: Array<{ name: string; args_summary: string; produced_evidence: boolean; latency_ms: number }>;
     /** P2c — claims made this turn (Desk DisclosedFactSchema). */
     disclosedFacts?: Array<{
       kind: string;

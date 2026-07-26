@@ -869,8 +869,18 @@ export function nayadeskCrm(
         offered_project_ids: entry.offeredProjectIds ?? [],
         disclosed_facts: entry.disclosedFacts ?? [],
         verify: entry.verify ?? { grounding: 'pass' },
+        // Desk's schema field is `success`; we populate it from the OBSERVED
+        // produced_evidence rather than a hardcoded true. Until Phase 0b gives
+        // the ports discriminated results, a legitimate absence and a
+        // transport failure both read false -- which is still strictly more
+        // truthful than every row claiming success.
         tool_runs:
-          entry.toolRuns ??
+          entry.toolRuns?.map((t) => ({
+            name: t.name,
+            args_summary: t.args_summary,
+            success: t.produced_evidence,
+            latency_ms: t.latency_ms,
+          })) ??
           entry.tools.map((name) => ({
             name,
             args_summary: '',

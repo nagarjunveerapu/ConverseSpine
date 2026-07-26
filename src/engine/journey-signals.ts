@@ -56,12 +56,14 @@ export function buildJourneySignalPost(
   }
 
   if (goal.kind === 'answer' && (goal.topic === 'compare' || goal.topics?.includes('compare'))) {
+    // No floor. A compare goal with one engaged project compared ONE project;
+    // reporting 2 made Desk's funnel unable to see a compare that did not
+    // happen -- the same class as tool_runs.success being hardcoded true.
     const n = Math.max(
       state.discover.discussedProjects?.length ?? 0,
       state.discover.lastOffered.length,
-      2,
     );
-    signals.projects_compared = n;
+    if (n > 0) signals.projects_compared = n;
   } else if ((state.discover.discussedProjects?.length ?? 0) >= 2) {
     // Soft signal when buyer has engaged 2+ projects even without compare goal this turn.
     signals.projects_compared = state.discover.discussedProjects!.length;
