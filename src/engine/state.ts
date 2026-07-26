@@ -8,6 +8,7 @@ import type {
   Match,
   OfferedProject,
 } from './types.js';
+import { recordEntities, pushFocus } from './entity-store.js';
 
 export function initState(convId: string, builderId: string): ConversationState {
   return {
@@ -210,7 +211,16 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
     ...(m.dimensionFit ? { dimensionFit: m.dimensionFit } : {}),
     ...(m.dimensionGap ? { dimensionGap: m.dimensionGap } : {}),
   }));
-  return { ...s, discover: { ...s.discover, lastOffered, ignoredProbes: 0 } };
+  // Phase 1a dual-write: the entity store records the same fact alongside
+  // lastOffered. Nothing reads it yet (1b migrates consumers, 1c deletes the
+  // legacy field), so this cannot change behaviour.
+  const withEntities = recordEntities(
+    s,
+    matches.map((m) => ({ projectId: m.projectId, name: m.name, ...(m.microMarket ? { microMarket: m.microMarket } : {}) })),
+    'offered',
+    s.turnCount,
+  );
+  return { ...withEntities, discover: { ...withEntities.discover, lastOffered, ignoredProbes: 0 } };
 }
 
 /** Drop stale shortlist — next successful recommend repopulates (W2). */
@@ -267,14 +277,26 @@ export function recordDiscussed(
     byId.set(p.projectId, { projectId: p.projectId, name: p.name });
   }
   const discussedProjects = [...byId.values()].slice(-6);
-  return { ...s, discover: { ...s.discover, discussedProjects } };
+  // Phase 1a dual-write. Note the store does NOT inherit the cap of 6 -- the
+  // cap is a property of this legacy array, and a dropped entity is exactly
+  // how a project the buyer engaged with becomes unreachable later.
+  const withEntities = recordEntities(
+    s,
+    projects.filter((p) => p.projectId && p.name).map((p) => ({ projectId: p.projectId, name: p.name })),
+    'discussed',
+    s.turnCount,
+  );
+  return { ...withEntities, discover: { ...withEntities.discover, discussedProjects } };
 }
 
 export function commitTo(s: ConversationState, projectId: string, projectName: string): ConversationState {
-  return recordDiscussed(
+  const discussed = recordDiscussed(
     { ...s, phase: 'focused', focus: { projectId, projectName } },
     [{ projectId, name: projectName }],
   );
+  // Phase 1a dual-write: focus becomes a STACK entry, so a later turn can pop
+  // back. `focus` stays the single source of truth until 1b.
+  return pushFocus(discussed, projectId, s.turnCount);
 }
 
 export function releaseToDiscover(s: ConversationState): ConversationState {
