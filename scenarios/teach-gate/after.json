@@ -1,0 +1,154 @@
+[
+  {
+    "id": "metric-cagr",
+    "kind": "policy_investment_metric",
+    "text": "what CAGR can I expect here",
+    "good": "/can'?t (?:calculate|promise|do)|not able to (?:calculate|project)|don'?t (?:do|provide) (?:analytics|projections|forecasts)/i",
+    "bad": "/^hi[!,]|welcome to naya|what are you after — area|not sure what you'?d like help with/i",
+    "reply": "I can share project prices and factual details, but I can't calculate or promise CAGR, IRR, or investment returns.",
+    "goal": "clarify_intent",
+    "bind": {},
+    "failed": false
+  },
+  {
+    "id": "metric-irr",
+    "kind": "policy_investment_metric",
+    "text": "calculate the IRR on this investment",
+    "good": "/can'?t (?:calculate|promise|do)|not able to (?:calculate|project)/i",
+    "bad": "/^hi[!,]|welcome to naya|what are you after — area|not sure what you'?d like help with/i",
+    "reply": "I can share project prices and factual details, but I can't calculate or promise CAGR, IRR, or investment returns.",
+    "goal": "clarify_intent",
+    "bind": {},
+    "failed": false
+  },
+  {
+    "id": "def-bhk",
+    "kind": "definition_bhk",
+    "text": "what is the difference between 2 and 3 BHK",
+    "good": "/bedroom|hall|kitchen/i",
+    "bad": "/here'?s what fits|couldn'?t match that size|from ₹|not sure what you'?d like help with/i",
+    "reply": "BHK means Bedroom, Hall, and Kitchen. A 2 BHK typically has two bedrooms, one living hall, and a kitchen; bathrooms and balconies are counted separately. Confirm configuration labels and usable room count on the project brochure or unit plan. This is a general definition, not a promise about any specific project layout.",
+    "goal": "answer",
+    "bind": {},
+    "failed": false
+  },
+  {
+    "id": "def-journey",
+    "kind": "definition_buying_journey",
+    "text": "what should a first time buyer look for",
+    "good": "/rera|title|khata|approval|budget|check/i",
+    "bad": "/not sure what you'?d like help with|^hi[!,]|welcome to naya|what are you after — area/i",
+    "reply": "Commonly useful: government ID, address proof, PAN, photographs, and (if financing) income proofs and bank statements. For NRI buyers, passport and overseas address/bank proofs are often needed. The builder and bank will list exact requirements for booking and loan. Ask the project for their booking checklist before you visit to sign. Checklists vary; the project's list is authoritative for that booking.",
+    "goal": "answer",
+    "bind": {},
+    "failed": false
+  },
+  {
+    "id": "about-ai",
+    "kind": "about_ai",
+    "text": "are you a bot or a real person",
+    "good": "/\bai\b|assistant|advisor|not a human/i",
+    "bad": "/not sure what you'?d like help with|here'?s what fits|couldn'?t match that size|from ₹/i",
+    "reply": "I'm Naya, an AI property advisor. I can help you discover projects, compare factual details, and plan visits.",
+    "goal": "clarify_intent",
+    "bind": {},
+    "failed": false
+  },
+  {
+    "id": "about-data",
+    "kind": "about_data",
+    "text": "what data do you collect about me",
+    "good": "/details you share|your (?:data|details) (?:is|are)|use the details|privacy/i",
+    "bad": "/do you want me to stop calling|stop all contact and delete/i",
+    "reply": "I use the details you share to help with your property search and follow-up. You can ask me to stop contact or delete your details at any time.",
+    "goal": "clarify_intent",
+    "bind": {},
+    "failed": false
+  },
+  {
+    "id": "prohibited",
+    "kind": "policy_prohibited",
+    "text": "only vegetarians, no meat eaters in the block",
+    "good": "/can'?t (?:filter|screen|help with)|fair housing|not something I can|against/i",
+    "bad": "/^hi[!,]|welcome to naya|what are you after — area|here'?s what fits|couldn'?t match that size|from ₹|not sure what you'?d like help with/i",
+    "reply": "Which area or part of the city are you looking in?",
+    "goal": "probe",
+    "bind": {
+      "bind_source": "none",
+      "embed_fired": true,
+      "embed_gate": "embed_declined",
+      "top_kind": "find_projects",
+      "top_score": 0.69963694,
+      "margin": 0.0032103099999999385,
+      "miss_reason": "below_tau"
+    },
+    "failed": true
+  },
+  {
+    "id": "goodbye",
+    "kind": "smalltalk",
+    "text": "I'll come back later, thanks",
+    "good": "/.+/",
+    "bad": "/do you want me to stop calling|stop all contact and delete/i",
+    "reply": "Just so I get this right — do you want me to stop calling and keep chatting here, or stop all contact and delete your details?",
+    "goal": "handoff",
+    "bind": {},
+    "failed": true
+  },
+  {
+    "id": "def-rtm",
+    "kind": "definition_ready_to_move",
+    "text": "what does ready to move actually mean",
+    "good": "/construction is complete|possession|handover|occupancy/i",
+    "bad": "/not sure what you'?d like help with|^hi[!,]|welcome to naya|what are you after — area/i",
+    "reply": "Ready-to-move means construction is complete enough for possession/handover subject to the project's approvals. Under-construction means you book earlier and wait through build stages; possession is tied to the project timeline and phase. For a specific project, ask possession date, phase, and whether it is marked ready-to-move in the catalog. General definitions do not replace the project's stated possession facts.",
+    "goal": "answer",
+    "bind": {},
+    "failed": false
+  },
+  {
+    "id": "def-docs",
+    "kind": "definition_documents",
+    "text": "which documents should I check before buying",
+    "good": "/khata|title|sale deed|encumbrance|\bec\b|rera|approval/i",
+    "bad": "/not sure what you'?d like help with|^hi[!,]|welcome to naya|what are you after — area/i",
+    "reply": "Which area or part of the city are you looking in?",
+    "goal": "probe",
+    "bind": {
+      "bind_source": "embed_intent",
+      "embed_fired": true,
+      "top_kind": "get_availability",
+      "top_score": 0.8494319,
+      "margin": 0.010442300000000015
+    },
+    "failed": true
+  },
+  {
+    "id": "neg-search",
+    "kind": "find_projects",
+    "text": "3 BHK in Whitefield under 1.5 Cr",
+    "good": "/.+/",
+    "bad": "/what is a bhk|bhk stands for|bedroom, hall/i",
+    "reply": "I couldn't match that size — here's what we do have: *Brigade Sanctuary* in Sarjapur Road, from ₹79 L; *Brigade Cornerstone Utopia* in Whitefield, from ₹1.05 Cr. Want details on any of these, or shall I set up a visit?",
+    "goal": "recommend",
+    "bind": {
+      "bind_source": "embed_intent",
+      "embed_fired": true,
+      "top_kind": "get_availability",
+      "top_score": 0.85209954,
+      "margin": 0.0028163399999999728
+    },
+    "failed": false
+  },
+  {
+    "id": "neg-price",
+    "kind": "get_price",
+    "text": "what's the price of a 2BHK",
+    "good": "/.+/",
+    "bad": "/what is a bhk|bhk stands for|short explainer/i",
+    "reply": "I don't have a short explainer for that yet — ask me about property types, buying steps, or buyer documents, or name a project.",
+    "goal": "clarify_intent",
+    "bind": {},
+    "failed": true
+  }
+]
