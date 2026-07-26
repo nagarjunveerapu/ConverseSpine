@@ -40,6 +40,7 @@ import {
   resolvePendingStop,
 } from './optout-confirm.js';
 import { speakFailure } from './speak-failure.js';
+import { rescueFocusedAnswer } from './turn-routing/goal-rescue.js';
 import { speakEducation } from './education.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
@@ -1471,6 +1472,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (!namedOk) {
       goal = { ...answerGoal, projectId: state.focus.projectId };
     }
+  }
+  // THE WIRE — the intent verdict finally gets a vote (goal-rescue.ts).
+  //
+  // decideGoal's signature carries no routing, so a turn the embedder
+  // understood at 0.874 could still fall to search. Placed HERE deliberately:
+  // after every existing owner has had its say, so it can only rescue a turn
+  // they lost — and BEFORE withAnswerRequirements, so a rescued answer faces
+  // the same answer contract and declines honestly rather than inventing.
+  const rescue = rescueFocusedAnswer(goal, routing, state, deps.routingInGoal === true);
+  if (rescue.rescued) {
+    goal = rescue.goal;
+    if (extractProvenance) extractProvenance.goal_rescued = rescue.rescued;
   }
   if (deps.failureAnswer && goal.kind === 'answer') {
     goal = withAnswerRequirements(goal, trimmedText);

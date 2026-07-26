@@ -69,6 +69,7 @@ export class ConverseRuntime {
       ...(env.FAILURE_ROUTING === 'true' ? { failureRouting: true } : {}),
       ...(env.FAILURE_SEARCH === 'true' ? { failureSearch: true } : {}),
       ...(env.FAILURE_ANSWER === 'true' ? { failureAnswer: true } : {}),
+      ...(env.ROUTING_IN_GOAL === 'true' ? { routingInGoal: true } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),

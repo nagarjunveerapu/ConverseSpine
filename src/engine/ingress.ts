@@ -69,6 +69,9 @@ export interface ExtractProvenance {
   baml?: import('./extract-baml.js').BamlShadowReport;
   /** SIL Phase 0 — semantic-layer fire/gate/bind telemetry (SEMANTIC_INTENT_LAYER_LLD §3.3). */
   routing_bind?: import('./turn-routing/types.js').RoutingBindTelemetry;
+  /** THE WIRE — set when the intent verdict rescued a focused turn that
+   *  decideGoal had sent shopping. Absent means the wire did not fire. */
+  goal_rescued?: { intent: string; score: number; topic: string };
 }
 
 export function markIngressBlocked(
