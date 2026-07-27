@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fallbackReply } from '../src/engine/compose.js';
-import { splitComposeTopics, unionAskTopics } from '../src/engine/facts.js';
+import { detectTopics, splitComposeTopics, unionAskTopics } from '../src/engine/facts.js';
 import { decide as focusedDecide } from '../src/engine/phases/focused.js';
 import { commitTo, initState } from '../src/engine/state.js';
 import {
@@ -9,6 +9,8 @@ import {
 } from '../src/engine/turn-routing/answer-topics.js';
 import type { TurnRoutingInput, TurnRoutingResult } from '../src/engine/turn-routing/types.js';
 import type { Extracted } from '../src/engine/types.js';
+import { withAnswerRequirements } from '../src/engine/answer-contract.js';
+import { excludeParkedFaqKeys } from '../src/engine/faq-keys.js';
 
 describe('unionAskTopics / splitComposeTopics', () => {
   it('unions and orders by TOPIC_ORDER, caps at 3', () => {
@@ -79,6 +81,36 @@ describe('Phase C — top-2 park', () => {
     if (goal.kind !== 'answer') return;
     expect(goal.topics).toEqual(['price', 'legal']);
     expect(goal.parkedTopics).toEqual(['location']);
+  });
+
+  it('possession joins availability so price+RERA+possession parks the third', () => {
+    let s = initState('naya-advisor', 't-park-poss');
+    s = commitTo(s, 'oasis', 'Brigade Oasis');
+    expect(detectTopics('price, possession date, and is it RERA approved?')).toEqual([
+      'price',
+      'legal',
+      'availability',
+    ]);
+    const goal = focusedDecide(
+      s,
+      {
+        constraints: {},
+        askTopics: ['price', 'legal', 'availability'],
+        askTopic: 'price',
+      },
+      'price, possession date, and is it RERA approved?',
+    );
+    expect(goal.kind).toBe('answer');
+    if (goal.kind !== 'answer') return;
+    expect(goal.topics).toEqual(['price', 'legal']);
+    expect(goal.parkedTopics).toEqual(['availability']);
+
+    const withReq = withAnswerRequirements(goal, 'price, possession date, and is it RERA approved?');
+    expect(withReq.requires ?? []).not.toContain('possession');
+    expect(withReq.requires ?? []).toEqual(expect.arrayContaining(['price', 'rera']));
+    expect(excludeParkedFaqKeys(['possession', 'rera_status'], ['availability'])).toEqual([
+      'rera_status',
+    ]);
   });
 
   it('compose offers parked topics explicitly', () => {

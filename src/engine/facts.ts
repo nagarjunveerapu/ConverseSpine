@@ -749,11 +749,12 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'emi', re: /\b(?:\bemi\b|monthly\s+payment|installment|loan\s+emi|emi\s+(?:kitna|amount|calc(?:ulate)?))\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
   {
-    // Config / unit asks only. Preference "ready to move" is a Constraint soft pref
-    // (detectSoftPrefs) — never askTopics:availability on search briefs.
-    // Focused readiness asks: "is it ready", "when … ready".
+    // Config / unit asks + possession/handover (Desk FAQ keys under availability).
+    // Preference "ready to move" as a search soft-pref stays in detectSoftPrefs —
+    // never askTopics:availability on search briefs. Focused readiness /
+    // possession date asks do belong here so multi-intent can park a 3rd topic.
     topic: 'availability',
-    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
+    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|possession(?:\s+date)?|handover(?:\s+date)?|completion\s+date|delivery\s+(?:date|timeline)|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
   {
     topic: 'media',

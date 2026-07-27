@@ -117,8 +117,7 @@ async function runProbe(probe) {
     if (b.test(r.reply)) misses.push(`hit-bad:${b}`);
   }
   if (probe.park && !probe.park.test(r.reply)) {
-    // Park is expected only when 3 topics made it to the goal — soft fail with warn
-    misses.push('warn:no-park-line');
+    misses.push('missing:park-line');
   }
   if (probe.minLen && r.reply.length < probe.minLen) {
     misses.push(`thin:${r.reply.length}`);

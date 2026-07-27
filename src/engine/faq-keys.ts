@@ -207,6 +207,31 @@ const TOPIC_TO_FAQ_KEYS: Partial<Record<AnswerTopic, readonly string[]>> = {
   emi: ['loan_eligibility', 'loan'],
 };
 
+/** Inverse of TOPIC_TO_FAQ_KEYS (+ text-bound keys that belong to a topic). */
+const FAQ_KEY_TO_TOPIC: Readonly<Record<string, AnswerTopic>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(TOPIC_TO_FAQ_KEYS).flatMap(([topic, keys]) =>
+      (keys ?? []).map((key) => [key, topic as AnswerTopic]),
+    ),
+  ) as Record<string, AnswerTopic>,
+);
+
+/**
+ * Drop FAQ keys owned by parked topics so Phase C top-2 does not still answer
+ * the parked atom via text-bound FAQ lookup (possession while availability parked).
+ */
+export function excludeParkedFaqKeys(
+  keys: readonly string[],
+  parked: readonly AnswerTopic[] | undefined,
+): string[] {
+  if (!parked?.length) return [...keys];
+  const blocked = new Set(parked);
+  return keys.filter((key) => {
+    const topic = FAQ_KEY_TO_TOPIC[key];
+    return !topic || !blocked.has(topic);
+  });
+}
+
 /**
  * Resolve Desk FAQ keys for this buyer utterance.
  * Prefer explicit text matches; fall back to topic→key hints (still lookup-gated).

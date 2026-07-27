@@ -61,7 +61,7 @@ import {
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
-import { isFaqShapedAsk, resolveFaqQuestionKeys, taughtFaqKey } from './faq-keys.js';
+import { excludeParkedFaqKeys, isFaqShapedAsk, resolveFaqQuestionKeys, taughtFaqKey } from './faq-keys.js';
 import { buyerCuedOtherProject } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
@@ -3121,9 +3121,15 @@ async function fetchAnswer(
   // lastRouting is re-stamped every turn before goal selection, so this is
   // always THIS turn's bind; text-bound keys win inside taughtFaqKey.
   const taughtKey = buyerText ? taughtFaqKey(s.rti?.lastRouting, buyerText) : undefined;
-  const resolvedKeys = resolveFaqQuestionKeys(buyerText ?? '', topics);
+  const resolvedKeys = excludeParkedFaqKeys(
+    resolveFaqQuestionKeys(buyerText ?? '', topics),
+    goal.parkedTopics,
+  );
   const faqKeys = taughtKey
-    ? [taughtKey, ...resolvedKeys.filter((k) => k !== taughtKey)]
+    ? excludeParkedFaqKeys(
+        [taughtKey, ...resolvedKeys.filter((k) => k !== taughtKey)],
+        goal.parkedTopics,
+      )
     : resolvedKeys;
   const faqHits: Array<{ questionKey: string; question: string; answer: string }> = [];
   // CRM activation / C1: yield + appreciation are owned by gated market intel

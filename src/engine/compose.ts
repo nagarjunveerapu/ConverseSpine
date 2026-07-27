@@ -42,7 +42,7 @@ const PARK_TOPIC_LABEL: Partial<Record<AnswerTopic, string>> = {
   legal: 'legal details',
   emi: 'EMI',
   amenities: 'amenities',
-  availability: 'unit configs',
+  availability: 'possession or configs',
   location: 'location',
   media: 'brochure / plans',
   overview: 'project overview',
