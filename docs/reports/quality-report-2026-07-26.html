@@ -47,6 +47,13 @@ ul{margin:0 0 14px;padding-left:19px}li{margin:0 0 6px}
 <div class="k"><b>+1</b><span>net scenario fixed</span></div>
 </div>
 
+<div class="card stop">
+<h3 style="margin-top:0">Correction, filed after this report was handed over<span class="tag bad">retracted</span></h3>
+<p>Below, this report calls <code>rental_yield</code>, <code>banks</code> and <code>payment_process</code> three routing bugs where the bot declined facts it holds. <strong>For <code>rental_yield</code> that is wrong</strong> — and it was the flagship example.</p>
+<p><code>turn.ts:3064</code> blocks <code>rental_yield</code> and <code>resale_value</code> from the project-FAQ path <em>deliberately</em>. Reading the 16 rows shows why: they say <code>"Estimated 3-4% net rental yield (post-maintenance) … per recent Magicbricks"</code> — an estimate carrying someone else's citation. A bot repeating that is giving investment advice, which is exactly what the C1 gate exists to prevent. Had I "fixed the routing", I would have deleted a guard.</p>
+<p>What survives is narrower, and is fixed on <span class="br">fix/intel-gated-decline</span>: the decline said <em>"I don't have rental yield on file"</em>, which asserts an absence the buyer reads as a data gap. The truth is a refusal, and it should say so. <code>banks</code> and <code>payment_process</code> remain genuine key mismatches — still S3.</p>
+</div>
+
 <h2>The headline</h2>
 <p>Three scenarios that the intent teach broke — <code>EXP-01</code>, <code>FV-P1-OPTOUT</code>, <code>ADV-H02</code> — are <strong>all green again</strong>, with the teach's genuine gains kept. That took three verified index rebuilds and 57 rows rolled back.</p>
 <p>The full 89-scenario run against the merged state finishes <strong>ahead of where it started</strong>: 306 turns pass vs 304 pre-teach, <strong>zero new failures</strong>, and <code>HOLD-04</code> ("please hold one for me" → "yes") recovered on top.</p>
@@ -64,7 +71,7 @@ HOLD-04       "please hold one for me" → "yes"                       ✓ recov
 <div class="card go">
 <h3 style="margin-top:0"><span class="br">phase0a/ledger-truth</span><span class="tag ok">merge</span></h3>
 <p>The ledger stops claiming success it never observed. <code>tool_runs</code> now carries <code>produced_evidence</code>; <code>projects_compared</code> loses its floor of 2.</p>
-<p><strong>Why it matters more than its size:</strong> three failures I confidently labelled "Desk content gaps" were routing bugs — <code>rental_yield</code>, <code>banks</code> and <code>payment_process</code> all hold <em>approved</em> answers while the bot said it had none. With this field that is a query, not a 30,000-line read.</p>
+<p><strong>Why it matters more than its size:</strong> three failures I confidently labelled "Desk content gaps" turned out to be nothing of the kind — <code>rental_yield</code>, <code>banks</code> and <code>payment_process</code> all hold approved rows while the bot said it had none. With this field that is a query, not a 30,000-line read. <em>(See the correction above: two of the three are routing bugs; <code>rental_yield</code> is a deliberate guard whose decline copy lied about its reason. The argument for the field is unchanged — the query is what told me which was which.)</em></p>
 <p><strong>Deliberate limit:</strong> it is not called <code>success</code>. A legitimate absence and a transport failure both read false — separating them needs Phase 0b's result wrappers. Naming it <code>success</code> would have swapped one lie for a subtler one. Desk's wire schema is unchanged; the adapter maps the field.</p>
 <p>Probes committed red first (5 failing, 1 already correct).</p>
 </div>
@@ -155,6 +162,7 @@ BOOST  what's the possession date for Eldorado</pre>
 <tr><td><code>resolveGeo</code> is the geography authority</td><td><code>resolveLocation</code> is, and is tri-state. I had quoted that file's own comment an hour earlier.</td></tr>
 <tr><td>4 probe assertions</td><td>too loose to grade their own answer — <code>reply_includes:["cornerstone"]</code> matched "Cornerstone Utopia"; a bare greet scored ok</td></tr>
 <tr><td>a 12-probe gate is a merge gate</td><td>it said <em>broke 0</em> while the 89-suite showed −3</td></tr>
+<tr><td><code>rental_yield</code> is the bot declining a fact it holds <em>(added after handover)</em></td><td>a deliberate C1 guard. The 16 rows are <em>estimates</em> citing Magicbricks — quoting one is investment advice. I made it the flagship example of a routing bug and would have removed the guard.</td></tr>
 </table>
 <p class="q">The rule that follows: intent classification is a domain judgement. Anything I propose there is a proposal needing sign-off, not something to fold silently into a corpus, a probe, or an LLD gate.</p>
 

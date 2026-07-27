@@ -182,7 +182,10 @@ describe('Phase 4 turn behavior', () => {
   it('declines rental yield instead of fabricating a % or rents (C1 boundary)', async () => {
     const { turn } = await focusedHarness('fv4-yield');
     const result = await turn('what is the rental yield?');
-    expect(result.reply).toMatch(/don't have rental yield on file/i);
+    // The refusal, stated as the policy it is — not as "not on file", which
+    // claimed an absence while 16 estimate-bearing FAQ rows sat behind the C1
+    // gate. See tests/seams/intel-gated-decline.test.ts.
+    expect(result.reply).toMatch(/(?:can'?t|don'?t|won'?t)\s+quote|can'?t source/i);
     // the fabrication that leaked live: a yield % and per-month rent figures
     expect(result.reply).not.toMatch(/\d+\s*%|per\s+month|\/month/i);
   });
