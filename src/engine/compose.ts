@@ -582,6 +582,12 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('property_type') && ev.detail?.projectType) {
         chunks.push(projectTypeLine(ev.detail));
       }
+      // AB-8 — media must join the multi-topic chunk path. Primary topic is often
+      // price (TOPIC_ORDER), so the single-topic `goal.topic === 'media'` branch
+      // never runs for "brochure and starting price" even when mediaShare succeeded.
+      if (topics.includes('media') && ev.media) {
+        chunks.push(mediaShareLine(ev.media, context.focusProjectName));
+      }
       // AB-8 — in a MULTI-topic ask the FAQ body carries the OTHER atom(s), so the
       // legal snapshot (RERA/khata) must still render rather than be swallowed by a
       // non-legal FAQ. "RERA and possession" was dropping RERA because a possession
@@ -673,16 +679,7 @@ export function fallbackReply(req: ComposeRequest): string {
         return `${locationSnapshotLine(ev.location)}. Want pricing, legal details, or a visit?`;
       }
       if (goal.topic === 'media' && ev.media) {
-        if (ev.media.allowed && ev.media.cdnUrl) {
-          return `Here's the ${ev.media.title ?? humanizeAsset(ev.media.assetKind)} for *${ev.media.projectName}*: ${ev.media.cdnUrl}`;
-        }
-        const pname = ev.media.projectName || context.focusProjectName || 'this project';
-        // ev.media.redirectHint / reason are INTERNAL composer instructions — Desk
-        // authors them for the RM ("offer site visit; do not quote this number"),
-        // never as buyer copy (see NayaDesk disclosure.ts). Echoing one printed
-        // "no floor_plan on file for this project yet — offer to follow up" to a
-        // buyer. Translate the miss into buyer-safe copy; never recite the hint.
-        return `I don't have the ${humanizeAsset(ev.media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
+        return mediaShareLine(ev.media, context.focusProjectName);
       }
       // Closed-beta: Desk FAQ (loan eligibility, yield, …) before EMI snapshot.
       if (ev.detail?.faqs?.length) {
@@ -973,6 +970,23 @@ export function typeComparisonReply(types: readonly string[], investment: boolea
     ? '\n\nOn returns: apartments are usually held for rental income, plots/land for appreciation, and plantation estates for crop revenue — the right fit depends on your horizon and how hands-on you want to be. Want me to show options in either?'
     : '\n\nWant me to show options in either?';
   return head + tail;
+}
+
+/** Buyer-safe media line — shared by single-topic and AB-8 multi-topic paths. */
+function mediaShareLine(
+  media: NonNullable<EvidenceSet['media']>,
+  focusProjectName?: string,
+): string {
+  if (media.allowed && media.cdnUrl) {
+    const pname = media.projectName || focusProjectName || 'this project';
+    return `Here's the ${media.title ?? humanizeAsset(media.assetKind)} for *${pname}*: ${media.cdnUrl}`;
+  }
+  const pname = media.projectName || focusProjectName || 'this project';
+  // media.redirectHint / reason are INTERNAL composer instructions — Desk
+  // authors them for the RM ("offer site visit; do not quote this number"),
+  // never as buyer copy (see NayaDesk disclosure.ts). Translate the miss into
+  // buyer-safe copy; never recite the hint.
+  return `I don't have the ${humanizeAsset(media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
 }
 
 /** Buyer-facing name for a media asset kind — never an underscored key like `floor_plan`. */

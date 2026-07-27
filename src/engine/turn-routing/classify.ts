@@ -189,8 +189,11 @@ export async function embedderRouting(
   // the copy carrying a taught facet is strictly more information (facets are
   // only taught when one FAQ key owns the meaning catalog-wide), so it wins.
   // Class-balanced definition candidates at ≥0.8 outrank denser availability
-  // only on literacy asks — not on "N BHK in <place>" search briefs.
-  const definitionBoostOk = looksLikeDefinitionAsk(input.text);
+  // only on literacy asks — not on "N BHK in <place>" search briefs, and not
+  // while focused (state-condition: "what's the price" is a catalog lookup).
+  const definitionBoostOk =
+    looksLikeDefinitionAsk(input.text) &&
+    !(input.phase === 'focused' && !!input.focus);
   matches.sort((a, b) => {
     const aBalanced =
       definitionBoostOk &&

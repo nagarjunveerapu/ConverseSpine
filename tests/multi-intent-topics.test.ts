@@ -113,4 +113,39 @@ describe('Phase C — top-2 park', () => {
     });
     expect(reply).toMatch(/location next|cover location/i);
   });
+
+  it('compose includes media chunk when price is primary in a multi-topic set', () => {
+    const reply = fallbackReply({
+      goal: {
+        kind: 'answer',
+        topic: 'price',
+        projectId: 'oasis',
+        topics: ['price', 'media'],
+      },
+      evidence: {
+        tools: ['pricing', 'mediaShare'],
+        pricing: {
+          projectName: 'Brigade Oasis',
+          components: [{ label: 'Base Selling Price', value: '₹9,000/sqft' }],
+        },
+        media: {
+          projectName: 'Brigade Oasis',
+          allowed: true,
+          assetKind: 'brochure',
+          title: 'brochure',
+          cdnUrl: 'https://cdn.example/brochure.pdf',
+        },
+      },
+      context: {
+        constraints: {},
+        alreadyShownSameSet: false,
+        builderName: 'Naya',
+        buyerText: 'send the brochure and what is the starting price?',
+        focusProjectName: 'Brigade Oasis',
+      },
+    });
+    expect(reply).toMatch(/₹9,000|Pricing/i);
+    expect(reply).toMatch(/brochure/i);
+    expect(reply).toContain('https://cdn.example/brochure.pdf');
+  });
 });
