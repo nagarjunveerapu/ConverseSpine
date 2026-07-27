@@ -70,6 +70,7 @@ export class ConverseRuntime {
       ...(env.FAILURE_SEARCH === 'true' ? { failureSearch: true } : {}),
       ...(env.FAILURE_ANSWER === 'true' ? { failureAnswer: true } : {}),
       ...(env.ROUTING_IN_GOAL === 'true' ? { routingInGoal: true } : {}),
+      ...(env.TOPIC_UNION === 'true' ? { topicUnion: true } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),

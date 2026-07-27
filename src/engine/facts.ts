@@ -662,7 +662,43 @@ function detectShownName(_text: string, _s: ConversationState): string | undefin
   return undefined;
 }
 
-const TOPIC_ORDER: AnswerTopic[] = ['compare', 'price', 'legal', 'property_type', 'location', 'emi', 'amenities', 'availability', 'media'];
+/** Canonical order for multi-topic unions (primary = first surviving). */
+export const TOPIC_ORDER: AnswerTopic[] = [
+  'compare',
+  'price',
+  'legal',
+  'property_type',
+  'location',
+  'emi',
+  'amenities',
+  'availability',
+  'media',
+];
+
+/** Cap for askTopics / answer_topics after union (compose answers top 2, parks rest). */
+export const ASK_TOPICS_CAP = 3;
+
+/** Union topic lists, order by TOPIC_ORDER, cap at ASK_TOPICS_CAP. */
+export function unionAskTopics(
+  ...lists: Array<readonly AnswerTopic[] | undefined | null>
+): AnswerTopic[] {
+  const found = new Set<AnswerTopic>();
+  for (const list of lists) {
+    for (const t of list ?? []) {
+      if (t) found.add(t);
+    }
+  }
+  return TOPIC_ORDER.filter((t) => found.has(t)).slice(0, ASK_TOPICS_CAP);
+}
+
+/** Compose answers at most two topics; remainder is parked for an explicit continuation. */
+export function splitComposeTopics(topics: readonly AnswerTopic[]): {
+  active: AnswerTopic[];
+  parked: AnswerTopic[];
+} {
+  const cleaned = topics.filter((t) => t && t !== 'compare');
+  return { active: cleaned.slice(0, 2), parked: cleaned.slice(2) };
+}
 
 // Cost-sheet component vocabulary — the ONE source shared by the price topic
 // pattern and the deterministic price-topic floor (extract-authority, W7).

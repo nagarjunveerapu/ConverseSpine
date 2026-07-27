@@ -14,6 +14,7 @@ import {
   fairHousingRouting,
 } from './fair-housing.js';
 import { projectIntentVector, routingTau } from '../../nlu/intent-projection.js';
+import { attachAnswerTopics } from './answer-topics.js';
 import { DEFERRABLE_ANSWER_TOPICS, projectRoutingFromSpeechAct } from './from-speech-act.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
 
@@ -320,6 +321,16 @@ function stateDependentRouting(input: TurnRoutingInput): TurnRoutingResult | nul
  * what the embedding declines instead of pre-empting it.
  */
 export async function classifyTurnRouting(
+  env:
+    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING'>
+    | undefined,
+  input: TurnRoutingInput,
+): Promise<TurnRoutingResult> {
+  const raw = await classifyTurnRoutingRaw(env, input);
+  return attachAnswerTopics(raw, input);
+}
+
+async function classifyTurnRoutingRaw(
   env:
     | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING'>
     | undefined,

@@ -3,6 +3,7 @@ import {
   hasDisclosedRera,
 } from './disclosed-facts.js';
 import type {
+  AnswerTopic,
   ComposeRequest,
   EvidenceSet,
   Match,
@@ -35,6 +36,30 @@ function relaxedLead(relaxed: readonly RelaxedDimension[] | undefined): string {
   return `I couldn't match ${phrase} — here's what we do have`;
 }
 import { isInventoryAsk } from './facts.js';
+
+const PARK_TOPIC_LABEL: Partial<Record<AnswerTopic, string>> = {
+  price: 'pricing',
+  legal: 'legal details',
+  emi: 'EMI',
+  amenities: 'amenities',
+  availability: 'unit configs',
+  location: 'location',
+  media: 'brochure / plans',
+  overview: 'project overview',
+  property_type: 'property type',
+  compare: 'a comparison',
+  education: 'a short explainer',
+};
+
+function parkContinuation(parked: readonly AnswerTopic[] | undefined): string {
+  if (!parked?.length) return '';
+  const labels = parked.map((t) => PARK_TOPIC_LABEL[t] ?? t);
+  const phrase =
+    labels.length === 1
+      ? labels[0]!
+      : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]!}`;
+  return ` I can cover ${phrase} next if you want.`;
+}
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
 import { speakEducation } from './education.js';
@@ -136,6 +161,11 @@ export function renderComposePrompt(req: ComposeRequest): string {
   }
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
     lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
+  }
+  if (goal.kind === 'answer' && goal.parkedTopics?.length) {
+    lines.push(
+      `Do NOT answer these now — close by offering them next: ${goal.parkedTopics.join(', ')}.`,
+    );
   }
   if (goal.kind === 'answer' && evidence.detail?.name) {
     // W8 — facet answers must anchor WHICH project they're about (dev
@@ -611,11 +641,12 @@ export function fallbackReply(req: ComposeRequest): string {
       } else if (topics.includes('emi') && ev.emi) {
         chunks.push(emiSnapshotLine(ev.emi));
       }
+      const park = parkContinuation(goal.parkedTopics);
       if (chunks.length > 1) {
-        return `${chunks.join('\n\n')}. Want the full breakdown or a site visit?`;
+        return `${chunks.join('\n\n')}.${park || ' Want the full breakdown or a site visit?'}`;
       }
       if (chunks.length === 1) {
-        return `${chunks[0]}. Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`;
+        return `${chunks[0]}.${park || ` Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`}`;
       }
 
       if (goal.topic === 'price' && ev.landedCost && !suppressPrice) {

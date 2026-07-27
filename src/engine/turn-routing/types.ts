@@ -58,6 +58,8 @@ export interface TurnRoutingResult {
   project_id?: string;
   project_name?: string;
   answer_topic?: AnswerTopic;
+  /** Multi-intent Phase B — full set; answer_topic remains [0] for compatibility. */
+  answer_topics?: AnswerTopic[];
   embedder_intent_kind?: string;
   embedder_score?: number;
   /** Taught sub-intent from vector metadata — a Desk FAQ question_key the

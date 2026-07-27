@@ -20,7 +20,7 @@ const UNKNOWN_CHIP: ChipResolution = {
 };
 
 describe('mergeExtractedAuthority', () => {
-  it('regex topics win over enriched topics', () => {
+  it('regex topics win over enriched topics (empty-only, default)', () => {
     const base: Extracted = {
       constraints: {},
       askTopic: 'price',
@@ -33,6 +33,22 @@ describe('mergeExtractedAuthority', () => {
     };
     const merged = mergeExtractedAuthority(base, enriched);
     expect(merged.askTopics).toEqual(['price']);
+    expect(merged.askTopic).toBe('price');
+  });
+
+  it('unions enriched topics when topicUnion is on', () => {
+    const base: Extracted = {
+      constraints: {},
+      askTopic: 'price',
+      askTopics: ['price'],
+    };
+    const enriched: Extracted = {
+      constraints: {},
+      askTopic: 'legal',
+      askTopics: ['legal'],
+    };
+    const merged = mergeExtractedAuthority(base, enriched, { topicUnion: true });
+    expect(merged.askTopics).toEqual(['price', 'legal']);
     expect(merged.askTopic).toBe('price');
   });
 

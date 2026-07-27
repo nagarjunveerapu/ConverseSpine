@@ -3,7 +3,7 @@
  * Gap-fill only after regex + embedder abstain. Never owns speech act.
  * See baml/extract_turn_facts.baml and docs/lld/P6_BAML_EXTRACT.md
  */
-import { locationLooksPolluted, looksLikeSearchBriefText } from './facts.js';
+import { locationLooksPolluted, looksLikeSearchBriefText, unionAskTopics } from './facts.js';
 import type { Env } from '../env.js';
 import { mayWriteSearchConstraints } from './speech-act/permissions.js';
 import type { ChipResolution, SpeechActKind } from './speech-act/types.js';
@@ -215,12 +215,21 @@ export function buildBamlShadowReport(
  * Never owns speech act. Chip path never calls this.
  * Budget/BHK stay regex (closed formats) — not in the BAML schema.
  */
-export function mergeBamlGapFill(current: Extracted, proposal: BamlExtractResult): Extracted {
+export function mergeBamlGapFill(
+  current: Extracted,
+  proposal: BamlExtractResult,
+  opts?: { topicUnion?: boolean },
+): Extracted {
   if (proposal.confidence !== 'llm') return current;
   let next = { ...current, constraints: { ...current.constraints } };
 
   const curTopics = next.askTopics ?? (next.askTopic ? [next.askTopic] : []);
-  if (curTopics.length === 0 && proposal.askTopics?.length) {
+  if (opts?.topicUnion && proposal.askTopics?.length) {
+    const united = unionAskTopics(curTopics, proposal.askTopics);
+    if (united.length) {
+      next = { ...next, askTopic: united[0], askTopics: united };
+    }
+  } else if (curTopics.length === 0 && proposal.askTopics?.length) {
     next = {
       ...next,
       askTopic: proposal.askTopics[0],

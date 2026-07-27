@@ -89,6 +89,9 @@ FAILURE_ANSWER = "true"
 # which is the argument for the ordering phase in the dialogue-state LLD.
 # Re-enable only with that phase, gated on the 31/33 split.
 ROUTING_IN_GOAL = "false"
+# Multi-intent Phase A — union askTopics (cap 3) instead of empty-only merge.
+# Dig-on with Phase C park (top-2 + explicit continuation). Off elsewhere until soak.
+TOPIC_UNION = "true"
 # ADR-005: rank advisor chips by the transition table (out of shadow), dev-first.
 CHIP_RANK_LIVE = "true"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"

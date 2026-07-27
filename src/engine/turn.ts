@@ -57,6 +57,7 @@ import {
   locationEchoesProjectName,
   locationLooksPolluted,
   resolveCatalogNameHit,
+  splitComposeTopics,
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
@@ -106,6 +107,7 @@ import {
 } from './turn-intent/classify.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
+import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
 import {
   applyIntentAuthority,
@@ -474,6 +476,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     catalogNames: catalogForNlu?.projectNames ?? [],
     ...(deps.failureTools ? { failureTools: true } : {}),
     ...(deps.bamlExtract ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' } : {}),
+    ...(deps.topicUnion ? { topicUnion: true } : {}),
   }, {
     inputSource,
     ingressFilledSlots: ingressFilled,
@@ -999,6 +1002,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       for (const slot of claimed.wrote) {
         if (extractProvenance) extractProvenance.fields[slot] = 'intent';
       }
+    }
+  }
+  // Multi-intent Phase B — routing's answer_topics union into extract (set grows only).
+  {
+    const before = ex.askTopics?.length ?? (ex.askTopic ? 1 : 0);
+    ex = mergeRoutingTopicsIntoExtract(ex, routing);
+    const after = ex.askTopics?.length ?? (ex.askTopic ? 1 : 0);
+    if (after > before && extractProvenance) {
+      extractProvenance.fields.askTopics = extractProvenance.fields.askTopics ?? 'intent';
     }
   }
   if (
@@ -1580,11 +1592,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     await deps.crm.commitProject(nd, goal.projectId).catch(() => {});
     if (goal.followUp || goal.followUpTopics?.length) {
       state = commitTo(state, goal.projectId, goal.projectName);
+      const followTopics = goal.followUpTopics?.length
+        ? goal.followUpTopics
+        : goal.followUp
+          ? [goal.followUp]
+          : [];
+      const { active, parked } = splitComposeTopics(followTopics);
       const rawAnswerGoal: Extract<TurnGoal, { kind: 'answer' }> = {
         kind: 'answer',
-        topic: goal.followUp ?? goal.followUpTopics![0]!,
+        topic: active[0] ?? goal.followUp ?? goal.followUpTopics![0]!,
         projectId: goal.projectId,
-        ...(goal.followUpTopics?.length ? { topics: goal.followUpTopics } : {}),
+        ...(active.length > 1 ? { topics: active } : {}),
+        ...(parked.length ? { parkedTopics: parked } : {}),
       };
       const answerGoal = deps.failureAnswer
         ? withAnswerRequirements(rawAnswerGoal, trimmedText)
