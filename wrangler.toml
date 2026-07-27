@@ -78,10 +78,17 @@ FAILURE_ROUTING = "true"
 FAILURE_SEARCH = "true"
 # Failure-as-a-value Phase 4: required facts + partial no-data outcomes.
 FAILURE_ANSWER = "true"
-# THE WIRE: a >=tau_high answer-intent bind may rescue a FOCUSED turn that
-# decideGoal sent to search. Additive only -- it never touches a turn that
-# already answers. dev-first; see src/engine/turn-routing/goal-rescue.ts.
-ROUTING_IN_GOAL = "true"
+# THE WIRE: a >=tau_high answer-intent bind vetoes the isFocusedSearchPivot
+# regex. OFF -- measured too broad. On merged main, focused on Brigade
+# Eldorado, 4 of 6 genuine pivots were PINNED to the old project:
+#   "2 BHK in Jayanagar"             -> Eldorado 2 BHK configs
+#   "actually my budget is only 50L" -> Eldorado pricing (Rs 89L+)
+# An offline audit of 1,751 real captured texts predicted this: of the 64
+# turns the veto fires on, ~31 carry a NEW search constraint and are genuine
+# pivots. Narrowing needs the extract, which has not run at that point --
+# which is the argument for the ordering phase in the dialogue-state LLD.
+# Re-enable only with that phase, gated on the 31/33 split.
+ROUTING_IN_GOAL = "false"
 # ADR-005: rank advisor chips by the transition table (out of shadow), dev-first.
 CHIP_RANK_LIVE = "true"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
