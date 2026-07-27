@@ -2,7 +2,7 @@
 
 **Audience:** implementer + reviewer
 **Scope:** ConverseSpine `origin/main` @ `0243356` — the understanding/state/policy seam
-**Status:** proposed, awaiting founder approval — review of 2026-07-26 folded into the body; **§3b/§3c added 2026-07-27 from measurement, and they gate most of what follows**
+**Status:** proposed, awaiting founder approval — review of 2026-07-26 folded into the body; **§3b/§3c added 2026-07-27; gate criteria corrected the same day (truth grader, not focus-stay)**
 **Supersedes:** the Lane A sequencing in [`SUBJECT_RESOLUTION_PLAN.md`](../SUBJECT_RESOLUTION_PLAN.md) (PR-2 and PR-4 are absorbed here; PR-1 has shipped as #150)
 **Evidence base:** [`SUBJECT_RESOLUTION_MAP.md`](../SUBJECT_RESOLUTION_MAP.md) — every claim below was verified by executing the code, not by reading it
 
@@ -154,22 +154,32 @@ predicate that has already decided.
 
 ### Why a veto is not the fix — the measurement that proves it
 
-#159 gave the embedder a vote against that regex and it worked on the two
-phrasings above (0/6 → 6/6, chained 5 lost → 2). An offline audit over **1,751
-unique real captured buyer texts** then sized the class properly:
+#159 gave the embedder a vote against that regex. On the possession phrasing
+cliff that is verified: `when is possession` went 0/6 → 6/6 keep-focus with the
+wire on (same bind confidence as `what is the possession date`). An offline
+audit over **1,751 unique real captured buyer texts** then sized the veto class:
 
 ```
 answer-intent binds ≥ tau_high      306
   regex says "pivot"                 64   ← where a veto fires
-    carries a NEW search constraint  31   ← genuine pivots
-    genuine defects                  33
+    predicted NEW search constraint  ~31  ← genuine pivots (offline label)
+    predicted answer-on-focus        ~33  ← defects if regex wins
 ```
 
-Confirmed live on merged main, focused, **4 of 6 pinned to the old project**:
-`"2 BHK in Jayanagar"` returned Eldorado's 2 BHKs; `"actually my budget is only
-50L"` returned Eldorado pricing at ₹89L+. A buyer who states a smaller budget or
-names a different locality is answered about the project they were leaving.
-(#160 turns the flag off; the code and the finding stay.)
+Those ~31/~33 counts are an **offline sizing**, not a live pass bar. A first
+live probe with the wire on did show genuine pivots answered on the focused
+project (e.g. budget/locality moves returning Eldorado configs/pricing). That
+failure mode is real. What is **not** authoritative: any early six-probe count
+that graded *"did it stay on Eldorado"* instead of *"was the answer true to the
+catalog."* That grader is discarded. Catalog anchors for re-grading:
+
+- 21 projects in the dig catalog; no Jayanagar inventory
+- cheapest 2BHK: Brigade Cornerstone Utopia from ₹45.0L
+- Eldorado 2BHK from ₹57.5L
+- Whitefield-only 3BHK from ₹1.55 Cr
+
+#160 sets `ROUTING_IN_GOAL=false` on dig (merged + Deploy dig). Wire code stays;
+flag stays off until this phase lands.
 
 The narrowing the data suggests — *do not veto when the turn carries a new
 constraint* — requires the **extract**, which has not run at that point. Adding
@@ -208,7 +218,7 @@ This is **not a new stage** (§0 rule 4). It reorders existing ones:
 3. **`isFocusedSearchPivot` stops being an authority and becomes a signal** —
    one input among the verdict, the extracted constraints and the prior state.
    It is not deleted; it is demoted. A turn that carries a new budget, BHK or
-   locality *is* a pivot regardless of the bind, which is the 31, and the
+   locality *is* a pivot regardless of the bind (the offline ~31 class), and the
    extract is what makes that knowable.
 4. **`decideGoal` gains the verdict in its signature.** `decideGoal(s, ex,
    visitCtx, text)` cannot see routing today; after the reorder there is a
@@ -216,34 +226,53 @@ This is **not a new stage** (§0 rule 4). It reorders existing ones:
 
 ### Gate
 
-The audit is the gate, and it is behavioural per §0 rule 1:
+Behavioural, per §0 rule 1. **Grade the fact in the reply, never "stayed on
+focus."** Offline ~31/~33 is a sizing hint only — live gate uses catalog truth.
 
-- **the 31 stay pivots** — a focused buyer stating a new budget / BHK / locality
-  is broadened, not pinned. Live probe, not offline prediction.
-- **the 33 become answers** — a focused buyer asking a facet gets it answered on
-  the focused project.
-- `when is possession` 6/6 and `what is the possession date` 6/6 in the same run.
-- The 90-scenario suite shows no new failures — **necessary, not sufficient.**
-  It came back clean on #159 while 4 of 6 pivots were broken; it does not cover
-  this class and must never again be the only gate for subject resolution.
-- Every live run pinned to one deployment version (`scripts/pinned-run.sh`).
+**Pivot class (must broaden / re-search, not pin):** focused buyer states a new
+budget, BHK, and/or locality. Minimum live probes (Eldorado focused first):
+
+| utterance | reply must |
+|---|---|
+| `actually my budget is only 50L` | surface budget-fit inventory (Cornerstone from ₹45L qualifies; must not answer as Eldorado-only pricing that ignores the new cap) |
+| `2 BHK in Jayanagar` | not invent Jayanagar stock; not dump Eldorado 2BHK as if that were the ask |
+| `show me other projects in Whitefield` | leave Eldorado focus; shortlist other Whitefield options |
+
+**Answer class (must keep focus and answer the facet):**
+
+| utterance | reply must |
+|---|---|
+| `when is possession` | Eldorado possession/delivery fact (same run as below) |
+| `what is the possession date` | same |
+| `has this area appreciated` | investment/return answer on focused project / its locality — not a fresh shortlist that replaces subject |
+
+Also:
+
+- `when is possession` and `what is the possession date` both 6/6 in the same pinned run.
+- 90-scenario suite: no new failures — **necessary, not sufficient.** Clean suite
+  on #159 coexisted with broken pivots; suite alone never gates subject resolution.
+- Every live run pinned (`scripts/pinned-run.sh`).
+- Re-score the full 64 veto-class texts live with the **truth** grader before
+  flipping `ROUTING_IN_GOAL` on. Do not ship on a focus-stay grader.
 
 ### Dependency
 
 Nothing depends on it that is not already blocked. **Phases 2, 3, 4b and 5 all
 sharpen `uₜ`, and none of them can change behaviour until `uₜ` arrives before
-`bₜ`.** Sequence 0d before all of them. Phase 1 (entity store) is orthogonal and
-can proceed either side.
+`bₜ`.** Sequence **0e → 0d** before all of them. Phase 1 (entity store) is
+orthogonal and can proceed either side. Dig keeps `ROUTING_IN_GOAL=false` until
+0d's gate passes.
 
 ### Risk
 
 Reordering touches every turn — the largest blast radius in this document.
 Mitigations: build behind a flag; keep the old order reachable for one release;
-gate on the audit split above rather than on the scenario suite; and land it as
+gate on the truth probes above rather than on the scenario suite; and land it as
 its own PR with nothing else in it.
 
 **The specific trap:** a reorder that "works" on a handful of probes is exactly
-what #159 was. Do not accept fewer than the full 64-text audit re-run live.
+what #159 was. Do not accept fewer than the full 64-text audit re-run live with
+catalog-truth grading.
 
 ---
 
@@ -256,13 +285,31 @@ be a number rather than an impression.
 `ask_delivery_timeline` are both ≥ tau_high and both wrong. Unknown today: how
 common that is.
 
-**Method:** sample N ≥ 200 of the ≥ tau_high binds from `intent_review_queue`,
-hand-label them against the boundary rulebook, report precision per intent kind.
-Cheap, offline, no deploy. **Output:** a per-kind precision table, and a
-tau_high that is chosen from the holdout rather than inherited. If precision on
-the answer-intent kinds is below ~90%, 0d's design changes — the verdict becomes
-a tiebreaker rather than an input of equal weight, and that must be known before
-the reorder, not after.
+**Method:** sample N ≥ 200 of the ≥ tau_high binds from `intent_review_queue`
+(or an export of the same shape), hand-label them against the boundary rulebook,
+report precision per intent kind. Cheap, offline, no deploy.
+
+**Label rule (one row = one bind):**
+
+| label | when |
+|---|---|
+| `correct` | bound kind is what a sales-aware reader would route the utterance to |
+| `wrong` | bound kind is not that route (even if confidence is high) |
+| `ambiguous` | two answerable kinds both fit; do not force a winner |
+
+Hard negatives already seen (must appear in the sample or be added): `"70L"` ↛
+`get_brochure`; `"summarize everything we discussed"` ↛ `ask_delivery_timeline`.
+
+**Output (blocks 0d start):**
+
+1. Per-kind precision table for answer-intent kinds at current `tau_high`
+2. Recommended `tau_high` from holdout (or explicit "keep inherited" with numbers)
+3. Decision line: if answer-intent precision is below ~90%, 0d treats the verdict
+   as a **tiebreaker** (regex + extract still vote); if at or above ~90%, verdict
+   may sit as an equal input as designed in §3b
+
+Do not open the 0d implementation PR until (1)–(3) exist in-repo (table + short
+note under `docs/reports/`). Dig flag stays off meanwhile.
 
 ---
 
