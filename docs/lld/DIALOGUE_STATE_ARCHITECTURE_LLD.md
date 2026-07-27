@@ -297,9 +297,6 @@ report precision per intent kind. Cheap, offline, no deploy.
 | `wrong` | bound kind is not that route (even if confidence is high) |
 | `ambiguous` | two answerable kinds both fit; do not force a winner |
 
-Hard negatives already seen (must appear in the sample or be added): `"70L"` ↛
-`get_brochure`; `"summarize everything we discussed"` ↛ `ask_delivery_timeline`.
-
 **Output (blocks 0d start):**
 
 1. Per-kind precision table for answer-intent kinds at current `tau_high`
@@ -308,8 +305,20 @@ Hard negatives already seen (must appear in the sample or be added): `"70L"` ↛
    as a **tiebreaker** (regex + extract still vote); if at or above ~90%, verdict
    may sit as an equal input as designed in §3b
 
-Do not open the 0d implementation PR until (1)–(3) exist in-repo (table + short
-note under `docs/reports/`). Dig flag stays off meanwhile.
+### Result (2026-07-27)
+
+Filed at [`docs/reports/phase-0e-verdict-precision.md`](../reports/phase-0e-verdict-precision.md)
+(+ `phase-0e-labels.json`). Dig D1 sample, N=203 distinct answer-intent binds @
+`tau_high=0.78`, hand-labelled from buyer text alone.
+
+- Overall precision **0.712** (121 correct / 49 wrong; 33 ambiguous)
+- Decision: verdict is a **tiebreaker** for 0d — not an equal input
+- Keep `tau_high=0.78`; worst wrongs already sit at 0.85–0.91
+- Dig keeps `ROUTING_IN_GOAL=false`; do not revive the #159 “verdict vetoes regex”
+  shape
+
+0d implementation may open only as **extract-before-mutation + tiebreaker
+verdict**, not as equal-weight wire.
 
 ---
 
