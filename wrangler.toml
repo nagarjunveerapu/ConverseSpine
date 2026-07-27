@@ -78,6 +78,10 @@ FAILURE_ROUTING = "true"
 FAILURE_SEARCH = "true"
 # Failure-as-a-value Phase 4: required facts + partial no-data outcomes.
 FAILURE_ANSWER = "true"
+# THE WIRE: a >=tau_high answer-intent bind may rescue a FOCUSED turn that
+# decideGoal sent to search. Additive only -- it never touches a turn that
+# already answers. dev-first; see src/engine/turn-routing/goal-rescue.ts.
+ROUTING_IN_GOAL = "true"
 # ADR-005: rank advisor chips by the transition table (out of shadow), dev-first.
 CHIP_RANK_LIVE = "true"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"

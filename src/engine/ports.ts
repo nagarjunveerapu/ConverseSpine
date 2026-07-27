@@ -372,6 +372,9 @@ export interface EngineDeps {
   failureSearch?: boolean;
   /** Failure-as-a-value Phase 4 behavior gate. */
   failureAnswer?: boolean;
+  /** THE WIRE — let a high-confidence answer-intent bind rescue a focused turn
+   *  that would otherwise fall to search. See turn-routing/goal-rescue.ts. */
+  routingInGoal?: boolean;
   /** Local dev JSONL turn log (wrangler dev only). */
   emitTurnLog?: (entry: import('../observability/local-turn-log.js').LocalTurnLogEntry) => void;
 }

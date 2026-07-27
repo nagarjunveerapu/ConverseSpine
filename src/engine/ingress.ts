@@ -69,6 +69,9 @@ export interface ExtractProvenance {
   baml?: import('./extract-baml.js').BamlShadowReport;
   /** SIL Phase 0 — semantic-layer fire/gate/bind telemetry (SEMANTIC_INTENT_LAYER_LLD §3.3). */
   routing_bind?: import('./turn-routing/types.js').RoutingBindTelemetry;
+  /** THE WIRE — set when the embedding verdict withheld a focus release the
+   *  LLM turn-intent classifier asked for. Absent means it did not fire. */
+  focus_held?: { intent: string; score: number; topic: string };
 }
 
 export function markIngressBlocked(

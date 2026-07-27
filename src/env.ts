@@ -74,6 +74,8 @@ export interface Env {
   FAILURE_SEARCH?: string;
   /** Phase 4: answer delivery requirements and partial no-data outcomes. */
   FAILURE_ANSWER?: string;
+  /** THE WIRE — intent verdict may rescue a focused turn that fell to search. */
+  ROUTING_IN_GOAL?: string;
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;

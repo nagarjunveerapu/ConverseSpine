@@ -198,6 +198,19 @@ export function mapIntentToRouting(
   return null;
 }
 
+/** Is this an intent the engine can answer, rather than a policy or definition?
+ *  Read by the goal-rescue wire; the tables themselves stay owned here. */
+export function isAnswerIntent(kind: string): boolean {
+  return ANSWER_INTENTS.has(kind);
+}
+
+/** The answer topic an intent maps to, or undefined when it maps to none.
+ *  Deliberately does NOT fall back to 'overview' the way `mapIntentToRouting`
+ *  does — a rescue with no real topic should not fire at all. */
+export function answerTopicForIntent(kind: string): AnswerTopic | undefined {
+  return INTENT_TO_TOPIC[kind];
+}
+
 /** The kinds INTENT_TO_TOPIC already owns. Exported so the intent-authority
  *  table can be tested for overlap — one owner per kind, enforced, not hoped. */
 export const INTENT_TO_TOPIC_KEYS: readonly string[] = Object.keys(INTENT_TO_TOPIC);

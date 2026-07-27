@@ -40,6 +40,7 @@ import {
   resolvePendingStop,
 } from './optout-confirm.js';
 import { speakFailure } from './speak-failure.js';
+import { holdsFocusAgainstRelease } from './turn-routing/focus-hold.js';
 import { speakEducation } from './education.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
 import { resolveInputSource } from './ingress.js';
@@ -333,12 +334,58 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   let recoveryChipTurn = false;
   let focusPivotTurn = false;
+  // THE WIRE — carried out of the pre-extract block; `extractProvenance` does
+  // not exist yet at the point the release is vetoed.
+  let focusHeldReason: { intent: string; score: number; topic: string } | undefined;
   let rtiFocusCommitted: { projectId: string; projectName: string } | undefined;
   let rtiSeedAskTopic: import('./types.js').AnswerTopic | undefined;
 
-  if (deps.turnIntent && shouldRunTurnIntent(state, input.action_id, trimmedText)) {
+  // THE WIRE (focus-hold.ts). `shouldRunTurnIntent` reaches
+  // `isFocusedSearchPivot`, a REGEX, and that regex decides whether a focused
+  // turn is the buyer pivoting away to search. Measured on dev:
+  //
+  //   isFocusedSearchPivot("when is possession")           true   kept 0/6
+  //   isFocusedSearchPivot("what is the possession date")  false  kept 6/6
+  //   isFocusedSearchPivot("has this area appreciated")    true   kept 0/6
+  //
+  // Same intent to the embedder (ask_delivery_timeline, 0.874 vs 0.880) and
+  // opposite outcomes, because a phrasing-shaped regex — not the understanding
+  // layer — is the authority on what the buyer meant. Everything downstream
+  // (the LLM classifier, the release, the shortlist that then BECOMES the
+  // subject) is consequence, which is why patching those seams did nothing.
+  //
+  // So: when the regex calls a focused turn a pivot, ask the embedder before
+  // believing it. A >=tau_high answer-intent bind means the buyer asked ABOUT
+  // this project. The pivot lane is then skipped entirely — which also REPLACES
+  // an LLM call with one embed on those turns, rather than adding work.
+  let runTurnIntent = Boolean(
+    deps.turnIntent && shouldRunTurnIntent(state, input.action_id, trimmedText),
+  );
+  if (
+    runTurnIntent &&
+    deps.routingInGoal &&
+    deps.routingEnv &&
+    !input.action_id &&
+    state.phase === 'focused'
+  ) {
+    // No `ex` — the extract does not exist yet, and the embedding query is over
+    // text alone (DIALOGUE_STATE LLD §5); the `ex` fields only gate and
+    // arbitrate, which the full classify further down still does in full.
+    const earlyRouting = await classifyTurnRouting(
+      deps.routingEnv,
+      buildTurnRoutingInput(state, {} as Extracted, trimmedText, inputSource),
+    ).catch(() => undefined);
+    const held = holdsFocusAgainstRelease(earlyRouting, true);
+    if (held.hold) {
+      runTurnIntent = false;
+      focusHeldReason = held.reason;
+    }
+  }
+
+  if (runTurnIntent && deps.turnIntent) {
     const intentInput = buildTurnIntentInput(state, trimmedText, channel, uiModeHint, input.action_id);
     const intent = await deps.turnIntent.classify(intentInput);
+
     const applied = applyTurnIntentResult(state, intent, intentInput.suggested_actions);
     state = applied.state;
     for (const k of applied.clearedKeys) clearedKeys.add(k);
@@ -434,6 +481,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   });
   let ex: Extracted = extractResult.extracted;
   const extractProvenance = extractResult.provenance;
+  if (focusHeldReason && extractProvenance) extractProvenance.focus_held = focusHeldReason;
 
   // Trade-off soft signals (priority / hub / schools / worries) are advisor-web
   // only. detectSoftPrefs still runs in facts for the location-pollution guard,
