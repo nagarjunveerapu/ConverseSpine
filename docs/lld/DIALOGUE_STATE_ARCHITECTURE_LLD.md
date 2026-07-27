@@ -2,7 +2,7 @@
 
 **Audience:** implementer + reviewer
 **Scope:** ConverseSpine `origin/main` @ `0243356` — the understanding/state/policy seam
-**Status:** proposed, awaiting founder approval — **review of 2026-07-26 folded into the body**
+**Status:** proposed, awaiting founder approval — review of 2026-07-26 folded into the body; **§3b/§3c added 2026-07-27 from measurement, and they gate most of what follows**
 **Supersedes:** the Lane A sequencing in [`SUBJECT_RESOLUTION_PLAN.md`](../SUBJECT_RESOLUTION_PLAN.md) (PR-2 and PR-4 are absorbed here; PR-1 has shipped as #150)
 **Evidence base:** [`SUBJECT_RESOLUTION_MAP.md`](../SUBJECT_RESOLUTION_MAP.md) — every claim below was verified by executing the code, not by reading it
 
@@ -103,6 +103,166 @@ But ~15 methods use nullable contracts today (`projectDetail`, `pricing`, `compa
 
 ### Gate
 A forced adapter failure appears as `success: false`. One ledger row answers *"what bound, what goal, what reply, and did the data exist."* **0c is not required to merge 0a.**
+
+---
+
+## 3b. Phase 0d — understanding before mutation
+
+> **Added 2026-07-27, from measurement.** This phase did not exist when §§1–13
+> were written, and every one of those phases silently assumes it. §5's own
+> gate says `ask_next_step` must be "wired as a state-conditioned **consumer**"
+> — there is no consumer, and there is no point in the pipeline where one could
+> be added, because the decision happens before the understanding exists.
+
+### Problem
+
+The turn destroys the conversation's subject before it works out what the turn
+meant.
+
+```
+turn.ts:341   const intent = await deps.turnIntent.classify(intentInput)   ← LLM
+turn.ts:343   applyTurnIntentResult(...)  →  releaseToDiscover()           ← subject deleted
+       ⋮
+turn.ts:927   routing = await classifyTurnRouting(...)                     ← verdict computed
+```
+
+584 lines apart. And the gate that decides whether `341` runs at all reaches
+`isFocusedSearchPivot` (`turn-intent/focused-intent.ts:97`) — **a regex.** No
+LLM, no embedder. That predicate is the real authority on whether a focused
+turn is the buyer walking away.
+
+Measured directly on the predicate, and live on dev with Brigade Eldorado
+focused, six fresh conversations per phrasing:
+
+| utterance | `isFocusedSearchPivot` | embedder bind | focus kept |
+|---|---|---|---|
+| `when is possession` | **true** | `ask_delivery_timeline` 0.874 | 0/6 |
+| `what is the possession date` | false | `ask_delivery_timeline` 0.880 | 6/6 |
+| `has this area appreciated` | **true** | `ask_investment_return` 0.828 | 0/6 |
+
+Same intent, same confidence, opposite outcomes — 100% correlated with the
+regex. `embedder-map.ts` had already mapped `ask_delivery_timeline → availability`
+and listed it in `ANSWER_INTENTS`. Everything needed to answer was in hand
+before the turn went shopping, and nothing asked. The shortlist that replaces
+the project then *becomes* the subject: chained, 5 of 8 asks collapse with no
+recovery path.
+
+**This is the concrete mechanism behind "every intent-layer gain measures inert
+end-to-end."** Not a missing wire — an ordering. The corpus, the learned
+projection, the teach loop and the Understanding board are all downstream of a
+predicate that has already decided.
+
+### Why a veto is not the fix — the measurement that proves it
+
+#159 gave the embedder a vote against that regex and it worked on the two
+phrasings above (0/6 → 6/6, chained 5 lost → 2). An offline audit over **1,751
+unique real captured buyer texts** then sized the class properly:
+
+```
+answer-intent binds ≥ tau_high      306
+  regex says "pivot"                 64   ← where a veto fires
+    carries a NEW search constraint  31   ← genuine pivots
+    genuine defects                  33
+```
+
+Confirmed live on merged main, focused, **4 of 6 pinned to the old project**:
+`"2 BHK in Jayanagar"` returned Eldorado's 2 BHKs; `"actually my budget is only
+50L"` returned Eldorado pricing at ₹89L+. A buyer who states a smaller budget or
+names a different locality is answered about the project they were leaving.
+(#160 turns the flag off; the code and the finding stay.)
+
+The narrowing the data suggests — *do not veto when the turn carries a new
+constraint* — requires the **extract**, which has not run at that point. Adding
+a constraint check by hand would be a second regex deciding meaning, which is
+the thing being fixed. **Every narrow fix at this seam needs information that
+does not exist yet when the decision is taken.** That is the argument for the
+phase, and it is evidence rather than taste.
+
+The audit also found confident binds that are simply wrong — `"70L"` →
+`get_brochure` @ 0.870, `"summarize everything we discussed"` →
+`ask_delivery_timeline`. Anything that leans on the verdict inherits that error
+rate, which is why §3c below is a prerequisite of the gate and not a nicety.
+
+### Design
+
+The LLD's central formula already says it:
+
+```
+bₜ = f(bₜ₋₁, uₜ)     not     bₜ = update(bₜ₋₁, extract(uₜ))
+```
+
+Phase 0d is the half nobody built: **uₜ must be complete before bₜ is
+computed.** Today `uₜ` is assembled in pieces across 900 lines while `bₜ` is
+mutated in the middle of it.
+
+This is **not a new stage** (§0 rule 4). It reorders existing ones:
+
+1. **Assemble `uₜ` first.** Run the embed route and the LLM extract
+   concurrently on the raw message — they read the same input and neither needs
+   the other — and join before any state write. This is the same change the
+   latency plan already scopes as "parallelize the extract"; the ~1–2s saving is
+   a side effect, not the reason.
+2. **Every state mutation moves after the join.** `releaseToDiscover`,
+   `commitTo`, constraint writes. The turn-intent classifier keeps its job but
+   becomes one input to `f`, not a direct writer.
+3. **`isFocusedSearchPivot` stops being an authority and becomes a signal** —
+   one input among the verdict, the extracted constraints and the prior state.
+   It is not deleted; it is demoted. A turn that carries a new budget, BHK or
+   locality *is* a pivot regardless of the bind, which is the 31, and the
+   extract is what makes that knowable.
+4. **`decideGoal` gains the verdict in its signature.** `decideGoal(s, ex,
+   visitCtx, text)` cannot see routing today; after the reorder there is a
+   complete `uₜ` to pass.
+
+### Gate
+
+The audit is the gate, and it is behavioural per §0 rule 1:
+
+- **the 31 stay pivots** — a focused buyer stating a new budget / BHK / locality
+  is broadened, not pinned. Live probe, not offline prediction.
+- **the 33 become answers** — a focused buyer asking a facet gets it answered on
+  the focused project.
+- `when is possession` 6/6 and `what is the possession date` 6/6 in the same run.
+- The 90-scenario suite shows no new failures — **necessary, not sufficient.**
+  It came back clean on #159 while 4 of 6 pivots were broken; it does not cover
+  this class and must never again be the only gate for subject resolution.
+- Every live run pinned to one deployment version (`scripts/pinned-run.sh`).
+
+### Dependency
+
+Nothing depends on it that is not already blocked. **Phases 2, 3, 4b and 5 all
+sharpen `uₜ`, and none of them can change behaviour until `uₜ` arrives before
+`bₜ`.** Sequence 0d before all of them. Phase 1 (entity store) is orthogonal and
+can proceed either side.
+
+### Risk
+
+Reordering touches every turn — the largest blast radius in this document.
+Mitigations: build behind a flag; keep the old order reachable for one release;
+gate on the audit split above rather than on the scenario suite; and land it as
+its own PR with nothing else in it.
+
+**The specific trap:** a reorder that "works" on a handful of probes is exactly
+what #159 was. Do not accept fewer than the full 64-text audit re-run live.
+
+---
+
+## 3c. Phase 0e — how wrong is the verdict? (prerequisite of 0d's gate)
+
+Phase 0d makes the verdict load-bearing. Before it does, its error rate has to
+be a number rather than an impression.
+
+`"70L"` → `get_brochure` @ 0.870 and `"summarize everything we discussed"` →
+`ask_delivery_timeline` are both ≥ tau_high and both wrong. Unknown today: how
+common that is.
+
+**Method:** sample N ≥ 200 of the ≥ tau_high binds from `intent_review_queue`,
+hand-label them against the boundary rulebook, report precision per intent kind.
+Cheap, offline, no deploy. **Output:** a per-kind precision table, and a
+tau_high that is chosen from the holdout rather than inherited. If precision on
+the answer-intent kinds is below ~90%, 0d's design changes — the verdict becomes
+a tiebreaker rather than an input of equal weight, and that must be known before
+the reorder, not after.
 
 ---
 
@@ -279,18 +439,29 @@ Pre-traffic sources, in order of value: the FAQ keys themselves (self-consuming,
 ## 10. Sequencing
 
 ```
-0a ──► unbound-name typing ──► 1a dual-write ──► 1b consumers ──► 1c delete ──┬──► 2
- │      (J7 honest)                                                          ├──► 4b
- └──► 4a  resolveLocation gate                                               └──► 5
-
-3  multi-label — parallel with 1; its product gate may need 1
+0a ──► unbound-name typing ──► 1a dual-write ──► 1b consumers ──► 1c delete
+ │      (J7 honest)
+ ├──► 4a  resolveLocation gate
+ │
+ └──► 0e verdict precision ──► 0d understanding-before-mutation ──┬──► 2
+      (measure, offline)       (reorder; EVERYTHING below needs it) ├──► 3
+                                                                    ├──► 4b
+                                                                    └──► 5
 ```
+
+**0d is the gate on the whole right-hand side.** 2, 3, 4b and 5 all sharpen
+`uₜ`, and none of them can change buyer behaviour until `uₜ` arrives before
+`bₜ` (§3b). Phase 1 is orthogonal and runs either side. This supersedes the
+earlier reading that 3 could ship in parallel with 1 and land a product gain —
+it can be *built* in parallel; it cannot *measure* until 0d.
 
 Prod infra cutover (Desk D1, service bindings, Advisor URL matrix, SQL seed hygiene) is a **separate track**. 0a helps ops; do not start 1a big-bang during prod provisioning.
 
 | phase | depends on | buyer-visible | size |
 |---|---|---|---|
 | 0a ledger truth | — | no | S |
+| **0e verdict precision** | — | no | S — offline, no deploy |
+| **0d understanding before mutation** | 0e | **yes** (the phrasing cliff) | **L — reorders every turn** |
 | 0b/0c port results | 0a | no | M |
 | unbound-name typing | — | **yes** (J7 honest) | S |
 | 1 entity store (a/b/c) | 0a to measure | **yes** (J7 correct, NAME-06) | L |
