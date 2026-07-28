@@ -72,6 +72,8 @@ export interface ExtractProvenance {
   /** THE WIRE — set when the embedding verdict withheld a focus release the
    *  LLM turn-intent classifier asked for. Absent means it did not fire. */
   focus_held?: { intent: string; score: number; topic: string };
+  /** Phase 0d pivot arbiter reason (post extract∥routing join). */
+  pivot_arbiter?: string;
 }
 
 export function markIngressBlocked(

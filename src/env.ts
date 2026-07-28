@@ -77,6 +77,11 @@ export interface Env {
   /** THE WIRE — intent verdict may rescue a focused turn that fell to search. */
   ROUTING_IN_GOAL?: string;
   /**
+   * Phase 0d — assemble extract ∥ routing before focus release (dig soak).
+   * Keep false on main until founder gate; dig may set true for same-URL testing.
+   */
+  UNDERSTANDING_BEFORE_MUTATION?: string;
+  /**
    * Multi-intent Phase A — union askTopics across regex/embedder/BAML (cap 3)
    * instead of empty-only fill. Dig-first; activates AB-8 multi-topic compose.
    */
