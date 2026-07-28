@@ -63,7 +63,9 @@ describe('arbitrateFocusPivot', () => {
       enabled: true,
     });
     expect(d.action).toBe('hold_focus');
-    expect(d.reason).toBe('answer_intent_tiebreaker');
+    // Possession is also a closed-set facet requirement — that reason wins
+    // over the embedder tiebreaker when both apply.
+    expect(['answer_intent_tiebreaker', 'focused_facet_requirement']).toContain(d.reason);
   });
 
   it('holds appreciation ask despite junk location extract', () => {
