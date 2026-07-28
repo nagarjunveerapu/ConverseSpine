@@ -749,12 +749,12 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'emi', re: /\b(?:\bemi\b|monthly\s+payment|installment|loan\s+emi|emi\s+(?:kitna|amount|calc(?:ulate)?))\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
   {
-    // Config / unit asks + possession/handover (Desk FAQ keys under availability).
-    // Preference "ready to move" as a search soft-pref stays in detectSoftPrefs —
-    // never askTopics:availability on search briefs. Focused readiness /
-    // possession date asks do belong here so multi-intent can park a 3rd topic.
+    // Config / unit asks + readiness. Preference "ready to move" as a search
+    // soft-pref stays in detectSoftPrefs — never askTopics:availability on
+    // search briefs. Lone possession/handover stays OFF this pattern (B5.1 —
+    // FAQ via overview); multi-intent folds it in via detectTopics below.
     topic: 'availability',
-    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|possession(?:\s+date)?|handover(?:\s+date)?|completion\s+date|delivery\s+(?:date|timeline)|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
+    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
   {
     topic: 'media',
@@ -762,11 +762,23 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   },
 ];
 
+/**
+ * Possession/handover as a *second* facet — alone it must not become
+ * askTopics:availability (taught-fill B5.1: availability template dumps configs
+ * instead of the possession FAQ). With other facets present, fold into
+ * availability so price+possession+RERA forms a 3-topic compose set.
+ */
+const POSSESSION_MULTI_FACET =
+  /\b(?:possession(?:\s+date)?|handover(?:\s+date)?|completion\s+date|delivery\s+(?:date|timeline))\b/i;
+
 /** All answer topics mentioned this turn (multi-intent). */
 export function detectTopics(text: string): AnswerTopic[] {
   const found = new Set<AnswerTopic>();
   for (const { topic, re } of TOPIC_PATTERNS) {
     if (re.test(text)) found.add(topic);
+  }
+  if (POSSESSION_MULTI_FACET.test(text) && found.size > 0) {
+    found.add('availability');
   }
   return TOPIC_ORDER.filter((t) => found.has(t));
 }

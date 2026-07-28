@@ -83,6 +83,11 @@ describe('Phase C — answer all capped topics', () => {
     expect(goal.parkedTopics).toBeUndefined();
   });
 
+  it('lone possession does not become availability (B5.1 FAQ/overview path)', () => {
+    expect(detectTopics('when is possession?')).toEqual([]);
+    expect(detectTopics('possession date?')).toEqual([]);
+  });
+
   it('possession joins availability so price+RERA+possession all stay active', () => {
     let s = initState('naya-advisor', 't-park-poss');
     s = commitTo(s, 'oasis', 'Brigade Oasis');
