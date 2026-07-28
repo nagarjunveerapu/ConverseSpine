@@ -123,6 +123,36 @@ describe('mergeBamlGapFill / shadow', () => {
     expect(merged.constraints.location).toBe('Coorg');
   });
 
+  it('promote unions topics when topicUnion is on', () => {
+    const current: Extracted = {
+      constraints: {},
+      askTopics: ['price'],
+      askTopic: 'price',
+      speechAct: 'unknown',
+    };
+    const merged = mergeBamlGapFill(
+      current,
+      { confidence: 'llm', askTopics: ['legal'] },
+      { topicUnion: true },
+    );
+    expect(merged.askTopics).toEqual(['price', 'legal']);
+    expect(merged.askTopic).toBe('price');
+  });
+
+  it('promote does not add topics when regex already has one (empty-only)', () => {
+    const current: Extracted = {
+      constraints: {},
+      askTopics: ['price'],
+      askTopic: 'price',
+      speechAct: 'unknown',
+    };
+    const merged = mergeBamlGapFill(current, {
+      confidence: 'llm',
+      askTopics: ['legal'],
+    });
+    expect(merged.askTopics).toEqual(['price']);
+  });
+
   it('shadow report marks would_fill vs disagree', () => {
     const report = buildBamlShadowReport(
       'shadow',

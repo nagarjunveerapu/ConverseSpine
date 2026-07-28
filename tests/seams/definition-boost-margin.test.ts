@@ -23,11 +23,17 @@
  * Keeping definition rows in the CANDIDATE SET is right — they are outnumbered
  * by search/availability rows and would never be retrieved otherwise. Letting
  * them win a contest they lost on score is not.
+ *
+ * LANDED (state-condition, not margin): when `phase === 'focused'` + focus,
+ * definition class-boost is off, and mapIntent declines definition /
+ * negotiate_price on catalog-facet asks so the walk binds get_price /
+ * get_amenities. Pins live in `tests/failure-routing.test.ts`. Margin-based
+ * ranking remains skipped below — do not revive without measured distributions.
  */
 import { describe, expect, it } from 'vitest';
 
 /**
- * BLOCKED — specification only, not yet implemented.
+ * BLOCKED — specification only for the MARGIN approach, not yet implemented.
  *
  * A margin was tried at 0.03 and reverted: `failure-routing.test.ts:121` pins
  * "what is this bhk you people say" with definition_bhk @ 0.805 losing to
@@ -39,15 +45,11 @@ import { describe, expect, it } from 'vitest';
  * utterances are literacy asks, and the two known data points (0.069 must
  * pass, EXP-01's competing score unknown) do not determine it.
  *
- * Two ways forward, neither a tuning exercise:
- *   1. MEASURE — score distributions for true-definition vs true-lookup turns,
- *      then set the margin from the separation.
- *   2. STATE-CONDITION (LLD phase 2) — "what is this bhk you people say" on a
- *      cold turn and "what's the BSP and carpet area" on a FOCUSED turn are
- *      distinguishable by state, not by score. This is the structural answer;
- *      the margin is a proxy for it.
+ * Structural answer (shipped): STATE-CONDITION on focused + catalog facet —
+ * see embedder-map `shouldDeclinePolicyForFocusedFacet` and classify
+ * `definitionBoostOk` gating. This file stays skipped for the margin idea.
  *
- * Un-skip when one of those lands.
+ * Un-skip only when measured score distributions set a real margin.
  */
 const m = (kind: string, score: number, facet = '') => ({ kind, score, facet });
 void m;

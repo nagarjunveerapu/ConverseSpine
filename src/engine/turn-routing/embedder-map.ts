@@ -99,6 +99,57 @@ export function looksLikeDefinitionAsk(text: string): boolean {
   );
 }
 
+/** Catalog facets a focused project can answer — not literacy / discount doors. */
+const CATALOG_FACET_TOPICS = new Set<AnswerTopic>([
+  'price',
+  'legal',
+  'amenities',
+  'availability',
+  'location',
+  'media',
+  'emi',
+  'property_type',
+]);
+
+/**
+ * Project-fact cues (price / RERA / amenities / possession / brochure…).
+ * Deliberately excludes discount/negotiate language so true out-of-scope
+ * discount asks still bind negotiate_price while focused.
+ */
+export function looksLikeCatalogFacetAsk(text: string): boolean {
+  return (
+    /\b(?:prices?|pricing|bsp|per\s*sq(?:ft|\.?|uare)?|starting\s+price|cost\s+sheet|how\s+much)\b/i.test(
+      text,
+    ) ||
+    /\b(?:rera|khata|title|encumbrance|\bec\b|legal\s+status|registration\s+no)\b/i.test(text) ||
+    /\b(?:amenit(?:y|ies)|gym|clubhouse|swimming\s+pool|maintenance(?:\s+charges?)?)\b/i.test(
+      text,
+    ) ||
+    /\b(?:possession|handover|ready\s*to\s*move|completion\s+date)\b/i.test(text) ||
+    /\b(?:brochure|floor\s*plans?|walkthrough|video\s+tour)\b/i.test(text) ||
+    /\b(?:payment\s+plan|emi|installments?)\b/i.test(text)
+  );
+}
+
+function extractHasCatalogFacet(input: TurnRoutingInput): boolean {
+  const topics = [
+    ...(input.ask_topics ?? []),
+    ...(input.ask_topic ? [input.ask_topic] : []),
+  ];
+  return topics.some((t) => CATALOG_FACET_TOPICS.has(t));
+}
+
+/**
+ * Focused + catalog-facet ask: definition/discount policy must yield so the
+ * walk can bind get_price / get_legal_info / get_amenities (state-condition
+ * from tests/seams/definition-boost-margin.test.ts). Cold literacy and bare
+ * discount asks stay on their policy doors.
+ */
+export function shouldDeclinePolicyForFocusedFacet(input: TurnRoutingInput): boolean {
+  if (input.phase !== 'focused' || !input.focus) return false;
+  return extractHasCatalogFacet(input) || looksLikeCatalogFacetAsk(input.text);
+}
+
 /**
  * Search brief with a configuration + place cue — not a literacy ask.
  * "3 BHK in Mumbai" must stay on discover/search, not definition_bhk.
@@ -158,6 +209,15 @@ export function mapIntentToRouting(
       if (
         policyIntent.policy === 'definition' &&
         looksLikeSearchBrief(input.text)
+      ) {
+        return null;
+      }
+      // Focused catalog-facet ask — decline definition + negotiate_price so the
+      // candidate walk can bind an answer intent (price/RERA/amenities…).
+      if (
+        shouldDeclinePolicyForFocusedFacet(input) &&
+        (policyIntent.policy === 'definition' ||
+          (kind === 'negotiate_price' && policyIntent.subject === 'discount'))
       ) {
         return null;
       }

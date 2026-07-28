@@ -16,6 +16,7 @@ const INPUT: TurnRoutingInput = {
   text: 'buyer text',
   builder_id: 'brigade-group',
   phase: 'discover',
+  named_project_ids: [],
 };
 
 describe('embedding-owned failure routing', () => {
@@ -87,6 +88,132 @@ describe('embedding-owned failure routing', () => {
         true,
       ),
     ).toMatchObject({ routing: 'unsupported', policy: 'definition', subject: 'bhk' });
+  });
+
+  const FOCUSED: TurnRoutingInput = {
+    ...INPUT,
+    phase: 'focused',
+    focus: { project_id: 'brigade-eldorado', project_name: 'Brigade Eldorado' },
+    named_project_ids: [],
+  };
+
+  it('declines definition/discount policy on focused catalog-facet asks', () => {
+    expect(
+      mapIntentToRouting(
+        'definition_ready_to_move',
+        0.9,
+        { ...FOCUSED, text: 'what is the price and is it RERA approved?' },
+        0.78,
+        true,
+      ),
+    ).toBeNull();
+    expect(
+      mapIntentToRouting(
+        'negotiate_price',
+        0.9,
+        {
+          ...FOCUSED,
+          text: 'what amenities does it have and what are the maintenance charges?',
+        },
+        0.78,
+        true,
+      ),
+    ).toBeNull();
+    // Pure discount while focused still refuses.
+    expect(
+      mapIntentToRouting(
+        'negotiate_price',
+        0.9,
+        { ...FOCUSED, text: 'any discount on this?' },
+        0.78,
+        true,
+      ),
+    ).toMatchObject({ routing: 'unsupported', subject: 'discount' });
+    // Cold literacy still binds definition.
+    expect(
+      mapIntentToRouting(
+        'definition_bhk',
+        0.9,
+        { ...INPUT, text: 'what is this bhk you people say' },
+        0.78,
+        true,
+      ),
+    ).toMatchObject({ routing: 'unsupported', policy: 'definition', subject: 'bhk' });
+  });
+
+  it('focused price+RERA walks past boosted definition to get_price', async () => {
+    const result = await embedderRouting(
+      {
+        SIL_ROUTING_TAU: '0.78',
+        FAILURE_ROUTING: 'true',
+        AI: { run: async () => ({ data: [[0.1, 0.2, 0.3]] }) },
+        INTENT_VECTORS: {
+          query: async (_vector: number[], options: { filter?: Record<string, unknown> }) => ({
+            matches: options.filter?.intent_kind
+              ? [
+                  {
+                    id: 'definition',
+                    score: 0.91,
+                    metadata: { intent_kind: String(options.filter.intent_kind) },
+                  },
+                ]
+              : [
+                  {
+                    id: 'price',
+                    score: 0.84,
+                    metadata: { intent_kind: 'get_price' },
+                  },
+                  {
+                    id: 'legal',
+                    score: 0.82,
+                    metadata: { intent_kind: 'get_legal_info' },
+                  },
+                ],
+          }),
+        },
+      } as never,
+      { ...FOCUSED, text: 'what is the price and is it RERA approved?' },
+    );
+    expect(result.result).toMatchObject({
+      routing: 'answer_on_project',
+      answer_topic: 'price',
+    });
+    expect(result.top_kind).toBe('get_price');
+  });
+
+  it('focused amenities+maintenance walks past negotiate_price to get_amenities', async () => {
+    const result = await embedderRouting(
+      {
+        SIL_ROUTING_TAU: '0.78',
+        FAILURE_ROUTING: 'true',
+        AI: { run: async () => ({ data: [[0.1, 0.2, 0.3]] }) },
+        INTENT_VECTORS: {
+          query: async () => ({
+            matches: [
+              {
+                id: 'negotiate',
+                score: 0.9,
+                metadata: { intent_kind: 'negotiate_price' },
+              },
+              {
+                id: 'amenities',
+                score: 0.86,
+                metadata: { intent_kind: 'get_amenities' },
+              },
+            ],
+          }),
+        },
+      } as never,
+      {
+        ...FOCUSED,
+        text: 'what amenities does it have and what are the maintenance charges?',
+      },
+    );
+    expect(result.result).toMatchObject({
+      routing: 'answer_on_project',
+      answer_topic: 'amenities',
+    });
+    expect(result.top_kind).toBe('get_amenities');
   });
 
   it('does not let class-balanced definition boost steal a search-shaped BHK turn', async () => {

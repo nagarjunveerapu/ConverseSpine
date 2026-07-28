@@ -76,6 +76,11 @@ export interface Env {
   FAILURE_ANSWER?: string;
   /** THE WIRE — intent verdict may rescue a focused turn that fell to search. */
   ROUTING_IN_GOAL?: string;
+  /**
+   * Multi-intent Phase A — union askTopics across regex/embedder/BAML (cap 3)
+   * instead of empty-only fill. Dig-first; activates AB-8 multi-topic compose.
+   */
+  TOPIC_UNION?: string;
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;

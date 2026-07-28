@@ -1,4 +1,5 @@
 import type { CatalogEnvelope, Constraints, ConversationState, EvidenceSet, Extracted, Match, ProbeKind, SearchFilters, TurnGoal } from '../types.js';
+import { splitComposeTopics } from '../facts.js';
 import { nameMentioned } from '../project_references.js';
 import { resolvePick } from '../state.js';
 import { formatInr } from '../compose.js';
@@ -470,10 +471,12 @@ function shortlistAnswerGoal(s: ConversationState, ex: Extracted): TurnGoal | nu
   if (!asked.length) return null;
   const ids = s.discover.lastOffered.slice(0, 3).map((o) => o.projectId);
   if (ids.length < 2) return null;
+  const { active, parked } = splitComposeTopics(asked);
   return {
     kind: 'shortlist_answer',
-    topic: asked[0]!,
-    ...(asked.length > 1 ? { topics: asked } : {}),
+    topic: active[0] ?? asked[0]!,
+    ...(active.length > 1 ? { topics: active } : {}),
+    ...(parked.length ? { parkedTopics: parked } : {}),
     projectIds: ids,
   };
 }
@@ -503,7 +506,7 @@ export function commitPickWithFollowUp(
   pick: { projectId: string; name: string },
   ex: Extracted,
 ): TurnGoal {
-  const topics = (ex.askTopics ?? []).filter((t) => t !== 'compare');
+  const topics = (ex.askTopics ?? []).filter((t) => t !== 'compare').slice(0, 3);
   const topic =
     topics[0] ??
     (ex.askTopic && ex.askTopic !== 'compare' ? ex.askTopic : undefined) ??

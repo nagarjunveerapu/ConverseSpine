@@ -5,6 +5,7 @@ import {
   extractLocation,
   isLocationBroadenTurn,
   isLocationCorrectionTurn,
+  locationCategoriesAsked,
   parseBudgetToInr,
 } from '../facts.js';
 import { classifySpeechAct, isNonSearchSpeechAct } from '../speech-act/index.js';
@@ -85,6 +86,10 @@ function isFocusedProjectQuestion(text: string): boolean {
   if (/\b(?:plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|configurations?|sizes?\s+offered|bhk options?)\b/i.test(t)) {
     return true;
   }
+  // S1 — "Schools near Brigade Eldorado" / "hospitals nearby" / "Commute from Whitefield":
+  // POI/Commute facet on the focused project. Without this, extractLocation reads
+  // the project name or area as a pivot and releases focus into an apartments search.
+  if (locationCategoriesAsked(t).length > 0 || /\bcommute\b/i.test(t)) return true;
   return (
     /\b(?:is this|are these|what (?:type|kind)|apartment or|plot or|villa or|legal status|rera status|possession date)\b/i.test(
       t,

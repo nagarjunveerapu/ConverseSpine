@@ -1,6 +1,6 @@
 import type { Failure } from './outcome.js';
 import { hasAppreciation, hasInvestmentRoi, hasRentBands } from './market-intel.js';
-import type { EvidenceSet, FactKey, TurnGoal } from './types.js';
+import type { AnswerTopic, EvidenceSet, FactKey, TurnGoal } from './types.js';
 
 const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   { key: 'carpet_area', pattern: /\bcarpet\s+(?:area|size)\b/i },
@@ -40,11 +40,28 @@ export function answerRequirements(text: string): FactKey[] {
     .map(({ key }) => key);
 }
 
+/** FactKeys owned by an AnswerTopic — used to drop parked-topic requires. */
+const FACT_KEY_TOPIC: Partial<Record<FactKey, AnswerTopic>> = {
+  carpet_area: 'price',
+  built_up_area: 'price',
+  price: 'price',
+  possession: 'availability',
+  rera: 'legal',
+  khata: 'legal',
+  ec_status: 'legal',
+  loan_eligibility: 'legal',
+  project_type: 'property_type',
+};
+
 export function withAnswerRequirements(
   goal: Extract<TurnGoal, { kind: 'answer' }>,
   text: string,
 ): Extract<TurnGoal, { kind: 'answer' }> {
-  const requires = answerRequirements(text);
+  const parked = new Set(goal.parkedTopics ?? []);
+  const requires = answerRequirements(text).filter((key) => {
+    const topic = FACT_KEY_TOPIC[key];
+    return !topic || !parked.has(topic);
+  });
   return requires.length ? { ...goal, requires } : goal;
 }
 

@@ -17,7 +17,16 @@ import {
   type BamlExtractMode,
   type BamlExtractResult,
 } from './extract-baml.js';
-import { extractFacts, isConstraintRefinementTurn, isDetailAskTurn, isLocationCorrectionTurn, locationLooksPolluted, looksLikeConfigAsk, looksLikeSearchBriefText } from './facts.js';
+import {
+  extractFacts,
+  isConstraintRefinementTurn,
+  isDetailAskTurn,
+  isLocationCorrectionTurn,
+  locationLooksPolluted,
+  looksLikeConfigAsk,
+  looksLikeSearchBriefText,
+  unionAskTopics,
+} from './facts.js';
 import { holdIntent } from './hold-intent.js';
 import { hasNarrowingConstraint } from './phases/discover.js';
 import {
@@ -56,6 +65,11 @@ export interface ExtractTurnDeps {
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<BamlExtractResult | null>;
   bamlMode?: BamlExtractMode;
   failureTools?: boolean;
+  /**
+   * Multi-intent Phase A — when true, topic merges UNION into askTopics (cap 3)
+   * instead of empty-only fill. Behind TOPIC_UNION; not behaviour-neutral.
+   */
+  topicUnion?: boolean;
 }
 
 export interface ExtractTurnOptions {
@@ -154,7 +168,9 @@ export async function extractTurnAuthority(
     ),
   });
 
-  const mergedRaw = mergeExtractedAuthority(base, enriched);
+  const mergedRaw = mergeExtractedAuthority(base, enriched, {
+    topicUnion: deps.topicUnion === true,
+  });
   const topicsBeforeBridge = mergedRaw.askTopics ?? (mergedRaw.askTopic ? [mergedRaw.askTopic] : []);
   const withTopicBridge = bridgeUnknownConfigAsk(mergedRaw, text, chipResolution);
   let merged = stampSpeechAct(
@@ -209,7 +225,10 @@ export async function extractTurnAuthority(
     if (bamlMode === 'promote' && proposal?.confidence === 'llm') {
       const searchBrief = looksLikeSearchBrief(text);
       let promoted = stampSpeechAct(
-        applySpeechActPermissions(mergeBamlGapFill(merged, proposal), chipResolution),
+        applySpeechActPermissions(
+          mergeBamlGapFill(merged, proposal, { topicUnion: deps.topicUnion === true }),
+          chipResolution,
+        ),
         chipResolution,
       );
       promoted = scrubEmbedderIdentityNoise(text, state.phase, promoted, [
@@ -376,7 +395,11 @@ function annotateConstraintProvenance(
  * - Detail asks never take embedder location.
  * Chip path never reaches this merge.
  */
-export function mergeExtractedAuthority(base: Extracted, enriched: Extracted): Extracted {
+export function mergeExtractedAuthority(
+  base: Extracted,
+  enriched: Extracted,
+  opts?: { topicUnion?: boolean },
+): Extracted {
   const merged: Extracted = {
     ...base,
     constraints: { ...base.constraints },
@@ -389,8 +412,15 @@ export function mergeExtractedAuthority(base: Extracted, enriched: Extracted): E
   }
 
   const baseTopics = base.askTopics ?? (base.askTopic ? [base.askTopic] : []);
-  if (baseTopics.length === 0) {
-    const enrichedTopics = enriched.askTopics ?? (enriched.askTopic ? [enriched.askTopic] : []);
+  const enrichedTopics = enriched.askTopics ?? (enriched.askTopic ? [enriched.askTopic] : []);
+  if (opts?.topicUnion) {
+    const united = unionAskTopics(baseTopics, enrichedTopics);
+    if (united.length) {
+      merged.askTopics = united;
+      merged.askTopic = united[0];
+    }
+  } else if (baseTopics.length === 0) {
+    // Legacy empty-only: once regex found any topic, enriched cannot add another.
     if (enrichedTopics.length > 0) {
       merged.askTopics = enrichedTopics;
       merged.askTopic = enriched.askTopic ?? enrichedTopics[0];

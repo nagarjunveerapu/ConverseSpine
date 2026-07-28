@@ -1,11 +1,22 @@
 # Phase 0e — verdict precision
 
-**Status:** labelled (2026-07-27). Blocks a Phase 0d reorder that treats the
-embedder verdict as an equal input.
+**Status:** labelled (2026-07-27), **re-exported + re-verified same day**.
+Blocks a Phase 0d reorder that treats the embedder verdict as an equal input.
 
 **Dig posture:** `ROUTING_IN_GOAL=false`. Do not flip from this report.
 
 **Labels file:** `docs/reports/phase-0e-labels.json` (203 rows).
+
+## Re-verify (2026-07-27, second pass)
+
+1. Re-ran the capped dig D1 export (same SQL/filter as first pass).
+2. Overlap with prior sample: **202 / 203** texts (one row rotated).
+3. Re-labelled every row with the same rubric; also tagged reasons.
+4. Result vs first pass: **0 label changes**. Overall precision still **0.712**.
+5. Of **33 ambiguous**, most are multi-route / multi-ask shapes where the bound
+   kind is *one* valid facet (coverage collapse), not a false primary. Those are
+   **not** counted as wrong in the precision denom — and must not be “fixed” by
+   teach volume alone (needs multi-intent carrying).
 
 ## Method (what was actually run)
 
@@ -15,8 +26,9 @@ embedder verdict as an equal input.
 4. Cap: ≤20 distinct texts per answer-intent kind (so brochure/project_info do
    not crowd out thin kinds). **N = 203**.
 5. Label: read `buyer_text` alone (no conversation history).  
-   `correct` = bound kind is the primary sales route; `wrong` = it is not;
-   `ambiguous` = two answerable kinds both fit.
+   `correct` = bound kind is the primary sales route; `wrong` = it is not a
+   valid route; `ambiguous` = two answerable kinds fit **or** multi-ask where
+   the bind is one correct facet.
 6. Precision = `correct / (correct + wrong)`. Ambiguous counted separately, not
    as correct.
 

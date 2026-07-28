@@ -41,6 +41,13 @@ describe('RTI-B focused pivot detection', () => {
     expect(isFocusedSearchPivot('can I resell the plantation plot later?')).toBe(false); // D2.17
     expect(isFocusedSearchPivot('can I customize the villa?')).toBe(false);        // F.5
     expect(isFocusedSearchPivot('schools near the villa project?')).toBe(false);   // F.10
+    // Project-named POI chip — "Brigade Eldorado" must NOT read as a new area pivot
+    // (that released focus into "apartments in Bengaluru" on Advisor).
+    expect(isFocusedSearchPivot('Schools near Brigade Eldorado')).toBe(false);
+    expect(isFocusedSearchPivot('hospitals near Brigade Orchards')).toBe(false);
+    expect(isFocusedSearchPivot('schools nearby?')).toBe(false);
+    expect(isFocusedSearchPivot('Commute from Whitefield / ITPL')).toBe(false);
+    expect(isFocusedSearchPivot('Commute from Whitefield to Brigade Eldorado')).toBe(false);
   });
 
   // Review AB-4: a soft cue (see / also / do you have) inside a FACET question is

@@ -11,3 +11,4 @@ scenarios/runs/
 
 # macOS
 .DS_Store
+scripts/__pycache__/

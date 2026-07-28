@@ -662,7 +662,43 @@ function detectShownName(_text: string, _s: ConversationState): string | undefin
   return undefined;
 }
 
-const TOPIC_ORDER: AnswerTopic[] = ['compare', 'price', 'legal', 'property_type', 'location', 'emi', 'amenities', 'availability', 'media'];
+/** Canonical order for multi-topic unions (primary = first surviving). */
+export const TOPIC_ORDER: AnswerTopic[] = [
+  'compare',
+  'price',
+  'legal',
+  'property_type',
+  'location',
+  'emi',
+  'amenities',
+  'availability',
+  'media',
+];
+
+/** Cap for askTopics / answer_topics after union (compose answers the full capped set). */
+export const ASK_TOPICS_CAP = 3;
+
+/** Union topic lists, order by TOPIC_ORDER, cap at ASK_TOPICS_CAP. */
+export function unionAskTopics(
+  ...lists: Array<readonly AnswerTopic[] | undefined | null>
+): AnswerTopic[] {
+  const found = new Set<AnswerTopic>();
+  for (const list of lists) {
+    for (const t of list ?? []) {
+      if (t) found.add(t);
+    }
+  }
+  return TOPIC_ORDER.filter((t) => found.has(t)).slice(0, ASK_TOPICS_CAP);
+}
+
+/** Compose answers every topic in the capped set (buyer asked for all of them). */
+export function splitComposeTopics(topics: readonly AnswerTopic[]): {
+  active: AnswerTopic[];
+  parked: AnswerTopic[];
+} {
+  const cleaned = topics.filter((t) => t && t !== 'compare');
+  return { active: cleaned, parked: [] };
+}
 
 // Cost-sheet component vocabulary — the ONE source shared by the price topic
 // pattern and the deterministic price-topic floor (extract-authority, W7).
@@ -713,11 +749,12 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   { topic: 'emi', re: /\b(?:\bemi\b|monthly\s+payment|installment|loan\s+emi|emi\s+(?:kitna|amount|calc(?:ulate)?))\b/i },
   { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
   {
-    // Config / unit asks only. Preference "ready to move" is a Constraint soft pref
-    // (detectSoftPrefs) — never askTopics:availability on search briefs.
-    // Focused readiness asks: "is it ready", "when … ready".
+    // Config / unit asks + possession/handover (Desk FAQ keys under availability).
+    // Preference "ready to move" as a search soft-pref stays in detectSoftPrefs —
+    // never askTopics:availability on search briefs. Focused readiness /
+    // possession date asks do belong here so multi-intent can park a 3rd topic.
     topic: 'availability',
-    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
+    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|possession(?:\s+date)?|handover(?:\s+date)?|completion\s+date|delivery\s+(?:date|timeline)|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
   {
     topic: 'media',

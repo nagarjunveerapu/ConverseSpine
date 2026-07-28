@@ -3,6 +3,7 @@ import {
   hasDisclosedRera,
 } from './disclosed-facts.js';
 import type {
+  AnswerTopic,
   ComposeRequest,
   EvidenceSet,
   Match,
@@ -35,6 +36,30 @@ function relaxedLead(relaxed: readonly RelaxedDimension[] | undefined): string {
   return `I couldn't match ${phrase} — here's what we do have`;
 }
 import { isInventoryAsk } from './facts.js';
+
+const PARK_TOPIC_LABEL: Partial<Record<AnswerTopic, string>> = {
+  price: 'pricing',
+  legal: 'legal details',
+  emi: 'EMI',
+  amenities: 'amenities',
+  availability: 'possession or configs',
+  location: 'location',
+  media: 'brochure / plans',
+  overview: 'project overview',
+  property_type: 'property type',
+  compare: 'a comparison',
+  education: 'a short explainer',
+};
+
+function parkContinuation(parked: readonly AnswerTopic[] | undefined): string {
+  if (!parked?.length) return '';
+  const labels = parked.map((t) => PARK_TOPIC_LABEL[t] ?? t);
+  const phrase =
+    labels.length === 1
+      ? labels[0]!
+      : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]!}`;
+  return ` I can cover ${phrase} next if you want.`;
+}
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
 import { speakEducation } from './education.js';
@@ -136,6 +161,11 @@ export function renderComposePrompt(req: ComposeRequest): string {
   }
   if (goal.kind === 'answer' && goal.topics && goal.topics.length > 1) {
     lines.push(`Answer ALL of these in one reply: ${goal.topics.join(', ')}. Use only EVIDENCE for each.`);
+  }
+  if (goal.kind === 'answer' && goal.parkedTopics?.length) {
+    lines.push(
+      `Do NOT answer these now — close by offering them next: ${goal.parkedTopics.join(', ')}.`,
+    );
   }
   if (goal.kind === 'answer' && evidence.detail?.name) {
     // W8 — facet answers must anchor WHICH project they're about (dev
@@ -552,6 +582,12 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('property_type') && ev.detail?.projectType) {
         chunks.push(projectTypeLine(ev.detail));
       }
+      // AB-8 — media must join the multi-topic chunk path. Primary topic is often
+      // price (TOPIC_ORDER), so the single-topic `goal.topic === 'media'` branch
+      // never runs for "brochure and starting price" even when mediaShare succeeded.
+      if (topics.includes('media') && ev.media) {
+        chunks.push(mediaShareLine(ev.media, context.focusProjectName));
+      }
       // AB-8 — in a MULTI-topic ask the FAQ body carries the OTHER atom(s), so the
       // legal snapshot (RERA/khata) must still render rather than be swallowed by a
       // non-legal FAQ. "RERA and possession" was dropping RERA because a possession
@@ -611,11 +647,12 @@ export function fallbackReply(req: ComposeRequest): string {
       } else if (topics.includes('emi') && ev.emi) {
         chunks.push(emiSnapshotLine(ev.emi));
       }
+      const park = parkContinuation(goal.parkedTopics);
       if (chunks.length > 1) {
-        return `${chunks.join('\n\n')}. Want the full breakdown or a site visit?`;
+        return `${chunks.join('\n\n')}.${park || ' Want the full breakdown or a site visit?'}`;
       }
       if (chunks.length === 1) {
-        return `${chunks[0]}. Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`;
+        return `${chunks[0]}.${park || ` Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`}`;
       }
 
       if (goal.topic === 'price' && ev.landedCost && !suppressPrice) {
@@ -642,16 +679,7 @@ export function fallbackReply(req: ComposeRequest): string {
         return `${locationSnapshotLine(ev.location)}. Want pricing, legal details, or a visit?`;
       }
       if (goal.topic === 'media' && ev.media) {
-        if (ev.media.allowed && ev.media.cdnUrl) {
-          return `Here's the ${ev.media.title ?? humanizeAsset(ev.media.assetKind)} for *${ev.media.projectName}*: ${ev.media.cdnUrl}`;
-        }
-        const pname = ev.media.projectName || context.focusProjectName || 'this project';
-        // ev.media.redirectHint / reason are INTERNAL composer instructions — Desk
-        // authors them for the RM ("offer site visit; do not quote this number"),
-        // never as buyer copy (see NayaDesk disclosure.ts). Echoing one printed
-        // "no floor_plan on file for this project yet — offer to follow up" to a
-        // buyer. Translate the miss into buyer-safe copy; never recite the hint.
-        return `I don't have the ${humanizeAsset(ev.media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
+        return mediaShareLine(ev.media, context.focusProjectName);
       }
       // Closed-beta: Desk FAQ (loan eligibility, yield, …) before EMI snapshot.
       if (ev.detail?.faqs?.length) {
@@ -942,6 +970,23 @@ export function typeComparisonReply(types: readonly string[], investment: boolea
     ? '\n\nOn returns: apartments are usually held for rental income, plots/land for appreciation, and plantation estates for crop revenue — the right fit depends on your horizon and how hands-on you want to be. Want me to show options in either?'
     : '\n\nWant me to show options in either?';
   return head + tail;
+}
+
+/** Buyer-safe media line — shared by single-topic and AB-8 multi-topic paths. */
+function mediaShareLine(
+  media: NonNullable<EvidenceSet['media']>,
+  focusProjectName?: string,
+): string {
+  if (media.allowed && media.cdnUrl) {
+    const pname = media.projectName || focusProjectName || 'this project';
+    return `Here's the ${media.title ?? humanizeAsset(media.assetKind)} for *${pname}*: ${media.cdnUrl}`;
+  }
+  const pname = media.projectName || focusProjectName || 'this project';
+  // media.redirectHint / reason are INTERNAL composer instructions — Desk
+  // authors them for the RM ("offer site visit; do not quote this number"),
+  // never as buyer copy (see NayaDesk disclosure.ts). Translate the miss into
+  // buyer-safe copy; never recite the hint.
+  return `I don't have the ${humanizeAsset(media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
 }
 
 /** Buyer-facing name for a media asset kind — never an underscored key like `floor_plan`. */

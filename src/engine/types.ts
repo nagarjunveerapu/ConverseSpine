@@ -285,13 +285,21 @@ export type TurnGoal =
       topic: AnswerTopic;
       projectId: string;
       topics?: AnswerTopic[];
+      /** Multi-intent Phase C — topics beyond the top-2 answered this turn. */
+      parkedTopics?: AnswerTopic[];
       requires?: FactKey[];
     }
   /** EMI from a buyer-stated principal; no project pick or price lookup required. */
   | { kind: 'emi_calculate' }
   /** Facet ask over a multi-project shortlist with no pick — answer the facet
    *  for EVERY shortlisted project instead of asking which one to open. */
-  | { kind: 'shortlist_answer'; topic: AnswerTopic; topics?: AnswerTopic[]; projectIds: string[] }
+  | {
+      kind: 'shortlist_answer';
+      topic: AnswerTopic;
+      topics?: AnswerTopic[];
+      parkedTopics?: AnswerTopic[];
+      projectIds: string[];
+    }
   | {
       kind: 'commit';
       projectId: string;
