@@ -675,7 +675,7 @@ export const TOPIC_ORDER: AnswerTopic[] = [
   'media',
 ];
 
-/** Cap for askTopics / answer_topics after union (compose answers top 2, parks rest). */
+/** Cap for askTopics / answer_topics after union (compose answers the full capped set). */
 export const ASK_TOPICS_CAP = 3;
 
 /** Union topic lists, order by TOPIC_ORDER, cap at ASK_TOPICS_CAP. */
@@ -691,13 +691,13 @@ export function unionAskTopics(
   return TOPIC_ORDER.filter((t) => found.has(t)).slice(0, ASK_TOPICS_CAP);
 }
 
-/** Compose answers at most two topics; remainder is parked for an explicit continuation. */
+/** Compose answers every topic in the capped set (buyer asked for all of them). */
 export function splitComposeTopics(topics: readonly AnswerTopic[]): {
   active: AnswerTopic[];
   parked: AnswerTopic[];
 } {
   const cleaned = topics.filter((t) => t && t !== 'compare');
-  return { active: cleaned.slice(0, 2), parked: cleaned.slice(2) };
+  return { active: cleaned, parked: [] };
 }
 
 // Cost-sheet component vocabulary — the ONE source shared by the price topic

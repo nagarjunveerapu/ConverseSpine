@@ -21,10 +21,10 @@ describe('unionAskTopics / splitComposeTopics', () => {
     ]);
   });
 
-  it('splits compose active (2) vs parked (rest)', () => {
+  it('splits compose active as the full capped set (answer all intents)', () => {
     expect(splitComposeTopics(['price', 'legal', 'location'])).toEqual({
-      active: ['price', 'legal'],
-      parked: ['location'],
+      active: ['price', 'legal', 'location'],
+      parked: [],
     });
   });
 });
@@ -64,8 +64,8 @@ describe('Phase B — answer_topics on routing', () => {
   });
 });
 
-describe('Phase C — top-2 park', () => {
-  it('focused decide parks the third topic', () => {
+describe('Phase C — answer all capped topics', () => {
+  it('focused decide keeps all three topics active (no park drop)', () => {
     let s = initState('naya-advisor', 't-park');
     s = commitTo(s, 'oasis', 'Brigade Oasis');
     const goal = focusedDecide(
@@ -79,11 +79,11 @@ describe('Phase C — top-2 park', () => {
     );
     expect(goal.kind).toBe('answer');
     if (goal.kind !== 'answer') return;
-    expect(goal.topics).toEqual(['price', 'legal']);
-    expect(goal.parkedTopics).toEqual(['location']);
+    expect(goal.topics).toEqual(['price', 'legal', 'location']);
+    expect(goal.parkedTopics).toBeUndefined();
   });
 
-  it('possession joins availability so price+RERA+possession parks the third', () => {
+  it('possession joins availability so price+RERA+possession all stay active', () => {
     let s = initState('naya-advisor', 't-park-poss');
     s = commitTo(s, 'oasis', 'Brigade Oasis');
     expect(detectTopics('price, possession date, and is it RERA approved?')).toEqual([
@@ -102,18 +102,18 @@ describe('Phase C — top-2 park', () => {
     );
     expect(goal.kind).toBe('answer');
     if (goal.kind !== 'answer') return;
-    expect(goal.topics).toEqual(['price', 'legal']);
-    expect(goal.parkedTopics).toEqual(['availability']);
+    expect(goal.topics).toEqual(['price', 'legal', 'availability']);
+    expect(goal.parkedTopics).toBeUndefined();
 
     const withReq = withAnswerRequirements(goal, 'price, possession date, and is it RERA approved?');
-    expect(withReq.requires ?? []).not.toContain('possession');
-    expect(withReq.requires ?? []).toEqual(expect.arrayContaining(['price', 'rera']));
-    expect(excludeParkedFaqKeys(['possession', 'rera_status'], ['availability'])).toEqual([
+    expect(withReq.requires ?? []).toEqual(expect.arrayContaining(['price', 'rera', 'possession']));
+    expect(excludeParkedFaqKeys(['possession', 'rera_status'], [])).toEqual([
+      'possession',
       'rera_status',
     ]);
   });
 
-  it('compose offers parked topics explicitly', () => {
+  it('compose still supports an explicit parkedTopics continuation when set', () => {
     const reply = fallbackReply({
       goal: {
         kind: 'answer',
@@ -145,7 +145,6 @@ describe('Phase C — top-2 park', () => {
     });
     expect(reply).toMatch(/location next|cover location/i);
   });
-
   it('compose includes media chunk when price is primary in a multi-topic set', () => {
     const reply = fallbackReply({
       goal: {

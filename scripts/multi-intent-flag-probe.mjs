@@ -81,15 +81,18 @@ const PROBES = [
     note: 'maintenance may still route as amenities/payment — score coverage, not perfect topic split',
   },
   {
-    id: 'price-possession-rera-park',
+    id: 'price-possession-rera-all',
     text: 'price, possession date, and is it RERA approved?',
     good: [
-      { name: 'facet_a', re: /₹|rs\.?|lakh|cr\b|pricing|starting|bsp|possession|ready|handover|rera|prm\/ka/i },
-      { name: 'facet_b', re: /₹|rs\.?|lakh|cr\b|pricing|possession|ready|handover|rera|prm\/ka/i },
+      { name: 'price', re: /₹|rs\.?|lakh|cr\b|pricing|starting|bsp/i },
+      { name: 'possession', re: /possession|ready|handover|deliver|completion|202\d/i },
+      { name: 'rera', re: /rera|prm\/ka|registration/i },
     ],
-    park: /I can cover .+ next if you want/i,
-    bad: [/not sure what you'?d like/i],
-    note: 'top-2 answered; park line expected when 3 topics survive',
+    bad: [
+      /not sure what you'?d like/i,
+      /I can cover .+ next if you want/i, // all three should answer — no park deferral
+    ],
+    note: 'all three catalog intents answered in one reply',
   },
   {
     id: 'single-price-no-thin',
