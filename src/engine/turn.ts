@@ -105,7 +105,7 @@ import {
   recoveryUiMode,
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
-import { arbitrateFocusPivot } from './turn-intent/pivot-arbiter.js';
+import { arbitrateFocusPivot, isImplausibleLocationCapture } from './turn-intent/pivot-arbiter.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
@@ -692,6 +692,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         constraints: kept.length ? { ...restConstraints, location: kept.join(', ') } : restConstraints,
       };
     }
+  }
+  // 0d — "has this area appreciated" must not become constraints.location and
+  // trip locationBroaden → releaseToDiscover (focus cliff unrelated to search).
+  if (
+    ex.constraints.location &&
+    isImplausibleLocationCapture(ex.constraints.location, trimmedText)
+  ) {
+    const { location: _junkLoc, ...restConstraints } = ex.constraints;
+    ex = { ...ex, constraints: restConstraints };
   }
 
   // AB-4 — focus type-freeze: while focused, a property-type word INSIDE a facet

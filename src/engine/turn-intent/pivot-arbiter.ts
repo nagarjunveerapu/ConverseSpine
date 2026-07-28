@@ -11,6 +11,8 @@
  *  3. Else regex pivot signal → release (legacy behaviour)
  *  4. Else hold
  */
+import { answerRequirements } from '../answer-contract.js';
+import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import type { Constraints, Extracted } from '../types.js';
 import { holdsFocusAgainstRelease } from '../turn-routing/focus-hold.js';
 import type { TurnRoutingResult } from '../turn-routing/types.js';
@@ -39,16 +41,23 @@ const EXPLORE_MORE_RE =
   /\b(?:show me other|show me more|other projects|more projects|more options|back to (?:all )?matches|my matches|different projects|different area|change area|another area)\b/i;
 
 /** Reject extract "locations" that are the whole utterance (appreciation cliff). */
+export function isImplausibleLocationCapture(loc: string, text: string): boolean {
+  const l = loc.trim();
+  if (!l) return true;
+  const t = text.trim().toLowerCase();
+  if (l.toLowerCase() === t) return true;
+  if (l.length > 48) return true;
+  if (l.split(/\s+/).length > 6) return true;
+  // Full-sentence extracts ("has this area appreciated") — not a place.
+  if (/\b(?:appreciat|possession|rera|pricing|budget|bhk)\b/i.test(l)) return true;
+  return false;
+}
+
 function plausibleLocationDelta(prior: string | undefined, next: string | undefined, text: string): boolean {
   const loc = (next ?? '').trim();
   if (!loc) return false;
   if (loc.toLowerCase() === (prior ?? '').toLowerCase()) return false;
-  const t = text.trim().toLowerCase();
-  if (loc.toLowerCase() === t) return false;
-  if (loc.length > 48) return false;
-  if (loc.split(/\s+/).length > 6) return false;
-  // Full-sentence extracts ("has this area appreciated") — not a place.
-  if (/\b(?:appreciat|possession|rera|pricing|budget|bhk)\b/i.test(loc)) return false;
+  if (isImplausibleLocationCapture(loc, text)) return false;
   return true;
 }
 
@@ -65,6 +74,25 @@ export function hasStrongSearchConstraintDelta(
   if (c.bhk && c.bhk !== prior.bhk) return true;
   if (c.propertyType && c.propertyType !== prior.propertyType) return true;
   if (plausibleLocationDelta(prior.location, c.location, text)) return true;
+  return false;
+}
+
+/** Closed-set facet / FAQ atoms — hold focus even when the embedder miss-fires. */
+const FOCUSED_FACET_KEYS = new Set([
+  'appreciation',
+  'rental_yield',
+  'growth_drivers',
+  'possession',
+  'rera',
+  'khata',
+  'ec_status',
+  'price',
+  'loan_eligibility',
+]);
+
+export function isFocusedFacetRequirement(text: string): boolean {
+  if (answerRequirements(text).some((k) => FOCUSED_FACET_KEYS.has(k))) return true;
+  if (resolveFaqQuestionKeys(text).length > 0) return true;
   return false;
 }
 
@@ -92,6 +120,18 @@ export function arbitrateFocusPivot(input: PivotArbiterInput): PivotArbiterDecis
     return {
       action: 'release_to_discover',
       reason: 'strong_constraint_delta',
+      regexPivot,
+      strongConstraintDelta,
+      answerHold,
+    };
+  }
+
+  // Deterministic facet/FAQ ask (appreciation, possession, RERA…) — hold even
+  // when the embedder does not clear tau (0e precision).
+  if (isFocusedFacetRequirement(input.text)) {
+    return {
+      action: 'hold_focus',
+      reason: 'focused_facet_requirement',
       regexPivot,
       strongConstraintDelta,
       answerHold,

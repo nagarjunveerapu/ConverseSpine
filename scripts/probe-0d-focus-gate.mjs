@@ -68,7 +68,11 @@ async function runAnswerCase(label, focusLine, ask, mustMatch, mustNot) {
   console.log(`ask: ${ask}`);
   console.log(`reply: ${reply.slice(0, 280).replace(/\n/g, ' ')}`);
   let ok = true;
-  ok = pass(/eldorado/i.test(focus) || /eldorado/i.test(reply), 'keeps Eldorado subject', focus || 'via reply') && ok;
+  ok = pass(
+    phase === 'focused' && /eldorado/i.test(focus),
+    'stays focused on Eldorado',
+    `phase=${phase} focus=${focus || '(none)'}`,
+  ) && ok;
   ok = pass(mustMatch.test(reply), 'reply carries expected fact shape', mustMatch.toString()) && ok;
   if (mustNot) ok = pass(!mustNot.test(reply), 'reply avoids wrong shape', mustNot.toString()) && ok;
   return ok;

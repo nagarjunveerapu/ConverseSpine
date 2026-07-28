@@ -78,6 +78,18 @@ describe('arbitrateFocusPivot', () => {
     expect(d.strongConstraintDelta).toBe(false);
   });
 
+  it('holds appreciation ask when embedder does not bind (facet requirements)', () => {
+    const d = arbitrateFocusPivot({
+      text: 'has this area appreciated',
+      priorConstraints: {},
+      ex: ex({ location: 'has this area appreciated' }),
+      routing: undefined,
+      enabled: true,
+    });
+    expect(d.action).toBe('hold_focus');
+    expect(d.reason).toBe('focused_facet_requirement');
+  });
+
   it('releases on real budget pivot even if answer bind is wrong', () => {
     const d = arbitrateFocusPivot({
       text: 'actually my budget is only 50L',
