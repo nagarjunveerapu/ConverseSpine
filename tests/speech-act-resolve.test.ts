@@ -76,9 +76,23 @@ describe('resolveFreeTextToChipPaths — catalog examples', () => {
     expect(r.speechAct).toBe('visit_book');
   });
 
-  it('any discount? → object', () => {
-    const r = resolveFreeTextToChipPaths('any discount?');
+  it('any discount / best price → price answer (not objection clarify)', () => {
+    for (const text of ['any discount?', 'best price? asap', 'any best price on this please']) {
+      const r = resolveFreeTextToChipPaths(text);
+      expect(r.speechAct).toBe('answer');
+      expect(r.primary?.id).toBe('chip.answer.price');
+      expect(r.primary?.topic).toBe('price');
+    }
+  });
+
+  it('too expensive → object', () => {
+    const r = resolveFreeTextToChipPaths('this feels too expensive');
     expect(r.speechAct).toBe('object');
+  });
+
+  it('dono farq → compare', () => {
+    const r = resolveFreeTextToChipPaths('dono farq kya hai');
+    expect(r.speechAct).toBe('compare');
   });
 
   it('novel "options for 2BHK" stays unknown — INTENT embedder gap-fills, not regex', () => {

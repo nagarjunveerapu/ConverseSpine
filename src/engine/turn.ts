@@ -113,6 +113,7 @@ import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
 import {
   applyIntentAuthority,
+  catalogAskOwns,
   shouldSurfaceUnknownIntent,
 } from './turn-routing/intent-authority.js';
 import { failureFromUnsupportedRouting } from './turn-routing/unsupported-outcome.js';
@@ -581,12 +582,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   }
 
-  if (isCompareAmongOfferedTurn(trimmedText) && state.discover.lastOffered.length >= 2) {
-    if (state.phase === 'focused' || state.phase === 'handoff') {
-      if (nd && state.focus) await deps.crm.releaseProject(nd).catch(() => {});
-      state = releaseToDiscover(state);
-    }
-  }
+  // Compare-among-offered stays on the current phase. prepareCompareExtracted
+  // seeds compare IDs from lastOffered; focused.decide answers the matrix.
+  // (Old path released focus → discover recommend shortlist dump.)
 
   ex = prepareCompareExtracted(trimmedText, state, ex);
   // Named multi-project turns without the word "compare" still need compare IDs —
@@ -737,12 +735,21 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // at the FINAL ex (after regex + BAML merge), so the second atom reaches compose.
   // Only when another topic is already present — a lone "schools near X" keeps its
   // S1 focused-LI path. Location-family FAQ keys resolve from buyerText regardless.
-  if (
-    (ex.askTopics?.length ?? 0) >= 1 &&
-    !ex.askTopics?.includes('location') &&
-    locationCategoriesAsked(trimmedText).length > 0
-  ) {
-    ex = { ...ex, askTopics: [...(ex.askTopics ?? []), 'location'] };
+  // Amenity-only "park?" must not become location+amenities (LI parks category).
+  {
+    const liCats = locationCategoriesAsked(trimmedText);
+    const amenityOnlyParks =
+      !!ex.askTopics?.includes('amenities') &&
+      liCats.length > 0 &&
+      liCats.every((c) => c === 'parks');
+    if (
+      (ex.askTopics?.length ?? 0) >= 1 &&
+      !ex.askTopics?.includes('location') &&
+      liCats.length > 0 &&
+      !amenityOnlyParks
+    ) {
+      ex = { ...ex, askTopics: [...(ex.askTopics ?? []), 'location'] };
+    }
   }
 
   let prevalidatedCatalogHit:
@@ -778,7 +785,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       buildTurnRoutingInput(state, ex, trimmedText, inputSource),
     );
     if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
-      const claimed = applyIntentAuthority(ex, precomputedRouting);
+      const claimed = applyIntentAuthority(ex, precomputedRouting, trimmedText);
       authorityClaimed = claimed.wrote.length > 0;
       if (claimed.wrote.length) {
         ex = claimed.ex;
@@ -1075,7 +1082,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // branch below, so an embedding-recognised opt-out reuses the existing
   // confirm-before-delete gate instead of inventing a second destructive path.
   if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
-    const claimed = applyIntentAuthority(ex, routing);
+    const claimed = applyIntentAuthority(ex, routing, trimmedText);
     authorityClaimed = authorityClaimed || claimed.wrote.length > 0;
     if (claimed.wrote.length) {
       ex = claimed.ex;
@@ -1250,6 +1257,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const locationBroaden =
     !isDetailAskTurn(ex) &&
+    !(ex.askTopic === 'compare' || ex.askTopics?.includes('compare')) &&
     (isLocationBroadenTurn(trimmedText) ||
       isLocationCorrectionTurn(trimmedText) ||
       Boolean(state.constraints.location && state.constraints.location !== prevLoc));
@@ -2244,7 +2252,12 @@ function decideGoal(
   // bathroom, is not in a discovery conversation — and every phase selector
   // would otherwise fall through to search and answer with a project list.
   // One check, one owner: this slot is written only by the intent authority.
-  if (ex.wantsHuman) return { kind: 'handoff' };
+  // Soft escalate/callback must not outrank a catalog facet ask while focused
+  // (or while focus still exists after a sticky handoff). True "talk to a
+  // human" speech-acts still set wantsHuman without catalog ownership.
+  if (ex.wantsHuman && !(s.focus && catalogAskOwns(ex, text))) {
+    return { kind: 'handoff' };
+  }
   switch (s.phase) {
     case 'discover':
       return discover.decide(s, ex);
@@ -2254,7 +2267,8 @@ function decideGoal(
     case 'visit':
       return visit.decide(s, ex, visitCtx!);
     case 'handoff':
-      return handoff.decide(ex);
+      // Catalog escape when focus lives — see phases/handoff.ts.
+      return handoff.decide(s, ex, text);
     default:
       return { kind: 'greet' };
   }
@@ -3620,7 +3634,13 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
         const name = fromOffered?.name ?? fromDiscussed?.name ?? s.focus?.projectName;
         if (name) discussed.push({ projectId: goal.projectId, name });
       }
-      return discussed.length ? recordDiscussed(s, discussed) : s;
+      let next = discussed.length ? recordDiscussed(s, discussed) : s;
+      // Catalog escape from sticky handoff — restore focused so later facet
+      // asks are not trapped in handoff.decide forever.
+      if (next.phase === 'handoff' && next.focus) {
+        next = { ...next, phase: 'focused' };
+      }
+      return next;
     }
     case 'propose_visit':
       return { ...s, phase: 'visit' };
@@ -3645,7 +3665,10 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
     case 'warm_ack':
       return { ...s, postVisitAckPending: false };
     case 'handoff':
-      return { ...s, phase: 'handoff' };
+      // Keep focus — sticky handoff must not drop the project pin. Catalog
+      // re-engage (loan/brochure/amenities) needs focus to answer, not ask
+      // "which project?". Advisor project_id sticky also re-commits focused.
+      return { ...s, phase: 'handoff', ...(s.focus ? { focus: s.focus } : {}) };
     default:
       return s;
   }

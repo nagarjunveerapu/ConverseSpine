@@ -1,0 +1,7 @@
+{
+  "promoted_at": "2026-07-29T15:50:23.379Z",
+  "p0_input": 2493,
+  "appended_to_registry": 2493,
+  "skipped_existing_id": 0,
+  "note": "audit_status=clean for rebuild eligibility; dig upsert uses /internal/intent-vector"
+}
