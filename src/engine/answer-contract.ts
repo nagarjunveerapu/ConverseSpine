@@ -7,16 +7,21 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   { key: 'built_up_area', pattern: /\b(?:built[- ]?up|super\s+built[- ]?up|sba)\s*(?:area|size)?\b/i },
   { key: 'possession', pattern: /\b(?:possession|handover)(?:\s+(?:date|timeline|when))?\b/i },
   // Focused menu chip — bare "when" means possession on the open project.
-  { key: 'possession', pattern: /^when\.?$/i },
+  { key: 'possession', pattern: /^when\s*[?.!]?\s*$/i },
   { key: 'rera', pattern: /\brera(?:\s+(?:number|status|registration))?\b/i },
   { key: 'khata', pattern: /\bkhata\b/i },
   { key: 'ec_status', pattern: /\b(?:ec|encumbrance)\s+(?:status|certificate|clear)?\b/i },
   { key: 'loan_eligibility', pattern: /\b(?:home\s+loan|loan\s+eligibility|approved\s+banks?|which\s+banks?)\b/i },
-  { key: 'loan_eligibility', pattern: /^loan\.?$/i },
+  // Natural + chip loan asks (including trailing ?). Must beat brochure embedder binds.
+  {
+    key: 'loan_eligibility',
+    pattern:
+      /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:eligib|approv|availab|for\s+this|on\s+this|against)|bank\s+loan|housing\s+loan|\bltv\b)\b/i,
+  },
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
   // Focused chip — discount/offer is a price/negotiation ask on this project.
-  { key: 'price', pattern: /^(?:discounts?|offers?)\.?$/i },
+  { key: 'price', pattern: /^(?:discounts?|offers?)\s*[?.!]?\s*$/i },
   { key: 'flood_zone', pattern: /\b(?:flood|flooding|flood[- ]?zone)\b/i },
   // Advisory atoms — deliver when approved market intel / project ROI is on
   // detail; otherwise no_data (C1: never invent a %).
@@ -67,7 +72,20 @@ export function withAnswerRequirements(
     const topic = FACT_KEY_TOPIC[key];
     return !topic || !parked.has(topic);
   });
-  return requires.length ? { ...goal, requires } : goal;
+  if (!requires.length) return goal;
+
+  // Brochure/media embedder misbinds must not outrank a FactKey loan ask.
+  let next: Extract<TurnGoal, { kind: 'answer' }> = { ...goal, requires };
+  if (requires.includes('loan_eligibility')) {
+    const topics = (goal.topics?.length ? goal.topics : [goal.topic]).filter((t) => t !== 'media');
+    const withLegal = topics.includes('legal') ? topics : (['legal', ...topics] as AnswerTopic[]);
+    next = {
+      ...next,
+      topic: 'legal',
+      ...(withLegal.length > 1 ? { topics: withLegal } : { topics: undefined }),
+    };
+  }
+  return next;
 }
 
 export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
@@ -94,7 +112,8 @@ export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
   if (
     evidence.detail?.loanEligibility ||
     faqKeys.has('loan_eligibility') ||
-    faqKeys.has('loan')
+    faqKeys.has('loan') ||
+    faqKeys.has('banks')
   ) {
     delivered.push('loan_eligibility');
   }

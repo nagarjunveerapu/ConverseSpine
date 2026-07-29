@@ -25,13 +25,14 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:payment\s+plan|payment\s+schedule|construction[- ]linked|clp|down\s+payment\s+plan)\b/i,
   },
   {
-    key: 'loan_eligibility',
+    key: 'banks',
     re: /\b(?:loan\s+eligib|home\s+loan|bank\s+loan|housing\s+loan|which\s+banks?\s+(?:give|provide|approve))\b/i,
   },
   {
-    // Focused menu chip — bare "loan" is the loan FAQ, not a locality.
-    key: 'loan_eligibility',
-    re: /^loan\.?$/i,
+    // Desk canonical FAQ key is `banks` (loan_eligibility aliases there).
+    // Focused chips + natural loan asks (incl. trailing ?).
+    key: 'banks',
+    re: /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:for\s+this|on\s+this|against))\b/i,
   },
   {
     // "is it ready to move?" (no trailing "in") is the same possession ask —
@@ -42,13 +43,13 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   {
     // Focused menu chip — bare "when" → possession on the open project.
     key: 'possession',
-    re: /^when\.?$/i,
+    re: /^when\s*[?.!]?\s*$/i,
   },
   {
     // Discount/offer chip — land on payment_plan FAQ when Desk has it; else
     // FactKey `price` still drives the answer contract.
     key: 'payment_plan',
-    re: /^(?:discounts?|offers?)\.?$/i,
+    re: /^(?:discounts?|offers?)\s*[?.!]?\s*$/i,
   },
   {
     key: 'amenities',
@@ -217,10 +218,10 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
 
 const TOPIC_TO_FAQ_KEYS: Partial<Record<AnswerTopic, readonly string[]>> = {
   amenities: ['amenities', 'amenities_summary'],
-  legal: ['rera_status', 'rera_number', 'legal_status', 'khata', 'loan_eligibility'],
+  legal: ['rera_status', 'rera_number', 'legal_status', 'khata', 'banks', 'loan_eligibility'],
   location: ['connectivity', 'metro_connectivity', 'airport_distance', 'nearby_schools', 'nearby_hospitals'],
   availability: ['possession', 'ready_to_move', 'configurations'],
-  emi: ['loan_eligibility', 'loan'],
+  emi: ['banks', 'loan_eligibility', 'loan'],
 };
 
 /** Inverse of TOPIC_TO_FAQ_KEYS (+ text-bound keys that belong to a topic). */

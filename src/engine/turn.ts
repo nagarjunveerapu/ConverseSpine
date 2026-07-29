@@ -29,6 +29,7 @@ import {
 } from './coverage-areas.js';
 import { looksLikePlaceFramedAsk } from './place-frame.js';
 import {
+  answerRequirements,
   enforceAnswerContract,
   withAnswerRequirements,
 } from './answer-contract.js';
@@ -1093,6 +1094,26 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (after > before && extractProvenance) {
       extractProvenance.fields.askTopics = extractProvenance.fields.askTopics ?? 'intent';
     }
+  }
+  // Loan FactKey/FAQ owns the turn — never let a brochure embedder leave
+  // askTopic=media (that shared the PDF for "can I get the loan?").
+  if (
+    answerRequirements(trimmedText).includes('loan_eligibility') ||
+    resolveFaqQuestionKeys(trimmedText).includes('loan_eligibility') ||
+    resolveFaqQuestionKeys(trimmedText).includes('banks')
+  ) {
+    const topics = (ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []).filter(
+      (t) => t !== 'media',
+    );
+    const withLegal = topics.includes('legal')
+      ? topics
+      : (['legal', ...topics] as NonNullable<Extracted['askTopics']>);
+    const { mediaAssetKind: _dropMedia, ...rest } = ex;
+    ex = {
+      ...rest,
+      askTopic: 'legal',
+      askTopics: withLegal,
+    };
   }
   if (
     deps.failureRouting &&
@@ -3086,6 +3107,14 @@ async function fetchAnswer(
   }
 
   if (topics.includes('media') || ex.mediaAssetKind) {
+    // Loan asks must never fetch/share a brochure — even if topic merge missed.
+    if (
+      answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
+      resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
+      resolveFaqQuestionKeys(buyerText ?? '').includes('banks')
+    ) {
+      // fall through — legal/detail path below answers LTV / honest miss
+    } else {
     const rawKind = ex.mediaAssetKind ?? 'brochure';
     const assetKind = normalizeMediaAssetKind(rawKind) ?? rawKind;
     const mediaName =
@@ -3148,6 +3177,7 @@ async function fetchAnswer(
           },
         };
       }
+    }
     }
   }
 
@@ -3307,6 +3337,15 @@ async function fetchAnswer(
           k === 'visit_logistics',
       ),
   );
+  // Loan LTV lives on ProjectDetail.loanEligibility — a FAQ miss for
+  // loan_eligibility used to suppress detail hydrate and answer "not on file"
+  // even when Desk carries the LTV string (Advisor dig: "can I get the loan?").
+  const loanEligibilityNeeded = Boolean(
+    goal.kind === 'answer' &&
+      (goal.requires?.includes('loan_eligibility') ||
+        evidence.faqMiss?.keys.some((k) => /loan|banks/i.test(k)) ||
+        (buyerText && answerRequirements(buyerText).includes('loan_eligibility'))),
+  );
   const needsDetail =
     (!faqShapedHit &&
       !faqShapedMiss &&
@@ -3320,9 +3359,21 @@ async function fetchAnswer(
           t === 'property_type',
       )) ||
     legalSnapshotNeeded ||
-    advisoryDetailNeeded;
+    advisoryDetailNeeded ||
+    loanEligibilityNeeded;
   if (needsDetail || wantsLocation) {
-    let detail = await hydrateProjectDetail(deps, s, goal.projectId);
+    // Overview-focused cache often omits loanEligibility; bust it when the
+    // buyer asks about loan so we re-fetch Desk detail (not a sticky miss).
+    let hydrateState = s;
+    if (
+      loanEligibilityNeeded &&
+      s.projectCache?.[goal.projectId] &&
+      !s.projectCache[goal.projectId].loanEligibility
+    ) {
+      const { [goal.projectId]: _stale, ...restCache } = s.projectCache;
+      hydrateState = { ...s, projectCache: restCache };
+    }
+    let detail = await hydrateProjectDetail(deps, hydrateState, goal.projectId);
     if (detail && topics.includes('legal')) {
       detail = await enrichDetailLegal(deps, nd, detail);
     }
@@ -3334,11 +3385,43 @@ async function fetchAnswer(
       // real FAQ hit (the loan atom); preserve it onto the hydrated detail so
       // the snapshot answers RERA and the FAQ body answers loan.
       const priorFaqs = evidence.detail?.faqs;
+      let nextDetail = priorFaqs?.length ? { ...detail, faqs: priorFaqs } : detail;
+      // Desk often stores LTV as a pricing "Loan LTV" info row, not
+      // projects.loan_eligibility — lift it when the buyer asked about loan.
+      if (loanEligibilityNeeded && !nextDetail.loanEligibility) {
+        const pricing = await deps.data
+          .pricing(s.builderId, nd, goal.projectId, unitType)
+          .catch(() => null);
+        const ltv = pricing?.components?.find((c) => /loan\s*ltv|ltv/i.test(c.label));
+        if (ltv?.value) {
+          tools.push('pricing');
+          nextDetail = { ...nextDetail, loanEligibility: ltv.value };
+          evidence = {
+            ...evidence,
+            tools: [...new Set(tools)],
+            pricing: { ...pricing!, projectName: pricing!.projectName || focusName },
+          };
+        }
+      }
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
-        detail: priorFaqs?.length ? { ...detail, faqs: priorFaqs } : detail,
+        detail: nextDetail,
       };
+      // Loan LTV on detail answers the ask — drop loan/banks FAQ miss so compose
+      // does not refuse to mention loan terms that are already on evidence.
+      if (nextDetail.loanEligibility && evidence.faqMiss?.keys.length) {
+        const left = evidence.faqMiss.keys.filter((k) => !/loan|banks/i.test(k));
+        if (left.length === 0) {
+          const { faqMiss: _dropLoanMiss, ...rest } = evidence;
+          evidence = rest;
+        } else {
+          evidence = {
+            ...evidence,
+            faqMiss: { ...evidence.faqMiss, keys: left },
+          };
+        }
+      }
     }
     if (detail && wantsLocation) {
       const leadCategories = [...new Set([...askedCategories, ...faqLocationCategories])];
