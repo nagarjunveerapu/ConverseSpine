@@ -133,4 +133,12 @@ describe('unknown recovery authority', () => {
     expect(shouldSurfaceUnknownIntent(EX, miss, false, 'asdf qwer')).toBe(true);
     expect(shouldSurfaceUnknownIntent(EX, miss, false)).toBe(true);
   });
+
+  it('does not steal focused FAQ / menu chips', () => {
+    const miss = routing({ miss_reason: 'below_tau', top_kind: 'other' });
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'when')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'loan')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'discount')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'is builder honest person')).toBe(false);
+  });
 });

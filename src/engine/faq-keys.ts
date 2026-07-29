@@ -29,10 +29,26 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:loan\s+eligib|home\s+loan|bank\s+loan|housing\s+loan|which\s+banks?\s+(?:give|provide|approve))\b/i,
   },
   {
+    // Focused menu chip — bare "loan" is the loan FAQ, not a locality.
+    key: 'loan_eligibility',
+    re: /^loan\.?$/i,
+  },
+  {
     // "is it ready to move?" (no trailing "in") is the same possession ask —
     // untreated it fell through to a configuration dump (B5.2).
     key: 'possession',
     re: /\b(?:possession(?:\s+date)?|possession\s+kab|when(?:'s| is)?\s+(?:possession|handover)|delivery\s+(?:date|timeline)|ready\s+to\s+move(?:\s+in)?|kab\s+(?:possession|handover))\b/i,
+  },
+  {
+    // Focused menu chip — bare "when" → possession on the open project.
+    key: 'possession',
+    re: /^when\.?$/i,
+  },
+  {
+    // Discount/offer chip — land on payment_plan FAQ when Desk has it; else
+    // FactKey `price` still drives the answer contract.
+    key: 'payment_plan',
+    re: /^(?:discounts?|offers?)\.?$/i,
   },
   {
     key: 'amenities',

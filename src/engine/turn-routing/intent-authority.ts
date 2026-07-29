@@ -27,6 +27,7 @@
  * silent for that kind automatically — ownership can never be held twice.
  */
 import { answerRequirements } from '../answer-contract.js';
+import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import type { Extracted } from '../types.js';
 import type { TurnRoutingResult } from './types.js';
 
@@ -142,5 +143,9 @@ export function shouldSurfaceUnknownIntent(
   }
   // Closed FactKey extractors — same set that withAnswerRequirements uses.
   if (text.trim() && answerRequirements(text).length > 0) return false;
+  // FAQ-shaped chips (builder honesty, bare loan/when…) — same closed set as
+  // focused evidence fetch. Without this, embedder below_tau → "rephrase"
+  // even when resolveFaqQuestionKeys already owned the turn.
+  if (text.trim() && resolveFaqQuestionKeys(text).length > 0) return false;
   return true;
 }
