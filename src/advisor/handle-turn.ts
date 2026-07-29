@@ -221,7 +221,7 @@ export async function handleAdvisorTurn(
     const skipStickyFocus =
       existing.phase === 'visit' ||
       isVisitFollowUpQuestion(text) ||
-      (isVisitRouteExpand(text) && existing.visit?.projectId);
+      (isVisitRouteExpand(text) && Boolean(existing.visit?.projectId));
     // Re-enter focused when the board pins a project — including from sticky
     // handoff (phase===handoff with focus still set). Old gate only committed
     // when projectId differed, so handoff→brochure/loan fell to no_fit
