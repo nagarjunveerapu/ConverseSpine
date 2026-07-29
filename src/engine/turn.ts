@@ -29,6 +29,7 @@ import {
 } from './coverage-areas.js';
 import { looksLikePlaceFramedAsk } from './place-frame.js';
 import {
+  answerRequirements,
   enforceAnswerContract,
   withAnswerRequirements,
 } from './answer-contract.js';
@@ -112,6 +113,7 @@ import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
 import { classifyTurnRouting } from './turn-routing/classify.js';
 import {
   applyIntentAuthority,
+  catalogAskOwns,
   shouldSurfaceUnknownIntent,
 } from './turn-routing/intent-authority.js';
 import { failureFromUnsupportedRouting } from './turn-routing/unsupported-outcome.js';
@@ -580,12 +582,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   }
 
-  if (isCompareAmongOfferedTurn(trimmedText) && state.discover.lastOffered.length >= 2) {
-    if (state.phase === 'focused' || state.phase === 'handoff') {
-      if (nd && state.focus) await deps.crm.releaseProject(nd).catch(() => {});
-      state = releaseToDiscover(state);
-    }
-  }
+  // Compare-among-offered stays on the current phase. prepareCompareExtracted
+  // seeds compare IDs from lastOffered; focused.decide answers the matrix.
+  // (Old path released focus → discover recommend shortlist dump.)
 
   ex = prepareCompareExtracted(trimmedText, state, ex);
   // Named multi-project turns without the word "compare" still need compare IDs —
@@ -736,12 +735,21 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // at the FINAL ex (after regex + BAML merge), so the second atom reaches compose.
   // Only when another topic is already present — a lone "schools near X" keeps its
   // S1 focused-LI path. Location-family FAQ keys resolve from buyerText regardless.
-  if (
-    (ex.askTopics?.length ?? 0) >= 1 &&
-    !ex.askTopics?.includes('location') &&
-    locationCategoriesAsked(trimmedText).length > 0
-  ) {
-    ex = { ...ex, askTopics: [...(ex.askTopics ?? []), 'location'] };
+  // Amenity-only "park?" must not become location+amenities (LI parks category).
+  {
+    const liCats = locationCategoriesAsked(trimmedText);
+    const amenityOnlyParks =
+      !!ex.askTopics?.includes('amenities') &&
+      liCats.length > 0 &&
+      liCats.every((c) => c === 'parks');
+    if (
+      (ex.askTopics?.length ?? 0) >= 1 &&
+      !ex.askTopics?.includes('location') &&
+      liCats.length > 0 &&
+      !amenityOnlyParks
+    ) {
+      ex = { ...ex, askTopics: [...(ex.askTopics ?? []), 'location'] };
+    }
   }
 
   let prevalidatedCatalogHit:
@@ -777,7 +785,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       buildTurnRoutingInput(state, ex, trimmedText, inputSource),
     );
     if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
-      const claimed = applyIntentAuthority(ex, precomputedRouting);
+      const claimed = applyIntentAuthority(ex, precomputedRouting, trimmedText);
       authorityClaimed = claimed.wrote.length > 0;
       if (claimed.wrote.length) {
         ex = claimed.ex;
@@ -1074,7 +1082,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // branch below, so an embedding-recognised opt-out reuses the existing
   // confirm-before-delete gate instead of inventing a second destructive path.
   if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
-    const claimed = applyIntentAuthority(ex, routing);
+    const claimed = applyIntentAuthority(ex, routing, trimmedText);
     authorityClaimed = authorityClaimed || claimed.wrote.length > 0;
     if (claimed.wrote.length) {
       ex = claimed.ex;
@@ -1093,6 +1101,26 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (after > before && extractProvenance) {
       extractProvenance.fields.askTopics = extractProvenance.fields.askTopics ?? 'intent';
     }
+  }
+  // Loan FactKey/FAQ owns the turn — never let a brochure embedder leave
+  // askTopic=media (that shared the PDF for "can I get the loan?").
+  if (
+    answerRequirements(trimmedText).includes('loan_eligibility') ||
+    resolveFaqQuestionKeys(trimmedText).includes('loan_eligibility') ||
+    resolveFaqQuestionKeys(trimmedText).includes('banks')
+  ) {
+    const topics = (ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []).filter(
+      (t) => t !== 'media',
+    );
+    const withLegal = topics.includes('legal')
+      ? topics
+      : (['legal', ...topics] as NonNullable<Extracted['askTopics']>);
+    const { mediaAssetKind: _dropMedia, ...rest } = ex;
+    ex = {
+      ...rest,
+      askTopic: 'legal',
+      askTopics: withLegal,
+    };
   }
   if (
     deps.failureRouting &&
@@ -1229,6 +1257,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const locationBroaden =
     !isDetailAskTurn(ex) &&
+    !(ex.askTopic === 'compare' || ex.askTopics?.includes('compare')) &&
     (isLocationBroadenTurn(trimmedText) ||
       isLocationCorrectionTurn(trimmedText) ||
       Boolean(state.constraints.location && state.constraints.location !== prevLoc));
@@ -2223,7 +2252,12 @@ function decideGoal(
   // bathroom, is not in a discovery conversation — and every phase selector
   // would otherwise fall through to search and answer with a project list.
   // One check, one owner: this slot is written only by the intent authority.
-  if (ex.wantsHuman) return { kind: 'handoff' };
+  // Soft escalate/callback must not outrank a catalog facet ask while focused
+  // (or while focus still exists after a sticky handoff). True "talk to a
+  // human" speech-acts still set wantsHuman without catalog ownership.
+  if (ex.wantsHuman && !(s.focus && catalogAskOwns(ex, text))) {
+    return { kind: 'handoff' };
+  }
   switch (s.phase) {
     case 'discover':
       return discover.decide(s, ex);
@@ -2233,7 +2267,8 @@ function decideGoal(
     case 'visit':
       return visit.decide(s, ex, visitCtx!);
     case 'handoff':
-      return handoff.decide(ex);
+      // Catalog escape when focus lives — see phases/handoff.ts.
+      return handoff.decide(s, ex, text);
     default:
       return { kind: 'greet' };
   }
@@ -3086,6 +3121,14 @@ async function fetchAnswer(
   }
 
   if (topics.includes('media') || ex.mediaAssetKind) {
+    // Loan asks must never fetch/share a brochure — even if topic merge missed.
+    if (
+      answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
+      resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
+      resolveFaqQuestionKeys(buyerText ?? '').includes('banks')
+    ) {
+      // fall through — legal/detail path below answers LTV / honest miss
+    } else {
     const rawKind = ex.mediaAssetKind ?? 'brochure';
     const assetKind = normalizeMediaAssetKind(rawKind) ?? rawKind;
     const mediaName =
@@ -3148,6 +3191,7 @@ async function fetchAnswer(
           },
         };
       }
+    }
     }
   }
 
@@ -3307,6 +3351,15 @@ async function fetchAnswer(
           k === 'visit_logistics',
       ),
   );
+  // Loan LTV lives on ProjectDetail.loanEligibility — a FAQ miss for
+  // loan_eligibility used to suppress detail hydrate and answer "not on file"
+  // even when Desk carries the LTV string (Advisor dig: "can I get the loan?").
+  const loanEligibilityNeeded = Boolean(
+    goal.kind === 'answer' &&
+      (goal.requires?.includes('loan_eligibility') ||
+        evidence.faqMiss?.keys.some((k) => /loan|banks/i.test(k)) ||
+        (buyerText && answerRequirements(buyerText).includes('loan_eligibility'))),
+  );
   const needsDetail =
     (!faqShapedHit &&
       !faqShapedMiss &&
@@ -3320,9 +3373,21 @@ async function fetchAnswer(
           t === 'property_type',
       )) ||
     legalSnapshotNeeded ||
-    advisoryDetailNeeded;
+    advisoryDetailNeeded ||
+    loanEligibilityNeeded;
   if (needsDetail || wantsLocation) {
-    let detail = await hydrateProjectDetail(deps, s, goal.projectId);
+    // Overview-focused cache often omits loanEligibility; bust it when the
+    // buyer asks about loan so we re-fetch Desk detail (not a sticky miss).
+    let hydrateState = s;
+    if (
+      loanEligibilityNeeded &&
+      s.projectCache?.[goal.projectId] &&
+      !s.projectCache[goal.projectId].loanEligibility
+    ) {
+      const { [goal.projectId]: _stale, ...restCache } = s.projectCache;
+      hydrateState = { ...s, projectCache: restCache };
+    }
+    let detail = await hydrateProjectDetail(deps, hydrateState, goal.projectId);
     if (detail && topics.includes('legal')) {
       detail = await enrichDetailLegal(deps, nd, detail);
     }
@@ -3334,11 +3399,43 @@ async function fetchAnswer(
       // real FAQ hit (the loan atom); preserve it onto the hydrated detail so
       // the snapshot answers RERA and the FAQ body answers loan.
       const priorFaqs = evidence.detail?.faqs;
+      let nextDetail = priorFaqs?.length ? { ...detail, faqs: priorFaqs } : detail;
+      // Desk often stores LTV as a pricing "Loan LTV" info row, not
+      // projects.loan_eligibility — lift it when the buyer asked about loan.
+      if (loanEligibilityNeeded && !nextDetail.loanEligibility) {
+        const pricing = await deps.data
+          .pricing(s.builderId, nd, goal.projectId, unitType)
+          .catch(() => null);
+        const ltv = pricing?.components?.find((c) => /loan\s*ltv|ltv/i.test(c.label));
+        if (ltv?.value) {
+          tools.push('pricing');
+          nextDetail = { ...nextDetail, loanEligibility: ltv.value };
+          evidence = {
+            ...evidence,
+            tools: [...new Set(tools)],
+            pricing: { ...pricing!, projectName: pricing!.projectName || focusName },
+          };
+        }
+      }
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
-        detail: priorFaqs?.length ? { ...detail, faqs: priorFaqs } : detail,
+        detail: nextDetail,
       };
+      // Loan LTV on detail answers the ask — drop loan/banks FAQ miss so compose
+      // does not refuse to mention loan terms that are already on evidence.
+      if (nextDetail.loanEligibility && evidence.faqMiss?.keys.length) {
+        const left = evidence.faqMiss.keys.filter((k) => !/loan|banks/i.test(k));
+        if (left.length === 0) {
+          const { faqMiss: _dropLoanMiss, ...rest } = evidence;
+          evidence = rest;
+        } else {
+          evidence = {
+            ...evidence,
+            faqMiss: { ...evidence.faqMiss, keys: left },
+          };
+        }
+      }
     }
     if (detail && wantsLocation) {
       const leadCategories = [...new Set([...askedCategories, ...faqLocationCategories])];
@@ -3537,7 +3634,13 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
         const name = fromOffered?.name ?? fromDiscussed?.name ?? s.focus?.projectName;
         if (name) discussed.push({ projectId: goal.projectId, name });
       }
-      return discussed.length ? recordDiscussed(s, discussed) : s;
+      let next = discussed.length ? recordDiscussed(s, discussed) : s;
+      // Catalog escape from sticky handoff — restore focused so later facet
+      // asks are not trapped in handoff.decide forever.
+      if (next.phase === 'handoff' && next.focus) {
+        next = { ...next, phase: 'focused' };
+      }
+      return next;
     }
     case 'propose_visit':
       return { ...s, phase: 'visit' };
@@ -3562,7 +3665,10 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
     case 'warm_ack':
       return { ...s, postVisitAckPending: false };
     case 'handoff':
-      return { ...s, phase: 'handoff' };
+      // Keep focus — sticky handoff must not drop the project pin. Catalog
+      // re-engage (loan/brochure/amenities) needs focus to answer, not ask
+      // "which project?". Advisor project_id sticky also re-commits focused.
+      return { ...s, phase: 'handoff', ...(s.focus ? { focus: s.focus } : {}) };
     default:
       return s;
   }

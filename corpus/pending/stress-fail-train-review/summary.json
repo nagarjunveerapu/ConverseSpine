@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-07-29T15:44:55.400Z",
+  "source_fails": "docs/reports/intent-stress-2026-07-29T12-12-10/fails-for-train.jsonl",
+  "input": 10416,
+  "dropped": {
+    "focus_only": 95,
+    "http_infra": 87
+  },
+  "kept_source_fails": 10234,
+  "emitted": 18918,
+  "by_priority": {
+    "P2": 15487,
+    "P0": 2493,
+    "P1": 362,
+    "P3": 576
+  },
+  "by_intent": {
+    "get_price": 4028,
+    "get_legal_info": 2918,
+    "get_amenities": 2030,
+    "get_brochure": 1607,
+    "ask_delivery_timeline": 1311,
+    "get_location_info": 1278,
+    "ask_investment_return": 1196,
+    "get_payment_plan": 891,
+    "compare_projects": 781,
+    "get_availability": 755,
+    "compute_emi": 738,
+    "book_visit": 471,
+    "get_project_info": 274,
+    "ask_about_builder": 233,
+    "negotiate_price": 179,
+    "escalate_to_human": 86,
+    "opt_out": 61,
+    "request_callback": 36,
+    "find_projects": 33,
+    "definition_bhk": 7,
+    "definition_documents": 5
+  },
+  "by_language": {
+    "hi-en": 6731,
+    "en": 8680,
+    "te": 59,
+    "hi": 3319,
+    "kn": 67,
+    "ta": 62
+  },
+  "atomized_from_multi": 15487,
+  "files": {
+    "all": "train-candidates.jsonl",
+    "tsv": "P0-P1-review.tsv",
+    "P0": "P0.jsonl",
+    "P1": "P1.jsonl",
+    "P2": "P2.jsonl",
+    "P3": "P3.jsonl"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "base": "https://converse-spine-dev.nagarjun-arjun.workers.dev",
+  "items": 2493,
+  "written": 2493,
+  "errors": 0,
+  "reports": [
+    {
+      "http": 200,
+      "batch_start": 0,
+      "size": 400,
+      "ok": true,
+      "written": 400,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    },
+    {
+      "http": 200,
+      "batch_start": 400,
+      "size": 400,
+      "ok": true,
+      "written": 400,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    },
+    {
+      "http": 200,
+      "batch_start": 800,
+      "size": 400,
+      "ok": true,
+      "written": 400,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    },
+    {
+      "http": 200,
+      "batch_start": 1200,
+      "size": 400,
+      "ok": true,
+      "written": 400,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    },
+    {
+      "http": 200,
+      "batch_start": 1600,
+      "size": 400,
+      "ok": true,
+      "written": 400,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    },
+    {
+      "http": 200,
+      "batch_start": 2000,
+      "size": 400,
+      "ok": true,
+      "written": 400,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    },
+    {
+      "http": 200,
+      "batch_start": 2400,
+      "size": 93,
+      "ok": true,
+      "written": 93,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    }
+  ],
+  "at": "2026-07-29T15:51:50.454Z"
+}

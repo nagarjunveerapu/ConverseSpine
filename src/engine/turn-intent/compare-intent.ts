@@ -11,6 +11,13 @@ export function isCompareAmongOfferedTurn(text: string): boolean {
   if (/\bcompare\b/i.test(t)) return true;
   if (/\b(?:add|include)\b.+\bcompar(?:e|ison|ision)\b/i.test(t)) return true;
   if (/\bcompar(?:e|ison|ision)\b.+\b(?:add|include)\b/i.test(t)) return true;
+  // Hinglish among-shortlist — prepareCompareExtracted owns IDs; do NOT treat
+  // as a fresh search. (Focus release for these is gated separately.)
+  if (/\b(?:project|projects|inmein|inme|dono(?:\s+mein)?)\s+se\s+kaun\b/i.test(t)) return true;
+  if (/\bkaun\s+better\b/i.test(t) && /\b(?:se|these|those|them|dono|projects?)\b/i.test(t)) {
+    return true;
+  }
+  if (/\bvs\.?\s+these\b/i.test(t)) return true;
   return false;
 }
 

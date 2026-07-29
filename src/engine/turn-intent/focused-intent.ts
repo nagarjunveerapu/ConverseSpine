@@ -16,7 +16,7 @@ const EXPLORE_MORE_RE =
   /\b(?:show me other|show me more|other projects|more projects|more options|back to (?:all )?matches|my matches|different projects|different area|change area|another area)\b/i;
 
 const MENU_TOPIC_ONLY =
-  /^(?:pricing|prices?|starting\s+prices?|legal(?:\s+status)?|rera|emi|visit|amenities|location|floor plans?|availability|media|overview|when|loan|discount|discounts?|offers?|possession)\.?$/i;
+  /^(?:pricing|prices?|starting\s+prices?|legal(?:\s+status)?|rera|emi|visit|amenities|location|floor plans?|availability|media|overview|when|loans?|discount|discounts?|offers?|possession|ltv)\s*[?.!]?\s*$/i;
 
 /**
  * AB-4 — a property-type word can sit INSIDE a facet question about the focused

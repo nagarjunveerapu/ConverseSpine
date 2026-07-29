@@ -8,6 +8,8 @@ import { hasTextOverride, isSlotWritable, stripTextOverride } from './ingress.js
 import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic, LocationCategoryKey } from './types.js';
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
+import { answerRequirements } from './answer-contract.js';
+import { resolveFaqQuestionKeys } from './faq-keys.js';
 
 /** Keep aligned with turn-intent AFFIRM_ONLY (dialogue acts, not localities). */
 const AFFIRM =
@@ -673,6 +675,7 @@ export const TOPIC_ORDER: AnswerTopic[] = [
   'amenities',
   'availability',
   'media',
+  'overview',
 ];
 
 /** Cap for askTopics / answer_topics after union (compose answers the full capped set). */
@@ -721,20 +724,26 @@ export function isCostComponentAsk(text: string): boolean {
 }
 
 const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
-  { topic: 'compare', re: /\b(?:compare|vs|versus|side by side|difference between|both projects?)\b/i },
+  {
+    topic: 'compare',
+    // "project se kaun better" / "inmein se kaun better" — Hinglish among-these.
+    re: /\b(?:compare|vs|versus|side by side|difference between|both projects?|trade-?offs?|\bdifferences?\b|dono\s+farq|farq\s+kya|kaun\s+better|(?:project|projects|inmein|inme|dono(?:\s+mein)?)\s+se\s+kaun)\b/i,
+  },
   {
     // Cost-sheet components (stamp duty, registration charges, taxes) are price
     // asks — they must route to the pricing evidence, not fall to no_fit (W7).
+    // Bare "kitna" excluded when paired with distance ("airport kitna door").
     topic: 'price',
     re: new RegExp(
-      `\\b(?:prices?|pricing|cost|how much|pricing batao|kitna|padega|bsp|basic\\s+sale\\s+price|carpet(?:\\s+area)?|sba|super\\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\\s+prices?|${COST_COMPONENT_SRC})\\b`,
+      `\\b(?:prices?|pricing|cost|how much|pricing batao|(?:kitna(?!\\s+door))|padega|bsp|basic\\s+sale\\s+price|carpet(?:\\s+area)?|sba|super\\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\\s+prices?|best\\s+price|any\\s+discount|discounts?|offers?|${COST_COMPONENT_SRC})\\b`,
       'i',
     ),
   },
   {
     topic: 'legal',
     // Loan eligibility / banks stay legal+FAQ — not EMI calculator.
-    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan(?:\s+approv|\s+eligib)?|(?:can\s+i\s+(?:get|take)\s+(?:a\s+)?(?:home\s+)?loan)|loan\s+eligib|is\s+(?:the\s+)?ec\s+clear)\b/i,
+    // OC / financing are legal paperwork, not inventory "available".
+    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|\boc\b|occupancy\s+certificate|financing|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan(?:\s+approv|\s+eligib)?|(?:can\s+i\s+(?:get|take)\s+(?:a\s+|the\s+)?(?:home\s+)?loan)|loan\s+eligib|is\s+(?:the\s+)?ec\s+clear)\b/i,
   },
   {
     topic: 'property_type',
@@ -743,22 +752,35 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   {
     // Asking about a project's location/connectivity — not "schools nearby" soft amenity.
     topic: 'location',
-    re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|map|directions?|micro[- ]?market)\b|^location\s*\?$/i,
+    re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|map|directions?|micro[- ]?market|tell\s+me\s+location|location\s+kahan|airport\s+kitna\s+door|kitna\s+door)\b|\blocation\s*\?/i,
   },
   // EMI amount / installment only — bare "loan" / "home loan" is legal+FAQ above.
   { topic: 'emi', re: /\b(?:\bemi\b|monthly\s+payment|installment|loan\s+emi|emi\s+(?:kitna|amount|calc(?:ulate)?))\b/i },
-  { topic: 'amenities', re: /\b(?:amenit|facilit|clubhouse|pool|gym)\b/i },
+  {
+    // "park?" / "list the park" are amenity asks; do not match corridor names
+    // like "Aerospace Park" mid-brief.
+    topic: 'amenities',
+    re: /\b(?:amenit|facilit|clubhouse|pool|gym|kids?\s*play(?:\s*area)?|swimming|multiplex|list\s+(?:teh\s+|the\s+)?parks?)\b|(?:^|\b)parks?\s*\??\s*$/i,
+  },
   {
     // Config / unit asks + readiness. Preference "ready to move" as a search
     // soft-pref stays in detectSoftPrefs — never askTopics:availability on
     // search briefs. Lone possession/handover stays OFF this pattern (B5.1 —
     // FAQ via overview); multi-intent folds it in via detectTopics below.
+    // Bare "available" removed — trailing "if available" / "is OC available"
+    // were stealing builder/legal asks into the config dump.
     topic: 'availability',
-    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
+    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|availability|(?:units?|configs?|configurations?|inventory|flats?|apartments?)\s+available|available\s+(?:units?|configs?|configurations?|inventory)|is\s+(?:it|this)\s+available|still\s+available|what'?s\s+available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
   {
     topic: 'media',
     re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|share (?:the )?(?:brochure|plan)|(?:brochure|floor\s*plan|layout|pdf|photos?)\s*(?:bhejo|bhej|bhejna|bhej\s*do)|(?:bhejo|bhej)\s*(?:brochure|pdf|photos?|floor\s*plan)?)\b/i,
+  },
+  {
+    // Focused project/builder/USP asks — hold overview so discourse prefixes
+    // ("also,", "about this project") cannot become a fake locality.
+    topic: 'overview',
+    re: /\b(?:about\s+this\s+project|project\s+overview|usps?|highlights?|builder\s+(?:reputation|honesty|credibility|track\s+record)|developer\s+track\s+record|who\s+is\s+the\s+builder|resale\s+value|\broi\b|appreciation|rental\s+yield|(?:what\s+|tell\s+me\s+about\s+|about\s+)?returns?)\b/i,
   },
 ];
 
@@ -771,14 +793,39 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
 const POSSESSION_MULTI_FACET =
   /\b(?:possession(?:\s+date)?|handover(?:\s+date)?|completion\s+date|delivery\s+(?:date|timeline))\b/i;
 
+/**
+ * Soft hedges / fillers that must not create topics or localities.
+ * "builder reputation if available" is a builder ask, not inventory.
+ */
+export function stripTopicHedges(text: string): string {
+  return text
+    .replace(/\bif\s+(?:it(?:'s|s)?\s+)?available\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** All answer topics mentioned this turn (multi-intent). */
 export function detectTopics(text: string): AnswerTopic[] {
+  const scan = stripTopicHedges(text);
   const found = new Set<AnswerTopic>();
   for (const { topic, re } of TOPIC_PATTERNS) {
-    if (re.test(text)) found.add(topic);
+    if (re.test(scan)) found.add(topic);
   }
-  if (POSSESSION_MULTI_FACET.test(text) && found.size > 0) {
+  const possessionAsFacet = POSSESSION_MULTI_FACET.test(scan);
+  if (possessionAsFacet && found.size > 0) {
     found.add('availability');
+  }
+  // Legal paperwork + "available" ("is OC available") must not also dump configs.
+  // Keep availability when possession/handover was folded in as a real facet
+  // (price + possession + RERA), not when "available" only hedged a legal ask.
+  if (
+    found.has('legal') &&
+    found.has('availability') &&
+    !possessionAsFacet &&
+    /\b(?:oc|rera|khata|title|\bec\b|encumbrance|occupancy)\b/i.test(scan) &&
+    !/\b(?:units?|configs?|configurations?|bhk|inventory|sizes?)\b/i.test(scan)
+  ) {
+    found.delete('availability');
   }
   return TOPIC_ORDER.filter((t) => found.has(t));
 }
@@ -951,8 +998,12 @@ export function isInventoryAsk(text: string): boolean {
 export function isDetailAskTurn(
   ex: Pick<Extracted, 'askTopic' | 'askTopics' | 'transition' | 'implicitProjectPick'>,
 ): boolean {
-  const topics = (ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : [])).filter((t) => t !== 'compare');
+  // Compare counts: "project se kaun better" must stay focused for a matrix
+  // answer. Filtering compare out made locationBroaden treat a bogus locality
+  // delta as a search move and releaseToDiscover → shortlist dump.
+  const topics = ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : []);
   if (topics.length > 0) return true;
+  if (ex.askTopic) return true;
   if (ex.transition === 'want_details' || ex.implicitProjectPick) return true;
   return false;
 }
@@ -1152,12 +1203,22 @@ const LOCALITY_STOP = new Set([
   // Discourse markers buyers open a correction with ("no wait, …", "ok so, …").
   'no', 'yes', 'yeah', 'yep', 'nope', 'ok', 'okay', 'wait', 'well', 'so', 'sure', 'hmm',
   // Comma-lead / chip noise ("fine, just yield", "which project has…").
-  'fine', 'which', 'what', 'how', 'when', 'loan', 'discount', 'yield', 'rental',
+  'fine', 'which', 'what', 'how', 'when', 'loan', 'loans', 'discount', 'yield', 'rental',
+  'ltv',
+  // Stress-corpus discourse prefixes that were becoming fake localities:
+  // "also, ROI?" → apartments in *also*; "about this project" → *about*.
+  'also', 'too', 'hey', 'hi', 'hello', 'for', 'about', 'asap', 'pls', 'tell',
+  'share', 'list', 'one', 'thing', 'quick', 'q', 'teh', 'the', 'top', 'ones',
+  'difference', 'tradeoff', 'returns', 'appreciation', 'roi', 'builder',
+  'reputation', 'honesty', 'developer', 'usps', 'usp', 'highlights', 'completion',
+  'delivery', 'timeline', 'clp', 'payment', 'schedule', 'resale', 'value',
+  // Facet words that survive after peeling "tell me …" — never places.
+  'location', 'locations', 'connectivity', 'distance', 'map', 'directions',
 ]);
 
 /** Facet / Q&A chips that must never become constraints.location. */
 const NON_LOCALITY_LEXICON =
-  /\b(?:appreciat\w*|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loan|discount|honest|guarantee|flexible|years?|book\s+today|emi|offers?|looking|invest(?:ing|ment)?|interested|searching|weekends?|hills?|greenery|nature)\b/i;
+  /\b(?:appreciat\w*|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loans?|discount|honest|guarantee|flexible|years?|book\s+today|emi|offers?|looking|invest(?:ing|ment)?|interested|searching|weekends?|hills?|greenery|nature|\bltv\b)\b/i;
 
 /**
  * Peel stopwords off both ends of a captured fragment. `isLocalityNoise` only
@@ -1201,8 +1262,19 @@ export function locationLooksPolluted(loc: string | undefined): boolean {
 
 /** "coorg, 50L", "looking in Sakleshpur", bare locality. */
 export function extractLocation(text: string, ctx?: ExtractLocationContext): string | undefined {
-  const trimmed = text.trim();
+  const trimmed = stripTopicHedges(text.trim());
   if (ctx?.askTopics?.length) return undefined;
+  // Facet ask already owned by detectTopics — never invent a locality.
+  if (detectTopics(trimmed).length > 0) return undefined;
+  // FAQ / FactKey owns focused facet asks. Skip on search briefs so soft-pref
+  // "near airport" still allows "in North Bangalore" to land as locality.
+  if (
+    trimmed &&
+    !looksLikeSearchBriefText(trimmed) &&
+    (resolveFaqQuestionKeys(trimmed).length > 0 || answerRequirements(trimmed).length > 0)
+  ) {
+    return undefined;
+  }
   if (isVisitDayUtterance(trimmed)) return undefined;
   // Dialogue acts — never invent a locality (HIN-06: "nahi chahiye" ≠ place).
   // Unless the buyer went on to override: "no wait, switch to Budigere Cross"
@@ -1274,6 +1346,14 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   // otherwise "actually I want Whitefield" is extracted verbatim as the locality.
   // Guards above still read the original text: a decline is a decline either way.
   let scan = stripTextOverride(trimmed);
+  // Discourse openers before a facet ask ("also,", "hey,", "one thing —",
+  // "for this project,"). Strip so comma-lead never captures them as places.
+  scan = scan
+    .replace(
+      /^(?:also|hey|hi|hello|ok(?:ay)?|one\s+thing|quick\s+q|for\s+this\s+(?:one|project)|tell\s+me|bhai|project\s+pe|project\s+se|is\s+project\s+se)\s*[,—–:-]?\s+/i,
+      '',
+    )
+    .trim();
   // "no wait, Budigere Cross" — a lead-in segment made ENTIRELY of words that
   // are never a place is the buyer clearing their throat, not part of the area.
   // Same all-stopwords test the noise gate uses; a segment carrying anything

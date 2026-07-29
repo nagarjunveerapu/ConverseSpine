@@ -71,6 +71,21 @@ export function isUnclaimedIntent(routing: TurnRoutingResult | undefined): boole
 }
 
 /**
+ * Catalog facet / FAQ / media / FactKey already owns this turn.
+ * Used so soft escalate/callback binds cannot steal "can I get the PDF/loan?".
+ * True "talk to a human" still arrives via speech-act chips, not this path.
+ */
+export function catalogAskOwns(ex: Extracted, text = ''): boolean {
+  if (ex.askTopic || (ex.askTopics?.length ?? 0) > 0) return true;
+  if (ex.mediaAssetKind) return true;
+  const t = text.trim();
+  if (!t) return false;
+  if (resolveFaqQuestionKeys(t).length > 0) return true;
+  if (answerRequirements(t).length > 0) return true;
+  return false;
+}
+
+/**
  * Let the intent verdict fill the meaning slots nothing else owns.
  *
  * Returns `ex` unchanged unless every condition holds, so the default path is
@@ -83,6 +98,7 @@ export function isUnclaimedIntent(routing: TurnRoutingResult | undefined): boole
 export function applyIntentAuthority(
   ex: Extracted,
   routing: TurnRoutingResult | undefined,
+  text = '',
 ): { ex: Extracted; wrote: Array<'stop' | 'wantsHuman'>; kind?: string } {
   if (!isUnclaimedIntent(routing)) return { ex, wrote: [] };
   const kind = routing!.bind!.top_kind!;
@@ -96,6 +112,12 @@ export function applyIntentAuthority(
     wrote.push('stop');
   }
   if (effect.wantsHuman && !next.wantsHuman) {
+    // Facet/FAQ/media already owns — "can I get the PDF" must not become
+    // request_callback → handoff. Explicit human asks still set wantsHuman
+    // via speech-act chip resolve, not this unmapped-kind path.
+    if (catalogAskOwns(next, text)) {
+      return { ex: next, wrote, kind };
+    }
     next = { ...next, wantsHuman: true };
     wrote.push('wantsHuman');
   }

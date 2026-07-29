@@ -22,6 +22,9 @@ describe('RTI-E compare intent (project-agnostic)', () => {
     expect(isCompareAmongOfferedTurn('Compare all 3')).toBe(true);
     expect(isCompareAmongOfferedTurn('add Orchards to comparision')).toBe(true);
     expect(isCompareAmongOfferedTurn('compare project alpha and beta')).toBe(true);
+    expect(isCompareAmongOfferedTurn('project se kaun better please')).toBe(true);
+    expect(isCompareAmongOfferedTurn('inmein se kaun better')).toBe(true);
+    expect(isCompareAmongOfferedTurn('vs these please')).toBe(true);
   });
 
   it('does not run RTI on compare turns', () => {

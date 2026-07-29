@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   INTENT_EFFECTS,
   applyIntentAuthority,
+  catalogAskOwns,
   isUnclaimedIntent,
   shouldSurfaceUnknownIntent,
 } from '../src/engine/turn-routing/intent-authority.js';
@@ -63,6 +64,27 @@ describe('applyIntentAuthority', () => {
       expect(r.ex.wantsHuman, kind).toBe(true);
       expect(r.ex.stop, kind).toBeUndefined();
     }
+  });
+
+  it('does not let soft callback steal a catalog facet ask', () => {
+    // "can I get the PDF" can nearest-neighbor request_callback; media extract
+    // already owns the turn — authority must not set wantsHuman → handoff.
+    const withMedia: Extracted = { constraints: {}, askTopic: 'media', mediaAssetKind: 'brochure' };
+    const r = applyIntentAuthority(withMedia, unclaimed('request_callback'), 'can I get the PDF');
+    expect(r.ex.wantsHuman).toBeUndefined();
+    expect(r.wrote).toEqual([]);
+  });
+
+  it('does not let soft callback steal a FactKey / FAQ loan ask', () => {
+    const r = applyIntentAuthority(EX, unclaimed('request_callback'), 'can I get the loan for this project?');
+    expect(r.ex.wantsHuman).toBeUndefined();
+    expect(r.wrote).toEqual([]);
+  });
+
+  it('still escalates when the text is a clear human ask with no catalog owner', () => {
+    const r = applyIntentAuthority(EX, unclaimed('escalate_to_human'), 'talk to a human please');
+    expect(r.ex.wantsHuman).toBe(true);
+    expect(r.wrote).toEqual(['wantsHuman']);
   });
 
   it('never overwrites a slot extraction already filled', () => {
@@ -138,6 +160,10 @@ describe('unknown recovery authority', () => {
     const miss = routing({ miss_reason: 'below_tau', top_kind: 'other' });
     expect(shouldSurfaceUnknownIntent(EX, miss, false, 'when')).toBe(false);
     expect(shouldSurfaceUnknownIntent(EX, miss, false, 'loan')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'loan?')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'can I get the loan for this project?')).toBe(
+      false,
+    );
     expect(shouldSurfaceUnknownIntent(EX, miss, false, 'discount')).toBe(false);
     expect(shouldSurfaceUnknownIntent(EX, miss, false, 'is builder honest person')).toBe(false);
   });
