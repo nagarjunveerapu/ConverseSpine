@@ -1,0 +1,15 @@
+{
+  "promoted_at": "2026-07-29T20:02:35.673Z",
+  "p1_input": 362,
+  "appended_to_registry": 361,
+  "skipped": 1,
+  "skipped_reason": "phrase_intent_exists (ROI?)",
+  "note": "audit_status=clean; dig upsert via /internal/intent-vector; languages hi/ta/te/kn",
+  "reprobe": {
+    "pass": 339,
+    "fail": 22,
+    "total": 361,
+    "pass_rate": 0.939,
+    "report": "docs/reports/intent-stress-2026-07-29T20-02-58"
+  }
+}
