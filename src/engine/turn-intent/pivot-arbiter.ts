@@ -45,6 +45,18 @@ export interface PivotArbiterDecision {
 const EXPLORE_MORE_RE =
   /\b(?:show me other|show me more|other projects|more projects|more options|back to (?:all )?matches|my matches|different projects|different area|change area|another area)\b/i;
 
+/** Keyboard-smash / filler — never a locality ("asdf qwer zxcv" cliff). */
+const GIBBERISH_TOKEN =
+  /^(?:asdf|qwer|zxcv|qaz|wsx|edc|rfv|tgb|yhn|ujm|foo|bar|baz|qux|xxx+|aaa+|bbb+|test|testing|lorem|ipsum|hjkl|uiop|abcd|xyz+)$/i;
+
+function looksLikeGibberishLocation(loc: string): boolean {
+  const words = loc.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  // Every token is smash/filler, or a token has no vowel (zxcv).
+  const smashy = words.filter((w) => GIBBERISH_TOKEN.test(w) || !/[aeiouy]/i.test(w));
+  return smashy.length === words.length || smashy.length >= 2;
+}
+
 /**
  * Reject extract "locations" that are dialogue/facet noise (appreciation cliff,
  * short chips, yield phrases). Bare place names that ARE the whole utterance
@@ -57,6 +69,7 @@ export function isImplausibleLocationCapture(loc: string, text: string): boolean
   const locLc = l.toLowerCase();
   if (l.length > 48) return true;
   if (l.split(/\s+/).length > 6) return true;
+  if (looksLikeGibberishLocation(l)) return true;
   // Facet / chip / temporal vocabulary — never a locality.
   if (
     /\b(?:appreciat|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loan|discount|honest|guarantee|flexible|years?|book\s+today)\b/i.test(

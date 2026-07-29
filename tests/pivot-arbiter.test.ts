@@ -75,6 +75,16 @@ describe('hasStrongSearchConstraintDelta', () => {
       ),
     ).toBe(false);
   });
+
+  it('rejects keyboard-smash fake localities', () => {
+    expect(
+      hasStrongSearchConstraintDelta(
+        { location: 'Aerospace Park' },
+        ex({ location: 'asdf qwer zxcv' }),
+        'asdf qwer zxcv',
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('arbitrateFocusPivot', () => {

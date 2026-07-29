@@ -1238,6 +1238,19 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     if (isLocalityNoise(cleaned)) return undefined;
     if (NON_LOCALITY_LEXICON.test(cleaned)) return undefined;
     if (locationLooksPolluted(cleaned)) return undefined;
+    // Keyboard smash must not become a search locality.
+    if (
+      cleaned
+        .split(/\s+/)
+        .filter(Boolean)
+        .every(
+          (w) =>
+            /^(?:asdf|qwer|zxcv|qaz|wsx|foo|bar|baz|xxx+|aaa+|test|hjkl|uiop|abcd|xyz+)$/i.test(w) ||
+            !/[aeiouy]/i.test(w),
+        )
+    ) {
+      return undefined;
+    }
     if (looksLikeOfferedProjectName(cleaned, hints)) return undefined;
     return cleaned;
   };
