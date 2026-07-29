@@ -811,13 +811,17 @@ export function detectTopics(text: string): AnswerTopic[] {
   for (const { topic, re } of TOPIC_PATTERNS) {
     if (re.test(scan)) found.add(topic);
   }
-  if (POSSESSION_MULTI_FACET.test(scan) && found.size > 0) {
+  const possessionAsFacet = POSSESSION_MULTI_FACET.test(scan);
+  if (possessionAsFacet && found.size > 0) {
     found.add('availability');
   }
   // Legal paperwork + "available" ("is OC available") must not also dump configs.
+  // Keep availability when possession/handover was folded in as a real facet
+  // (price + possession + RERA), not when "available" only hedged a legal ask.
   if (
     found.has('legal') &&
     found.has('availability') &&
+    !possessionAsFacet &&
     /\b(?:oc|rera|khata|title|\bec\b|encumbrance|occupancy)\b/i.test(scan) &&
     !/\b(?:units?|configs?|configurations?|bhk|inventory|sizes?)\b/i.test(scan)
   ) {
