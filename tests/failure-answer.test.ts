@@ -88,6 +88,8 @@ describe('answer delivery contract', () => {
   it('declines rental yield / ROI as no_data — no catalog atom exists', () => {
     expect(answerRequirements('what is the rental yield?')).toContain('rental_yield');
     expect(answerRequirements('what ROI can I expect?')).toContain('rental_yield');
+    // Past-tense / corridor phrasing — Advisor dig cliff when embedder abstains
+    expect(answerRequirements('has this area appreciated')).toContain('appreciation');
     // legit facets are untouched by the new pattern
     expect(answerRequirements('what is the price?')).toEqual(['price']);
     const out = enforceAnswerContract(

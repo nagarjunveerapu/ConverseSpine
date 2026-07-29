@@ -1097,7 +1097,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (
     deps.failureRouting &&
     !state.stopConfirmPending &&
-    shouldSurfaceUnknownIntent(ex, routing, authorityClaimed)
+    shouldSurfaceUnknownIntent(ex, routing, authorityClaimed, trimmedText)
   ) {
     routing = {
       routing: 'unsupported',

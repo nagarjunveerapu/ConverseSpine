@@ -820,7 +820,7 @@ export function detectSoftPrefs(
     out.walkabilityMentioned = true;
   }
   if (
-    /\bresale\b|\bappreciat(?:e|ion)\b|\bhold(?:s)?\s+(?:its\s+)?value\b|\bfuture\s+value\b|\brental\s+yield\b|\byield\b|\broi\b|\breturn\s+on\s+investment\b/i.test(
+    /\bresale\b|\bappreciat\w*\b|\bhold(?:s)?\s+(?:its\s+)?value\b|\bfuture\s+value\b|\brental\s+yield\b|\byield\b|\broi\b|\breturn\s+on\s+investment\b/i.test(
       text,
     )
   ) {

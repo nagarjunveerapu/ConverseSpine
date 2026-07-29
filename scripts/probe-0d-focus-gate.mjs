@@ -48,18 +48,44 @@ function pass(cond, label, detail) {
   return ok;
 }
 
-async function runAnswerCase(label, focusLine, ask, mustMatch, mustNot) {
+const BRIEF_PREFS = {
+  purpose: 'self_use',
+  budget: '₹50–70L',
+  bhk: '2 BHK',
+  location: 'Aerospace Park / Devanahalli Corridor',
+  property_type: 'Apartment',
+};
+
+async function runAnswerCase(label, focusLine, ask, mustMatch, mustNot, opts = {}) {
   const sid = `0d-ans-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  await turn(sid, 'hi', {
-    purpose: 'self_use',
-    budget: '₹50–70L',
-    bhk: '2 BHK',
-    location: 'Aerospace Park / Devanahalli Corridor',
-    property_type: 'Apartment',
-  });
+  await turn(sid, 'hi', BRIEF_PREFS);
   // Force focus via named ask
   await turn(sid, focusLine);
-  const { json } = await turn(sid, ask);
+  // Advisor SPA re-sends the full brief + sticky project on every turn.
+  let json;
+  if (opts.advisorPayload) {
+    const r = await fetch(`${BASE}/api/advisor/turn`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        builder_id: BUILDER,
+        session_id: sid,
+        text: ask,
+        preferences: {
+          ...BRIEF_PREFS,
+          worries: 'Resale value',
+          commute_hub: 'Whitefield / ITPL',
+          schools: 'important',
+        },
+        project_id: 'brigade-eldorado-naya-advisor',
+        project_name: 'Brigade Eldorado',
+        board_tab: 'legal',
+      }),
+    });
+    json = await r.json();
+  } else {
+    ({ json } = await turn(sid, ask));
+  }
   const reply = replyOf(json);
   const focus = focusOf(json);
   const phase = phaseOf(json);
@@ -75,6 +101,7 @@ async function runAnswerCase(label, focusLine, ask, mustMatch, mustNot) {
   ) && ok;
   ok = pass(mustMatch.test(reply), 'reply carries expected fact shape', mustMatch.toString()) && ok;
   if (mustNot) ok = pass(!mustNot.test(reply), 'reply avoids wrong shape', mustNot.toString()) && ok;
+  ok = pass(!/not sure what you'd like help with/i.test(reply), 'avoids unknown clarify', '') && ok;
   return ok;
 }
 
@@ -128,6 +155,15 @@ async function main() {
         'has this area appreciated',
         /appreciat|growth|value|cagr|trend|don'?t have|on file|records team|can'?t verify/i,
         /here'?s what fits|catalog searched|3 matches/i,
+      ),
+    () =>
+      runAnswerCase(
+        'C2 appreciation + Advisor SPA payload',
+        'Tell me about Brigade Eldorado',
+        'has this area appreciated',
+        /appreciat|growth|value|cagr|trend|don'?t have|on file|records team|can'?t verify/i,
+        /here'?s what fits|catalog searched|3 matches|not sure what you'd like/i,
+        { advisorPayload: true },
       ),
     () =>
       runPivotCase(
