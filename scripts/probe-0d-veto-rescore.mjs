@@ -40,10 +40,6 @@ const ELDORADO_PIN = /from ₹57\.5\s*l(?!.*cornerstone)/i;
 
 function offlineLabel(text) {
   const t = text.trim();
-  // Deterministic facet / FactKey ask → answer-on-focus, even if regex pivot fired historically
-  if (answerRequirements(t).length > 0 || detectTopics(t).length > 0) {
-    return { kind: 'answer', reasons: ['facet_or_factkey'] };
-  }
 
   const rawLoc = extractLocation(t);
   const loc =
@@ -52,7 +48,7 @@ function offlineLabel(text) {
   const ptype = detectPropertyTypes(t);
   const bhk = normalizeConfig(t) ?? (/\b(\d(?:\.\d)?\s*bhk)\b/i.exec(t)?.[1] ?? null);
   const namedOther =
-    /\b(?:orchards|cornerstone|sanctuary|meadows|utopia|buena\s*vista|ayana|atmosphere|oasis)\b/i.test(
+    /\b(?:orchards|cornerstone|sanctuary|meadows|utopia|buena\s*vista|ayana|atmosphere|oasis|clarks\s+exotica)\b/i.test(
       t,
     ) && !/\beldorado\b/i.test(t);
   const exploreMore = /\b(?:show\s+me\s+more|other\s+projects|more\s+options)\b/i.test(t);
@@ -97,11 +93,24 @@ function offlineLabel(text) {
     pivot = true;
     reasons.push('project_switch');
   }
-  // Short junk / single-word chips that regex pivoted historically but have no constraint
+  // Hard search move wins over facet words embedded in a new brief
+  // ("…for rental income" must not force answer while budget/BHK pivot).
+  if (pivot) return { kind: 'pivot', reasons };
+
+  // Deterministic facet / FactKey ask → answer-on-focus
+  if (answerRequirements(t).length > 0 || detectTopics(t).length > 0) {
+    return { kind: 'answer', reasons: ['facet_or_factkey'] };
+  }
+
+  // Short junk / single-word chips that regex pivoted historically but have no constraint.
+  // Bare real places ("Whitefield", "banglore whitefield") are pivots — not answer chips.
   if (!pivot && reasons.length === 0 && t.split(/\s+/).length <= 2) {
+    if (loc) {
+      return { kind: 'pivot', reasons: [`loc:${loc}`] };
+    }
     return { kind: 'answer', reasons: ['short_utterance'] };
   }
-  return { kind: pivot ? 'pivot' : 'answer', reasons };
+  return { kind: 'answer', reasons };
 }
 
 async function turn(sessionId, text, preferences) {

@@ -16,7 +16,7 @@ const EXPLORE_MORE_RE =
   /\b(?:show me other|show me more|other projects|more projects|more options|back to (?:all )?matches|my matches|different projects|different area|change area|another area)\b/i;
 
 const MENU_TOPIC_ONLY =
-  /^(?:pricing|prices?|starting\s+prices?|legal(?:\s+status)?|rera|emi|visit|amenities|location|floor plans?|availability|media|overview)\.?$/i;
+  /^(?:pricing|prices?|starting\s+prices?|legal(?:\s+status)?|rera|emi|visit|amenities|location|floor plans?|availability|media|overview|when|loan|discount|discounts?|offers?|possession)\.?$/i;
 
 /**
  * AB-4 — a property-type word can sit INSIDE a facet question about the focused
@@ -120,7 +120,19 @@ export function isFocusedSearchPivot(text: string): boolean {
   if (/^[A-Za-z][A-Za-z\s]{2,28}\s+projects?\b/i.test(t) && !/\b(?:want|tell|details?|about|give|show|the|this|my|need)\b/i.test(t)) {
     return true;
   }
-  if (/\b(?:looking|searching|interested)\s+(?:in|for)\s+[A-Za-z]/i.test(t)) return true;
+  // "looking for …" alone is not a search pivot — amenity soft-asks
+  // ("looking for something green near the hills") used to release focus.
+  // Require a hard constraint signal already covered above, or an explicit place/type/budget/BHK.
+  if (/\b(?:looking|searching|interested)\s+(?:in|for)\s+/i.test(t)) {
+    if (
+      extractLocation(t) ||
+      detectPropertyTypes(t) ||
+      parseBudgetToInr(t) ||
+      /\b\d(?:\.\d)?\s*bhk\b/i.test(t)
+    ) {
+      return true;
+    }
+  }
   if (/\b(?:change|switch|update)\s+(?:my\s+)?(?:area|location|budget|bhk|property type)\b/i.test(t)) return true;
   // Chip miss (unknown): interrogatives stay on the focused project so INTENT
   // embedder can gap-fill topic — do not re-search. Explicit pivots already returned above.

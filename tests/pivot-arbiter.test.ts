@@ -46,10 +46,34 @@ describe('hasStrongSearchConstraintDelta', () => {
     ).toBe(false);
   });
 
-  it('accepts a short real locality', () => {
+  it('accepts bare real localities even when loc equals the whole utterance', () => {
     expect(
-      hasStrongSearchConstraintDelta({}, ex({ location: 'Jayanagar' }), '2 BHK in Jayanagar'),
+      hasStrongSearchConstraintDelta({}, ex({ location: 'Whitefield' }), 'Whitefield'),
     ).toBe(true);
+    expect(
+      hasStrongSearchConstraintDelta(
+        { location: 'Aerospace Park' },
+        ex({ location: 'banglore whitefield' }),
+        'banglore whitefield',
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects junk yield / chip locations', () => {
+    expect(
+      hasStrongSearchConstraintDelta(
+        { location: 'Aerospace Park' },
+        ex({ location: 'fine' }),
+        'fine, just yield, one number',
+      ),
+    ).toBe(false);
+    expect(
+      hasStrongSearchConstraintDelta(
+        { location: 'Aerospace Park' },
+        ex({ location: '3 years and I book today' }),
+        'guarantee me 20% appreciation in 3 years and I book today',
+      ),
+    ).toBe(false);
   });
 });
 
@@ -124,5 +148,29 @@ describe('arbitrateFocusPivot', () => {
       enabled: false,
     });
     expect(d.reason).toBe('flag_off');
+  });
+
+  it('holds soft same-budget chip without material delta', () => {
+    const d = arbitrateFocusPivot({
+      text: 'budget 70L but flexible',
+      priorConstraints: { budgetMaxInr: 7_000_000 },
+      ex: ex({ budgetMaxInr: 7_000_000 }),
+      routing: undefined,
+      enabled: true,
+    });
+    expect(d.action).toBe('hold_focus');
+    expect(d.reason).toBe('regex_without_material_delta');
+  });
+
+  it('holds yield ask despite junk comma-lead location', () => {
+    const d = arbitrateFocusPivot({
+      text: 'fine, just yield, one number',
+      priorConstraints: { location: 'Aerospace Park / Devanahalli Corridor' },
+      ex: ex({ location: 'fine' }),
+      routing: undefined,
+      enabled: true,
+    });
+    expect(d.action).toBe('hold_focus');
+    expect(d.reason).toBe('focused_facet_requirement');
   });
 });

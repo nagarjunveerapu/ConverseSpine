@@ -54,7 +54,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'builder_credibility',
-    re: /\b(?:builder\s+(?:track\s+record|credibility|reputation)|how\s+reliable\s+is\s+(?:the\s+)?builder)\b/i,
+    re: /\b(?:builder\s+(?:track\s+record|credibility|reputation|honest)|is\s+(?:the\s+|this\s+)?builder\s+honest|how\s+reliable\s+is\s+(?:the\s+)?builder|honest\s+(?:builder|person))\b/i,
   },
   {
     key: 'rera_status',

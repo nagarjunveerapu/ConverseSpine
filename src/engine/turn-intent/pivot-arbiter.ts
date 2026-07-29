@@ -12,6 +12,11 @@
  *  4. Else hold
  */
 import { answerRequirements } from '../answer-contract.js';
+import {
+  extractLocation,
+  isLocationBroadenTurn,
+  isLocationCorrectionTurn,
+} from '../facts.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import type { Constraints, Extracted } from '../types.js';
 import { holdsFocusAgainstRelease } from '../turn-routing/focus-hold.js';
@@ -40,16 +45,42 @@ export interface PivotArbiterDecision {
 const EXPLORE_MORE_RE =
   /\b(?:show me other|show me more|other projects|more projects|more options|back to (?:all )?matches|my matches|different projects|different area|change area|another area)\b/i;
 
-/** Reject extract "locations" that are the whole utterance (appreciation cliff). */
+/**
+ * Reject extract "locations" that are dialogue/facet noise (appreciation cliff,
+ * short chips, yield phrases). Bare place names that ARE the whole utterance
+ * ("Whitefield", "banglore whitefield") stay plausible — equality alone is not junk.
+ */
 export function isImplausibleLocationCapture(loc: string, text: string): boolean {
   const l = loc.trim();
   if (!l) return true;
   const t = text.trim().toLowerCase();
-  if (l.toLowerCase() === t) return true;
+  const locLc = l.toLowerCase();
   if (l.length > 48) return true;
   if (l.split(/\s+/).length > 6) return true;
-  // Full-sentence extracts ("has this area appreciated") — not a place.
-  if (/\b(?:appreciat|possession|rera|pricing|budget|bhk)\b/i.test(l)) return true;
+  // Facet / chip / temporal vocabulary — never a locality.
+  if (
+    /\b(?:appreciat|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loan|discount|honest|guarantee|flexible|years?|book\s+today)\b/i.test(
+      l,
+    )
+  ) {
+    return true;
+  }
+  if (/^(?:when|loan|discount|discounts?|emi|offers?|fine|which|what|how|yes|no|ok|thanks)$/i.test(locLc)) {
+    return true;
+  }
+  // Whole-utterance capture: junk when the utterance is not a bare place phrase.
+  if (locLc === t) {
+    if (/[?]/.test(text)) return true;
+    if (t.split(/\s+/).length > 4) return true;
+    if (
+      /\b(?:appreciat|yield|possession|rera|pricing|budget|bhk|loan|discount|honest|guarantee|percent|ballpark|when|how|what|which|is|are|has|does)\b/i.test(
+        t,
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
   return false;
 }
 
@@ -74,6 +105,9 @@ export function hasStrongSearchConstraintDelta(
   if (c.bhk && c.bhk !== prior.bhk) return true;
   if (c.propertyType && c.propertyType !== prior.propertyType) return true;
   if (plausibleLocationDelta(prior.location, c.location, text)) return true;
+  // Focused extract skips bare localities (phase gate). isFocusedSearchPivot still
+  // sees them via extractLocation(text) — count that as a real place move.
+  if (plausibleLocationDelta(prior.location, extractLocation(text), text)) return true;
   return false;
 }
 
@@ -150,6 +184,25 @@ export function arbitrateFocusPivot(input: PivotArbiterInput): PivotArbiterDecis
   }
 
   if (regexPivot) {
+    // Soft budget / junk-loc regex hits with no material constraint move must not
+    // cliff focus ("budget 70L but flexible" when already at 70L). Explicit explore /
+    // broaden / correction / change-slot still release even without extract delta.
+    const explicitSearchMove =
+      EXPLORE_MORE_RE.test(input.text) ||
+      isLocationBroadenTurn(input.text) ||
+      isLocationCorrectionTurn(input.text) ||
+      /\b(?:change|switch|update)\s+(?:my\s+)?(?:area|location|budget|bhk|property type)\b/i.test(
+        input.text,
+      );
+    if (!strongConstraintDelta && !explicitSearchMove) {
+      return {
+        action: 'hold_focus',
+        reason: 'regex_without_material_delta',
+        regexPivot,
+        strongConstraintDelta,
+        answerHold,
+      };
+    }
     return {
       action: 'release_to_discover',
       reason: 'regex_pivot_signal',
