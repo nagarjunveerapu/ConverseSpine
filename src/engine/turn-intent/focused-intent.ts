@@ -73,7 +73,16 @@ function isFocusedProjectQuestion(text: string): boolean {
   const t = text.trim();
   if (MENU_TOPIC_ONLY.test(t)) return true;
   if (typeWordIsFocusedReference(t)) return true;
-  if (/^(?:legal|rera|pricing|prices?|starting\s+prices?|price|emi|visit|amenities|availability|possession|floor plan)\b/i.test(t)) {
+  if (
+    /^(?:legal|rera|pricing|prices?|starting\s+prices?|price|emi|visit|amenities|availability|possession|floor plan|completion|usps?|overview|highlights?)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  // Delivery / possession phrasing that used to trip extractLocation → pivot
+  // ("when is completion" → leftover "is"; "kab milega" → fake locality).
+  if (/\b(?:when\s+is\s+completion|completion(?:\s+date)?|kab\s+milega|possession(?:\s+date)?|handover)\b/i.test(t)) {
     return true;
   }
   if (/^location(?:\s+details?)?\s*\.?\s*$/i.test(t) || /\blocation details?\b/i.test(t)) return true;

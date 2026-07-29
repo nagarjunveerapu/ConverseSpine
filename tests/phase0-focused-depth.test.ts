@@ -50,6 +50,14 @@ describe('Phase 0 — location extraction gates', () => {
     expect(extractLocation('also, builder reputation?')).toBeUndefined();
     expect(extractLocation('about this project? for this one')).toBeUndefined();
     expect(extractLocation('for this project, tell me location')).toBeUndefined();
+    // Residual P0: stop-trim leftovers must not become places.
+    expect(extractLocation('also, when is completion')).toBeUndefined();
+    expect(extractLocation('when is completion')).toBeUndefined();
+    expect(extractLocation('bhai kab milega batao')).toBeUndefined();
+    expect(extractLocation('also, share down payment please')).toBeUndefined();
+    expect(extractLocation('share inventory')).toBeUndefined();
+    expect(extractLocation('bhai builder kaun hai batao')).toBeUndefined();
+    expect(extractLocation('also, share tell me more')).toBeUndefined();
     const s = commitTo(initState('c1', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
     const locAsk = extractFactsSync('for this project, tell me location', s);
     expect(locAsk.constraints.location).toBeUndefined();
@@ -79,6 +87,19 @@ describe('Phase 0 — location extraction gates', () => {
     expect(detectTopics('hey, tell me about returns if available')).toContain('overview');
     expect(detectTopics('hey, tell me about returns if available')).not.toContain('availability');
     expect(extractLocation('project se airport kitna door batao')).toBeUndefined();
+  });
+
+  it('residual P0 facets: inventory, CLP, commute, overview hinglish', () => {
+    expect(detectTopics('share inventory')).toContain('availability');
+    expect(detectTopics('for this project, what is the CLP')).toContain('price');
+    expect(detectTopics('also, share down payment please')).toContain('price');
+    expect(detectTopics('what about commute')).toContain('location');
+    expect(detectTopics('bhai builder kaun hai batao')).toContain('overview');
+    expect(detectTopics('also, share tell me more')).toContain('overview');
+    expect(detectTopics('tradeoff the top ones please')).toContain('compare');
+    expect(detectTopics('price, when is completion')).toEqual(
+      expect.arrayContaining(['price', 'availability']),
+    );
   });
 });
 
