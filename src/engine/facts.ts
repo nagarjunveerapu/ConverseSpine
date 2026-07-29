@@ -727,7 +727,8 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   {
     topic: 'compare',
     // "project se kaun better" / "inmein se kaun better" — Hinglish among-these.
-    re: /\b(?:compare|vs|versus|side by side|difference between|both projects?|trade-?offs?|\bdifferences?\b|dono\s+farq|farq\s+kya|kaun\s+better|(?:project|projects|inmein|inme|dono(?:\s+mein)?)\s+se\s+kaun)\b/i,
+    // Stress: bare "tradeoff/difference/which is better the top ones".
+    re: /\b(?:compare|vs|versus|side by side|difference between|both projects?|trade-?offs?|\bdifferences?\b|\bdifference\b|\btradeoff\b|which\s+is\s+better|dono\s+farq|farq\s+kya|kaun\s+better|(?:project|projects|inmein|inme|dono(?:\s+mein)?)\s+se\s+kaun)\b/i,
   },
   {
     // Cost-sheet components (stamp duty, registration charges, taxes) are price
@@ -735,7 +736,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     // Bare "kitna" excluded when paired with distance ("airport kitna door").
     topic: 'price',
     re: new RegExp(
-      `\\b(?:prices?|pricing|cost|how much|pricing batao|(?:kitna(?!\\s+door))|padega|bsp|basic\\s+sale\\s+price|carpet(?:\\s+area)?|sba|super\\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\\s+prices?|best\\s+price|any\\s+discount|discounts?|offers?|${COST_COMPONENT_SRC})\\b`,
+      `\\b(?:prices?|pricing|cost|how much|pricing batao|(?:kitna(?!\\s+door))|padega|bsp|basic\\s+sale\\s+price|carpet(?:\\s+area)?|sba|super\\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\\s+prices?|best\\s+price|any\\s+discount|discounts?|offers?|payment\\s+plan|payment\\s+schedule|construction[- ]linked|clp|down\\s*payments?|${COST_COMPONENT_SRC})\\b`,
       'i',
     ),
   },
@@ -752,7 +753,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   {
     // Asking about a project's location/connectivity — not "schools nearby" soft amenity.
     topic: 'location',
-    re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|map|directions?|micro[- ]?market|tell\s+me\s+location|location\s+kahan|airport\s+kitna\s+door|kitna\s+door)\b|\blocation\s*\?/i,
+    re: /\b(?:location details?|where(?:'s| is)(?: it| this)?\s*\?|connectivity|distance|how far|map|directions?|micro[- ]?market|tell\s+me\s+location|location\s+kahan|airport\s+kitna\s+door|kitna\s+door|commute)\b|\blocation\s*\?/i,
   },
   // EMI amount / installment only — bare "loan" / "home loan" is legal+FAQ above.
   { topic: 'emi', re: /\b(?:\bemi\b|monthly\s+payment|installment|loan\s+emi|emi\s+(?:kitna|amount|calc(?:ulate)?))\b/i },
@@ -770,7 +771,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     // Bare "available" removed — trailing "if available" / "is OC available"
     // were stealing builder/legal asks into the config dump.
     topic: 'availability',
-    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|availability|(?:units?|configs?|configurations?|inventory|flats?|apartments?)\s+available|available\s+(?:units?|configs?|configurations?|inventory)|is\s+(?:it|this)\s+available|still\s+available|what'?s\s+available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
+    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|availability|\binventory\b|(?:units?|configs?|configurations?|inventory|flats?|apartments?)\s+available|available\s+(?:units?|configs?|configurations?|inventory)|is\s+(?:it|this)\s+available|still\s+available|what'?s\s+available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b/i,
   },
   {
     topic: 'media',
@@ -780,7 +781,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     // Focused project/builder/USP asks — hold overview so discourse prefixes
     // ("also,", "about this project") cannot become a fake locality.
     topic: 'overview',
-    re: /\b(?:about\s+this\s+project|project\s+overview|usps?|highlights?|builder\s+(?:reputation|honesty|credibility|track\s+record)|developer\s+track\s+record|who\s+is\s+the\s+builder|resale\s+value|\broi\b|appreciation|rental\s+yield|(?:what\s+|tell\s+me\s+about\s+|about\s+)?returns?)\b/i,
+    re: /\b(?:about\s+this\s+project|project\s+overview|project\s+details?|tell\s+me\s+more|usps?|highlights?|builder\s+(?:reputation|honesty|credibility|track\s+record|kaun)|(?:builder\s+)?kaun\s+hai|kya\s+special|developer\s+track\s+record|who\s+is\s+the\s+builder|resale\s+value|\broi\b|appreciation|rental\s+yield|(?:what\s+|tell\s+me\s+about\s+|about\s+)?returns?)\b/i,
   },
 ];
 
@@ -791,7 +792,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
  * availability so price+possession+RERA forms a 3-topic compose set.
  */
 const POSSESSION_MULTI_FACET =
-  /\b(?:possession(?:\s+date)?|handover(?:\s+date)?|completion\s+date|delivery\s+(?:date|timeline))\b/i;
+  /\b(?:possession(?:\s+date)?|handover(?:\s+date)?|completion(?:\s+date)?|delivery\s+(?:date|timeline)|kab\s+milega|milega)\b/i;
 
 /**
  * Soft hedges / fillers that must not create topics or localities.
@@ -1207,13 +1208,19 @@ const LOCALITY_STOP = new Set([
   'ltv',
   // Stress-corpus discourse prefixes that were becoming fake localities:
   // "also, ROI?" → apartments in *also*; "about this project" → *about*.
-  'also', 'too', 'hey', 'hi', 'hello', 'for', 'about', 'asap', 'pls', 'tell',
-  'share', 'list', 'one', 'thing', 'quick', 'q', 'teh', 'the', 'top', 'ones',
-  'difference', 'tradeoff', 'returns', 'appreciation', 'roi', 'builder',
+  'also', 'too', 'hey', 'hi', 'hello', 'for', 'about', 'asap', 'pls', 'please',
+  'tell', 'share', 'list', 'one', 'thing', 'quick', 'q', 'teh', 'the', 'top',
+  'ones', 'difference', 'tradeoff', 'returns', 'appreciation', 'roi', 'builder',
   'reputation', 'honesty', 'developer', 'usps', 'usp', 'highlights', 'completion',
   'delivery', 'timeline', 'clp', 'payment', 'schedule', 'resale', 'value',
+  // Copulas / leftovers after stop-trim: "when is completion" → *is*.
+  'is', 'are', 'am', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did',
+  'has', 'have', 'had', 'down', 'inventory', 'more', 'special',
+  // Hinglish discourse that was becoming fake localities.
+  'bhai', 'kab', 'milega', 'batao', 'bata', 'dena', 'kaun', 'hai', 'kya', 'na',
   // Facet words that survive after peeling "tell me …" — never places.
   'location', 'locations', 'connectivity', 'distance', 'map', 'directions',
+  'commute',
 ]);
 
 /** Facet / Q&A chips that must never become constraints.location. */

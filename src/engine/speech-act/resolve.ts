@@ -27,7 +27,7 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.handoff',
-    re: /\b(?:talk to (?:a |an )?(?:human|agent|person)|speak to (?:someone|a human)|call me(?: back)?|request(?: a)? callback|escalate|connect me (?:to|with))\b/i,
+    re: /\b(?:talk to (?:a |an )?(?:human|agent|person)|speak to (?:someone|a human)|call me(?: back)?|request(?: a)? callback|callback\s+do|callback\b|escalate|connect me (?:to|with))\b/i,
     priority: 95,
   },
   {
