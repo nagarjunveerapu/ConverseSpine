@@ -10,6 +10,15 @@ Generated from `docs/reports/intent-stress-2026-07-29T12-12-10/fails-for-train.j
 4. **`P2.jsonl`** = multi-intent atomized (same text, one row per expected atom) — keep only atoms clearly present in the phrasing.
 5. Tell me which file/IDs to promote; I will push to registry + INTENT_VECTORS.
 
+
+## P1 promote (2026-07-30)
+
+- Input: 362 non-EN singles (hi/ta/te/kn)
+- Promoted: **361** (skipped 1 duplicate `ROI?`)
+- Registry: `promote_batch=P1`, `source=stress_fail_p1_2026_07_30`
+- Vectorize: additive upsert **361/361** → space `p256-f6665e0b79`
+- Artifacts: `P1-promoted.jsonl`, `P1-upsert-items.jsonl`, `P1-upsert-result.json`, `P1-reprobe-corpus.jsonl`
+
 ## Priority
 
 | Pri | Meaning | Count |

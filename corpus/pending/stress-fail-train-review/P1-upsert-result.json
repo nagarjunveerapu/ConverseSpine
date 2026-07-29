@@ -1,0 +1,18 @@
+{
+  "base": "https://converse-spine-dev.nagarjun-arjun.workers.dev",
+  "items": 361,
+  "written": 361,
+  "errors": 0,
+  "reports": [
+    {
+      "http": 200,
+      "batch_start": 0,
+      "size": 361,
+      "ok": true,
+      "written": 361,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    }
+  ]
+}
