@@ -48,12 +48,14 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.compare',
-    re: /\b(?:compare|vs\.?|versus|side[\s-]by[\s-]side|difference between)\b|\bcompare (?:the |both |all )?(?:projects?|options?|them|these|both)\b|\b(?:can you |could you |please )?compare\b/i,
+    re: /\b(?:compare|vs\.?|versus|side[\s-]by[\s-]side|difference between|dono\s+farq|farq\s+kya|kaun\s+better|trade-?offs?|(?:project|projects|inmein|inme|dono(?:\s+mein)?)\s+se\s+kaun)\b|\bcompare (?:the |both |all )?(?:projects?|options?|them|these|both)\b|\b(?:can you |could you |please )?compare\b/i,
     priority: 75,
   },
   {
+    // True objections only — "best price" / "any discount" are price asks
+    // (chip.answer.price), not playbook objections (no-playbook → clarify).
     id: 'chip.object',
-    re: /\b(?:any\s+discount|best\s+price|negotiable|too\s+(?:expensive|far|risky|high|costly)|(?:feels|seems|looks|is|bit)\s+(?:too\s+)?(?:expensive|pricey|high|overpriced)|on\s+the\s+(?:higher|expensive)\s+side|out\s+of\s+(?:budget|range)|over\s+budget|not\s+convinced)\b/i,
+    re: /\b(?:too\s+(?:expensive|far|risky|high|costly)|(?:feels|seems|looks|is|bit)\s+(?:too\s+)?(?:expensive|pricey|high|overpriced)|on\s+the\s+(?:higher|expensive)\s+side|out\s+of\s+(?:budget|range)|over\s+budget|not\s+convinced)\b/i,
     priority: 70,
   },
   {
@@ -63,7 +65,7 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   },
   {
     id: 'chip.answer.price',
-    re: /\b(?:prices?|pricing|cost|how much|pricing batao|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|per\s*(?:sq\.?\s*ft|sqft|sft)|starting\s+prices?)\b/i,
+    re: /\b(?:prices?|pricing|cost|how much|pricing batao|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|per\s*(?:sq\.?\s*ft|sqft|sft)|starting\s+prices?|best\s+price|any\s+discount|discounts?|offers?|negotiable)\b/i,
     priority: 60,
   },
   {
@@ -91,7 +93,7 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   {
     id: 'chip.answer.location',
     // Not bare "nearby" — that fires on search soft prefs ("schools nearby").
-    re: /\b(?:location details?|location\s*(?:&|and)\s*connectivity|where(?:'s| is)(?: it| this)?\s*\?|connectivity|how far|micro[- ]?market|growth\s*corridor)\b|^location\s*\?$/i,
+    re: /\b(?:location details?|location\s*(?:&|and)\s*connectivity|where(?:'s| is)(?: it| this)?\s*\?|connectivity|how far|micro[- ]?market|growth\s*corridor)\b|\blocation\s*\?/i,
     priority: 48,
   },
   // Compare lenses (P7 chips) — keep on compare path, not project search

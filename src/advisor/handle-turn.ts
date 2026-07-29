@@ -25,6 +25,24 @@ import type { Failure } from '../engine/outcome.js';
 
 const DEFAULT_ADVISOR_BUILDER = 'naya-advisor';
 
+/**
+ * Whether Advisor board project_id must re-commit focus this turn.
+ * Pure — sticky handoff with the same projectId still needs commitTo so
+ * phase returns to focused (catalog asks after escalate).
+ */
+export function needsAdvisorFocusRestore(input: {
+  skipStickyFocus: boolean;
+  phase: string;
+  focusProjectId?: string;
+  boardProjectId: string;
+}): boolean {
+  if (input.skipStickyFocus) return false;
+  if (!input.focusProjectId) return true;
+  if (input.focusProjectId !== input.boardProjectId) return true;
+  if (input.phase === 'handoff') return true;
+  return false;
+}
+
 export async function handleAdvisorTurn(
   rt: ConverseRuntime,
   body: AdvisorTurnRequest,
@@ -203,11 +221,22 @@ export async function handleAdvisorTurn(
     const skipStickyFocus =
       existing.phase === 'visit' ||
       isVisitFollowUpQuestion(text) ||
-      (isVisitRouteExpand(text) && existing.visit?.projectId);
-    if (!skipStickyFocus && existing.focus?.projectId !== projectId) {
+      (isVisitRouteExpand(text) && Boolean(existing.visit?.projectId));
+    // Re-enter focused when the board pins a project — including from sticky
+    // handoff (phase===handoff with focus still set). Old gate only committed
+    // when projectId differed, so handoff→brochure/loan fell to no_fit
+    // "which project?" even though the board still had Eldorado pinned.
+    const needsFocusRestore = needsAdvisorFocusRestore({
+      skipStickyFocus,
+      phase: existing.phase,
+      focusProjectId: existing.focus?.projectId,
+      boardProjectId: projectId,
+    });
+    if (needsFocusRestore) {
       const name =
         projectName ||
         existing.discover.lastOffered.find((p) => p.projectId === projectId)?.name ||
+        existing.focus?.projectName ||
         projectId;
       if (existing.ndConversationId) {
         await rt.engine.crm.commitProject(existing.ndConversationId, projectId).catch(() => {});

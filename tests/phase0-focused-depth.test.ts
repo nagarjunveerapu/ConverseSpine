@@ -44,6 +44,42 @@ describe('Phase 0 — location extraction gates', () => {
     expect(ex.askTopics).toContain('price');
     expect(wantsCostBreakdown('breakdown of costs')).toBe(true);
   });
+
+  it('does not treat discourse prefixes as localities (also/about/for this project)', () => {
+    expect(extractLocation('also, ROI? for this one')).toBeUndefined();
+    expect(extractLocation('also, builder reputation?')).toBeUndefined();
+    expect(extractLocation('about this project? for this one')).toBeUndefined();
+    expect(extractLocation('for this project, tell me location')).toBeUndefined();
+    const s = commitTo(initState('c1', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
+    const locAsk = extractFactsSync('for this project, tell me location', s);
+    expect(locAsk.constraints.location).toBeUndefined();
+    expect(locAsk.askTopics).toContain('location');
+    const ex = extractFactsSync('also, what resale value can I expect if available', s);
+    expect(ex.constraints.location).toBeUndefined();
+    expect(ex.askTopics ?? []).not.toContain('availability');
+  });
+
+  it('if-available hedge does not steal builder/legal into availability', () => {
+    expect(detectTopics('builder reputation? if available')).toContain('overview');
+    expect(detectTopics('builder reputation? if available')).not.toContain('availability');
+    expect(detectTopics('also, is OC available')).toContain('legal');
+    expect(detectTopics('also, is OC available')).not.toContain('availability');
+  });
+
+  it('park amenity ask and airport hinglish land on facets', () => {
+    expect(detectTopics('park?')).toContain('amenities');
+    expect(detectTopics('list the park')).toContain('amenities');
+    expect(detectTopics('airport kitna door batao')).toContain('location');
+    expect(detectTopics('airport kitna door batao')).not.toContain('price');
+    expect(detectTopics('any best price on this')).toContain('price');
+    expect(detectTopics('dono farq kya hai')).toContain('compare');
+    expect(detectTopics('project se kaun better please')).toContain('compare');
+    expect(detectTopics('inmein se kaun better')).toContain('compare');
+    expect(detectTopics('location? please')).toContain('location');
+    expect(detectTopics('hey, tell me about returns if available')).toContain('overview');
+    expect(detectTopics('hey, tell me about returns if available')).not.toContain('availability');
+    expect(extractLocation('project se airport kitna door batao')).toBeUndefined();
+  });
 });
 
 describe('Phase 0 — the/this project binding', () => {

@@ -30,9 +30,9 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     // Desk canonical FAQ key is `banks` (loan_eligibility aliases there).
-    // Focused chips + natural loan asks (incl. trailing ?).
+    // Focused chips + natural loan asks (incl. trailing ? / LTV).
     key: 'banks',
-    re: /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:for\s+this|on\s+this|against))\b/i,
+    re: /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:for\s+this|on\s+this|against)|\bltv\b|loan\s+to\s+value)\b/i,
   },
   {
     // "is it ready to move?" (no trailing "in") is the same possession ask —
@@ -46,10 +46,10 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /^when\s*[?.!]?\s*$/i,
   },
   {
-    // Discount/offer chip — land on payment_plan FAQ when Desk has it; else
-    // FactKey `price` still drives the answer contract.
+    // Discount/offer chip + free-text negotiate — land on payment_plan FAQ when
+    // Desk has it; else FactKey `price` still drives the answer contract.
     key: 'payment_plan',
-    re: /^(?:discounts?|offers?)\s*[?.!]?\s*$/i,
+    re: /^(?:discounts?|offers?)\s*[?.!]?\s*$|\b(?:any\s+)?(?:best\s+)?(?:price|discount|offer)s?\s+(?:on\s+this|for\s+this)|(?:any|best)\s+(?:price|discount|offer)s?\b/i,
   },
   {
     key: 'amenities',
@@ -71,7 +71,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'builder_credibility',
-    re: /\b(?:builder\s+(?:track\s+record|credibility|reputation|honest)|is\s+(?:the\s+|this\s+)?builder\s+honest|how\s+reliable\s+is\s+(?:the\s+)?builder|honest\s+(?:builder|person))\b/i,
+    re: /\b(?:(?:builder|developer)\s+(?:track\s+record|credibility|reputation|honesty|honest)|is\s+(?:the\s+|this\s+)?builder\s+honest|how\s+reliable\s+is\s+(?:the\s+)?builder|who\s+is\s+the\s+builder|honest\s+(?:builder|person))\b/i,
   },
   {
     key: 'rera_status',
@@ -93,7 +93,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'airport_distance',
-    re: /\b(?:airport(?:\s+distance)?|how\s+far(?:\s+is)?\s+(?:the\s+)?airport)\b/i,
+    re: /\b(?:airport(?:\s+distance)?|how\s+far(?:\s+is)?\s+(?:the\s+)?airport|airport\s+kitna\s+door|kitna\s+door(?:\s+hai)?)\b/i,
   },
 
   // ——— AB-1: the orphaned corpus ———

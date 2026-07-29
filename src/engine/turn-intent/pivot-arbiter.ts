@@ -72,13 +72,13 @@ export function isImplausibleLocationCapture(loc: string, text: string): boolean
   if (looksLikeGibberishLocation(l)) return true;
   // Facet / chip / temporal vocabulary — never a locality.
   if (
-    /\b(?:appreciat|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loan|discount|honest|guarantee|flexible|years?|book\s+today)\b/i.test(
+    /\b(?:appreciat|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loans?|discount|honest|guarantee|flexible|years?|book\s+today|\bltv\b)\b/i.test(
       l,
     )
   ) {
     return true;
   }
-  if (/^(?:when|loan|discount|discounts?|emi|offers?|fine|which|what|how|yes|no|ok|thanks)$/i.test(locLc)) {
+  if (/^(?:when|loans?|discount|discounts?|emi|offers?|fine|which|what|how|yes|no|ok|thanks|ltv)$/i.test(locLc)) {
     return true;
   }
   // Whole-utterance capture: junk when the utterance is not a bare place phrase.

@@ -20,8 +20,12 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   },
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
-  // Focused chip — discount/offer is a price/negotiation ask on this project.
-  { key: 'price', pattern: /^(?:discounts?|offers?)\s*[?.!]?\s*$/i },
+  // Focused chip + free-text negotiate ("any discount on this", "best price?").
+  {
+    key: 'price',
+    pattern:
+      /^(?:discounts?|offers?|best\s+price)\s*[?.!]?\s*$|\b(?:any\s+)?(?:best\s+)?(?:price|discount|offer)s?\s+(?:on\s+this|for\s+this)|(?:any|best)\s+(?:price|discount|offer)s?\b/i,
+  },
   { key: 'flood_zone', pattern: /\b(?:flood|flooding|flood[- ]?zone)\b/i },
   // Advisory atoms — deliver when approved market intel / project ROI is on
   // detail; otherwise no_data (C1: never invent a %).

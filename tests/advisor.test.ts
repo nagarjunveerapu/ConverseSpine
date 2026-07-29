@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapAdvisorTurnResponse } from '../src/advisor/map-response.js';
+import { needsAdvisorFocusRestore } from '../src/advisor/handle-turn.js';
 import { sessionToConvId, sessionToPhone } from '../src/advisor/session.js';
 import { initState } from '../src/engine/state.js';
 import type { TurnDebug } from '../src/engine/types.js';
@@ -9,6 +10,64 @@ describe('advisor session', () => {
     const sid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
     expect(sessionToPhone(sid)).toBe('+9190a1b2c3d4e5');
     expect(sessionToConvId(sid)).toBe(`advisor:${sid}`);
+  });
+});
+
+describe('needsAdvisorFocusRestore', () => {
+  const eldo = 'brigade-eldorado-naya-advisor';
+
+  it('restores when focus is missing', () => {
+    expect(
+      needsAdvisorFocusRestore({
+        skipStickyFocus: false,
+        phase: 'discover',
+        boardProjectId: eldo,
+      }),
+    ).toBe(true);
+  });
+
+  it('restores when board project differs from focus', () => {
+    expect(
+      needsAdvisorFocusRestore({
+        skipStickyFocus: false,
+        phase: 'focused',
+        focusProjectId: 'other',
+        boardProjectId: eldo,
+      }),
+    ).toBe(true);
+  });
+
+  it('restores when phase is sticky handoff even if focus already matches', () => {
+    expect(
+      needsAdvisorFocusRestore({
+        skipStickyFocus: false,
+        phase: 'handoff',
+        focusProjectId: eldo,
+        boardProjectId: eldo,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not restore when already focused on the board project', () => {
+    expect(
+      needsAdvisorFocusRestore({
+        skipStickyFocus: false,
+        phase: 'focused',
+        focusProjectId: eldo,
+        boardProjectId: eldo,
+      }),
+    ).toBe(false);
+  });
+
+  it('respects visit skipStickyFocus', () => {
+    expect(
+      needsAdvisorFocusRestore({
+        skipStickyFocus: true,
+        phase: 'handoff',
+        focusProjectId: eldo,
+        boardProjectId: eldo,
+      }),
+    ).toBe(false);
   });
 });
 
