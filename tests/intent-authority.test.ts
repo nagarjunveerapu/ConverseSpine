@@ -118,4 +118,27 @@ describe('unknown recovery authority', () => {
       ),
     ).toBe(false);
   });
+
+  it('does not steal FactKey asks that answerRequirements already owns', () => {
+    const miss = routing({ miss_reason: 'below_tau', top_kind: 'other' });
+    // Appreciation is a FactKey on overview — never askTopic — so extract
+    // looks "empty" while the answer contract already understood the turn.
+    expect(
+      shouldSurfaceUnknownIntent(EX, miss, false, 'has this area appreciated'),
+    ).toBe(false);
+    expect(
+      shouldSurfaceUnknownIntent(EX, miss, false, 'what is the rental yield?'),
+    ).toBe(false);
+    // Truly empty free text still surfaces unknown.
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'asdf qwer')).toBe(true);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false)).toBe(true);
+  });
+
+  it('does not steal focused FAQ / menu chips', () => {
+    const miss = routing({ miss_reason: 'below_tau', top_kind: 'other' });
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'when')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'loan')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'discount')).toBe(false);
+    expect(shouldSurfaceUnknownIntent(EX, miss, false, 'is builder honest person')).toBe(false);
+  });
 });

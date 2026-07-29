@@ -30,6 +30,24 @@ describe('AB-3 — locality noise is not a place', () => {
     expect(extractLocation('projects in North Bangalore')).toBe('North Bangalore');
   });
 
+  it('does not invent localities from facet chips or yield phrases', () => {
+    expect(extractLocation('when')).toBeUndefined();
+    expect(extractLocation('loan')).toBeUndefined();
+    expect(extractLocation('discount')).toBeUndefined();
+    expect(extractLocation('fine, just yield, one number')).toBeUndefined();
+    expect(extractLocation('rental yield percent, ballpark')).toBeUndefined();
+    expect(
+      extractLocation('guarantee me 20% appreciation in 3 years and I book today'),
+    ).toBeUndefined();
+    expect(extractLocation('is builder honest person')).toBeUndefined();
+    expect(extractLocation('budget 70L but flexible')).toBeUndefined();
+  });
+
+  it('still captures bare real places', () => {
+    expect(extractLocation('Whitefield')).toBe('Whitefield');
+    expect(extractLocation('banglore whitefield')).toBe('banglore whitefield');
+  });
+
   // Spelling/alias resolution (Mysore→Mysuru) is Desk's job — the geo registry
   // (areasSemantic / resolveGeo) owns served-area truth, not a hardcoded map here.
   // The engine extracts the buyer's word as-is and lets Desk resolve it.

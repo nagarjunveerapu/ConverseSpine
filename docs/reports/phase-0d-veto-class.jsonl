@@ -1,0 +1,80 @@
+{"buyer_text":"looking for apartments 3BHK","sil_intent":"get_availability","sil_score":0.90535116}
+{"buyer_text":"budget 70 lakh, 2 BHK in Whitefield","sil_intent":"get_price","sil_score":0.8929656}
+{"buyer_text":"1 crore, 3BHK, final answer","sil_intent":"get_brochure","sil_score":0.8851403}
+{"buyer_text":"3 BHK in Mumbai","sil_intent":"get_brochure","sil_score":0.88452536}
+{"buyer_text":"budget is tight, 60 lakhs max","sil_intent":"get_brochure","sil_score":0.88384235}
+{"buyer_text":"Brigade Orchards","sil_intent":"get_project_info","sil_score":0.8826125}
+{"buyer_text":"Down payment needed","sil_intent":"get_payment_plan","sil_score":0.8798875}
+{"buyer_text":"80 lakh hai bas, itne me acha milega kya","sil_intent":"get_price","sil_score":0.8798859}
+{"buyer_text":"budget 50L","sil_intent":"get_price","sil_score":0.8779856}
+{"buyer_text":"We're a young couple buying our first home. Budget about 90 lakhs, both work in Whitefield, want a 2BHK with good resale. A bit worried about builder delays. Where should we look?","sil_intent":"get_price","sil_score":0.87729895}
+{"buyer_text":"Buy, 70 lakh, 2 BHK","sil_intent":"get_brochure","sil_score":0.87661725}
+{"buyer_text":"when is possession","sil_intent":"ask_delivery_timeline","sil_score":0.87430024}
+{"buyer_text":"Brigade Meadows","sil_intent":"get_project_info","sil_score":0.8735011}
+{"buyer_text":"70L","sil_intent":"get_brochure","sil_score":0.8703611}
+{"buyer_text":"Actually is there anything at 50 lakhs","sil_intent":"get_price","sil_score":0.8691246}
+{"buyer_text":"3 BHK in Whitefield","sil_intent":"get_availability","sil_score":0.8659046}
+{"buyer_text":"master plan please","sil_intent":"get_brochure","sil_score":0.8655672}
+{"buyer_text":"booking amount","sil_intent":"get_payment_plan","sil_score":0.86496264}
+{"buyer_text":"2 BHK in Jayanagar","sil_intent":"get_availability","sil_score":0.8615061}
+{"buyer_text":"guarantee me 20% appreciation in 3 years and I book today","sil_intent":"get_brochure","sil_score":0.8600781}
+{"buyer_text":"Fine, lock it if you can do 12%","sil_intent":"get_brochure","sil_score":0.8600671}
+{"buyer_text":"2 bhk apartment in North Bangalore under 1 crore","sil_intent":"get_price","sil_score":0.8596919}
+{"buyer_text":"send pics","sil_intent":"get_brochure","sil_score":0.8591291}
+{"buyer_text":"Brigade Eldorado","sil_intent":"get_project_info","sil_score":0.8586139}
+{"buyer_text":"50L","sil_intent":"get_price","sil_score":0.85800695}
+{"buyer_text":"I want something green near the hills","sil_intent":"get_availability","sil_score":0.85668105}
+{"buyer_text":"payment schedule","sil_intent":"get_payment_plan","sil_score":0.8554}
+{"buyer_text":"Brigade Atmosphere","sil_intent":"get_project_info","sil_score":0.8543485}
+{"buyer_text":"banglore whitefield","sil_intent":"get_project_info","sil_score":0.8537795}
+{"buyer_text":"Krishnaja Greens","sil_intent":"get_project_info","sil_score":0.85339075}
+{"buyer_text":"Vanam","sil_intent":"get_project_info","sil_score":0.85325366}
+{"buyer_text":"3 BHK in Whitefield under 1.5 Cr","sil_intent":"get_availability","sil_score":0.85209954}
+{"buyer_text":"also Krishnaja Greens","sil_intent":"get_price","sil_score":0.84966075}
+{"buyer_text":"is anything move-in ready in whitefield or sarjapur","sil_intent":"ask_about_builder","sil_score":0.8478061}
+{"buyer_text":"Let's go back to 1.2 crore for 3BHK","sil_intent":"get_brochure","sil_score":0.84585214}
+{"buyer_text":"Clarks Exotica","sil_intent":"get_project_info","sil_score":0.8447398}
+{"buyer_text":"ready to move","sil_intent":"ask_delivery_timeline","sil_score":0.8442394}
+{"buyer_text":"Brigade Oasis","sil_intent":"get_project_info","sil_score":0.84325993}
+{"buyer_text":"2 bhk apartment in North Bangalore","sil_intent":"get_price","sil_score":0.8419961}
+{"buyer_text":"investment ke liye, rent nikalna hai","sil_intent":"get_brochure","sil_score":0.84183925}
+{"buyer_text":"We're a young couple buying our first home. Budget about 90 lakhs, both work in Whitefield, want a 2BHK with good resale.","sil_intent":"get_brochure","sil_score":0.8405559}
+{"buyer_text":"CC commencement certificate date","sil_intent":"ask_delivery_timeline","sil_score":0.8391936}
+{"buyer_text":"must move in within a month","sil_intent":"compute_emi","sil_score":0.8377339}
+{"buyer_text":"sorry I meant 2 BHK not 3","sil_intent":"get_brochure","sil_score":0.837058}
+{"buyer_text":"actually my budget is only 50L","sil_intent":"get_price","sil_score":0.8344099}
+{"buyer_text":"has OC been received","sil_intent":"get_legal_info","sil_score":0.83377504}
+{"buyer_text":"my pension is 60 lakh total","sil_intent":"compute_emi","sil_score":0.83269936}
+{"buyer_text":"fine, just yield, one number","sil_intent":"get_price","sil_score":0.8322616}
+{"buyer_text":"Ayana","sil_intent":"get_project_info","sil_score":0.83121645}
+{"buyer_text":"summarize everything we discussed","sil_intent":"ask_delivery_timeline","sil_score":0.8304328}
+{"buyer_text":"earliest handover you have","sil_intent":"ask_delivery_timeline","sil_score":0.8304009}
+{"buyer_text":"i trust you, just tell me haan ya na","sil_intent":"ask_about_builder","sil_score":0.83008575}
+{"buyer_text":"no wait keep chatting","sil_intent":"ask_delivery_timeline","sil_score":0.82899743}
+{"buyer_text":"is builder honest person","sil_intent":"ask_delivery_timeline","sil_score":0.8281933}
+{"buyer_text":"has this area appreciated","sil_intent":"ask_investment_return","sil_score":0.82767797}
+{"buyer_text":"Hi, I'm an NRI in Dubai looking to invest in a 2BHK in Bangalore, budget 1.2 crore, for rental income.","sil_intent":"get_brochure","sil_score":0.82621694}
+{"buyer_text":"Two kids, need at least 2BHK ready to move","sil_intent":"get_availability","sil_score":0.8250571}
+{"buyer_text":"rental yield percent, ballpark","sil_intent":"get_location_info","sil_score":0.8248387}
+{"buyer_text":"expected appreciation percentage","sil_intent":"ask_investment_return","sil_score":0.8243334}
+{"buyer_text":"resale","sil_intent":"get_brochure","sil_score":0.82433116}
+{"buyer_text":"no under construction","sil_intent":"ask_delivery_timeline","sil_score":0.8209599}
+{"buyer_text":"budget 70L but flexible","sil_intent":"negotiate_price","sil_score":0.8202958}
+{"buyer_text":"I'm looking for a home but honestly I think these advisor bots are useless. Prove me wrong.","sil_intent":"ask_about_builder","sil_score":0.8192611}
+{"buyer_text":"fine, of YOUR three, final ranking 1-2-3","sil_intent":"get_brochure","sil_score":0.81865805}
+{"buyer_text":"Interested in pre-launch and under-construction for appreciation","sil_intent":"ask_delivery_timeline","sil_score":0.81606424}
+{"buyer_text":"what areas are good to buy in around bangalore","sil_intent":"get_location_info","sil_score":0.81470954}
+{"buyer_text":"3 BHK around 2.5 crore in North Bangalore","sil_intent":"get_price","sil_score":0.8083168}
+{"buyer_text":"3 BHK under 1.5 crore in Whitefield","sil_intent":"get_price","sil_score":0.8042323}
+{"buyer_text":"3 BHK in Devanahalli under 2.5 crore","sil_intent":"get_price","sil_score":0.8027056}
+{"buyer_text":"looking for something green near the hills for weekends","sil_intent":"get_brochure","sil_score":0.80246913}
+{"buyer_text":"Budget about 90 lakhs, both work in Whitefield","sil_intent":"get_price","sil_score":0.7993903}
+{"buyer_text":"I want to viist","sil_intent":"get_location_info","sil_score":0.79889494}
+{"buyer_text":"no self-use","sil_intent":"get_availability","sil_score":0.7961646}
+{"buyer_text":"discount","sil_intent":"negotiate_price","sil_score":0.79537815}
+{"buyer_text":"who is the builder, what's their track record","sil_intent":"ask_about_builder","sil_score":0.79425496}
+{"buyer_text":"when","sil_intent":"ask_delivery_timeline","sil_score":0.78649944}
+{"buyer_text":"Buena Vista","sil_intent":"get_location_info","sil_score":0.7826699}
+{"buyer_text":"3 BHK apartment around 2.5 crore near Devanahalli","sil_intent":"get_price","sil_score":0.78105193}
+{"buyer_text":"loan","sil_intent":"get_payment_plan","sil_score":0.7808441}
+{"buyer_text":"which project has the best rental yield?","sil_intent":"get_location_info","sil_score":0.7807673}

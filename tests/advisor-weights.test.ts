@@ -102,6 +102,7 @@ describe('value — resale/appreciation finally has a dimension (P3.4)', () => {
   it('detects resale/appreciation mentions deterministically', () => {
     expect(detectSoftPrefs('what about resale value here?').valueMentioned).toBe(true);
     expect(detectSoftPrefs('will this area appreciate?').valueMentioned).toBe(true);
+    expect(detectSoftPrefs('has this area appreciated').valueMentioned).toBe(true);
     expect(detectSoftPrefs('does it hold its value long term').valueMentioned).toBe(true);
     expect(detectSoftPrefs('shorter commute please').valueMentioned).toBeUndefined();
   });

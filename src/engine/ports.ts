@@ -375,6 +375,11 @@ export interface EngineDeps {
   /** THE WIRE — let a high-confidence answer-intent bind rescue a focused turn
    *  that would otherwise fall to search. See turn-routing/goal-rescue.ts. */
   routingInGoal?: boolean;
+  /**
+   * Phase 0d — join extract ∥ routing before turn-intent may release focus.
+   * See docs/lld/PHASE_0D_UNDERSTANDING_BEFORE_MUTATION.md.
+   */
+  understandingBeforeMutation?: boolean;
   /** Multi-intent Phase A — union topic merges (TOPIC_UNION env). */
   topicUnion?: boolean;
   /** Local dev JSONL turn log (wrangler dev only). */

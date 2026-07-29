@@ -6,12 +6,17 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   { key: 'carpet_area', pattern: /\bcarpet\s+(?:area|size)\b/i },
   { key: 'built_up_area', pattern: /\b(?:built[- ]?up|super\s+built[- ]?up|sba)\s*(?:area|size)?\b/i },
   { key: 'possession', pattern: /\b(?:possession|handover)(?:\s+(?:date|timeline|when))?\b/i },
+  // Focused menu chip — bare "when" means possession on the open project.
+  { key: 'possession', pattern: /^when\.?$/i },
   { key: 'rera', pattern: /\brera(?:\s+(?:number|status|registration))?\b/i },
   { key: 'khata', pattern: /\bkhata\b/i },
   { key: 'ec_status', pattern: /\b(?:ec|encumbrance)\s+(?:status|certificate|clear)?\b/i },
   { key: 'loan_eligibility', pattern: /\b(?:home\s+loan|loan\s+eligibility|approved\s+banks?|which\s+banks?)\b/i },
+  { key: 'loan_eligibility', pattern: /^loan\.?$/i },
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
+  // Focused chip — discount/offer is a price/negotiation ask on this project.
+  { key: 'price', pattern: /^(?:discounts?|offers?)\.?$/i },
   { key: 'flood_zone', pattern: /\b(?:flood|flooding|flood[- ]?zone)\b/i },
   // Advisory atoms — deliver when approved market intel / project ROI is on
   // detail; otherwise no_data (C1: never invent a %).

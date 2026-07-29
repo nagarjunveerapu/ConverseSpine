@@ -108,6 +108,9 @@ A forced adapter failure appears as `success: false`. One ledger row answers *"w
 
 ## 3b. Phase 0d — understanding before mutation
 
+> **Implementation design note (awaiting founder approval before code):**
+> [`PHASE_0D_UNDERSTANDING_BEFORE_MUTATION.md`](./PHASE_0D_UNDERSTANDING_BEFORE_MUTATION.md)
+
 > **Added 2026-07-27, from measurement.** This phase did not exist when §§1–13
 > were written, and every one of those phases silently assumes it. §5's own
 > gate says `ask_next_step` must be "wired as a state-conditioned **consumer**"

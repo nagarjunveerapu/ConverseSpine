@@ -105,6 +105,7 @@ import {
   recoveryUiMode,
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
+import { arbitrateFocusPivot, isImplausibleLocationCapture } from './turn-intent/pivot-arbiter.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
@@ -363,16 +364,74 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let runTurnIntent = Boolean(
     deps.turnIntent && shouldRunTurnIntent(state, input.action_id, trimmedText),
   );
+  // Phase 0d — join extract ∥ routing BEFORE turn-intent may release focus.
+  // Reused later as the main extract / precomputedRouting (no double work).
+  let earlyExtractBundle:
+    | Awaited<ReturnType<typeof extractTurnAuthority>>
+    | undefined;
+  let earlyPrecomputedRouting: TurnRoutingResult | undefined;
+  let pivotArbiterReason: string | undefined;
+
   if (
+    runTurnIntent &&
+    deps.understandingBeforeMutation &&
+    deps.routingEnv &&
+    !input.action_id &&
+    state.phase === 'focused'
+  ) {
+    const priorConstraints = { ...state.constraints };
+    const catalogForEarly = await deps.data.catalog(state.builderId).catch(() => null);
+    const [extractBundle, routingEarly] = await Promise.all([
+      extractTurnAuthority(
+        trimmedText,
+        state,
+        state.builderId,
+        {
+          llm: deps.llm,
+          semantic: deps.semantic,
+          microMarkets: catalogForEarly?.microMarkets ?? [],
+          catalogNames: catalogForEarly?.projectNames ?? [],
+          ...(deps.failureTools ? { failureTools: true } : {}),
+          ...(deps.bamlExtract
+            ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' }
+            : {}),
+          ...(deps.topicUnion ? { topicUnion: true } : {}),
+        },
+        {
+          inputSource,
+          ingressFilledSlots: ingressFilled,
+          actionId: input.action_id,
+        },
+      ),
+      classifyTurnRouting(
+        deps.routingEnv,
+        buildTurnRoutingInput(state, {} as Extracted, trimmedText, inputSource),
+      ).catch(() => undefined),
+    ]);
+    earlyExtractBundle = extractBundle;
+    earlyPrecomputedRouting = routingEarly;
+    const decision = arbitrateFocusPivot({
+      text: trimmedText,
+      priorConstraints,
+      ex: extractBundle.extracted,
+      routing: routingEarly,
+      enabled: true,
+    });
+    pivotArbiterReason = decision.reason;
+    if (decision.action === 'hold_focus') {
+      runTurnIntent = false;
+      const held = holdsFocusAgainstRelease(routingEarly, true);
+      if (held.hold) focusHeldReason = held.reason;
+    }
+  } else if (
     runTurnIntent &&
     deps.routingInGoal &&
     deps.routingEnv &&
     !input.action_id &&
     state.phase === 'focused'
   ) {
-    // No `ex` — the extract does not exist yet, and the embedding query is over
-    // text alone (DIALOGUE_STATE LLD §5); the `ex` fields only gate and
-    // arbitrate, which the full classify further down still does in full.
+    // Legacy THE WIRE (#159) — dig keeps ROUTING_IN_GOAL=false; path retained
+    // for rollback. Prefer UNDERSTANDING_BEFORE_MUTATION when both set.
     const earlyRouting = await classifyTurnRouting(
       deps.routingEnv,
       buildTurnRoutingInput(state, {} as Extracted, trimmedText, inputSource),
@@ -469,22 +528,35 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const catalogForNlu = await deps.data.catalog(state.builderId).catch(() => null);
-  const extractResult = await extractTurnAuthority(trimmedText, state, state.builderId, {
-    llm: deps.llm,
-    semantic: deps.semantic,
-    microMarkets: catalogForNlu?.microMarkets ?? [],
-    catalogNames: catalogForNlu?.projectNames ?? [],
-    ...(deps.failureTools ? { failureTools: true } : {}),
-    ...(deps.bamlExtract ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' } : {}),
-    ...(deps.topicUnion ? { topicUnion: true } : {}),
-  }, {
-    inputSource,
-    ingressFilledSlots: ingressFilled,
-    actionId: input.action_id,
-  });
+  const extractResult =
+    earlyExtractBundle ??
+    (await extractTurnAuthority(
+      trimmedText,
+      state,
+      state.builderId,
+      {
+        llm: deps.llm,
+        semantic: deps.semantic,
+        microMarkets: catalogForNlu?.microMarkets ?? [],
+        catalogNames: catalogForNlu?.projectNames ?? [],
+        ...(deps.failureTools ? { failureTools: true } : {}),
+        ...(deps.bamlExtract
+          ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' }
+          : {}),
+        ...(deps.topicUnion ? { topicUnion: true } : {}),
+      },
+      {
+        inputSource,
+        ingressFilledSlots: ingressFilled,
+        actionId: input.action_id,
+      },
+    ));
   let ex: Extracted = extractResult.extracted;
   const extractProvenance = extractResult.provenance;
   if (focusHeldReason && extractProvenance) extractProvenance.focus_held = focusHeldReason;
+  if (pivotArbiterReason && extractProvenance) {
+    extractProvenance.pivot_arbiter = pivotArbiterReason;
+  }
 
   // Trade-off soft signals (priority / hub / schools / worries) are advisor-web
   // only. detectSoftPrefs still runs in facts for the location-pollution guard,
@@ -621,6 +693,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       };
     }
   }
+  // 0d — "has this area appreciated" must not become constraints.location and
+  // trip locationBroaden → releaseToDiscover (focus cliff unrelated to search).
+  if (
+    ex.constraints.location &&
+    isImplausibleLocationCapture(ex.constraints.location, trimmedText)
+  ) {
+    const { location: _junkLoc, ...restConstraints } = ex.constraints;
+    ex = { ...ex, constraints: restConstraints };
+  }
 
   // AB-4 — focus type-freeze: while focused, a property-type word INSIDE a facet
   // question ("can I customize the villa?", "is there a corner plot premium?",
@@ -688,9 +769,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Route the final extracted turn before geography persistence when Phase 3
   // is live. This does not mutate state; it lets semantic owners reject a
   // spurious location capture before the Desk is asked to validate it.
-  let precomputedRouting: TurnRoutingResult | undefined;
+  let precomputedRouting: TurnRoutingResult | undefined = earlyPrecomputedRouting;
   let authorityClaimed = false;
-  if (deps.failureSearch) {
+  if (deps.failureSearch && !precomputedRouting) {
     precomputedRouting = await classifyTurnRouting(
       deps.routingEnv,
       buildTurnRoutingInput(state, ex, trimmedText, inputSource),
@@ -1016,7 +1097,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (
     deps.failureRouting &&
     !state.stopConfirmPending &&
-    shouldSurfaceUnknownIntent(ex, routing, authorityClaimed)
+    shouldSurfaceUnknownIntent(ex, routing, authorityClaimed, trimmedText)
   ) {
     routing = {
       routing: 'unsupported',

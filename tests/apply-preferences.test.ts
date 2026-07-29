@@ -3,6 +3,7 @@ import {
   advisorPrefsDelta,
   advisorPrefsSnapshot,
   constraintsFromAdvisorPreferences,
+  ingressFilledSlotsFromPreferences,
   mergeAdvisorPreferences,
 } from '../src/advisor/apply-preferences.js';
 import type { Constraints } from '../src/engine/types.js';
@@ -106,5 +107,20 @@ describe('advisorPrefsDelta / advisorPrefsSnapshot (recovery delta-merge)', () =
     const first = advisorPrefsSnapshot({ location: 'Devanahalli', budget: 'around 60' });
     const second = advisorPrefsSnapshot({ budget: 'up to 75' }, first);
     expect(second).toEqual({ location: 'Devanahalli', budget: 'up to 75' });
+  });
+
+  it('unchanged location delta is empty — free-text area pivots stay writable', () => {
+    // Advisor dig stress P03: sticky brief re-sent location must NOT become
+    // ingressFilledSlots.location, or "2 BHK in Jayanagar" cannot extract.
+    const snap = advisorPrefsSnapshot({
+      purpose: 'self_use',
+      budget: '₹50–70L',
+      location: 'Aerospace Park / Devanahalli Corridor',
+      property_type: 'Apartment',
+      bhk: '2 BHK',
+    });
+    const delta = advisorPrefsDelta(snap, { ...snap });
+    expect(Object.keys(delta)).toHaveLength(0);
+    expect(ingressFilledSlotsFromPreferences(delta)).toEqual([]);
   });
 });

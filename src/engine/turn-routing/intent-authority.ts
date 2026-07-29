@@ -26,6 +26,8 @@
  * topic mapping, `unmapped_kind` stops firing for it and this module goes
  * silent for that kind automatically — ownership can never be held twice.
  */
+import { answerRequirements } from '../answer-contract.js';
+import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import type { Extracted } from '../types.js';
 import type { TurnRoutingResult } from './types.js';
 
@@ -103,11 +105,17 @@ export function applyIntentAuthority(
 /**
  * Embedder abstention is the authority for the unknown recovery. Structured
  * extraction suppresses it when another owner already understood the turn.
+ *
+ * `text` (optional): FactKey patterns in `answerRequirements` own focused
+ * asks that never become `askTopic` (appreciation, yield, carpet…). Without
+ * this, embedder below_tau → "rephrase" while the answer contract already
+ * knew the ask ("has this area appreciated" cliff on dig Advisor).
  */
 export function shouldSurfaceUnknownIntent(
   ex: Extracted,
   routing: TurnRoutingResult | undefined,
   authorityClaimed: boolean,
+  text = '',
 ): boolean {
   if (authorityClaimed || routing?.routing !== 'defer') return false;
   const miss = routing.bind?.miss_reason;
@@ -133,5 +141,11 @@ export function shouldSurfaceUnknownIntent(
   ) {
     return false;
   }
+  // Closed FactKey extractors — same set that withAnswerRequirements uses.
+  if (text.trim() && answerRequirements(text).length > 0) return false;
+  // FAQ-shaped chips (builder honesty, bare loan/when…) — same closed set as
+  // focused evidence fetch. Without this, embedder below_tau → "rephrase"
+  // even when resolveFaqQuestionKeys already owned the turn.
+  if (text.trim() && resolveFaqQuestionKeys(text).length > 0) return false;
   return true;
 }

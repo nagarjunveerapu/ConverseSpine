@@ -81,9 +81,13 @@ export async function handleAdvisorTurn(
     // fields whose value CHANGED vs the last-applied snapshot apply, so a
     // stale re-sent brief can't clobber recovery edits, but a fresh buyer
     // edit mid-recovery is never swallowed wholesale again.
-    const effectivePrefs = inRecovery
-      ? advisorPrefsDelta(existing.advisorPrefsSnapshot, body.preferences)
-      : body.preferences;
+    //
+    // ingressFilledSlots always come from the DELTA, even out of recovery:
+    // the SPA re-sends the full brief every turn, and treating unchanged
+    // chips as "filled this turn" blocked free-text pivots
+    // ("2 BHK in Jayanagar" while the chip still said Devanahalli).
+    const prefsDelta = advisorPrefsDelta(existing.advisorPrefsSnapshot, body.preferences);
+    const effectivePrefs = inRecovery ? prefsDelta : body.preferences;
     if (Object.keys(effectivePrefs).length > 0) {
       const acceptedPrefs = { ...effectivePrefs };
       if (rt.engine.failureSearch && acceptedPrefs.location?.trim()) {
@@ -99,7 +103,10 @@ export async function handleAdvisorTurn(
         }
       }
       preferenceClears = preferenceClearsFromPatch(acceptedPrefs);
-      ingressFilledSlots = ingressFilledSlotsFromPreferences(acceptedPrefs);
+      // Only newly changed chip fields mask extract — not the whole re-sent brief.
+      // Use pre-resolve delta vs snapshot so durable-location normalization does
+      // not re-mask location every turn.
+      ingressFilledSlots = ingressFilledSlotsFromPreferences(prefsDelta);
       existing = {
         ...existing,
         constraints: mergeAdvisorPreferences(existing.constraints, acceptedPrefs),

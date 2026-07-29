@@ -820,7 +820,7 @@ export function detectSoftPrefs(
     out.walkabilityMentioned = true;
   }
   if (
-    /\bresale\b|\bappreciat(?:e|ion)\b|\bhold(?:s)?\s+(?:its\s+)?value\b|\bfuture\s+value\b|\brental\s+yield\b|\byield\b|\broi\b|\breturn\s+on\s+investment\b/i.test(
+    /\bresale\b|\bappreciat\w*\b|\bhold(?:s)?\s+(?:its\s+)?value\b|\bfuture\s+value\b|\brental\s+yield\b|\byield\b|\broi\b|\breturn\s+on\s+investment\b/i.test(
       text,
     )
   ) {
@@ -1017,6 +1017,16 @@ export function looksLikeOfferedProjectName(
 }
 
 export function isLocationBroadenTurn(text: string): boolean {
+  // Soft amenity asks ("looking for something green near the hills") are not
+  // area broadens — they have no named locality move.
+  if (
+    /\bnear\s+(?:the\s+)?(?:hills?|parks?|lakes?|beach|sea|mountains?|greenery|nature|green)\b/i.test(
+      text,
+    ) &&
+    !/\b(?:in|near|around)\s+[A-Z][a-z]{2,}/.test(text)
+  ) {
+    return false;
+  }
   return (
     /\b(?:projects?|properties|options|homes?)\s+in\s+/i.test(text) ||
     (/\b(?:also|too|as well)\b/i.test(text) && /\b(?:in|near|around|at)\s+/i.test(text)) ||
@@ -1141,7 +1151,13 @@ const LOCALITY_STOP = new Set([
   'show', 'looking', 'some', 'any', 'other', 'else', 'something', 'anything', 'please',
   // Discourse markers buyers open a correction with ("no wait, …", "ok so, …").
   'no', 'yes', 'yeah', 'yep', 'nope', 'ok', 'okay', 'wait', 'well', 'so', 'sure', 'hmm',
+  // Comma-lead / chip noise ("fine, just yield", "which project has…").
+  'fine', 'which', 'what', 'how', 'when', 'loan', 'discount', 'yield', 'rental',
 ]);
+
+/** Facet / Q&A chips that must never become constraints.location. */
+const NON_LOCALITY_LEXICON =
+  /\b(?:appreciat\w*|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loan|discount|honest|guarantee|flexible|years?|book\s+today|emi|offers?|looking|invest(?:ing|ment)?|interested|searching|weekends?|hills?|greenery|nature)\b/i;
 
 /**
  * Peel stopwords off both ends of a captured fragment. `isLocalityNoise` only
@@ -1220,6 +1236,21 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     // this project" grabbed "this project" — each surfaced as "No exact match for the".
     // A locality must contain at least one word that is not a stopword or a generic.
     if (isLocalityNoise(cleaned)) return undefined;
+    if (NON_LOCALITY_LEXICON.test(cleaned)) return undefined;
+    if (locationLooksPolluted(cleaned)) return undefined;
+    // Keyboard smash must not become a search locality.
+    if (
+      cleaned
+        .split(/\s+/)
+        .filter(Boolean)
+        .every(
+          (w) =>
+            /^(?:asdf|qwer|zxcv|qaz|wsx|foo|bar|baz|xxx+|aaa+|test|hjkl|uiop|abcd|xyz+)$/i.test(w) ||
+            !/[aeiouy]/i.test(w),
+        )
+    ) {
+      return undefined;
+    }
     if (looksLikeOfferedProjectName(cleaned, hints)) return undefined;
     return cleaned;
   };
@@ -1305,10 +1336,10 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&
-    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?|haan?|haaji|yeah\s+sure|yes\s+please|nahi(?:n)?(?:\s+chahiye)?)$/i.test(
+    !/^(hi|hello|hey|yes|no|ok|thanks|pricing|legal|compare|location(?:\s+details?)?|haan?|haaji|yeah\s+sure|yes\s+please|nahi(?:n)?(?:\s+chahiye)?|when|loan|discount|discounts?|offers?|emi|possession|yield|appreciation)$/i.test(
       bare,
     ) &&
-    !/\b(?:compare|both|dono|projects|options|show|visit|pricing|refining|refine|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|floor plan|chahiye)\b/i.test(bare) &&
+    !/\b(?:compare|both|dono|projects|options|show|visit|pricing|refining|refine|breakdown|costs?|details?|emi|overview|amenities|availability|brochure|floor plan|chahiye|yield|appreciat|rental|discount|loan|honest|guarantee|flexible)\b/i.test(bare) &&
     !isAdvisorBriefChipPhrase(bare) &&
     !looksLikeOfferedProjectName(bare, hints) &&
     !AFFIRM.test(bare) &&

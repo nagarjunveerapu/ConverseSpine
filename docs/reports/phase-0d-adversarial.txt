@@ -1,0 +1,215 @@
+0d adversarial → https://converse-spine-dev.nagarjun-arjun.workers.dev
+started 2026-07-29T09:07:48.223Z
+
+======== A1 appreciation guarantee ========
+PASS  A1: focused — phase=focused
+PASS  A1: no shortlist
+PASS  A1: no unknown
+PASS  A1: non-empty
+    reply: I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.
+
+======== A2 yield one-liner ========
+PASS  A2: focused — phase=focused
+PASS  A2: no shortlist
+PASS  A2: no unknown
+PASS  A2: non-empty
+    reply: I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and 
+
+======== A3 rental yield ballpark ========
+PASS  A3: focused — phase=focused
+PASS  A3: no shortlist
+PASS  A3: no unknown
+PASS  A3: non-empty
+    reply: I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and 
+
+======== A4 which project best yield (while focused) ========
+PASS  A4: focused — phase=focused
+PASS  A4: no shortlist
+PASS  A4: no unknown
+PASS  A4: non-empty
+    reply: I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and 
+
+======== A5 has this area appreciated ========
+PASS  A5: focused — phase=focused
+PASS  A5: no shortlist
+PASS  A5: no unknown
+PASS  A5: non-empty
+    reply: I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.
+
+======== B chip when ========
+PASS  B-when: focused — phase=focused
+PASS  B-when: no shortlist
+PASS  B-when: no unknown
+PASS  B-when: non-empty
+    reply: Possession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire, Jasper/Iridium) are ready or near-ready. Dioro & Beryl blocks
+
+======== B chip loan ========
+PASS  B-loan: focused — phase=focused
+PASS  B-loan: no shortlist
+PASS  B-loan: no unknown
+PASS  B-loan: non-empty
+    reply: I don't have loan eligibility on file.
+
+======== B chip discount ========
+PASS  B-discount: focused — phase=focused
+PASS  B-discount: no shortlist
+PASS  B-discount: no unknown
+PASS  B-discount: non-empty
+    reply: *Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, u
+
+======== B builder honest ========
+PASS  B-builder: focused — phase=focused
+PASS  B-builder: no shortlist
+PASS  B-builder: no unknown
+PASS  B-builder: non-empty
+    reply: *Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, u
+
+======== B budget flexible same ========
+PASS  B-flex: focused — phase=focused
+PASS  B-flex: no shortlist
+PASS  B-flex: no unknown
+PASS  B-flex: non-empty
+    reply: *Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, u
+
+======== B green near hills soft ========
+PASS  B-green: focused — phase=focused
+PASS  B-green: no shortlist
+PASS  B-green: no unknown
+PASS  B-green: non-empty
+    reply: *Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, u
+
+======== C1 whitefield typo ========
+PASS  C1: not stuck on Eldorado pin — phase=discover
+PASS  C1: no unknown
+PASS  C1: non-empty
+PASS  C1: left focus or searched — phase=discover
+    phase=discover goal=no_fit reply: Nothing in *banglore whitefield* starts within ₹70 L — closest on your brief is *Brigade Cornerstone Utopia* from ₹1.05 Cr. Want me to open 
+PASS  C1 discover
+
+======== C2 Clarks Exotica ========
+PASS  C2: not stuck on Eldorado pin — phase=discover
+PASS  C2: no unknown
+PASS  C2: non-empty
+PASS  C2: left focus or searched — phase=discover
+    phase=discover goal=recommend reply: Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L; *Brigade Orchards* in Devanahalli / Airport Cor
+PASS  C2 left focus
+
+======== C3 budget cut 50L ========
+PASS  C3: not stuck on Eldorado pin — phase=discover
+PASS  C3: no unknown
+PASS  C3: non-empty
+PASS  C3: left focus or searched — phase=discover
+    phase=discover goal=recommend reply: I couldn't match that size — here's what we do have: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹31 L. Want details o
+PASS  C3 discover
+
+======== C4 show other Whitefield ========
+PASS  C4: not stuck on Eldorado pin — phase=discover
+PASS  C4: no unknown
+PASS  C4: non-empty
+PASS  C4: left focus or searched — phase=discover
+    phase=discover goal=no_fit reply: Nothing in *Whitefield* starts within ₹70 L — closest on your brief is *Brigade Sanctuary* from ₹79 L. Want me to open *Brigade Sanctuary*?
+PASS  C4 discover
+
+======== C5 NRI Dubai brief ========
+PASS  C5: not stuck on Eldorado pin — phase=discover
+PASS  C5: no unknown
+PASS  C5: non-empty
+PASS  C5: left focus or searched — phase=discover
+    phase=discover goal=no_fit reply: I don't have apartments in *Dubai* — I have apartments in Bengaluru. Want to look there?
+PASS  C5 not focused Eldorado-only
+
+======== C6 3BHK apartments ========
+PASS  C6: not stuck on Eldorado pin — phase=discover
+PASS  C6: no unknown
+PASS  C6: non-empty
+PASS  C6: left focus or searched — phase=discover
+    phase=discover goal=recommend reply: I couldn't match that size — here's what we do have: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹31 L. Want details o
+PASS  C6 discover
+
+======== D sticky prefs → Jayanagar ========
+PASS  D: not stuck on Eldorado pin — phase=discover
+PASS  D: no unknown
+PASS  D: non-empty
+PASS  D: left focus or searched — phase=discover
+    phase=discover goal=recommend reply: I don't have apartments in *Jayanagar* — I do have apartments in Kanakapura Road, Sarjapur Road, and Jakkur. Want me to show those?
+PASS  D mentions Jayanagar or searches — I don't have apartments in *Jayanagar* — I do have apartments in Kanakapura Road
+PASS  D not unknown
+
+======== D2 sticky prefs + appreciation hold ========
+PASS  D2: focused — phase=focused
+PASS  D2: no shortlist
+PASS  D2: no unknown
+PASS  D2: non-empty
+    reply: I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.
+
+======== E1 bot when ========
+PASS  E1: focused — phase=focused
+PASS  E1: no shortlist
+PASS  E1: no unknown
+PASS  E1: non-empty
+    reply: Possession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire, Jasper/Iridium) are ready or near-ready. Dioro & Beryl blocks
+
+======== E2 bot yield ========
+PASS  E2: focused — phase=focused
+PASS  E2: no shortlist
+PASS  E2: no unknown
+PASS  E2: non-empty
+    reply: I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and 
+
+======== E3 bot whitefield pivot ========
+PASS  E3: not stuck on Eldorado pin — phase=discover
+PASS  E3: no unknown
+PASS  E3: non-empty
+PASS  E3: left focus or searched — phase=discover
+    phase=discover goal=recommend reply: Here's what fits: *Brigade Cornerstone Utopia* in Whitefield, from ₹1.05 Cr. Want details on any of these, or shall I set up a visit?
+PASS  E3 discover
+
+======== E4 bot loan ========
+PASS  E4: focused — phase=focused
+PASS  E4: no shortlist
+PASS  E4: no unknown
+PASS  E4: non-empty
+    reply: I don't have loan eligibility on file.
+
+======== F1 appreciation + Whitefield in same turn ========
+    phase=focused reply: I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.
+PASS  F1 no unknown
+PASS  F1 non-empty
+
+======== F2 fine, show me other projects ========
+PASS  F2 discover — discover
+PASS  F2 no unknown
+
+======== F3 nonsense after focus ========
+FAIL  F3 not shortlist — phase=discover
+
+======== F4 go ahead after focus ========
+    phase=focused reply: Thanks for sharing those details! Just to confirm, do you have a preferred floor level or any specific amenities you're looking for in Aeros
+PASS  F4 no shortlist cliff
+
+======== F5 possession then yield chain ========
+PASS  F5: focused — phase=focused
+PASS  F5: no shortlist
+PASS  F5: no unknown
+PASS  F5: non-empty
+    reply: I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and 
+
+======== F6 comma discourse yield ========
+PASS  F6: focused — phase=focused
+PASS  F6: no shortlist
+PASS  F6: no unknown
+PASS  F6: non-empty
+    reply: I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and 
+
+======== F7 years as fake location ========
+PASS  F7: focused — phase=focused
+PASS  F7: no shortlist
+PASS  F7: no unknown
+PASS  F7: non-empty
+    reply: I can share project prices and factual details, but I can't calculate or promise CAGR, IRR, or investment returns.
+
+======== SUMMARY ========
+TOTAL: 29/30
+FAILED:
+  - F3 nonsense after focus
+EXIT:1

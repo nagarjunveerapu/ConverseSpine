@@ -89,6 +89,9 @@ FAILURE_ANSWER = "true"
 # which is the argument for the ordering phase in the dialogue-state LLD.
 # Re-enable only with that phase, gated on the 31/33 split.
 ROUTING_IN_GOAL = "false"
+# Phase 0d — extract∥routing before focus release (dig soak only; do not merge
+# as default until founder gate). Same dig URL; flag off → prior order.
+UNDERSTANDING_BEFORE_MUTATION = "true"
 # Multi-intent Phase A — union askTopics (cap 3) instead of empty-only merge.
 # Dig-on with Phase C park (top-2 + explicit continuation). Off elsewhere until soak.
 TOPIC_UNION = "true"
