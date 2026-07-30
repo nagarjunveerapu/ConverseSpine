@@ -19,6 +19,17 @@ Generated from `docs/reports/intent-stress-2026-07-29T12-12-10/fails-for-train.j
 - Vectorize: additive upsert **361/361** → space `p256-f6665e0b79`
 - Artifacts: `P1-promoted.jsonl`, `P1-upsert-items.jsonl`, `P1-upsert-result.json`, `P1-reprobe-corpus.jsonl`
 
+
+## P2 promote (2026-07-30)
+
+- Input: 15487 atomized multi-intent candidates
+- **Applicable filter:** atom cue in phrasing; skip already-answered topic; **one vector per phrasing** (prefer rarer secondary atom over `get_price` when multi-miss)
+- Promoted: **5351** → registry `promote_batch=P2`, `source=stress_fail_p2_2026_07_30`
+- Vectorize: additive upsert **5351/5351** → space `p256-f6665e0b79`
+- Dropped: no_cue 4008, already_answered 1929, visit_already 92, conflict_loser 4107
+- Artifacts: `P2-promoted.jsonl`, `P2-upsert-items.jsonl`, `P2-upsert-result.json`, `P2-reprobe-corpus.jsonl`, `P2-reprobe-sample-600.jsonl`
+- Sample re-probe (572 stratified): **527/572 (92.1%)** — weakest: `ask_investment_return`
+
 ## Priority
 
 | Pri | Meaning | Count |
