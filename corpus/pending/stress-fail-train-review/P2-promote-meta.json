@@ -1,0 +1,47 @@
+{
+  "promoted_at": "2026-07-30T04:41:55.107Z",
+  "p2_input": 15487,
+  "appended_to_registry": 5351,
+  "filter": {
+    "require_atom_cue_in_phrasing": true,
+    "skip_already_answered_topic": true,
+    "one_vector_per_phrasing": true,
+    "preference": "rarer secondary atom over get_price when multi-miss"
+  },
+  "stats": {
+    "drop_no_cue": 4008,
+    "drop_already_answered": 1929,
+    "drop_visit_already": 92,
+    "drop_dup_registry": 0,
+    "drop_conflict_loser": 4107,
+    "keep": 5351
+  },
+  "by_intent": {
+    "ask_delivery_timeline": 817,
+    "ask_investment_return": 851,
+    "get_legal_info": 634,
+    "get_brochure": 432,
+    "book_visit": 22,
+    "compare_projects": 320,
+    "compute_emi": 440,
+    "get_location_info": 441,
+    "get_amenities": 659,
+    "get_availability": 84,
+    "get_payment_plan": 123,
+    "get_price": 528
+  },
+  "by_language": {
+    "hi-en": 2334,
+    "en": 2613,
+    "hi": 404
+  },
+  "note": "audit_status=clean; dig upsert via /internal/intent-vector; multi-intent atoms only when cue present & missed",
+  "reprobe_sample": {
+    "pass": 527,
+    "fail": 45,
+    "total": 572,
+    "pass_rate": 0.921,
+    "report": "docs/reports/intent-stress-2026-07-30T04-43-30",
+    "note": "stratified ~50/intent sample; investment_return remains weakest (Desk data gap)"
+  }
+}
