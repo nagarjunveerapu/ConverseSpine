@@ -43,5 +43,19 @@
     "pass_rate": 0.921,
     "report": "docs/reports/intent-stress-2026-07-30T04-43-30",
     "note": "stratified ~50/intent sample; investment_return remains weakest (Desk data gap)"
+  },
+  "reprobe_full": {
+    "pass": 4367,
+    "fail": 984,
+    "total": 5351,
+    "pass_rate": 0.816,
+    "by_reason": {
+      "fail_topic": 683,
+      "fail_http": 297,
+      "fail_focus": 5
+    },
+    "slow_over_25s": 1055,
+    "report": "docs/reports/intent-stress-2026-07-30T04-54-06",
+    "note": "c=30 dig soak; ~297 http/timeouts \u2014 topic residual ~683 if infra excluded"
   }
 }
