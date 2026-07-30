@@ -59,6 +59,33 @@ describe('visit exit', () => {
     expect(goal.topic).toBe('overview');
   });
 
+  it('does not defer SA-4 what-about follow-up (overview chip stays on visit day)', () => {
+    let s = initState('naya-advisor', 't-visit-whatabout');
+    s = commitTo(s, 'ayana', 'Ayana');
+    s = {
+      ...s,
+      phase: 'visit',
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+        lastAsk: 'day',
+        askCount: 1,
+        queued: [{ projectId: 'krishnaja', projectName: 'Krishnaja Greens' }],
+      },
+    };
+    const goal = visitDecide(
+      s,
+      {
+        constraints: {},
+        askTopic: 'overview',
+        askTopics: ['overview'],
+        namedProjects: [{ projectId: 'krishnaja', name: 'Krishnaja Greens' }],
+      },
+      { text: 'what about Krishnaja Greens?', now: new Date('2026-07-30T10:00:00+05:30') },
+    );
+    expect(goal.kind).toBe('visit_ask');
+  });
+
   it('defers using visit.projectId when focus was cleared', () => {
     let s = initState('naya-advisor', 't-visit-nofocus');
     s = {

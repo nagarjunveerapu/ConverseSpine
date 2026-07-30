@@ -109,13 +109,15 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
 
   // Facet/overview/FAQ mid-scheduling → answer the project, keep visit state.
   // overview was missing from the shared facet list, so builder/ROI Hindi asks
-  // fell through to visit_ask (P1 residual-22).
+  // fell through to visit_ask (P1 residual-22). Do not steal SA-4 "what about
+  // <next stop>?" follow-ups — those resolve to overview but stay on visit day.
   const deferTopic =
     (ex.askTopic && VISIT_DEFERRABLE_TOPICS.includes(ex.askTopic)) ||
     (ex.askTopics ?? []).some((t) => VISIT_DEFERRABLE_TOPICS.includes(t)) ||
     resolveFaqQuestionKeys(ctx.text).length > 0;
   if (
     deferTopic &&
+    !isVisitFollowUpQuestion(ctx.text, ex) &&
     !parseVisitSlot(ctx.text, now) &&
     !parseDayAnchor(ctx.text, now) &&
     !visitRouteExpand
