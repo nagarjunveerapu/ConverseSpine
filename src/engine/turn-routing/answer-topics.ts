@@ -2,7 +2,7 @@
  * Multi-intent Phase B — attach and merge answer_topics[] without collapsing
  * extract.askTopics when routing only carries a scalar.
  */
-import { unionAskTopics } from '../facts.js';
+import { ASK_TOPICS_CAP, unionAskTopics } from '../facts.js';
 import type { Extracted } from '../types.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
 
@@ -44,13 +44,25 @@ export function mergeRoutingTopicsIntoExtract(
         ? [routing.answer_topic]
         : [];
   if (!fromRouting.length) return ex;
-  const united = unionAskTopics(
-    ex.askTopics,
-    ex.askTopic ? [ex.askTopic] : undefined,
-    fromRouting,
-  );
-  if (!united.length) return ex;
   const prev = ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : []);
-  if (prev.length === united.length && prev.every((t, i) => t === united[i])) return ex;
+  // Deterministic extract already named topics — keep extract order as authority.
+  // Do not re-sort via TOPIC_ORDER (price before location), and do not let a
+  // false embedder facet contaminate overview/FAQ turns (P1 residual-22:
+  // ಸ್ಥಳ/இடம் → price; बिल्डर/एप्रिसिएशन → price).
+  if (prev.length > 0) {
+    const primary = prev[0]!;
+    // Overview/FAQ extract owns the turn — taught-lane may promote later only
+    // when FAQ keys are empty; merging price here leapfrogs compose.
+    if (primary === 'overview') return ex;
+    const routingOnly = fromRouting.filter((t) => t !== 'compare' && !prev.includes(t));
+    const askTopics = [primary, ...prev.slice(1).filter((t) => t !== primary), ...routingOnly].slice(
+      0,
+      ASK_TOPICS_CAP,
+    );
+    if (prev.length === askTopics.length && prev.every((t, i) => t === askTopics[i])) return ex;
+    return { ...ex, askTopic: primary, askTopics };
+  }
+  const united = unionAskTopics(fromRouting);
+  if (!united.length) return ex;
   return { ...ex, askTopic: united[0], askTopics: united };
 }

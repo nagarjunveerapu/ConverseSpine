@@ -18,6 +18,19 @@ export function isCompareAmongOfferedTurn(text: string): boolean {
     return true;
   }
   if (/\bvs\.?\s+these\b/i.test(t)) return true;
+  // Stress corpus: "tradeoff/difference/which is better the top ones/these"
+  if (
+    /\b(?:trade-?off|difference|which\s+is\s+better|\bvs\.?\b)\b/i.test(t) &&
+    /\b(?:top\s+ones?|these|those|them|both|shortlist|options?)\b/i.test(t)
+  ) {
+    return true;
+  }
+  if (/^(?:also[,:]?\s+|hey[,:]?\s+|quick\s+q\s*[—–-]?\s*|one\s+thing[:\s]+)?(?:need\s+a\s+)?(?:trade-?off|difference|which\s+is\s+better)\b/i.test(t)) {
+    return true;
+  }
+  // P1 residual: Hindi तुलना / Tamil எது better among shortlist.
+  if (/तुलना/.test(t)) return true;
+  if (/எது\s*better/i.test(t)) return true;
   return false;
 }
 
