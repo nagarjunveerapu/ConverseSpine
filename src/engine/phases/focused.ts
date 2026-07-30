@@ -1,5 +1,5 @@
 import type { AnswerTopic, ConversationState, Extracted, TurnGoal } from '../types.js';
-import { splitComposeTopics, unionAskTopics } from '../facts.js';
+import { splitComposeTopics } from '../facts.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { holdUnitType } from '../hold-intent.js';
 
@@ -169,10 +169,20 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   }
   // Multi from extract stays; a lone overview default yields to a promoted primary
   // (taught-lane / P3-B). Never drop a real multi-set.
-  const composeSet =
-    topics.length > 1
-      ? unionAskTopics(topics, primary !== 'overview' ? [primary] : undefined)
-      : [primary];
+  // Preserve extract/taught primary order — do NOT re-sort via TOPIC_ORDER
+  // (unionAskTopics), or embedder price leapfrogs location (P1 residual-22).
+  let composeSet: AnswerTopic[];
+  if (topics.length > 1) {
+    const head = primary;
+    const rest = topics.filter((t) => t !== head);
+    if (head !== 'overview' && !topics.includes(head)) {
+      composeSet = [head, ...rest];
+    } else {
+      composeSet = topics[0] === head ? topics : [head, ...rest];
+    }
+  } else {
+    composeSet = [primary];
+  }
   const { active, parked } = splitComposeTopics(composeSet);
   return {
     kind: 'answer',

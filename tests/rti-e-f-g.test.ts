@@ -28,6 +28,9 @@ describe('RTI-E compare intent (project-agnostic)', () => {
     expect(isCompareAmongOfferedTurn('tradeoff the top ones please')).toBe(true);
     expect(isCompareAmongOfferedTurn('also, need a difference for this one')).toBe(true);
     expect(isCompareAmongOfferedTurn('which is better the top ones')).toBe(true);
+    expect(isCompareAmongOfferedTurn('तुलना करो बताओ')).toBe(true);
+    expect(isCompareAmongOfferedTurn('इस पर तुलना करो?')).toBe(true);
+    expect(isCompareAmongOfferedTurn('ஒரு கேள்வி: எது better?')).toBe(true);
   });
 
   it('does not run RTI on compare turns', () => {

@@ -22,6 +22,7 @@ import {
 import { isSameDayPhrase, isDifferentDayPhrase, lastBookedVisit, resolveSameDayDate, addMinutesToIso } from '../visit-itinerary.js';
 import { buildProjectGeoMap, nearestProjectName, projectGeo, resolveOriginGeoCached } from '../project-geo.js';
 import { orderStopsByTravel, type TripStop } from '../trip-logistics.js';
+import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { DEFERRABLE_ANSWER_TOPICS } from '../turn-routing/from-speech-act.js';
 
 const DECLINE = /\b(no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i;
@@ -41,8 +42,11 @@ export function isVisitProjectSwitchUtterance(
   return false;
 }
 
-/** SA-4: single shared list with L8 turn-routing (not a duplicate visit-only set). */
-const VISIT_DEFERRABLE_TOPICS = DEFERRABLE_ANSWER_TOPICS;
+/** SA-4: shared facet list + overview (builder/ROI/FAQ cards defer mid-visit). */
+const VISIT_DEFERRABLE_TOPICS: readonly import('../types.js').AnswerTopic[] = [
+  ...DEFERRABLE_ANSWER_TOPICS,
+  'overview',
+];
 
 const TOPIC_PROBE_IN_WHAT_ABOUT =
   /\b(?:pricing|price|legal|rera|configurations?|unit types?|units?|bhk|floor plans?|brochure|amenities|location|emi|availability|possession|media|details?)\b/i;
@@ -103,9 +107,15 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
   const visitRouteExpand =
     ALSO_RE.test(ctx.text.trim()) && (ex.namedProjects?.length ?? 0) === 1 && !!prior.projectId;
 
+  // Facet/overview/FAQ mid-scheduling → answer the project, keep visit state.
+  // overview was missing from the shared facet list, so builder/ROI Hindi asks
+  // fell through to visit_ask (P1 residual-22).
+  const deferTopic =
+    (ex.askTopic && VISIT_DEFERRABLE_TOPICS.includes(ex.askTopic)) ||
+    (ex.askTopics ?? []).some((t) => VISIT_DEFERRABLE_TOPICS.includes(t)) ||
+    resolveFaqQuestionKeys(ctx.text).length > 0;
   if (
-    ex.askTopic &&
-    VISIT_DEFERRABLE_TOPICS.includes(ex.askTopic) &&
+    deferTopic &&
     !parseVisitSlot(ctx.text, now) &&
     !parseDayAnchor(ctx.text, now) &&
     !visitRouteExpand
@@ -203,6 +213,7 @@ function deferToProjectAnswer(s: ConversationState, ex: Extracted): TurnGoal | n
   const projectId =
     named?.projectId ??
     s.focus?.projectId ??
+    s.visit?.projectId ??
     s.discover.lastOffered[0]?.projectId;
   if (!projectId) return null;
 

@@ -62,6 +62,51 @@ describe('Phase B — answer_topics on routing', () => {
     expect(merged.askTopics).toEqual(['price', 'legal']);
     expect(merged.askTopic).toBe('price');
   });
+
+  it('keeps extract primary when embedder topic would leapfrog TOPIC_ORDER', () => {
+    const ex: Extracted = { constraints: {}, askTopic: 'location', askTopics: ['location'] };
+    const routing: TurnRoutingResult = {
+      routing: 'answer_on_project',
+      confidence: 'embedder',
+      answer_topic: 'price',
+      answer_topics: ['price'],
+    };
+    const merged = mergeRoutingTopicsIntoExtract(ex, routing);
+    expect(merged.askTopic).toBe('location');
+    expect(merged.askTopics?.[0]).toBe('location');
+    expect(merged.askTopics).toContain('price');
+  });
+
+  it('does not merge embedder facets into overview extract', () => {
+    const ex: Extracted = { constraints: {}, askTopic: 'overview', askTopics: ['overview'] };
+    const routing: TurnRoutingResult = {
+      routing: 'answer_on_project',
+      confidence: 'embedder',
+      answer_topic: 'price',
+      answer_topics: ['price'],
+    };
+    const merged = mergeRoutingTopicsIntoExtract(ex, routing);
+    expect(merged.askTopics).toEqual(['overview']);
+    expect(merged.askTopic).toBe('overview');
+  });
+
+  it('focused decide keeps location primary when price is also in the set', () => {
+    let s = initState('naya-advisor', 't-loc-primary');
+    s = commitTo(s, 'oasis', 'Brigade Oasis');
+    const goal = focusedDecide(
+      s,
+      {
+        constraints: {},
+        askTopics: ['location', 'price'],
+        askTopic: 'location',
+      },
+      'ಸ್ಥಳ ಎಲ್ಲಿದೆ??',
+    );
+    expect(goal.kind).toBe('answer');
+    if (goal.kind !== 'answer') return;
+    expect(goal.topic).toBe('location');
+    expect(goal.topics?.[0]).toBe('location');
+  });
 });
 
 describe('Phase C — answer all capped topics', () => {

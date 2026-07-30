@@ -28,6 +28,9 @@ export function isCompareAmongOfferedTurn(text: string): boolean {
   if (/^(?:also[,:]?\s+|hey[,:]?\s+|quick\s+q\s*[—–-]?\s*|one\s+thing[:\s]+)?(?:need\s+a\s+)?(?:trade-?off|difference|which\s+is\s+better)\b/i.test(t)) {
     return true;
   }
+  // P1 residual: Hindi तुलना / Tamil எது better among shortlist.
+  if (/तुलना/.test(t)) return true;
+  if (/எது\s*better/i.test(t)) return true;
   return false;
 }
 

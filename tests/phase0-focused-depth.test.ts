@@ -101,6 +101,22 @@ describe('Phase 0 — location extraction gates', () => {
       expect.arrayContaining(['price', 'availability']),
     );
   });
+
+  it('P1 residual Indic facet cues (hi/ta/te/kn)', () => {
+    expect(detectTopics('तुलना करो बताओ')).toContain('compare');
+    expect(detectTopics('एक बात: तुलना करो')).toContain('compare');
+    expect(detectTopics('ஒரு கேள்வி: எது better?')).toContain('compare');
+    expect(detectTopics('दर बताओ?')).toContain('price');
+    expect(detectTopics('ಎಷ್ಟಾಗುತ್ತೆ??')).toContain('price');
+    expect(detectTopics('ஒரு கேள்வி: எவ்வளவு ஆகும்??')).toContain('price');
+    expect(detectTopics('ಸ್ಥಳ ಎಲ್ಲಿದೆ?')).toContain('location');
+    expect(detectTopics('ஒரு கேள்வி: இடம் எங்கே?')).toContain('location');
+    expect(detectTopics('ಒಂದು ಪ್ರಶ್ನೆ: ಲಭ್ಯತೆ?')).toContain('availability');
+    expect(detectTopics('बिल्डर कौन है??')).toContain('overview');
+    expect(detectTopics('एक बात: एप्रिसिएशन? बताओ')).toContain('overview');
+    expect(extractLocation('इस पर कब मिलेगा? बताओ?')).toBeUndefined();
+    expect(extractLocation('तुलना करो बताओ')).toBeUndefined();
+  });
 });
 
 describe('Phase 0 — the/this project binding', () => {

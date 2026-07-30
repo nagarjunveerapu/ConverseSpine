@@ -18,7 +18,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'resale_value',
-    re: /\b(?:resale|appreciation|capital\s+gains?)\b/i,
+    re: /\b(?:resale|appreciation|capital\s+gains?)\b|एप्रिसिएशन/i,
   },
   {
     key: 'payment_plan',
@@ -38,7 +38,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     // "is it ready to move?" (no trailing "in") is the same possession ask —
     // untreated it fell through to a configuration dump (B5.2).
     key: 'possession',
-    re: /\b(?:possession(?:\s+date)?|possession\s+kab|when(?:'s| is)?\s+(?:possession|handover|completion)|(?:what\s+is\s+the\s+)?completion(?:\s+date)?|handover(?:\s+date)?|delivery\s+(?:date|timeline)|ready\s+to\s+move(?:\s+in)?|kab\s+(?:possession|handover|milega)|kab\s+milega|milega\s+batao)\b/i,
+    re: /\b(?:possession(?:\s+date)?|possession\s+kab|when(?:'s| is)?\s+(?:possession|handover|completion)|(?:what\s+is\s+the\s+)?completion(?:\s+date)?|handover(?:\s+date)?|delivery\s+(?:date|timeline)|ready\s+to\s+move(?:\s+in)?|kab\s+(?:possession|handover|milega)|kab\s+milega|milega\s+batao)\b|कब\s*मिलेगा|ಪೊಸೆಷನ್|పొసెషన్/i,
   },
   {
     // Focused menu chip — bare "when" → possession on the open project.
@@ -71,7 +71,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'builder_credibility',
-    re: /\b(?:(?:builder|developer)\s+(?:track\s+record|credibility|reputation|honesty|honest|kaun)|builder\s+kaun\s+hai|is\s+(?:the\s+|this\s+)?builder\s+honest|how\s+reliable\s+is\s+(?:the\s+)?builder|who\s+is\s+the\s+builder|honest\s+(?:builder|person))\b/i,
+    re: /\b(?:(?:builder|developer)\s+(?:track\s+record|credibility|reputation|honesty|honest|kaun)|builder\s+kaun\s+hai|is\s+(?:the\s+|this\s+)?builder\s+honest|how\s+reliable\s+is\s+(?:the\s+)?builder|who\s+is\s+the\s+builder|honest\s+(?:builder|person))\b|बिल्डर\s*कौन|ट्रैक\s*रिकॉर्ड/i,
   },
   {
     key: 'rera_status',
