@@ -67,7 +67,9 @@ const TOPIC_CUE = {
   media: /brochure|pdf|floor\s*plan|photo|gallery|media|link|sheet/i,
   amenities: /amenit|club|pool|gym|park|facilit/i,
   location: /location|km|min|commute|school|hospital|whitefield|itpl|connect|near/i,
-  overview: /project|builder|overview|highlight|us|track|reputation|appreciat|yield|roi/i,
+  // Honest ROI miss copy uses price-trend/corridor — count as overview atom.
+  overview:
+    /project|builder|overview|highlight|us|track|reputation|appreciat|yield|roi|price-trend|corridor|resale|won'?t put a number|don'?t quote/i,
   emi: /emi|installment|monthly|loan\s*%|interest/i,
   compare: /compar|versus|\bvs\b|trade.?off|difference|better/i,
 };

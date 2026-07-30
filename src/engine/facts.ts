@@ -745,7 +745,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     topic: 'legal',
     // Loan eligibility / banks stay legal+FAQ — not EMI calculator.
     // OC / financing are legal paperwork, not inventory "available".
-    re: /\b(?:rera|legal|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|\boc\b|occupancy\s+certificate|financing|(?:which|what)\s+banks?|banks?\s+(?:approved|approv|approving)|approved\s+banks?|home\s+loan(?:\s+approv|\s+eligib)?|(?:can\s+i\s+(?:get|take)\s+(?:a\s+|the\s+)?(?:home\s+)?loan)|loan\s+eligib|is\s+(?:the\s+)?ec\s+clear)\b/i,
+    re: /\b(?:rera|legal|khata|title|approval|approvals?|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|\boc\b|occupancy\s+certificate|financing|(?:which|what)\s+banks?|what\s+about\s+(?:banks?|loans?|approvals?)|banks?\s+(?:approved|approv|approving|available)|is\s+banks?\s+available|can\s+i\s+get\s+banks?|get\s+banks?\s+for|(?:tell\s+me\s+about|need)\s+(?:banks?|loan(?:\s+details)?|loan\s+eligibility)|about\s+banks?|approved\s+banks?|home\s+loan(?:\s+approv|\s+eligib)?|(?:can\s+i\s+(?:get|take)\s+(?:a\s+|the\s+)?(?:home\s+)?loan)|loan\s+eligib|loan\s+mil(?:e(?:ga|gi)?)?|ispe\s+loan|loan\s+ho\s+jayega|is\s+(?:the\s+)?ec\s+clear)\b/i,
   },
   {
     topic: 'property_type',
@@ -771,6 +771,8 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     // FAQ via overview); multi-intent folds it in via detectTopics below.
     // Bare "available" removed — trailing "if available" / "is OC available"
     // were stealing builder/legal asks into the config dump.
+    // "is OC available" / "banks available" must not dump configs alone —
+    // legal+loan owns when banks/loan cues present (P2 residual).
     topic: 'availability',
     re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|availability|\binventory\b|(?:units?|configs?|configurations?|inventory|flats?|apartments?)\s+available|available\s+(?:units?|configs?|configurations?|inventory)|is\s+(?:it|this)\s+available|still\s+available|what'?s\s+available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b|ಲಭ್ಯತೆ|అందుబాటు/i,
   },

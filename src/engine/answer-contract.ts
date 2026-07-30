@@ -16,7 +16,13 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   {
     key: 'loan_eligibility',
     pattern:
-      /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:eligib|approv|availab|for\s+this|on\s+this|against)|bank\s+loan|housing\s+loan|\bltv\b)\b/i,
+      /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:eligib|approv|availab|for\s+this|on\s+this|against)|bank\s+loan|housing\s+loan|\bltv\b)\b|\bloans?\s*[?.!]/i,
+  },
+  // P2 residual: Hinglish loan + "is banks available" (not inventory).
+  {
+    key: 'loan_eligibility',
+    pattern:
+      /\b(?:loan\s+mil(?:e(?:ga|gi)?)?|ispe\s+loan|loan\s+ho\s+jayega|banks?\s+available|is\s+banks?\s+available|can\s+i\s+get\s+(?:banks?|approvals?)|get\s+banks?\s+for|what\s+about\s+(?:banks?|loans?|approvals?)|approvals?\s+for\s+this|(?:tell\s+me\s+about|need)\s+(?:banks?|loan(?:\s+details)?|loan\s+eligibility)|about\s+banks?)\b|\bapprovals?\b/i,
   },
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
@@ -30,7 +36,21 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   // Advisory atoms — deliver when approved market intel / project ROI is on
   // detail; otherwise no_data (C1: never invent a %).
   { key: 'rental_yield', pattern: /\b(?:rental\s+yield|yield|roi|return\s+on\s+investment|rental\s+returns?|rental\s+income)\b/i },
-  { key: 'appreciation', pattern: /\b(?:appreciat\w*|how\s+much\s+has\s+(?:this\s+)?(?:area|corridor)\s+grown|corridor\s+growth)\b/i },
+  // Bare "returns?" / "what returns can I expect" — P2 residual investment atom.
+  {
+    key: 'rental_yield',
+    pattern:
+      /^(?:returns?)\s*[?.!]?\s*$|\b(?:what\s+returns?(?:\s+can\s+i\s+expect)?|returns?\s+can\s+i\s+expect|about\s+returns?)\b|\breturns?\s*[?.!]/i,
+  },
+  // Include resale / capital-gains phrasing — P2 multis often say "resale value?"
+  // without "appreciation", so requires never fired and price-only compose won.
+  {
+    // Devanagari must not sit inside `\b…\b` — JS word boundaries are ASCII-only,
+    // so `एप्रिसिएशन` never matched.
+    key: 'appreciation',
+    pattern:
+      /\b(?:appreciat\w*|resale(?:\s+value)?|capital\s+gains?|how\s+much\s+has\s+(?:this\s+)?(?:area|corridor)\s+grown|corridor\s+growth)\b|एप्रिसिएशन/i,
+  },
   {
     key: 'growth_drivers',
     pattern:
@@ -65,6 +85,9 @@ const FACT_KEY_TOPIC: Partial<Record<FactKey, AnswerTopic>> = {
   ec_status: 'legal',
   loan_eligibility: 'legal',
   project_type: 'property_type',
+  appreciation: 'overview',
+  rental_yield: 'overview',
+  growth_drivers: 'overview',
 };
 
 export function withAnswerRequirements(
@@ -88,6 +111,21 @@ export function withAnswerRequirements(
       topic: 'legal',
       ...(withLegal.length > 1 ? { topics: withLegal } : { topics: undefined }),
     };
+  }
+  // P2 residual: appreciation/resale co-asked with price — keep overview in the
+  // multi set so advisory/honest-miss is not swallowed by the pricing template.
+  if (
+    (requires.includes('appreciation') || requires.includes('rental_yield')) &&
+    !requires.includes('loan_eligibility')
+  ) {
+    const topics = next.topics?.length ? [...next.topics] : [next.topic];
+    if (!topics.includes('overview')) {
+      const withOverview = [...topics, 'overview'] as AnswerTopic[];
+      next = {
+        ...next,
+        ...(withOverview.length > 1 ? { topics: withOverview } : {}),
+      };
+    }
   }
   return next;
 }
