@@ -431,9 +431,9 @@ Requires Phase 1. You cannot condition on a state with no canonical form.
 ### Status (2026-07-31)
 | Slice | What | Status |
 |---|---|---|
-| **2a tokens** | `discourseStateToken` + `buildRoutingQuery` prefix behind `SIL_STATE_TOKENS` (default off). Gate: `npm run test:phase-2`. | **started** |
-| **2b corpus** | Rebuild state-dependent rows (`ask_next_step`, deixis, `confirm_action`) with the same prefix; flip flag on dev. | next |
-| **2c consumer** | Wire `ask_next_step` across the four states (compare/open · visit/price · booking · probe). | next |
+| **2a tokens** | `discourseStateToken` + `buildRoutingQuery` prefix behind `SIL_STATE_TOKENS` (default off). Gate: `npm run test:phase-2`. | **landed** |
+| **2b corpus** | Rebuild expands `ask_next_step` / `confirm_action` into prefixed siblings when `SIL_STATE_TOKENS`; 35 `ask_next_step` rows in registry. **Flag stays off until a rebuild runs with the flag on.** | **landed (code + rows; flag off)** |
+| **2c consumer** | `ask-next-step.ts` + `mapIntentToRouting` → `ask_next_step`; cold→orient/probe, board→clarify/commit, focused→advance, visit→propose. Gate: `npm run test:phase-2`. | **landed** |
 
 ---
 

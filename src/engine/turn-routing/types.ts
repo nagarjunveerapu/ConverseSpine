@@ -11,6 +11,8 @@ export type TurnRoutingKind =
   | 'visit_reschedule'
   | 'search_pivot'
   | 'compare_offered'
+  /** Phase 2 — process nudge; consumed by resolveAskNextStepGoal. */
+  | 'ask_next_step'
   | 'unsupported'
   | 'defer';
 

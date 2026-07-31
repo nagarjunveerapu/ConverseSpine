@@ -56,3 +56,39 @@ export function withDiscourseStatePrefix(text: string, token: DiscourseStateToke
   if (!body) return token;
   return `${token} ${body}`;
 }
+
+/**
+ * Intents whose meaning depends on discourse state. Rebuild expands each
+ * eligible row into one vector per token when SIL_STATE_TOKENS is on.
+ * Fact intents (`get_price`, …) stay unprefixed.
+ */
+export const STATE_DEPENDENT_INTENT_KINDS: ReadonlySet<string> = new Set([
+  'ask_next_step',
+  'confirm_action',
+]);
+
+/** Closed expand set — board uses N=2 as the shortlist exemplar (not every N). */
+export const STATE_TOKEN_EXPAND_SET: readonly DiscourseStateToken[] = [
+  '<cold>',
+  '<board:2>',
+  '<focused>',
+  '<visit_pending>',
+];
+
+export function discourseStateIdSuffix(token: DiscourseStateToken): string {
+  return token.replace(/^<|>$/g, '').replace(/:/g, '_');
+}
+
+/** Expand one registry row into prefixed siblings (empty when not state-dependent). */
+export function expandRowForStateTokens<
+  T extends { id: string; phrasing: string; intent_kind: string; is_negative?: boolean },
+>(row: T): Array<T & { discourse_state: DiscourseStateToken }> {
+  if (row.is_negative || !STATE_DEPENDENT_INTENT_KINDS.has(row.intent_kind)) {
+    return [];
+  }
+  return STATE_TOKEN_EXPAND_SET.map((discourse_state) => ({
+    ...row,
+    id: `${row.id}:st:${discourseStateIdSuffix(discourse_state)}`,
+    discourse_state,
+  }));
+}
