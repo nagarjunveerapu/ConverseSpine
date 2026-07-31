@@ -399,10 +399,10 @@ A big-bang swap of five state fields read by 21 resolvers is not reviewable. Thr
 `Extracted` gains a channel for **name-shaped tokens that resolved to nothing**, so *"the buyer named nothing"* and *"the buyer named something I could not bind"* stop being the same value. This is a one-field change and it makes J7 **honest** (clarify rather than guess) without waiting for the refactor. Ship it first; the store then makes J7 **correct** (compares the two projects actually named).
 
 ### Gate — buyer-visible, despite being a refactor
-- J7 compares Eldorado + Sanctuary
-- `NAME-06` (currently a standing red scenario) goes green — `"what about cornerstone utopia"` switches to the sibling
-- `"the other one"` resolves
-- Resolver count drops measurably
+- J7 compares Eldorado + Sanctuary (unbound-name / PR-2-lite — landed)
+- `NAME-06` goes green — `"what about cornerstone utopia"` switches to the sibling (`test:name-06` — **landed** for named-resolve/switch family; broader salience migration still open)
+- `"the other one"` resolves (needs focus-stack consumers — still open)
+- Resolver count drops measurably (full 1b/1c)
 - **Zero scenario regressions**, proven the way #150 was: deploy `main` to the same worker, run all 89, diff at turn level
 
 ### Size
@@ -718,7 +718,8 @@ direction; “small, one day” only holds if scoped.
 |---|---|---|
 | **0a** | Ledger `tool_runs[].success`, `postChoiceEvent` `engine_status`, drop `projects_compared` floor, promote `turn-log-snapshot` fields into deployed ledger | S — landed |
 | **0b** | `DataResult<T>` wrappers for `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy + `test:phase-0b` gate (`0B-01`…`0B-14`) | M — **landed** |
-| **unbound-name** | `Extracted.unboundProjectNames` + catalog in compare matching + block pool-guess; gates `test:unbound-name` / `:report` / `:live` (`UN-00` defect probe + `UN-01`…`UN-05`) | S — **landed** (PR-2-lite; NAME-06 stays known-fail until 1b) |
+| **unbound-name** | `Extracted.unboundProjectNames` + catalog in compare matching + block pool-guess; gates `test:unbound-name` / `:report` / `:live` (`UN-00` defect probe + `UN-01`…`UN-05`) | S — **landed** (PR-2-lite) |
+| **1b (named-resolve / switch)** | Full sibling overshadows partial; refinement switch over compare; gate `test:name-06` (NAME-06 green). Broader salience consumer migration still open. | S — **partial landed** |
 | **0c** | Remainder of `EngineData` | separate PR |
 
 Gate for closing Phase 0 remains: forced adapter failure → `success: false` with

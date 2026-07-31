@@ -8,6 +8,10 @@ import {
 const GENERIC_COMPARE_RE =
   /\b(?:compare|which\s+(?:is|one)\s+better|what(?:'s|\s+is)\s+the\s+difference|difference\s+between|vs\.?|versus)\b/i;
 
+/** Catalog joins matching only on compare-shaped turns — not "what about X utopia". */
+const CATALOG_MATCH_CUE_RE =
+  /\b(?:compar(?:e|ing|ison)|vs\.?|versus|difference\s+between|which\s+(?:is|one)\s+better)\b/i;
+
 function projectPool(s: ConversationState): ProjectRef[] {
   const discussed = s.discover.discussedProjects ?? [];
   const pool: ProjectRef[] = [];
@@ -70,7 +74,13 @@ export function resolveCompareProjectIds(
   if (ex.transition === 'want_visit') return [];
 
   const pool = projectPool(s);
-  const matchPool = matchingPool(pool, catalogNames);
+  // Catalog in the MATCHING pool only when the buyer is comparing — otherwise
+  // "what about cornerstone utopia" binds both siblings and blocks NAME-06 switch.
+  const catalogInMatch =
+    ex.askTopic === 'compare' ||
+    (ex.askTopics?.includes('compare') ?? false) ||
+    CATALOG_MATCH_CUE_RE.test(buyerText);
+  const matchPool = catalogInMatch ? matchingPool(pool, catalogNames) : pool;
   const recent: ContextMessage[] = (s.discover.recentMessages ?? []).map((m) => ({
     text: m.text,
     created_at_ms: m.atMs,

@@ -54,7 +54,8 @@ const LOKATIONS: readonly P[] = [
   { id: 'cornerstone', name: 'Brigade Cornerstone', market: 'Devanahalli', type: 'apartment', priceInr: 5_200_000, display: '₹52 L' },
   {
     id: 'cornerstone-utopia',
-    name: 'Cornerstone Utopia',
+    // Dig catalog shape — token-superset of Brigade Cornerstone (NAME-06).
+    name: 'Brigade Cornerstone Utopia',
     market: 'Whitefield',
     type: 'apartment',
     priceInr: 10_500_000,

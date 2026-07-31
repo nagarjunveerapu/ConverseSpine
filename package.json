@@ -24,6 +24,7 @@
     "test:unbound-name": "vitest run tests/unbound-name.test.ts",
     "test:unbound-name:report": "tsx scripts/run-unbound-name-scenarios.ts",
     "test:unbound-name:live": "tsx scripts/run-unbound-name-scenarios.ts --live",
+    "test:name-06": "vitest run tests/name-06-sibling-switch.test.ts tests/name-evidence.test.ts",
     "test:probe": "tsx scripts/probe-project-vectors.ts",
     "smoke:p7": "bash scripts/smoke-p7-focused-chips.sh"
   },
