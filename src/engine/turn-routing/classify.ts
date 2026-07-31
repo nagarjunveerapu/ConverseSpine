@@ -105,13 +105,19 @@ interface EmbedderOutcome {
 export async function embedderRouting(
   env: Pick<
     Env,
-    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'FAILURE_ROUTING'
+    | 'AI'
+    | 'INTENT_VECTORS'
+    | 'SIL_EMBED_MODEL'
+    | 'SIL_INTENT_PROJECTION'
+    | 'SIL_ROUTING_TAU'
+    | 'FAILURE_ROUTING'
+    | 'SIL_STATE_TOKENS'
   >,
   input: TurnRoutingInput,
 ): Promise<EmbedderOutcome> {
   if (!env.AI || !env.INTENT_VECTORS) return { result: null, fired: false };
 
-  const queryText = buildRoutingQuery(input);
+  const queryText = buildRoutingQuery(input, env);
   const model = env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
   const embed = (await env.AI.run(model as never, { text: [queryText] })) as { data?: number[][] };
   const raw = embed.data?.[0];

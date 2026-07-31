@@ -428,6 +428,13 @@ We are fitting `text → intent` when the function is `(state, text) → intent`
 ### Dependency
 Requires Phase 1. You cannot condition on a state with no canonical form.
 
+### Status (2026-07-31)
+| Slice | What | Status |
+|---|---|---|
+| **2a tokens** | `discourseStateToken` + `buildRoutingQuery` prefix behind `SIL_STATE_TOKENS` (default off). Gate: `npm run test:phase-2`. | **started** |
+| **2b corpus** | Rebuild state-dependent rows (`ask_next_step`, deixis, `confirm_action`) with the same prefix; flip flag on dev. | next |
+| **2c consumer** | Wire `ask_next_step` across the four states (compare/open · visit/price · booking · probe). | next |
+
 ---
 
 ## 6. Phase 3 — multi-label producer
