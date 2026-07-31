@@ -12,9 +12,9 @@
  *   NAME-06  focus is a single slot, not a stack, so there is nothing to pop
  *            back to and no way to reach a longer-named sibling
  *
- * 1a writes the store ALONGSIDE the existing fields and changes no behaviour.
- * Nothing reads it yet. 1b migrates consumers family by family, asserting
- * `salience(state)` still matches the old projection at each step; 1c deletes
+ * 1a dual-writes the store. 1b readers start with alternate deixis
+ * (`resolveAlternateProject` / "the other one"). Broader family migration
+ * (compare → visit → chips) still asserts salience vs legacy pools; 1c deletes
  * the old fields once no reader remains.
  *
  * DURABLE SHAPE. `store-kv.ts:28` is `JSON.stringify(state)`, and a Map/Set
@@ -29,9 +29,12 @@ import {
   popFocus,
   salience,
   focusedEntity,
+  resolveAlternateProject,
+  discourseEntities,
+  legacyConversationPoolIds,
   type DiscourseEntityRecord,
 } from '../../src/engine/entity-store.js';
-import { initState } from '../../src/engine/state.js';
+import { initState, releaseToDiscover } from '../../src/engine/state.js';
 import type { ConversationState } from '../../src/engine/types.js';
 
 const ELDORADO = { projectId: 'eldorado', name: 'Brigade Eldorado' };
@@ -73,12 +76,51 @@ describe('one salience order, not four pools', () => {
     ]);
   });
 
-  it('popping the stack returns to the previous focus — NAME-06 needs this', () => {
+  it('popping the stack returns to the previous focus and dual-writes legacy focus', () => {
     let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE], 'offered', 1);
     s = pushFocus(s, ELDORADO.projectId, 2);
     s = pushFocus(s, CORNERSTONE.projectId, 3);
     s = popFocus(s);
     expect(names(salience(s))[0]).toBe('Brigade Eldorado');
+    expect(s.focus?.projectId).toBe('eldorado');
+    expect(focusedEntity(s)?.name).toBe('Brigade Eldorado');
+  });
+
+  it('resolveAlternateProject picks the unique non-focus discourse entity', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE], 'offered', 1);
+    s = { ...s, phase: 'focused', focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' } };
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    expect(resolveAlternateProject(s)?.projectId).toBe('cornerstone');
+  });
+
+  it('resolveAlternateProject stays silent when more than one alternate exists', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE, UTOPIA], 'offered', 1);
+    s = { ...s, phase: 'focused', focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' } };
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    // No stack prior → ambiguous among Cornerstone + Utopia.
+    expect(resolveAlternateProject(s)).toBeUndefined();
+  });
+
+  it('resolveAlternateProject uses stack[1] when shortlist is ambiguous', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE, UTOPIA], 'offered', 1);
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    s = pushFocus(s, CORNERSTONE.projectId, 3);
+    s = {
+      ...s,
+      phase: 'focused',
+      focus: { projectId: 'cornerstone', projectName: 'Brigade Cornerstone' },
+    };
+    expect(resolveAlternateProject(s)?.projectId).toBe('eldorado');
+  });
+
+  it('releaseToDiscover clears focusStack so store focus does not outlive legacy focus', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO], 'offered', 1);
+    s = { ...s, phase: 'focused', focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' } };
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    s = releaseToDiscover(s);
+    expect(s.focus).toBeUndefined();
+    expect(s.focusStack ?? []).toEqual([]);
+    expect(focusedEntity(s)).toBeUndefined();
   });
 
   it('a rejected project ranks last but is never forgotten — a rejection is information', () => {
@@ -161,6 +203,12 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
       ...(s.focus ? [s.focus.projectId] : []),
     ]);
     for (const id of Object.keys(s.entities ?? {})) expect(known.has(id)).toBe(true);
+
+    // 1b membership: every legacy pool id is in the store discourse view.
+    const discourseIds = new Set(discourseEntities(s).map((e) => e.projectId));
+    for (const id of legacyConversationPoolIds(s)) {
+      expect(discourseIds.has(id), `legacy id ${id} missing from discourseEntities`).toBe(true);
+    }
   });
 
   it('keeps a project the legacy cap of 6 would have dropped', async () => {

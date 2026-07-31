@@ -176,16 +176,16 @@ export interface ConversationState {
   /** Cached NayaDesk project facts for focused / shortlisted projects. */
   projectCache?: Record<string, ProjectDetail>;
   /**
-   * Phase 1a — the discourse entity store (entity-store.ts). Written ALONGSIDE
-   * lastOffered / discussedProjects / focus / visit.queued; nothing reads it
-   * yet. 1b migrates consumers, 1c deletes the old fields.
+   * Phase 1 — discourse entity store (entity-store.ts). Dual-written alongside
+   * lastOffered / discussedProjects / focus / visit.queued. 1b readers start
+   * with alternate deixis (`resolveAlternateProject`); 1c deletes legacy fields.
    *
    * JSON-safe by construction: a Record of plain records, never a Map, because
    * store-kv.ts persists this with JSON.stringify and a Map round-trips to {}.
    */
   entities?: Record<string, import('./entity-store.js').DiscourseEntityRecord>;
-  /** Focus history, most recent first. Depth > 1 is what "go back to the first
-   *  one" and the Cornerstone -> Utopia sibling switch need. */
+  /** Focus history, most recent first. Depth > 1 powers "the other one" /
+   *  "go back" via salience; legacy `focus` stays authoritative until 1c. */
   focusStack?: string[];
   /** Last-read confirmed visits from NayaDesk (itinerary mirror for board). */
   visitBookedCache?: Array<{

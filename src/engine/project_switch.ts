@@ -4,6 +4,7 @@
 import type { AnswerTopic, ConversationState, Extracted, OfferedProject, TurnGoal } from './types.js';
 import type { EngineDeps } from './ports.js';
 import { bearingTokensOf, tokenizeName } from './name-index.js';
+import { discourseOffered, resolveAlternateProject } from './entity-store.js';
 
 export interface SwitchIntent {
   readonly followUp?: AnswerTopic;
@@ -342,6 +343,9 @@ function exactPoolPick(pool: readonly OfferedProject[], pickName: string): Offer
 }
 
 function poolOf(s: ConversationState): OfferedProject[] {
+  const fromStore = discourseOffered(s);
+  if (fromStore.length > 0) return fromStore;
+  // Pre-1a sessions.
   const pool = [...s.discover.lastOffered];
   for (const d of s.discover.discussedProjects ?? []) {
     if (!pool.some((p) => p.projectId === d.projectId)) pool.push(d);
@@ -350,6 +354,13 @@ function poolOf(s: ConversationState): OfferedProject[] {
     pool.push({ projectId: s.focus.projectId, name: s.focus.projectName });
   }
   return pool;
+}
+
+/** "the other one" / prior-focus deixis — resolved via entity-store salience. */
+export function isAlternateDeixis(text: string): boolean {
+  return /\b(?:the\s+other\s+one|the\s+other\s+project|other\s+one|go\s+back(?:\s+to\s+(?:the\s+)?(?:first|previous|other)(?:\s+one)?)?)\b/i.test(
+    text,
+  );
 }
 
 /** Sync detection — returns null when no switch or when compare/handoff paths own the turn. */
@@ -372,6 +383,17 @@ export function detectFocusedSwitchIntent(
   }
   const focus = s.focus;
   const fu = followUpTopics(ex);
+
+  // Phase 1b — "the other one" / go-back deixis against salience (not embedder).
+  // Runs before named/compare so a stale namedProjects cannot steal the turn.
+  if (isAlternateDeixis(_text)) {
+    const alt = resolveAlternateProject(s);
+    if (alt && alt.projectId !== focus.projectId) {
+      return { commit: { projectId: alt.projectId, name: alt.name }, ...fu };
+    }
+    return null;
+  }
+
   const siblings = [...poolOf(s), ...(ex.namedProjects ?? [])];
 
   /** Longer-sibling refinement while focused — switch, don't compare. */

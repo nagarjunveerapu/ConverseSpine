@@ -305,7 +305,9 @@ export function releaseToDiscover(s: ConversationState): ConversationState {
     ? recordDiscussed(s, [{ projectId: focus.projectId, name: focus.projectName }])
     : s;
   const { focus: _f, ...rest } = withDiscussed;
-  return { ...rest, phase: 'discover' };
+  // Dual-write: focusStack[0] means "current focus". Clear it with legacy focus
+  // so focusedEntity / salience do not keep a released project as #1.
+  return { ...rest, phase: 'discover', focusStack: [] };
 }
 
 export function isSameAsLast(s: ConversationState, matches: readonly Match[]): boolean {

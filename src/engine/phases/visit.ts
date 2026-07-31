@@ -24,6 +24,7 @@ import { buildProjectGeoMap, nearestProjectName, projectGeo, resolveOriginGeoCac
 import { orderStopsByTravel, type TripStop } from '../trip-logistics.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { DEFERRABLE_ANSWER_TOPICS } from '../turn-routing/from-speech-act.js';
+import { discourseEntities, discourseOffered } from '../entity-store.js';
 
 const DECLINE = /\b(no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i;
 const BARE_AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|sounds good)\.?!?\s*$/i;
@@ -211,7 +212,9 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
     // SA-2: after compare, discussed set ≥2 — "come for the visit" seeds the queue
     // without requiring "them/both" deixis.
     seedDiscussedMulti:
-      ex.transition === 'want_visit' && (s.discover.discussedProjects?.length ?? 0) >= 2,
+      ex.transition === 'want_visit' &&
+      (discourseEntities(s).filter((e) => e.roles.includes('discussed')).length >= 2 ||
+        (s.discover.discussedProjects?.length ?? 0) >= 2),
   });
 }
 
@@ -221,6 +224,7 @@ function deferToProjectAnswer(s: ConversationState, ex: Extracted): TurnGoal | n
     named?.projectId ??
     s.focus?.projectId ??
     s.visit?.projectId ??
+    discourseOffered(s)[0]?.projectId ??
     s.discover.lastOffered[0]?.projectId;
   if (!projectId) return null;
 
@@ -247,6 +251,17 @@ function followUpNamed(ex: Extracted, text: string, s: ConversationState): Offer
 }
 
 function candidatesOf(s: ConversationState): OfferedProject[] {
+  const ents = discourseEntities(s);
+  if (ents.length > 0) {
+    const discussed = ents
+      .filter((e) => e.roles.includes('discussed'))
+      .sort((a, b) => a.firstSeenTurn - b.firstSeenTurn)
+      .map((e) => ({ projectId: e.projectId, name: e.name }));
+    if (discussed.length >= 2) return discussed;
+    if (s.focus) return [{ projectId: s.focus.projectId, name: s.focus.projectName }];
+    if (discussed.length === 1) return discussed;
+    return discourseOffered(s);
+  }
   const discussed = s.discover.discussedProjects ?? [];
   if (discussed.length >= 2) return [...discussed];
   if (s.focus) return [{ projectId: s.focus.projectId, name: s.focus.projectName }];

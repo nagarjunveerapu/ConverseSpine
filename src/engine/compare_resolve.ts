@@ -4,6 +4,7 @@ import {
   type ContextMessage,
   type ProjectRef,
 } from './project_references.js';
+import { discourseEntities } from './entity-store.js';
 
 const GENERIC_COMPARE_RE =
   /\b(?:compare|which\s+(?:is|one)\s+better|what(?:'s|\s+is)\s+the\s+difference|difference\s+between|vs\.?|versus)\b/i;
@@ -12,8 +13,29 @@ const GENERIC_COMPARE_RE =
 const CATALOG_MATCH_CUE_RE =
   /\b(?:compar(?:e|ing|ison)|vs\.?|versus|difference\s+between|which\s+(?:is|one)\s+better)\b/i;
 
+/**
+ * Conversation matching/fallback pool — Phase 1b reads the entity store.
+ * Discussed order is preserved at the front so "compare both" stays stable;
+ * remaining discourse entities follow salience (focus → stack → recency).
+ */
 function projectPool(s: ConversationState): ProjectRef[] {
-  const discussed = s.discover.discussedProjects ?? [];
+  const ents = discourseEntities(s);
+  if (ents.length === 0) {
+    // Pre-1a sessions / empty store — legacy projection.
+    const discussed = s.discover.discussedProjects ?? [];
+    const pool: ProjectRef[] = [];
+    const seen = new Set<string>();
+    const push = (project_id: string, name: string) => {
+      if (!project_id || seen.has(project_id)) return;
+      seen.add(project_id);
+      pool.push({ project_id, name });
+    };
+    for (const p of discussed) push(p.projectId, p.name);
+    if (s.focus) push(s.focus.projectId, s.focus.projectName);
+    for (const o of s.discover.lastOffered) push(o.projectId, o.name);
+    return pool;
+  }
+
   const pool: ProjectRef[] = [];
   const seen = new Set<string>();
   const push = (project_id: string, name: string) => {
@@ -21,11 +43,22 @@ function projectPool(s: ConversationState): ProjectRef[] {
     seen.add(project_id);
     pool.push({ project_id, name });
   };
-  // Discussed first — "both" after focused Q&A should beat stale search shortlist.
-  for (const p of discussed) push(p.projectId, p.name);
-  if (s.focus) push(s.focus.projectId, s.focus.projectName);
-  for (const o of s.discover.lastOffered) push(o.projectId, o.name);
+  for (const p of s.discover.discussedProjects ?? []) {
+    if (ents.some((e) => e.projectId === p.projectId)) push(p.projectId, p.name);
+  }
+  for (const e of ents) push(e.projectId, e.name);
   return pool;
+}
+
+function discussedRefs(s: ConversationState): ProjectRef[] {
+  const legacy = s.discover.discussedProjects ?? [];
+  if (legacy.length > 0) {
+    return legacy.map((p) => ({ project_id: p.projectId, name: p.name }));
+  }
+  return discourseEntities(s)
+    .filter((e) => e.roles.includes('discussed'))
+    .sort((a, b) => a.firstSeenTurn - b.firstSeenTurn)
+    .map((e) => ({ project_id: e.projectId, name: e.name }));
 }
 
 /** Conversation pool ∪ catalog — catalog joins MATCHING only, never fallback. */
@@ -101,10 +134,10 @@ export function resolveCompareProjectIds(
     return [];
   }
 
-  const discussed = s.discover.discussedProjects ?? [];
+  const discussed = discussedRefs(s);
   const anaphora = /\b(?:both|these|those|them|the\s+two|dono)\b/i.test(buyerText);
   if (anaphora && discussed.length >= 2) {
-    return uniqueIds(discussed.map((p) => ({ project_id: p.projectId, name: p.name })));
+    return uniqueIds(discussed);
   }
 
   if (
@@ -115,7 +148,7 @@ export function resolveCompareProjectIds(
   ) {
     // Prefer discussed pair over search shortlist when buyer has engaged 2+ projects.
     if (discussed.length >= 2) {
-      return uniqueIds(discussed.map((p) => ({ project_id: p.projectId, name: p.name })));
+      return uniqueIds(discussed);
     }
     return uniqueIds(pool);
   }

@@ -401,7 +401,7 @@ A big-bang swap of five state fields read by 21 resolvers is not reviewable. Thr
 ### Gate — buyer-visible, despite being a refactor
 - J7 compares Eldorado + Sanctuary (unbound-name / PR-2-lite — landed)
 - `NAME-06` goes green — `"what about cornerstone utopia"` switches to the sibling (`test:name-06` — **landed** for named-resolve/switch family; broader salience migration still open)
-- `"the other one"` resolves (needs focus-stack consumers — still open)
+- `"the other one"` resolves (`test:other-one` — **landed** for alternate deixis / focus-stack reader; broader salience migration still open)
 - Resolver count drops measurably (full 1b/1c)
 - **Zero scenario regressions**, proven the way #150 was: deploy `main` to the same worker, run all 89, diff at turn level
 
@@ -720,6 +720,8 @@ direction; “small, one day” only holds if scoped.
 | **0b** | `DataResult<T>` wrappers for `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy + `test:phase-0b` gate (`0B-01`…`0B-14`) | M — **landed** |
 | **unbound-name** | `Extracted.unboundProjectNames` + catalog in compare matching + block pool-guess; gates `test:unbound-name` / `:report` / `:live` (`UN-00` defect probe + `UN-01`…`UN-05`) | S — **landed** (PR-2-lite) |
 | **1b (named-resolve / switch)** | Full sibling overshadows partial; refinement switch over compare; gate `test:name-06` (NAME-06 green). Broader salience consumer migration still open. | S — **partial landed** |
+| **1b (alternate deixis)** | `"the other one"` / go-back via `resolveAlternateProject` + `detectFocusedSwitchIntent`; dual-write sync on `popFocus` / `releaseToDiscover`; gate `test:other-one` | S — **landed** |
+| **1b (salience consumers)** | `discourseEntities` / `discourseOffered` feed compare pool, visit candidates, switch `poolOf`, `resolveNamed`; legacy ⊆ store membership assert in dual-write test. Chips/display + 1c delete still open. | M — **landed** |
 | **0c** | Remainder of `EngineData` | separate PR |
 
 Gate for closing Phase 0 remains: forced adapter failure → `success: false` with

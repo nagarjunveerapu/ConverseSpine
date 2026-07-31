@@ -10,6 +10,7 @@ import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 import { answerRequirements } from './answer-contract.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
+import { discourseOffered } from './entity-store.js';
 
 /** Keep aligned with turn-intent AFFIRM_ONLY (dialogue acts, not localities). */
 const AFFIRM =
@@ -495,14 +496,21 @@ function offeredNameTokens(name: string): string[] {
 }
 
 function resolveNamed(text: string, s: ConversationState): OfferedProject[] {
-  // Shortlist + discussed discourse — full catalog names still come from PROJECT_VECTORS.
-  // Discussed lets "compare ayana and krishnaja" resolve when Krishnaja is not in lastOffered.
+  // Discourse pool (entity store) — full catalog names still come from PROJECT_VECTORS.
+  // Store membership includes discussed that fell off the legacy last-6 cap.
+  const fromStore = discourseOffered(s);
   const offered = s.discover.lastOffered;
-  const discussed = s.discover.discussedProjects ?? [];
-  const pool: OfferedProject[] = [...offered];
-  for (const d of discussed) {
-    if (!pool.some((p) => p.projectId === d.projectId)) pool.push(d);
-  }
+  const pool: OfferedProject[] =
+    fromStore.length > 0
+      ? fromStore
+      : (() => {
+          const discussed = s.discover.discussedProjects ?? [];
+          const legacy: OfferedProject[] = [...offered];
+          for (const d of discussed) {
+            if (!legacy.some((p) => p.projectId === d.projectId)) legacy.push(d);
+          }
+          return legacy;
+        })();
   if (!pool.length) return [];
   const t = text.trim().toLowerCase();
   const hits: OfferedProject[] = [];

@@ -12,10 +12,10 @@
  *   NAME-06  `focus` is a single slot. There is nothing to pop back to, so
  *            "what about cornerstone utopia" cannot reach the sibling.
  *
- * PHASE 1a writes this store ALONGSIDE the existing fields. Nothing reads it
- * yet and no behaviour changes. 1b migrates consumers family by family
- * (compare → named-resolve → visit → chips), asserting `salience(state)`
- * matches the old projection at each step. 1c deletes the old fields.
+ * PHASE 1a dual-writes this store alongside the legacy fields. 1b migrates
+ * consumers family by family (compare → named-resolve → visit → chips).
+ * First reader: `resolveAlternateProject` ("the other one") via
+ * `detectFocusedSwitchIntent`. 1c deletes the old fields once no reader remains.
  *
  * DURABLE SHAPE. `store-kv.ts:28` is `JSON.stringify(state)`. A `Map` or `Set`
  * round-trips to `{}` — silently, while still typechecking — so the stored
@@ -95,11 +95,24 @@ export function pushFocus(state: ConversationState, projectId: string, turn: num
   return { ...withRole, focusStack: stack };
 }
 
-/** Return to the previous focus. This is what NAME-06 and "go back" need. */
+/**
+ * Return to the previous focus. Dual-writes legacy `focus` until 1c — the stack
+ * alone must not diverge from `state.focus` while both exist.
+ */
 export function popFocus(state: ConversationState): ConversationState {
   const stack = state.focusStack ?? [];
   if (stack.length < 2) return state;
-  return { ...state, focusStack: stack.slice(1) };
+  const next = stack.slice(1);
+  const id = next[0]!;
+  const entity = state.entities?.[id];
+  return {
+    ...state,
+    focusStack: next,
+    phase: 'focused',
+    ...(entity
+      ? { focus: { projectId: entity.projectId, projectName: entity.name } }
+      : {}),
+  };
 }
 
 /**
@@ -120,8 +133,97 @@ export function salience(state: ConversationState): DiscourseEntityRecord[] {
   });
 }
 
-/** The focused entity, if any — the store's answer to `state.focus`. */
+/**
+ * The focused entity, if any.
+ * During dual-write, trust legacy `state.focus` first — `focusStack` can lag
+ * after `releaseToDiscover` until 1c deletes the split.
+ */
 export function focusedEntity(state: ConversationState): DiscourseEntityRecord | undefined {
+  if (state.focus) {
+    const fromStore = state.entities?.[state.focus.projectId];
+    if (fromStore) return fromStore;
+  }
+  if (state.phase !== 'focused') return undefined;
   const id = (state.focusStack ?? [])[0];
   return id ? state.entities?.[id] : undefined;
+}
+
+function isDiscourseRole(roles: readonly EntityRole[]): boolean {
+  return (
+    roles.includes('offered') ||
+    roles.includes('discussed') ||
+    roles.includes('focused') ||
+    roles.includes('queued')
+  );
+}
+
+/**
+ * Conversation-scoped entities in salience order — the pool every resolver
+ * should read. Rejected rows are omitted (still retained in `state.entities`).
+ * Empty when the store was never dual-written (pre-1a sessions).
+ */
+export function discourseEntities(state: ConversationState): DiscourseEntityRecord[] {
+  return salience(state).filter(
+    (e) => !e.roles.includes('rejected') && isDiscourseRole(e.roles),
+  );
+}
+
+/** OfferedProject-shaped view for visit / switch / named-resolve consumers. */
+export function discourseOffered(
+  state: ConversationState,
+): Array<{ projectId: string; name: string; microMarket?: string }> {
+  return discourseEntities(state).map((e) => ({
+    projectId: e.projectId,
+    name: e.name,
+    ...(e.microMarket ? { microMarket: e.microMarket } : {}),
+  }));
+}
+
+/**
+ * Legacy pool projection (discussed → focus → lastOffered) for dual-write
+ * membership asserts. Order is the old compare_resolve shape — not salience.
+ */
+export function legacyConversationPoolIds(state: ConversationState): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (id: string | undefined) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  };
+  for (const p of state.discover.discussedProjects ?? []) push(p.projectId);
+  push(state.focus?.projectId);
+  for (const o of state.discover.lastOffered) push(o.projectId);
+  return out;
+}
+
+/**
+ * Resolve "the other one" / alternate deixis against salience.
+ *
+ * Returns the unique non-focus discourse entity when exactly one exists.
+ * Ambiguous (0 or 2+) → undefined — never invent a subject.
+ */
+export function resolveAlternateProject(
+  state: ConversationState,
+): DiscourseEntityRecord | undefined {
+  const focusId = state.focus?.projectId ?? (state.focusStack ?? [])[0];
+  if (!focusId) return undefined;
+
+  const others = salience(state).filter(
+    (e) =>
+      e.projectId !== focusId &&
+      !e.roles.includes('rejected') &&
+      isDiscourseRole(e.roles),
+  );
+
+  if (others.length === 1) return others[0];
+
+  // Stack depth > 1 is an unambiguous prior focus even when more offered exist.
+  const stackAlt = (state.focusStack ?? [])[1];
+  if (stackAlt && stackAlt !== focusId) {
+    const entity = state.entities?.[stackAlt];
+    if (entity && !entity.roles.includes('rejected')) return entity;
+  }
+
+  return undefined;
 }
