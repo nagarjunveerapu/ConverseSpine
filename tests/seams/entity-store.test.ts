@@ -32,10 +32,11 @@ import {
   resolveAlternateProject,
   discourseEntities,
   legacyConversationPoolIds,
+  currentShortlist,
   type DiscourseEntityRecord,
 } from '../../src/engine/entity-store.js';
-import { initState, releaseToDiscover } from '../../src/engine/state.js';
-import type { ConversationState } from '../../src/engine/types.js';
+import { initState, recordOffered, releaseToDiscover } from '../../src/engine/state.js';
+import type { ConversationState, Match } from '../../src/engine/types.js';
 
 const ELDORADO = { projectId: 'eldorado', name: 'Brigade Eldorado' };
 const CORNERSTONE = { projectId: 'cornerstone', name: 'Brigade Cornerstone' };
@@ -209,6 +210,41 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
     for (const id of legacyConversationPoolIds(s)) {
       expect(discourseIds.has(id), `legacy id ${id} missing from discourseEntities`).toBe(true);
     }
+  });
+
+  it('1c: shortlistIds + entity card payload are the shortlist authority', () => {
+    const matches: Match[] = [
+      {
+        projectId: 'eldorado',
+        name: 'Brigade Eldorado',
+        microMarket: 'North Bangalore',
+        startingPriceInr: 6_500_000,
+        startingPriceDisplay: '₹65 L',
+        matchReasons: [],
+        tradeoffNote: 'near airport',
+      },
+      {
+        projectId: 'sanctuary',
+        name: 'Brigade Sanctuary',
+        microMarket: 'Sarjapur Road',
+        startingPriceInr: 7_900_000,
+        startingPriceDisplay: '₹79 L',
+        matchReasons: [],
+      },
+    ];
+    let s = recordOffered(initState('c1c', 'b'), matches);
+    expect(s.shortlistIds).toEqual(['eldorado', 'sanctuary']);
+    expect(currentShortlist(s).map((o) => o.projectId)).toEqual(['eldorado', 'sanctuary']);
+    expect(currentShortlist(s)[0]?.tradeoffNote).toBe('near airport');
+    // Mirror still populated for raw readers / old KV revive.
+    expect(s.discover.lastOffered.map((o) => o.projectId)).toEqual(['eldorado', 'sanctuary']);
+
+    // New shortlist replaces offered role — Sanctuary drops off the board but
+    // can remain as discussed later without inventing a board card.
+    s = recordOffered(s, [matches[0]!]);
+    expect(s.shortlistIds).toEqual(['eldorado']);
+    expect(currentShortlist(s)).toHaveLength(1);
+    expect(s.entities?.sanctuary?.roles.includes('offered')).toBe(false);
   });
 
   it('keeps a project the legacy cap of 6 would have dropped', async () => {

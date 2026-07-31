@@ -1,29 +1,17 @@
 /**
  * The discourse entity store — one place, one ordering.
  *
- * Entities live in five fields today (`discover.lastOffered`,
- * `discover.discussedProjects`, `focus`, `projectCache`, `visit.queued`) and 21
- * resolvers read them in four different orderings. The disagreement is the bug
- * class, not a symptom of it:
+ * Phase 1a dual-wrote this alongside `lastOffered` / `discussedProjects` /
+ * `focus`. 1b migrated identity resolvers. **1c** makes the store the
+ * authority for the current shortlist (ids + card payload); legacy arrays are
+ * write-through mirrors for old KV revive and any remaining raw readers.
  *
- *   J7       `compare_resolve.projectPool` is discussed → focus → lastOffered
- *            with the catalog in none of them, so "comparing Eldorado and
- *            Sanctuary" compared Ayana / Desire Spaces / Vanam.
- *   NAME-06  `focus` is a single slot. There is nothing to pop back to, so
- *            "what about cornerstone utopia" cannot reach the sibling.
+ * NOT in NayaDesk. Desk owns the catalog; Spine owns conversation discourse.
+ * There is nothing to delete from Desk when this lands.
  *
- * PHASE 1a dual-writes this store alongside the legacy fields. 1b migrates
- * consumers family by family (compare → named-resolve → visit → chips).
- * First reader: `resolveAlternateProject` ("the other one") via
- * `detectFocusedSwitchIntent`. 1c deletes the old fields once no reader remains.
- *
- * DURABLE SHAPE. `store-kv.ts:28` is `JSON.stringify(state)`. A `Map` or `Set`
- * round-trips to `{}` — silently, while still typechecking — so the stored
- * shape is a plain `Record<>` of plain records, and salience is a pure
- * function over state rather than a method on it. A turn may build a `Map` in
- * memory; never as the stored field.
+ * DURABLE SHAPE. `store-kv.ts` is `JSON.stringify(state)`. Never store a Map/Set.
  */
-import type { ConversationState } from './types.js';
+import type { ConversationState, OfferedProject } from './types.js';
 
 export type EntityRole = 'offered' | 'discussed' | 'focused' | 'rejected' | 'queued';
 
@@ -36,21 +24,40 @@ export interface DiscourseEntityRecord {
   firstSeenTurn: number;
   lastTouchedTurn: number;
   microMarket?: string;
+  /** Card payload — Advisor SPA / re-list. Only on the current shortlist set. */
+  startingPriceDisplay?: string;
+  startingPriceInr?: number;
+  tradeoffNote?: string;
+  dimensionFit?: OfferedProject['dimensionFit'];
+  dimensionGap?: OfferedProject['dimensionGap'];
+  /** Rank within the current shortlist (0 = top search hit). */
+  offeredRank?: number;
 }
 
 /** Rank order: rejected sinks; everything else is ordered by the focus stack. */
 const REJECTED_RANK = 1_000_000;
 
+export type EntityWrite = {
+  projectId: string;
+  name: string;
+  microMarket?: string;
+  startingPriceDisplay?: string;
+  startingPriceInr?: number;
+  tradeoffNote?: string;
+  dimensionFit?: OfferedProject['dimensionFit'];
+  dimensionGap?: OfferedProject['dimensionGap'];
+  offeredRank?: number;
+};
+
 /**
  * Record entities under a role, merging with what is already known.
  *
  * An entity is never replaced wholesale: roles accumulate, because "offered
- * then discussed then rejected" is three true facts about one project, and
- * collapsing them is how `discussedProjects` and `lastOffered` drifted apart.
+ * then discussed then rejected" is three true facts about one project.
  */
 export function recordEntities(
   state: ConversationState,
-  entities: ReadonlyArray<{ projectId: string; name: string; microMarket?: string }>,
+  entities: ReadonlyArray<EntityWrite>,
   role: EntityRole,
   turn: number,
 ): ConversationState {
@@ -58,8 +65,6 @@ export function recordEntities(
   let changed = false;
 
   for (const e of entities) {
-    // A slug is not a name. Refusing the write here is cheaper than scrubbing
-    // it out of a reply later.
     if (!e.projectId || !e.name?.trim()) continue;
     const prior = next[e.projectId];
     next[e.projectId] = prior
@@ -69,6 +74,14 @@ export function recordEntities(
           roles: prior.roles.includes(role) ? prior.roles : [...prior.roles, role],
           lastTouchedTurn: turn,
           ...(e.microMarket ? { microMarket: e.microMarket } : {}),
+          ...(e.startingPriceDisplay !== undefined
+            ? { startingPriceDisplay: e.startingPriceDisplay }
+            : {}),
+          ...(e.startingPriceInr !== undefined ? { startingPriceInr: e.startingPriceInr } : {}),
+          ...(e.tradeoffNote !== undefined ? { tradeoffNote: e.tradeoffNote } : {}),
+          ...(e.dimensionFit !== undefined ? { dimensionFit: e.dimensionFit } : {}),
+          ...(e.dimensionGap !== undefined ? { dimensionGap: e.dimensionGap } : {}),
+          ...(e.offeredRank !== undefined ? { offeredRank: e.offeredRank } : {}),
         }
       : {
           projectId: e.projectId,
@@ -77,10 +90,45 @@ export function recordEntities(
           firstSeenTurn: turn,
           lastTouchedTurn: turn,
           ...(e.microMarket ? { microMarket: e.microMarket } : {}),
+          ...(e.startingPriceDisplay !== undefined
+            ? { startingPriceDisplay: e.startingPriceDisplay }
+            : {}),
+          ...(e.startingPriceInr !== undefined ? { startingPriceInr: e.startingPriceInr } : {}),
+          ...(e.tradeoffNote !== undefined ? { tradeoffNote: e.tradeoffNote } : {}),
+          ...(e.dimensionFit !== undefined ? { dimensionFit: e.dimensionFit } : {}),
+          ...(e.dimensionGap !== undefined ? { dimensionGap: e.dimensionGap } : {}),
+          ...(e.offeredRank !== undefined ? { offeredRank: e.offeredRank } : {}),
         };
     changed = true;
   }
 
+  return changed ? { ...state, entities: next } : state;
+}
+
+/** Drop the `offered` role + card payload from every entity not in `keepIds`. */
+export function clearOfferedExcept(
+  state: ConversationState,
+  keepIds: ReadonlySet<string>,
+): ConversationState {
+  const entities = state.entities;
+  if (!entities) return state;
+  let changed = false;
+  const next: Record<string, DiscourseEntityRecord> = {};
+  for (const [id, e] of Object.entries(entities)) {
+    if (e.roles.includes('offered') && !keepIds.has(id)) {
+      changed = true;
+      next[id] = {
+        projectId: e.projectId,
+        name: e.name,
+        roles: e.roles.filter((r) => r !== 'offered'),
+        firstSeenTurn: e.firstSeenTurn,
+        lastTouchedTurn: e.lastTouchedTurn,
+        ...(e.microMarket ? { microMarket: e.microMarket } : {}),
+      };
+    } else {
+      next[id] = e;
+    }
+  }
   return changed ? { ...state, entities: next } : state;
 }
 
@@ -90,14 +138,25 @@ export function pushFocus(state: ConversationState, projectId: string, turn: num
   const entity = state.entities?.[projectId];
   const stack = [projectId, ...(state.focusStack ?? []).filter((id) => id !== projectId)];
   const withRole = entity
-    ? recordEntities(state, [{ projectId, name: entity.name, ...(entity.microMarket ? { microMarket: entity.microMarket } : {}) }], 'focused', turn)
+    ? recordEntities(
+        state,
+        [
+          {
+            projectId,
+            name: entity.name,
+            ...(entity.microMarket ? { microMarket: entity.microMarket } : {}),
+          },
+        ],
+        'focused',
+        turn,
+      )
     : state;
   return { ...withRole, focusStack: stack };
 }
 
 /**
- * Return to the previous focus. Dual-writes legacy `focus` until 1c — the stack
- * alone must not diverge from `state.focus` while both exist.
+ * Return to the previous focus. Dual-writes legacy `focus` until focus-field
+ * 1c — the stack alone must not diverge from `state.focus` while both exist.
  */
 export function popFocus(state: ConversationState): ConversationState {
   const stack = state.focusStack ?? [];
@@ -135,8 +194,7 @@ export function salience(state: ConversationState): DiscourseEntityRecord[] {
 
 /**
  * The focused entity, if any.
- * During dual-write, trust legacy `state.focus` first — `focusStack` can lag
- * after `releaseToDiscover` until 1c deletes the split.
+ * Trust legacy `state.focus` first while the focus field still dual-writes.
  */
 export function focusedEntity(state: ConversationState): DiscourseEntityRecord | undefined {
   if (state.focus) {
@@ -157,10 +215,53 @@ function isDiscourseRole(roles: readonly EntityRole[]): boolean {
   );
 }
 
+export function entityToOffered(e: DiscourseEntityRecord): OfferedProject {
+  return {
+    projectId: e.projectId,
+    name: e.name,
+    ...(e.microMarket ? { microMarket: e.microMarket } : {}),
+    ...(e.startingPriceDisplay ? { startingPriceDisplay: e.startingPriceDisplay } : {}),
+    ...(e.startingPriceInr !== undefined ? { startingPriceInr: e.startingPriceInr } : {}),
+    ...(e.tradeoffNote ? { tradeoffNote: e.tradeoffNote } : {}),
+    ...(e.dimensionFit ? { dimensionFit: e.dimensionFit } : {}),
+    ...(e.dimensionGap ? { dimensionGap: e.dimensionGap } : {}),
+  };
+}
+
+/**
+ * Current search board — Phase 1c authority.
+ * Prefer `shortlistIds` + entity card payload; fall back to legacy `lastOffered`
+ * for pre-1c KV sessions.
+ */
+export function currentShortlist(state: ConversationState): OfferedProject[] {
+  const ids = state.shortlistIds;
+  if (ids?.length && state.entities) {
+    const out: OfferedProject[] = [];
+    for (const id of ids) {
+      const e = state.entities[id];
+      if (e) out.push(entityToOffered(e));
+    }
+    if (out.length) return out;
+  }
+  return state.discover.lastOffered ?? [];
+}
+
+/**
+ * Discussed discourse projects (uncapped). Legacy array is a revive fallback
+ * and is capped at 6 — store wins when present.
+ */
+export function discussedList(state: ConversationState): OfferedProject[] {
+  const fromStore = Object.values(state.entities ?? {})
+    .filter((e) => e.roles.includes('discussed'))
+    .sort((a, b) => a.firstSeenTurn - b.firstSeenTurn || a.lastTouchedTurn - b.lastTouchedTurn)
+    .map(entityToOffered);
+  if (fromStore.length) return fromStore;
+  return state.discover.discussedProjects ?? [];
+}
+
 /**
  * Conversation-scoped entities in salience order — the pool every resolver
  * should read. Rejected rows are omitted (still retained in `state.entities`).
- * Empty when the store was never dual-written (pre-1a sessions).
  */
 export function discourseEntities(state: ConversationState): DiscourseEntityRecord[] {
   return salience(state).filter(
@@ -169,19 +270,30 @@ export function discourseEntities(state: ConversationState): DiscourseEntityReco
 }
 
 /** OfferedProject-shaped view for visit / switch / named-resolve consumers. */
-export function discourseOffered(
-  state: ConversationState,
-): Array<{ projectId: string; name: string; microMarket?: string }> {
-  return discourseEntities(state).map((e) => ({
-    projectId: e.projectId,
-    name: e.name,
-    ...(e.microMarket ? { microMarket: e.microMarket } : {}),
-  }));
+export function discourseOffered(state: ConversationState): OfferedProject[] {
+  return discourseEntities(state).map(entityToOffered);
 }
 
 /**
- * Legacy pool projection (discussed → focus → lastOffered) for dual-write
- * membership asserts. Order is the old compare_resolve shape — not salience.
+ * Mirror store → legacy arrays so remaining raw readers stay correct.
+ * Call after every shortlist / discussed write.
+ */
+export function mirrorLegacyPools(state: ConversationState): ConversationState {
+  const lastOffered = currentShortlist(state);
+  const discussedProjects = discussedList(state);
+  return {
+    ...state,
+    discover: {
+      ...state.discover,
+      lastOffered,
+      discussedProjects,
+    },
+  };
+}
+
+/**
+ * Legacy pool projection (discussed → focus → lastOffered) for membership
+ * asserts during dual-write.
  */
 export function legacyConversationPoolIds(state: ConversationState): string[] {
   const out: string[] = [];
@@ -191,9 +303,9 @@ export function legacyConversationPoolIds(state: ConversationState): string[] {
     seen.add(id);
     out.push(id);
   };
-  for (const p of state.discover.discussedProjects ?? []) push(p.projectId);
+  for (const p of discussedList(state)) push(p.projectId);
   push(state.focus?.projectId);
-  for (const o of state.discover.lastOffered) push(o.projectId);
+  for (const o of currentShortlist(state)) push(o.projectId);
   return out;
 }
 
@@ -218,7 +330,6 @@ export function resolveAlternateProject(
 
   if (others.length === 1) return others[0];
 
-  // Stack depth > 1 is an unambiguous prior focus even when more offered exist.
   const stackAlt = (state.focusStack ?? [])[1];
   if (stackAlt && stackAlt !== focusId) {
     const entity = state.entities?.[stackAlt];

@@ -8,7 +8,13 @@ import type {
   Match,
   OfferedProject,
 } from './types.js';
-import { recordEntities, pushFocus } from './entity-store.js';
+import {
+  clearOfferedExcept,
+  currentShortlist,
+  mirrorLegacyPools,
+  pushFocus,
+  recordEntities,
+} from './entity-store.js';
 
 export function initState(convId: string, builderId: string): ConversationState {
   return {
@@ -199,34 +205,43 @@ export function resolvePick(
 
 export function recordOffered(s: ConversationState, matches: readonly Match[]): ConversationState {
   if (matches.length === 0) return s;
-  const lastOffered = matches.map((m) => ({
-    projectId: m.projectId,
-    name: m.name,
-    microMarket: m.microMarket,
-    startingPriceDisplay: m.startingPriceDisplay,
-    ...(m.startingPriceInr > 0 ? { startingPriceInr: m.startingPriceInr } : {}),
-    // Receipts must survive this projection or they never reach the
-    // advisor SPA — cards render from lastOffered, not raw search evidence.
-    ...(m.tradeoffNote ? { tradeoffNote: m.tradeoffNote } : {}),
-    ...(m.dimensionFit ? { dimensionFit: m.dimensionFit } : {}),
-    ...(m.dimensionGap ? { dimensionGap: m.dimensionGap } : {}),
-  }));
-  // Phase 1a dual-write: the entity store records the same fact alongside
-  // lastOffered. Nothing reads it yet (1b migrates consumers, 1c deletes the
-  // legacy field), so this cannot change behaviour.
+  const keep = new Set(matches.map((m) => m.projectId));
+  // Phase 1c — store is authority: clear stale offered roles, write card payload,
+  // set shortlistIds, then mirror into legacy lastOffered for raw readers.
+  const cleared = clearOfferedExcept(s, keep);
   const withEntities = recordEntities(
-    s,
-    matches.map((m) => ({ projectId: m.projectId, name: m.name, ...(m.microMarket ? { microMarket: m.microMarket } : {}) })),
+    cleared,
+    matches.map((m, i) => ({
+      projectId: m.projectId,
+      name: m.name,
+      ...(m.microMarket ? { microMarket: m.microMarket } : {}),
+      startingPriceDisplay: m.startingPriceDisplay,
+      ...(m.startingPriceInr > 0 ? { startingPriceInr: m.startingPriceInr } : {}),
+      ...(m.tradeoffNote ? { tradeoffNote: m.tradeoffNote } : {}),
+      ...(m.dimensionFit ? { dimensionFit: m.dimensionFit } : {}),
+      ...(m.dimensionGap ? { dimensionGap: m.dimensionGap } : {}),
+      offeredRank: i,
+    })),
     'offered',
     s.turnCount,
   );
-  return { ...withEntities, discover: { ...withEntities.discover, lastOffered, ignoredProbes: 0 } };
+  const withIds = {
+    ...withEntities,
+    shortlistIds: matches.map((m) => m.projectId),
+    discover: { ...withEntities.discover, ignoredProbes: 0 },
+  };
+  return mirrorLegacyPools(withIds);
 }
 
 /** Drop stale shortlist — next successful recommend repopulates (W2). */
 export function clearLastOffered(s: ConversationState): ConversationState {
-  if (s.discover.lastOffered.length === 0) return s;
-  return { ...s, discover: { ...s.discover, lastOffered: [] } };
+  if ((s.shortlistIds?.length ?? 0) === 0 && s.discover.lastOffered.length === 0) return s;
+  const cleared = clearOfferedExcept(s, new Set());
+  return mirrorLegacyPools({
+    ...cleared,
+    shortlistIds: [],
+    discover: { ...cleared.discover, lastOffered: [], ignoredProbes: cleared.discover.ignoredProbes },
+  });
 }
 
 /** True when search-shaping constraints changed (not purpose/name). No locality hardcode. */
@@ -270,23 +285,20 @@ export function recordDiscussed(
   projects: ReadonlyArray<OfferedProject>,
 ): ConversationState {
   if (projects.length === 0) return s;
-  const prev = s.discover.discussedProjects ?? [];
-  const byId = new Map(prev.map((p) => [p.projectId, p]));
-  for (const p of projects) {
-    if (!p.projectId || !p.name) continue;
-    byId.set(p.projectId, { projectId: p.projectId, name: p.name });
-  }
-  const discussedProjects = [...byId.values()].slice(-6);
-  // Phase 1a dual-write. Note the store does NOT inherit the cap of 6 -- the
-  // cap is a property of this legacy array, and a dropped entity is exactly
-  // how a project the buyer engaged with becomes unreachable later.
+  // Phase 1c — store is uncapped authority; mirror may still slice for back-compat.
   const withEntities = recordEntities(
     s,
     projects.filter((p) => p.projectId && p.name).map((p) => ({ projectId: p.projectId, name: p.name })),
     'discussed',
     s.turnCount,
   );
-  return { ...withEntities, discover: { ...withEntities.discover, discussedProjects } };
+  const mirrored = mirrorLegacyPools(withEntities);
+  const discussed = mirrored.discover.discussedProjects ?? [];
+  if (discussed.length <= 6) return mirrored;
+  return {
+    ...mirrored,
+    discover: { ...mirrored.discover, discussedProjects: discussed.slice(-6) },
+  };
 }
 
 export function commitTo(s: ConversationState, projectId: string, projectName: string): ConversationState {
@@ -311,7 +323,7 @@ export function releaseToDiscover(s: ConversationState): ConversationState {
 }
 
 export function isSameAsLast(s: ConversationState, matches: readonly Match[]): boolean {
-  const prev = s.discover.lastOffered;
+  const prev = currentShortlist(s);
   if (prev.length === 0 || prev.length !== matches.length) return false;
   return prev.every((p, i) => p.projectId === matches[i]?.projectId);
 }

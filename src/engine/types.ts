@@ -78,6 +78,11 @@ export interface TranscriptMessage {
 export interface DiscoverState {
   asked: ProbeKind[];
   rejectedProjectIds: string[];
+  /**
+   * Phase 1c — write-through mirror of `shortlistIds` + entity card payload.
+   * Authority is `currentShortlist(state)` / `state.shortlistIds`. Kept so old
+   * KV sessions and any raw readers keep working; do not write independently.
+   */
   lastOffered: OfferedProject[];
   oriented: boolean;
   ignoredProbes: number;
@@ -85,8 +90,9 @@ export interface DiscoverState {
   /** Recent turns for anaphora ("both", "these") — newest last. */
   recentMessages?: TranscriptMessage[];
   /**
-   * Projects the buyer has actually engaged with this session (focus, switch, named Q&A).
-   * Used for "compare both" / "visit them" when lastOffered is still the search shortlist.
+   * Phase 1c — write-through mirror of entities with role `discussed`.
+   * Authority is `discussedList(state)`. Uncapped in the store; this mirror
+   * may still be sliced for back-compat.
    */
   discussedProjects?: OfferedProject[];
 }
@@ -176,17 +182,19 @@ export interface ConversationState {
   /** Cached NayaDesk project facts for focused / shortlisted projects. */
   projectCache?: Record<string, ProjectDetail>;
   /**
-   * Phase 1 — discourse entity store (entity-store.ts). Dual-written alongside
-   * lastOffered / discussedProjects / focus / visit.queued. 1b readers start
-   * with alternate deixis (`resolveAlternateProject`); 1c deletes legacy fields.
+   * Phase 1 — discourse entity store (entity-store.ts). 1c authority for
+   * shortlist card payload + discourse roles. Legacy lastOffered /
+   * discussedProjects are mirrors only. Not a NayaDesk field — Spine KV only.
    *
    * JSON-safe by construction: a Record of plain records, never a Map, because
    * store-kv.ts persists this with JSON.stringify and a Map round-trips to {}.
    */
   entities?: Record<string, import('./entity-store.js').DiscourseEntityRecord>;
   /** Focus history, most recent first. Depth > 1 powers "the other one" /
-   *  "go back" via salience; legacy `focus` stays authoritative until 1c. */
+   *  "go back" via salience; legacy `focus` still dual-writes for phase gates. */
   focusStack?: string[];
+  /** Phase 1c — current board order (search rank). Source for currentShortlist(). */
+  shortlistIds?: string[];
   /** Last-read confirmed visits from NayaDesk (itinerary mirror for board). */
   visitBookedCache?: Array<{
     projectId: string;

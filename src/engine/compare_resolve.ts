@@ -4,7 +4,7 @@ import {
   type ContextMessage,
   type ProjectRef,
 } from './project_references.js';
-import { discourseEntities } from './entity-store.js';
+import { discourseEntities, discussedList } from './entity-store.js';
 
 const GENERIC_COMPARE_RE =
   /\b(?:compare|which\s+(?:is|one)\s+better|what(?:'s|\s+is)\s+the\s+difference|difference\s+between|vs\.?|versus)\b/i;
@@ -51,14 +51,7 @@ function projectPool(s: ConversationState): ProjectRef[] {
 }
 
 function discussedRefs(s: ConversationState): ProjectRef[] {
-  const legacy = s.discover.discussedProjects ?? [];
-  if (legacy.length > 0) {
-    return legacy.map((p) => ({ project_id: p.projectId, name: p.name }));
-  }
-  return discourseEntities(s)
-    .filter((e) => e.roles.includes('discussed'))
-    .sort((a, b) => a.firstSeenTurn - b.firstSeenTurn)
-    .map((e) => ({ project_id: e.projectId, name: e.name }));
+  return discussedList(s).map((p) => ({ project_id: p.projectId, name: p.name }));
 }
 
 /** Conversation pool ∪ catalog — catalog joins MATCHING only, never fallback. */

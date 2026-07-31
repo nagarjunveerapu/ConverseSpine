@@ -5,6 +5,7 @@
 import type { ConverseRuntime } from '../runtime/deps.js';
 import { runEngineTurn } from '../engine/turn.js';
 import { prefetchProjects } from '../engine/project-cache.js';
+import { currentShortlist } from '../engine/entity-store.js';
 import { commitTo, initState, markAsked, withNdConversation } from '../engine/state.js';
 import { detectSoftPrefs } from '../engine/facts.js';
 import { derivedPriorityFromWorries } from '../engine/advisor-weights.js';
@@ -182,7 +183,7 @@ export async function handleAdvisorTurn(
         narrowing &&
         !existing.constraints.priorityFocus &&
         !existing.discover.asked.includes('priority') &&
-        existing.discover.lastOffered.length === 0 &&
+        currentShortlist(existing).length === 0 &&
         !projectId &&
         !body.action_id?.trim()
       ) {
@@ -235,7 +236,7 @@ export async function handleAdvisorTurn(
     if (needsFocusRestore) {
       const name =
         projectName ||
-        existing.discover.lastOffered.find((p) => p.projectId === projectId)?.name ||
+        currentShortlist(existing).find((p) => p.projectId === projectId)?.name ||
         existing.focus?.projectName ||
         projectId;
       if (existing.ndConversationId) {

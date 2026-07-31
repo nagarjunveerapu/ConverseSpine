@@ -7,6 +7,7 @@ import { buildChipShadow } from '../chips/shadow.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
 import { summarizeFailure, type Failure } from './outcome.js';
 import { answerRequirements, deliveredFactKeys } from './answer-contract.js';
+import { currentShortlist } from './entity-store.js';
 import { detectFocusedSwitchIntent } from './project_switch.js';
 import type {
   ConversationState,
@@ -90,7 +91,7 @@ export function buildLedgerWritePayload(input: {
       ? { focus: { project_id: state.focus.projectId, name: state.focus.projectName } }
       : {}),
     constraints: { ...state.constraints },
-    shortlist: state.discover.lastOffered.map((o) => ({
+    shortlist: currentShortlist(state).map((o) => ({
       project_id: o.projectId,
       name: o.name,
     })),
@@ -190,7 +191,7 @@ export function buildLedgerWritePayload(input: {
   };
 
   const fromMatches = evidence.matches?.map((m) => m.projectId) ?? [];
-  const fromOffered = state.discover.lastOffered.map((o) => o.projectId);
+  const fromOffered = currentShortlist(state).map((o) => o.projectId);
   const offered_project_ids = [...new Set([...fromMatches, ...fromOffered])].slice(0, 20);
 
   return {
