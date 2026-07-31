@@ -74,6 +74,7 @@ import {
 import { matchesFromLastOffered } from './matches-from-offered.js';
 import { advisorSearchPrefs, importanceFromConstraints } from './advisor-weights.js';
 import { findNearbyTypeOffer } from './nearby-offer.js';
+import { isAskNextStepText } from './ask-next-step-detect.js';
 import { resolveAskNextStepGoal, shouldConsumeAskNextStep } from './ask-next-step.js';
 import { isAlternateDeixis, resolveFocusedSwitchGoal } from './project_switch.js';
 import { driveLeg, haversineDriveMinutes } from './trip-logistics.js';
@@ -486,7 +487,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       (intent.confidence === 'abstain' ||
         excerptReply(applied.probeReply ?? '') === state.rti?.lastReplyExcerpt);
 
-    if (applied.probeReply && !probeFallsThrough) {
+    // Phase 2 — ask_next_step must reach decideGoalAsync (state-conditioned
+    // consumer). A pending recovery/nearby chip menu must not swallow it into
+    // the canned RTI probe (which debug-labels as no_fit).
+    if (
+      applied.probeReply &&
+      !probeFallsThrough &&
+      !isAskNextStepText(trimmedText)
+    ) {
       let searchRecovery = storedSearchRecovery(state);
       if (!searchRecovery?.suggested_actions.length) {
         searchRecovery = await freshSearchRecovery(deps, state, channel);
