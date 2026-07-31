@@ -46,6 +46,12 @@ export interface Env {
    *  mined corpus as entity-masked (canonical) vectors and canonicalizes the
    *  live query in lockstep. Default/unset = legacy raw behaviour (rebuild no-op). */
   SIL_CANONICAL_EMBED?: string;
+  /**
+   * Phase 2 — prepend discourse state tokens (`<focused>`, `<board:N>`, …)
+   * to the intent-embed query. Requires a corpus rebuild that prefixes the
+   * same tokens on state-dependent rows. Default/unset = off (no behaviour change).
+   */
+  SIL_STATE_TOKENS?: string;
 
   /**
    * Understanding Flywheel Wave A — "true" wires every turn into Desk's

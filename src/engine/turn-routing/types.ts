@@ -1,4 +1,5 @@
 import type { TurnInputSource } from '../ingress.js';
+import { currentShortlist } from '../entity-store.js';
 import type { AnswerTopic, ConversationState, Extracted, Phase } from '../types.js';
 
 export type TurnRoutingKind =
@@ -84,6 +85,8 @@ export interface TurnRoutingInput {
     awaiting_confirm: boolean;
     booked_count: number;
   };
+  /** Phase 2 — shortlist size for `<board:N>` state token. */
+  board_count?: number;
   ask_topic?: AnswerTopic;
   ask_topics?: AnswerTopic[];
   named_project_ids: string[];
@@ -115,6 +118,7 @@ export function buildTurnRoutingInput(
     builder_id: state.builderId,
     phase: state.phase,
     transition: ex.transition,
+    board_count: currentShortlist(state).length,
     ...(state.focus
       ? { focus: { project_id: state.focus.projectId, project_name: state.focus.projectName } }
       : {}),
