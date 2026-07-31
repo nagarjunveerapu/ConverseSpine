@@ -83,6 +83,26 @@ describe('filterNamedProjectsByEvidence', () => {
     expect(out).toEqual([UTOPIA]);
   });
 
+  it('NAME-06: both proposed → full Utopia overshadows partial Cornerstone', () => {
+    const out = filterNamedProjectsByEvidence(
+      'what about cornerstone utopia',
+      [CORNERSTONE, UTOPIA],
+      [CORNERSTONE],
+      [CORNERSTONE, UTOPIA, ELDORADO],
+    );
+    expect(out).toEqual([UTOPIA]);
+  });
+
+  it('NAME-06 dig shape: both FULL → shorter name dropped by token-superset', () => {
+    const out = filterNamedProjectsByEvidence(
+      'what about Brigade Cornerstone Utopia',
+      [CORNERSTONE, UTOPIA],
+      [CORNERSTONE],
+      [CORNERSTONE, UTOPIA, ELDORADO],
+    );
+    expect(out).toEqual([UTOPIA]);
+  });
+
   it('bare project name on an empty board survives', () => {
     expect(filterNamedProjectsByEvidence('vanam', [VANAM], [])).toEqual([VANAM]);
   });

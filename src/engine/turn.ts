@@ -17,6 +17,7 @@ import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
 import { searchLocalityWiden } from './locality-widen.js';
+import { currentShortlist, discussedList, discourseEntities } from './entity-store.js';
 import {
   collapseCoverageMarkets,
   coverageCityCoverBit,
@@ -72,7 +73,8 @@ import {
 } from './turn-intent/compare-intent.js';
 import { matchesFromLastOffered } from './matches-from-offered.js';
 import { advisorSearchPrefs, importanceFromConstraints } from './advisor-weights.js';
-import { resolveFocusedSwitchGoal } from './project_switch.js';
+import { findNearbyTypeOffer } from './nearby-offer.js';
+import { isAlternateDeixis, resolveFocusedSwitchGoal } from './project_switch.js';
 import { driveLeg, haversineDriveMinutes } from './trip-logistics.js';
 import { catalogFromProjectCoords, projectGeo } from './project-geo.js';
 import {
@@ -83,6 +85,7 @@ import {
   commitTo,
   constraintsMateriallyChanged,
   incObjection,
+  hydrateLegacyDiscourse,
   initState,
   isSameAsLast,
   markAsked,
@@ -133,11 +136,12 @@ import type {
   Match,
   ObjectionTopic,
   OfferedProject,
+  ProjectDetail,
   RelaxedDimension,
   TurnDebug,
   TurnGoal,
 } from './types.js';
-import type { EngineDeps } from './ports.js';
+import type { DataResult, EngineDeps } from './ports.js';
 
 export interface EngineTurnInput {
   convId: string;
@@ -179,7 +183,9 @@ export interface EngineTurnOutput {
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
-  let state = (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId);
+  let state = hydrateLegacyDiscourse(
+    (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId),
+  );
   const inputSource = resolveInputSource(input.action_id);
 
   const trimmedText = input.text.trim();
@@ -590,7 +596,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Named multi-project turns without the word "compare" still need compare IDs —
   // but not on a fresh search board (embedder names are not a shortlist).
   const freshSearchBoard =
-    state.discover.lastOffered.length === 0 &&
+    currentShortlist(state).length === 0 &&
     !state.focus &&
     (discover.hasNarrowingConstraint(state.constraints) ||
       discover.hasNarrowingConstraint(ex.constraints) ||
@@ -614,7 +620,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     compareProjectIds:
       ex.compareProjectIds && ex.compareProjectIds.length >= 2
         ? ex.compareProjectIds
-        : resolveCompareProjectIds(trimmedText, ex, state),
+        : resolveCompareProjectIds(
+            trimmedText,
+            ex,
+            state,
+            catalogForNlu?.projectNames ?? [],
+          ),
   };
   if (recoveryChipTurn || focusPivotTurn) {
     ex = {
@@ -649,8 +660,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const anchorNames = [
       ...(state.phase === 'focused' && state.focus ? [state.focus.projectName] : []),
       ...(ex.namedProjects ?? []).map((p) => p.name),
-      ...state.discover.lastOffered.map((o) => o.name),
-      ...(state.discover.discussedProjects ?? []).map((p) => p.name),
+      ...currentShortlist(state).map((o) => o.name),
+      ...discussedList(state).map((p) => p.name),
     ].filter(Boolean);
     const noNewLocality =
       !ex.constraints.location || locationEchoesProjectName(ex.constraints.location, anchorNames);
@@ -677,7 +688,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (ex.constraints.location) {
     const knownNames = [
       ...(state.focus?.projectName ? [state.focus.projectName] : []),
-      ...state.discover.lastOffered.map((o) => o.name),
+      ...currentShortlist(state).map((o) => o.name),
     ];
     if (knownNames.length) {
       const kept = ex.constraints.location
@@ -1035,7 +1046,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   // W2: constraint pivot invalidates stale shortlist — no catalog names; delta-driven.
   if (
-    state.discover.lastOffered.length > 0 &&
+    currentShortlist(state).length > 0 &&
     shouldInvalidateLastOffered(prevConstraints, state.constraints, trimmedText, ex)
   ) {
     state = clearLastOffered(state);
@@ -1499,7 +1510,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       (discover.hasNarrowingConstraint(state.constraints) ||
         discover.hasNarrowingConstraint(ex.constraints)) &&
       !state.focus &&
-      state.discover.lastOffered.length === 0;
+      currentShortlist(state).length === 0;
     if (!freshSearchBrief) {
       state = { ...state, phase: 'visit' };
     }
@@ -1534,7 +1545,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (
     (state.phase === 'discover' || state.phase === 'handoff') &&
     (ex.namedProjects?.length ?? 0) >= 1 &&
-    state.discover.lastOffered.length >= 1 &&
+    currentShortlist(state).length >= 1 &&
     routing.routing === 'visit_schedule_stop'
   ) {
     state = { ...state, phase: 'visit' };
@@ -1644,7 +1655,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const coldNameEligible =
     state.phase === 'discover' &&
     !state.focus &&
-    state.discover.lastOffered.length === 0 &&
+    currentShortlist(state).length === 0 &&
     (ex.namedProjects?.length ?? 0) < 2 &&
     (ex.isQuestion || isDetailAskTurn(ex) || /^(?:is|are|does|do|what|which|how|can|tell me)\b/i.test(trimmedText));
   if (coldNameEligible) {
@@ -1670,8 +1681,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   ) {
     const answerGoal = goal;
     const pool = [
-      ...state.discover.lastOffered,
-      ...(state.discover.discussedProjects ?? []),
+      ...currentShortlist(state),
+      ...discussedList(state),
       { projectId: state.focus.projectId, name: state.focus.projectName },
     ];
     const namedOk =
@@ -1693,9 +1704,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // front instead of propose→fail. Counts absent (pre-#203 payloads) →
     // fail open and keep the honest propose→409 path.
     const wantType = goal.unitType.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const detail = await deps.data
+    const detailRes = await deps.data
       .projectDetail(state.builderId, nd, goal.projectId)
       .catch(() => null);
+    const detail = detailRes?.ok ? detailRes.value : null;
     const cfg = detail?.configurations?.find(
       (u) => u.unitType.toLowerCase().replace(/[^a-z0-9]/g, '') === wantType,
     );
@@ -1851,10 +1863,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Hold copy is a commitment ("held until 5:30 pm") — never LLM-paraphrased.
   const holdDeterministic = goal.kind === 'hold_propose' || goal.kind === 'hold_booked';
   const firstShortlistTurn =
-    state.discover.lastOffered.length === 0 &&
+    currentShortlist(state).length === 0 &&
     (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
     (evidence.matches?.length ?? 0) > 0;
   const clarifyPickDeterministic = goal.kind === 'clarify_project_pick';
+  const clarifyDiscourseDeterministic = goal.kind === 'clarify_discourse';
   // Shortlist-wide facet blocks are structured facts — template-locked like compare.
   const shortlistAnswerDeterministic = goal.kind === 'shortlist_answer';
   const compareDeterministic = goal.kind === 'answer' && goal.topic === 'compare';
@@ -1894,6 +1907,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     holdDeterministic ||
     firstShortlistTurn ||
     clarifyPickDeterministic ||
+    clarifyDiscourseDeterministic ||
     shortlistAnswerDeterministic ||
     compareDeterministic ||
     multiAnswerDeterministic ||
@@ -2209,8 +2223,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       tools: evidence.tools,
       grounding,
       ...(repeat_guard ? { repeat_guard } : {}),
-      last_offered_count: state.discover.lastOffered.length,
-      last_offered_ids: state.discover.lastOffered.map((o) => o.projectId),
+      last_offered_count: currentShortlist(state).length,
+      last_offered_ids: currentShortlist(state).map((o) => o.projectId),
+      ...(evidence.nearbyOffer?.nearbyAreas.length
+        ? {
+            nearby_offer: {
+              asked: evidence.nearbyOffer.asked,
+              nearbyAreas: evidence.nearbyOffer.nearbyAreas,
+              label: 'Also nearby estates',
+            },
+          }
+        : {}),
     },
     inputSource,
     extractProvenance,
@@ -2236,7 +2259,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ...(evidence.compare?.matrix ? { compareMatrix: evidence.compare.matrix } : {}),
     ...(cappedRecovery ? { searchRecovery: cappedRecovery } : {}),
     uiMode,
-    whatsappActions: whatsAppButtons(searchRecovery, channel),
+    whatsappActions:
+      whatsAppButtons(searchRecovery, channel) ??
+      (channel === 'whatsapp' && evidence.nearbyOffer
+        ? nearbyOfferSuggestedActions(evidence.nearbyOffer).slice(0, 2)
+        : undefined),
   };
 }
 
@@ -2323,6 +2350,25 @@ async function decideGoalAsync(
   if (s.phase === 'focused') {
     const switchGoal = await resolveFocusedSwitchGoal(text, ex, s, deps);
     if (switchGoal) return switchGoal;
+    // Alternate deixis with no unique target — clarify instead of recycling overview.
+    if (s.focus && isAlternateDeixis(text)) {
+      const focusId = s.focus.projectId;
+      const others = discourseEntities(s).filter((e) => e.projectId !== focusId);
+      if (others.length >= 2) {
+        return {
+          kind: 'clarify_discourse',
+          reason: 'ambiguous_alternate',
+          projectName: s.focus.projectName,
+          alternateNames: others.map((e) => e.name).slice(0, 3),
+        };
+      }
+      const reason = /\bgo\s+back\b/i.test(text) ? 'no_prior_focus' : 'no_alternate';
+      return {
+        kind: 'clarify_discourse',
+        reason,
+        projectName: s.focus.projectName,
+      };
+    }
   }
   return decideGoal(s, ex, visitCtx, text);
 }
@@ -2523,7 +2569,7 @@ async function fetchRecommend(
     strictSearch = await searchWithFilters(deps, s.builderId, filters);
   }
 
-  const offeredIds = new Set(s.discover.lastOffered.map((o) => o.projectId));
+  const offeredIds = new Set(currentShortlist(s).map((o) => o.projectId));
 
   const rawMatches: Match[] = strictSearch.matches
     .map((m) => ({
@@ -2548,7 +2594,7 @@ async function fetchRecommend(
     { locationAliases: strictSearch.expandedLocations ?? [] },
   );
 
-  if (matches.length === 0 && base.kind === 'recommend' && s.discover.lastOffered.length === 0) {
+  if (matches.length === 0 && base.kind === 'recommend' && currentShortlist(s).length === 0) {
     const broadened = await broadenInitialShortlist(
       deps,
       s.builderId,
@@ -2646,7 +2692,7 @@ async function fetchRecommend(
         const relist = relistShortlist();
         if (relist) return relist;
       }
-      if (s.discover.lastOffered.length === 0) {
+      if (currentShortlist(s).length === 0) {
         const broadened = await broadenInitialShortlist(
           deps,
           s.builderId,
@@ -2681,6 +2727,56 @@ async function fetchRecommend(
       return {
         goal: { kind: 'no_fit' },
         evidence: { ...budgetEv, searchRecovery },
+      };
+    }
+  }
+
+  // "Show me others" with nothing new in the asked place — offer same-type nearby
+  // before propertyType/budget no_fit loops the same singleton.
+  if (
+    scopedMatches.length === 0 &&
+    (ex.wantsMore || ex.rejected || base.kind === 'ack_reject_recommend') &&
+    s.constraints.location?.trim() &&
+    (s.constraints.propertyType || filters.projectTypes)
+  ) {
+    const asked = s.constraints.location.trim();
+    const excludeIds = new Set([
+      ...currentShortlist(s).map((o) => o.projectId),
+      ...s.discover.rejectedProjectIds,
+      ...(s.focus?.projectId ? [s.focus.projectId] : []),
+    ]);
+    const offer = await findNearbyTypeOffer({
+      asked,
+      builderId: s.builderId,
+      filters,
+      constraints: s.constraints,
+      excludeIds,
+      search: async (builderId, candidateFilters) => {
+        const result = await searchWithFilters(deps, builderId, candidateFilters);
+        const { location: _loc, ...sansArea } = s.constraints;
+        return {
+          matches: discover.filterSearchMatches(
+            rawToMatches(result.matches ?? []),
+            sansArea,
+            s.discover.rejectedProjectIds,
+          ),
+        };
+      },
+    });
+    if (offer?.previewMatches.length) {
+      const exactFitName = currentShortlist(s)[0]?.name ?? s.focus?.projectName;
+      return {
+        goal: { kind: 'recommend' },
+        evidence: {
+          tools: ['search'],
+          matches: offer.previewMatches,
+          relaxed: ['area'],
+          localityWiden: {
+            asked,
+            nearbyAreas: offer.nearbyAreas,
+            ...(exactFitName ? { exactFitName } : {}),
+          },
+        },
       };
     }
   }
@@ -2725,11 +2821,23 @@ async function fetchRecommend(
     // Padding a short-but-real shortlist up to three (RTI-D+). Anything the
     // padding gave up rides along so compose never calls the padded entries a fit.
     let padRelaxed: RelaxedDimension[] = [];
-    if (base.kind === 'recommend' && s.discover.lastOffered.length === 0 && listed.length < 3) {
+    if (base.kind === 'recommend' && currentShortlist(s).length === 0 && listed.length < 3) {
       const padded = await broadenInitialShortlist(deps, s.builderId, filters, s.constraints, s.discover.rejectedProjectIds, listed);
       listed = padded.matches;
       padRelaxed = padded.relaxed;
     }
+    // Thin exact board + location on brief → soft nearby offer (opt-in; not padded in).
+    const nearbyOfferEv = await maybeNearbyOfferEvidence({
+      listed,
+      s,
+      filters,
+      deps,
+      excludeIds: new Set([
+        ...listed.map((m) => m.projectId),
+        ...currentShortlist(s).map((o) => o.projectId),
+        ...s.discover.rejectedProjectIds,
+      ]),
+    });
     if (
       base.kind === 'recommend' &&
       !ex.wantsMore &&
@@ -2744,12 +2852,18 @@ async function fetchRecommend(
           matches: listed,
           ...(miss ? { nextSlot: miss } : {}),
           ...(padRelaxed.length ? { relaxed: padRelaxed } : {}),
+          ...(nearbyOfferEv ?? {}),
         },
       };
     }
     return {
       goal: base,
-      evidence: { tools: ['search'], matches: listed, ...(padRelaxed.length ? { relaxed: padRelaxed } : {}) },
+      evidence: {
+        tools: ['search'],
+        matches: listed,
+        ...(padRelaxed.length ? { relaxed: padRelaxed } : {}),
+        ...(nearbyOfferEv ?? {}),
+      },
     };
   }
 
@@ -2831,6 +2945,68 @@ function rawToMatches(
     ...(m.dimension_fit ? { dimensionFit: m.dimension_fit } : {}),
     ...(m.dimension_gap ? { dimensionGap: m.dimension_gap } : {}),
   }));
+}
+
+/** Soft nearby CTA when the exact board is thin (1 card) and type+area are set. */
+async function maybeNearbyOfferEvidence(input: {
+  listed: Match[];
+  s: ConversationState;
+  filters: import('./types.js').SearchFilters;
+  deps: EngineDeps;
+  excludeIds: Set<string>;
+}): Promise<{ nearbyOffer: NonNullable<EvidenceSet['nearbyOffer']> } | undefined> {
+  const { listed, s, filters, deps, excludeIds } = input;
+  const asked = s.constraints.location?.trim();
+  if (!asked || listed.length !== 1) return undefined;
+  if (!filters.projectTypes && !s.constraints.propertyType) return undefined;
+  const offer = await findNearbyTypeOffer({
+    asked,
+    builderId: s.builderId,
+    filters,
+    constraints: s.constraints,
+    excludeIds,
+    search: async (builderId, candidateFilters) => {
+      const result = await searchWithFilters(deps, builderId, candidateFilters);
+      const { location: _loc, ...sansArea } = s.constraints;
+      return {
+        matches: discover.filterSearchMatches(
+          rawToMatches(result.matches ?? []),
+          sansArea,
+          s.discover.rejectedProjectIds,
+        ),
+      };
+    },
+  });
+  if (!offer) return undefined;
+  return {
+    nearbyOffer: {
+      asked: offer.asked,
+      nearbyAreas: offer.nearbyAreas,
+      previewNames: offer.previewNames,
+    },
+  };
+}
+
+function nearbyOfferSuggestedActions(
+  nearbyOffer: NonNullable<EvidenceSet['nearbyOffer']>,
+): SuggestedAction[] {
+  const places = nearbyOffer.nearbyAreas.slice(0, 2).join(' / ') || 'nearby areas';
+  return [
+    {
+      id: 'nearby_offer:widen',
+      label: 'Also nearby estates',
+      patch: { location: nearbyOffer.nearbyAreas.join(', ') },
+      user_line: 'Show me those nearby estates too',
+      expected_matches: nearbyOffer.previewNames?.length ?? 2,
+    },
+    {
+      id: 'nearby_offer:open',
+      label: `Try ${places.split(' / ')[0] ?? 'nearby'}`,
+      patch: { location: nearbyOffer.nearbyAreas[0] },
+      user_line: `Show me projects in ${nearbyOffer.nearbyAreas[0]}`,
+      expected_matches: 1,
+    },
+  ];
 }
 
 /** First shortlist after brief — relax BHK/type filters to surface up to 3 options. */
@@ -2985,7 +3161,7 @@ async function fetchShortlistAnswer(
       topic: 'legal',
       label: 'Legal & approvals',
       perProject: matches.map((m, i) => {
-        const d = details[i];
+        const d = details[i]?.ok ? details[i]!.value : null;
         const parts = [
           d?.reraNumber?.trim() ? `RERA ${d.reraNumber.trim()}` : '',
           d?.khata?.trim() ?? '',
@@ -3014,7 +3190,9 @@ async function fetchShortlistAnswer(
         // honest fallback (s01: no BHK on the brief → priceBasis missed and
         // the whole EMI block silently vanished). basisFormatted names the
         // basis either way, so the figure is never presented as unit-exact.
-        const basisInr = bases[i]?.priceInr ?? (m.startingPriceInr > 0 ? m.startingPriceInr : 0);
+        const basisInr =
+          (bases[i]?.ok ? bases[i]!.value.priceInr : 0) ||
+          (m.startingPriceInr > 0 ? m.startingPriceInr : 0);
         const outcome = computeEmi({
           ...(basisInr > 0 ? { projectPriceInr: basisInr } : {}),
           ratePercent: rate,
@@ -3081,7 +3259,7 @@ async function fetchAnswer(
   const unitType = s.constraints.bhk;
   const focusName = s.focus?.projectName ?? '';
   const topics = goal.topics?.length ? goal.topics : [goal.topic];
-  const tools: string[] = [];
+  let tools: string[] = [];
   let evidence: EvidenceSet = { tools };
 
   if (goal.topic === 'compare' || topics.includes('compare')) {
@@ -3105,20 +3283,23 @@ async function fetchAnswer(
   if (topics.includes('price')) {
     const breakdownAsk = buyerText ? wantsCostBreakdown(buyerText) : false;
     if (breakdownAsk && unitType) {
-      const landed = await deps.data.landedCost(s.builderId, nd, goal.projectId, unitType).catch(() => null);
-      if (landed) {
-        tools.push('landedCost');
-        evidence = {
-          ...evidence,
-          tools: [...new Set(tools)],
-          landedCost: landed,
-        };
+      const landedRes = await deps.data
+        .landedCost(s.builderId, nd, goal.projectId, unitType)
+        .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+      evidence = stampToolRun(evidence, 'landedCost', landedRes);
+      tools = evidence.tools;
+      if (landedRes.ok) {
+        evidence = { ...evidence, landedCost: landedRes.value };
       }
     }
     if (!evidence.landedCost) {
-      const pricing = await deps.data.pricing(s.builderId, nd, goal.projectId, unitType).catch(() => null);
-      if (pricing) {
-        tools.push('pricing');
+      const pricingRes = await deps.data
+        .pricing(s.builderId, nd, goal.projectId, unitType)
+        .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+      evidence = stampToolRun(evidence, 'pricing', pricingRes);
+      tools = evidence.tools;
+      if (pricingRes.ok) {
+        const pricing = pricingRes.value;
         // AB-1 — a cost-component ask gets THE component(s), filtered at the
         // EVIDENCE level so both the LLM composer and the template floor see
         // only the asked rows ("club membership fee?" led with base price when
@@ -3130,7 +3311,6 @@ async function fetchAnswer(
         const components = asked.length ? asked : pricing.components;
         evidence = {
           ...evidence,
-          tools: [...new Set(tools)],
           pricing: { ...pricing, components, projectName: pricing.projectName || focusName },
         };
       }
@@ -3138,14 +3318,19 @@ async function fetchAnswer(
   }
 
   if (topics.includes('emi')) {
-    const basis = await deps.data.priceBasis(s.builderId, nd, goal.projectId, unitType).catch(() => null);
+    const basisRes = await deps.data
+      .priceBasis(s.builderId, nd, goal.projectId, unitType)
+      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+    evidence = stampToolRun(evidence, 'priceBasis', basisRes);
+    tools = evidence.tools;
+    const basis = basisRes.ok ? basisRes.value : null;
     const outcome = computeEmi({
       ...(basis ? { projectPriceInr: basis.priceInr } : {}),
       ratePercent: ex.emiRatePercent ?? DEFAULT_RATE_PERCENT,
       tenureYears: ex.emiTenureYears ?? DEFAULT_TENURE_YEARS,
     });
     if (outcome.ok) {
-      tools.push('priceBasis', 'emi');
+      tools.push('emi');
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
@@ -3176,7 +3361,7 @@ async function fetchAnswer(
     const assetKind = normalizeMediaAssetKind(rawKind) ?? rawKind;
     const mediaName =
       (s.focus?.projectId === goal.projectId ? focusName : '') ||
-      s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
+      currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
       focusName;
     const projectName = mediaName || focusName || 'this project';
     // Inventory gate: when focused detail lists media kinds and the requested
@@ -3188,11 +3373,15 @@ async function fetchAnswer(
         : s.projectCache?.[goal.projectId]?.mediaKinds;
     let inventoryKinds = cachedKinds;
     if (inventoryKinds === undefined) {
-      const detailForMedia = await hydrateProjectDetail(deps, s, goal.projectId).catch(() => null);
-      if (detailForMedia) {
-        inventoryKinds = detailForMedia.mediaKinds;
+      const hydratedMedia = await hydrateProjectDetail(deps, s, goal.projectId).catch(() => null);
+      if (hydratedMedia?.fetch) {
+        evidence = stampToolRun(evidence, 'detail', hydratedMedia.fetch);
+        tools = evidence.tools;
+      }
+      if (hydratedMedia?.detail) {
+        inventoryKinds = hydratedMedia.detail.mediaKinds;
         if (!evidence.detail) {
-          evidence = { ...evidence, detail: detailForMedia };
+          evidence = { ...evidence, detail: hydratedMedia.detail };
         }
       }
     }
@@ -3305,18 +3494,25 @@ async function fetchAnswer(
   const faqBlockedForIntel = new Set(['rental_yield', 'resale_value']);
   for (const key of faqKeys) {
     if (deps.failureAnswer && faqBlockedForIntel.has(key)) continue;
-    const faq = await deps.data.faqLookup(goal.projectId, key).catch(() => null);
-    if (faq?.answer) {
-      faqHits.push({ questionKey: key, question: faq.question, answer: faq.answer });
+    const faqRes = await deps.data
+      .faqLookup(goal.projectId, key)
+      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+    evidence = stampToolRun(evidence, 'faqLookup', faqRes);
+    tools = evidence.tools;
+    if (faqRes.ok && faqRes.value.answer) {
+      faqHits.push({
+        questionKey: key,
+        question: faqRes.value.question,
+        answer: faqRes.value.answer,
+      });
     }
   }
   if (faqHits.length) {
-    tools.push('faqLookup');
     // Stub name must follow goal.projectId — lagging focus used to print
     // "Regulatory snapshot for Sanctuary" on an Eldorado FAQ hit.
     const stubName =
       (s.focus?.projectId === goal.projectId ? focusName : '') ||
-      s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
+      currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
       'this project';
     evidence = {
       ...evidence,
@@ -3430,12 +3626,16 @@ async function fetchAnswer(
       const { [goal.projectId]: _stale, ...restCache } = s.projectCache;
       hydrateState = { ...s, projectCache: restCache };
     }
-    let detail = await hydrateProjectDetail(deps, hydrateState, goal.projectId);
+    const hydrated = await hydrateProjectDetail(deps, hydrateState, goal.projectId);
+    if (hydrated.fetch) {
+      evidence = stampToolRun(evidence, 'detail', hydrated.fetch);
+      tools = evidence.tools;
+    }
+    let detail = hydrated.detail;
     if (detail && topics.includes('legal')) {
       detail = await enrichDetailLegal(deps, nd, detail);
     }
     if (detail && needsDetail) {
-      tools.push('detail');
       // Detail replaces any topic-hint FAQ attach (original single-owner
       // behavior) — only text-bound faq-shaped asks keep their FAQ answer.
       // AB-8b — but a multi-atom legal ask (legalSnapshotNeeded) DOES carry a
@@ -3446,17 +3646,18 @@ async function fetchAnswer(
       // Desk often stores LTV as a pricing "Loan LTV" info row, not
       // projects.loan_eligibility — lift it when the buyer asked about loan.
       if (loanEligibilityNeeded && !nextDetail.loanEligibility) {
-        const pricing = await deps.data
+        const pricingRes = await deps.data
           .pricing(s.builderId, nd, goal.projectId, unitType)
-          .catch(() => null);
+          .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+        evidence = stampToolRun(evidence, 'pricing', pricingRes);
+        tools = evidence.tools;
+        const pricing = pricingRes.ok ? pricingRes.value : null;
         const ltv = pricing?.components?.find((c) => /loan\s*ltv|ltv/i.test(c.label));
-        if (ltv?.value) {
-          tools.push('pricing');
+        if (ltv?.value && pricing) {
           nextDetail = { ...nextDetail, loanEligibility: ltv.value };
           evidence = {
             ...evidence,
-            tools: [...new Set(tools)],
-            pricing: { ...pricing!, projectName: pricing!.projectName || focusName },
+            pricing: { ...pricing, projectName: pricing.projectName || focusName },
           };
         }
       }
@@ -3536,7 +3737,7 @@ function locationHasAskedData(
 }
 
 function buildLocationEvidence(
-  detail: NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>,
+  detail: import('./types.js').ProjectDetail,
   askedCategories?: readonly LocationCategoryKey[],
 ): LocationEvidence {
   const loc = detail.location;
@@ -3587,11 +3788,40 @@ async function fetchVisitRecall(
   };
 }
 
+/** Phase 0b — record tool name + latency + failure_reason onto evidence. */
+function stampToolRun<T>(
+  evidence: EvidenceSet,
+  name: string,
+  result: DataResult<T>,
+): EvidenceSet {
+  const tools = [...new Set([...(evidence.tools ?? []), name])];
+  const toolLatencyMs = { ...(evidence.toolLatencyMs ?? {}), [name]: result.latency_ms };
+  if (result.ok) {
+    if (!evidence.toolFailureReason?.[name]) {
+      return { ...evidence, tools, toolLatencyMs };
+    }
+    const nextFail = { ...evidence.toolFailureReason };
+    delete nextFail[name];
+    return {
+      ...evidence,
+      tools,
+      toolLatencyMs,
+      ...(Object.keys(nextFail).length ? { toolFailureReason: nextFail } : {}),
+    };
+  }
+  return {
+    ...evidence,
+    tools,
+    toolLatencyMs,
+    toolFailureReason: { ...(evidence.toolFailureReason ?? {}), [name]: result.reason },
+  };
+}
+
 async function enrichDetailLegal(
   deps: EngineDeps,
   nd: string,
-  detail: NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>,
-): Promise<NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>> {
+  detail: ProjectDetail,
+): Promise<ProjectDetail> {
   if (detail.reraNumber?.trim() && detail.phases?.length) return detail;
   const ctx = await deps.data.conversationContext(nd).catch(() => null);
   // Context is Desk-focus-scoped — never overlay another project's RERA/phases.
@@ -3643,9 +3873,9 @@ async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineD
 }
 
 function compareIds(s: ConversationState): string[] {
-  const discussed = s.discover.discussedProjects ?? [];
+  const discussed = discussedList(s);
   if (discussed.length >= 2) return discussed.map((p) => p.projectId).slice(0, 3);
-  const ids = s.discover.lastOffered.map((o) => o.projectId);
+  const ids = currentShortlist(s).map((o) => o.projectId);
   if (s.focus && !ids.includes(s.focus.projectId)) ids.unshift(s.focus.projectId);
   return ids.slice(0, 3);
 }
@@ -3679,8 +3909,8 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
           for (const p of matrixPs) discussed.push({ projectId: p.project_id, name: p.name });
         }
       } else if (goal.projectId) {
-        const fromOffered = s.discover.lastOffered.find((o) => o.projectId === goal.projectId);
-        const fromDiscussed = (s.discover.discussedProjects ?? []).find((o) => o.projectId === goal.projectId);
+        const fromOffered = currentShortlist(s).find((o) => o.projectId === goal.projectId);
+        const fromDiscussed = discussedList(s).find((o) => o.projectId === goal.projectId);
         const name = fromOffered?.name ?? fromDiscussed?.name ?? s.focus?.projectName;
         if (name) discussed.push({ projectId: goal.projectId, name });
       }
@@ -3806,12 +4036,19 @@ async function syncFacts(
   if ((goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') && ev.matches?.length) {
     await deps.crm.syncShortlist(nd, ev.matches.map((m) => m.projectId));
     await deps.crm.syncMatching(nd, ev.matches.map((m) => m.projectId));
+    // Phase 0a — choice events carry observed status, not hardcoded ok.
+    const choiceStatus = ev.failure
+      ? 'error'
+      : ev.notices?.length || ev.faqMiss?.keys.length || ev.noMatch
+        ? 'partial'
+        : 'ok';
     await deps.crm.postChoiceEvent(
       s.builderId,
       s.ndBuyerPhone ?? '',
       nd,
       ev.matches.map((m) => ({ projectId: m.projectId, name: m.name })),
       s.constraints as Record<string, unknown>,
+      choiceStatus,
     );
   }
   if (ex.rejected) {
@@ -4145,7 +4382,7 @@ function deriveAdvisorUiMode(
   if (state.phase === 'focused') return 'focused';
 
   const matchCount = evidence.matches?.length ?? 0;
-  const hasShortlist = state.discover.lastOffered.length > 0;
+  const hasShortlist = currentShortlist(state).length > 0;
 
   if (goal.kind === 'no_fit' || searchRecovery?.mode === 'search_recovery') {
     return 'search_recovery';

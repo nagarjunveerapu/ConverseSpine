@@ -1,4 +1,5 @@
 import { detectFocusedSwitchIntent } from '../engine/project_switch.js';
+import { currentShortlist } from '../engine/entity-store.js';
 import type {
   ConversationState,
   EvidenceSet,
@@ -54,7 +55,7 @@ export function buildTurnLogSnapshot(input: {
       ? { focus: { project_id: state.focus.projectId, name: state.focus.projectName } }
       : {}),
     constraints: { ...state.constraints },
-    last_offered: state.discover.lastOffered.map((o) => ({
+    last_offered: currentShortlist(state).map((o) => ({
       project_id: o.projectId,
       name: o.name,
     })),

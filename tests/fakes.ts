@@ -1,4 +1,5 @@
-import type { EngineCrm, EngineData, EngineDeps, EngineStore } from '../src/engine/ports.js';
+import type { DataResult, EngineCrm, EngineData, EngineDeps, EngineStore } from '../src/engine/ports.js';
+import { dataAbsent, dataOk, dataTransport } from '../src/engine/ports.js';
 import { noopEngineLlm } from '../src/engine/adapters/llm.js';
 import type { SemanticNluPort, SemanticContext } from '../src/engine/adapters/semantic-nlu.js';
 import { shouldQueryProjectVectors } from '../src/engine/adapters/semantic-nlu.js';
@@ -42,10 +43,19 @@ const LOKATIONS: readonly P[] = [
     display: '₹48 L',
   },
   { id: 'eldorado', name: 'Brigade Eldorado', market: 'North Bangalore', type: 'apartment', priceInr: 6_500_000, display: '₹65 L' },
+  {
+    id: 'sanctuary',
+    name: 'Brigade Sanctuary',
+    market: 'Sarjapur Road',
+    type: 'apartment',
+    priceInr: 7_900_000,
+    display: '₹79 L',
+  },
   { id: 'cornerstone', name: 'Brigade Cornerstone', market: 'Devanahalli', type: 'apartment', priceInr: 5_200_000, display: '₹52 L' },
   {
     id: 'cornerstone-utopia',
-    name: 'Cornerstone Utopia',
+    // Dig catalog shape — token-superset of Brigade Cornerstone (NAME-06).
+    name: 'Brigade Cornerstone Utopia',
     market: 'Whitefield',
     type: 'apartment',
     priceInr: 10_500_000,
@@ -169,13 +179,24 @@ function projectDetailFor(id: string) {
     : null;
 }
 
+/** Phase 0b inject keys — sticky until cleared by the test. */
+export type FakeDataFailKey = 'pricing' | 'landedCost' | 'priceBasis' | 'faqLookup' | 'projectDetail';
+
 export function fakeData(): EngineData & {
   holdsPlaced: Array<{ projectId: string; unitType: string; buyerName: string }>;
+  /** Set `fail['pricing'] = 'absent' | 'transport'` to force DataResult failures. */
+  fail: Partial<Record<FakeDataFailKey, 'absent' | 'transport'>>;
+  /** Optional per-key FAQ overrides (null = force absent for that key). */
+  faqOverrides: Record<string, { question: string; answer: string } | null>;
 } {
   const visits: Array<{ projectId: string; projectName: string; iso: string; label: string; confirmed: boolean }> = [];
   const holds: Array<{ projectId: string; unitType: string; buyerName: string }> = [];
+  const fail: Partial<Record<FakeDataFailKey, 'absent' | 'transport'>> = {};
+  const faqOverrides: Record<string, { question: string; answer: string } | null> = {};
   return {
     holdsPlaced: holds,
+    fail,
+    faqOverrides,
     async search(_b, f) {
       return { matches: filterCatalog(f).map((p) => ({
         project_id: p.id,
@@ -207,30 +228,45 @@ export function fakeData(): EngineData & {
       return LOKATIONS.map((p) => ({ projectId: p.id, name: p.name }));
     },
     async projectDetail(_b, _nd, id) {
-      return projectDetailFor(id);
+      if (fail.projectDetail === 'absent') return dataAbsent(1);
+      if (fail.projectDetail === 'transport') return dataTransport(1);
+      const d = projectDetailFor(id);
+      return d ? dataOk(d, 1) : dataAbsent(1);
     },
     async pricing(_b, _nd, id) {
+      if (fail.pricing === 'absent') return dataAbsent(1);
+      if (fail.pricing === 'transport') return dataTransport(1);
       const p = LOKATIONS.find((x) => x.id === id);
       return p
-        ? {
-            projectName: p.name,
-            components: [{ label: 'Starting from', value: p.display.replace(/^from\s+/i, '').trim() || p.display }],
-            startingDisplay: p.display,
-          }
-        : null;
+        ? dataOk(
+            {
+              projectName: p.name,
+              components: [
+                { label: 'Starting from', value: p.display.replace(/^from\s+/i, '').trim() || p.display },
+              ],
+              startingDisplay: p.display,
+            },
+            1,
+          )
+        : dataAbsent(1);
     },
     async landedCost(_b, _nd, id, unitType) {
+      if (fail.landedCost === 'absent') return dataAbsent(1);
+      if (fail.landedCost === 'transport') return dataTransport(1);
       const p = LOKATIONS.find((x) => x.id === id);
       return p
-        ? {
-            projectName: p.name,
-            unitType,
-            baseDisplay: p.display,
-            oneTime: [{ label: 'Stamp duty', display: '5%' }],
-            recurring: [],
-            totalDisplay: p.display,
-          }
-        : null;
+        ? dataOk(
+            {
+              projectName: p.name,
+              unitType,
+              baseDisplay: p.display,
+              oneTime: [{ label: 'Stamp duty', display: '5%' }],
+              recurring: [],
+              totalDisplay: p.display,
+            },
+            1,
+          )
+        : dataAbsent(1);
     },
     async compare(_nd, ids) {
       const ps = ids.map((id) => LOKATIONS.find((x) => x.id === id)).filter(Boolean) as P[];
@@ -251,8 +287,10 @@ export function fakeData(): EngineData & {
       };
     },
     async priceBasis(_b, _nd, id) {
+      if (fail.priceBasis === 'absent') return dataAbsent(1);
+      if (fail.priceBasis === 'transport') return dataTransport(1);
       const p = LOKATIONS.find((x) => x.id === id);
-      return p ? { priceInr: p.priceInr, display: p.display } : null;
+      return p ? dataOk({ priceInr: p.priceInr, display: p.display }, 1) : dataAbsent(1);
     },
     async listUnits(id) {
       const p = LOKATIONS.find((x) => x.id === id);
@@ -412,17 +450,35 @@ export function fakeData(): EngineData & {
       ];
     },
     async faqLookup(_pid, key) {
-      if (key === 'amenities') return { question: 'Amenities?', answer: 'Clubhouse and pool on file.' };
+      if (fail.faqLookup === 'absent') return dataAbsent(1);
+      if (fail.faqLookup === 'transport') return dataTransport(1);
+      if (Object.prototype.hasOwnProperty.call(faqOverrides, key)) {
+        const o = faqOverrides[key];
+        return o ? dataOk(o, 1) : dataAbsent(1);
+      }
+      if (key === 'amenities') return dataOk({ question: 'Amenities?', answer: 'Clubhouse and pool on file.' }, 1);
       if (key === 'rental_yield') {
-        return {
-          question: 'What rental yield can I expect?',
-          answer: 'Estimated 3–4% net rental yield — estimate only, not a guarantee.',
-        };
+        return dataOk(
+          {
+            question: 'What rental yield can I expect?',
+            answer: 'Estimated 3–4% net rental yield — estimate only, not a guarantee.',
+          },
+          1,
+        );
       }
       if (key === 'possession') {
-        return { question: 'When is possession?', answer: 'Possession is phased through 2028.' };
+        return dataOk({ question: 'When is possession?', answer: 'Possession is phased through 2028.' }, 1);
       }
-      return null;
+      if (key === 'loan_eligibility' || key === 'banks') {
+        return dataOk(
+          {
+            question: 'Is home loan available?',
+            answer: 'HDFC, SBI, ICICI support loans here — typical LTV up to 80%, subject to credit.',
+          },
+          1,
+        );
+      }
+      return dataAbsent(1);
     },
     async educationSearch(text) {
       const t = text.toLowerCase();

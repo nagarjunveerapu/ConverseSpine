@@ -1,9 +1,9 @@
 {
   "id": "NAME-06",
-  "title": "KNOWN FAIL (pre-existing, not PR-1) — cannot switch to a longer-named sibling",
+  "title": "Phase 1b — switch to a longer-named sibling (Cornerstone → Utopia)",
   "builder_id": "naya-advisor",
   "channel": "advisor",
-  "tags": ["known-fail", "name-distinctiveness", "advisor", "backlog"],
+  "tags": ["name-distinctiveness", "advisor", "phase-1b"],
   "turns": [
     { "text": "tell me about cornerstone", "assert": { "reply_includes": ["cornerstone"] } },
     {

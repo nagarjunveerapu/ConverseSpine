@@ -78,6 +78,10 @@ export interface TranscriptMessage {
 export interface DiscoverState {
   asked: ProbeKind[];
   rejectedProjectIds: string[];
+  /**
+   * Phase 1c — revive-only legacy board. Authority is `shortlistIds` + entities.
+   * Hydrated once on load via `hydrateLegacyDiscourse`; never write-through.
+   */
   lastOffered: OfferedProject[];
   oriented: boolean;
   ignoredProbes: number;
@@ -85,8 +89,7 @@ export interface DiscoverState {
   /** Recent turns for anaphora ("both", "these") — newest last. */
   recentMessages?: TranscriptMessage[];
   /**
-   * Projects the buyer has actually engaged with this session (focus, switch, named Q&A).
-   * Used for "compare both" / "visit them" when lastOffered is still the search shortlist.
+   * Phase 1c — revive-only legacy discussed list. Authority is `discussedList`.
    */
   discussedProjects?: OfferedProject[];
 }
@@ -176,17 +179,19 @@ export interface ConversationState {
   /** Cached NayaDesk project facts for focused / shortlisted projects. */
   projectCache?: Record<string, ProjectDetail>;
   /**
-   * Phase 1a — the discourse entity store (entity-store.ts). Written ALONGSIDE
-   * lastOffered / discussedProjects / focus / visit.queued; nothing reads it
-   * yet. 1b migrates consumers, 1c deletes the old fields.
+   * Phase 1 — discourse entity store (entity-store.ts). 1c authority for
+   * shortlist card payload + discourse roles. Legacy lastOffered /
+   * discussedProjects are revive-only (not mirrored). Spine KV only.
    *
    * JSON-safe by construction: a Record of plain records, never a Map, because
    * store-kv.ts persists this with JSON.stringify and a Map round-trips to {}.
    */
   entities?: Record<string, import('./entity-store.js').DiscourseEntityRecord>;
-  /** Focus history, most recent first. Depth > 1 is what "go back to the first
-   *  one" and the Cornerstone -> Utopia sibling switch need. */
+  /** Focus history, most recent first. Depth > 1 powers "the other one" /
+   *  "go back" via salience; legacy `focus` still dual-writes for phase gates. */
   focusStack?: string[];
+  /** Phase 1c — current board order (search rank). Source for currentShortlist(). */
+  shortlistIds?: string[];
   /** Last-read confirmed visits from NayaDesk (itinerary mirror for board). */
   visitBookedCache?: Array<{
     projectId: string;
@@ -277,6 +282,20 @@ export type TurnGoal =
   | { kind: 'advance'; reason: 'same_set' }
   /** Shortlist has 2+ projects; buyer asked for details without naming which. */
   | { kind: 'clarify_project_pick' }
+  /**
+   * Discourse deixis / compare cannot resolve honestly — ask, don't recycle overview.
+   * - no_alternate: "the other one" with only the focused project in play
+   * - no_prior_focus: "go back" with stack depth 1
+   * - need_pair_to_compare: "compare both" with &lt;2 discourse projects
+   * - ambiguous_alternate: "the other one" with 2+ non-focus candidates
+   */
+  | {
+      kind: 'clarify_discourse';
+      reason: 'no_alternate' | 'no_prior_focus' | 'need_pair_to_compare' | 'ambiguous_alternate';
+      projectName: string;
+      /** For ambiguous_alternate — names the buyer can pick. */
+      alternateNames?: string[];
+    }
   | { kind: 'no_fit' }
   | { kind: 'ack_reject_recommend' }
   | { kind: 'objection'; topic: ObjectionTopic; projectId?: string }
@@ -607,6 +626,10 @@ export type RelaxedDimension = 'type' | 'area' | 'size' | 'budget';
 
 export interface EvidenceSet {
   tools: string[];
+  /** Phase 0b — wall-clock ms per tool name (last call wins). */
+  toolLatencyMs?: Record<string, number>;
+  /** Phase 0b — absent vs transport when the port returned !ok. */
+  toolFailureReason?: Record<string, 'absent' | 'transport'>;
   matches?: Match[];
   /**
    * Dimensions of the buyer's ask that had to be RELAXED for these matches to
@@ -656,7 +679,21 @@ export interface EvidenceSet {
    * Empty-locality widen: nothing in `asked`, but `matches` are nearby /
    * in-city alternatives. Compose must name the miss — never present as a fit.
    */
-  localityWiden?: { asked: string; nearbyAreas?: string[] };
+  localityWiden?: {
+    asked: string;
+    nearbyAreas?: string[];
+    /** When set, exact fit already shown — copy says "other/also", not "I don't have". */
+    exactFitName?: string;
+  };
+  /**
+   * Singleton (or thin) exact fit with same-type inventory outside `asked`.
+   * Board stays exact; compose/chips offer an opt-in nearby widen.
+   */
+  nearbyOffer?: {
+    asked: string;
+    nearbyAreas: string[];
+    previewNames?: string[];
+  };
   nextSlot?: ProbeKind;
   detail?: ProjectDetail;
   pricing?: PricingEvidence;
@@ -725,6 +762,12 @@ export interface Extracted {
   emiContractV1?: boolean;
   mediaAssetKind?: string;
   namedProjects?: OfferedProject[];
+  /**
+   * Name-shaped tokens the buyer used that did not bind to any session/catalog
+   * project. Distinguishes "named nothing" from "named something unbound" so
+   * compare fall-through does not pool-guess the shortlist (SUBJECT PR-2).
+   */
+  unboundProjectNames?: string[];
   compareAdvice?: boolean;
   compareProjectIds?: string[];
   smalltalk?: boolean;
@@ -795,4 +838,6 @@ export interface TurnDebug {
   /** W2/W6: shortlist size after turn (stale-board asserts). */
   last_offered_count?: number;
   last_offered_ids?: string[];
+  /** Soft nearby-widen CTA attached this turn (chips / WA buttons). */
+  nearby_offer?: { asked: string; nearbyAreas: string[]; label: string };
 }

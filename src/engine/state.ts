@@ -8,7 +8,13 @@ import type {
   Match,
   OfferedProject,
 } from './types.js';
-import { recordEntities, pushFocus } from './entity-store.js';
+import {
+  clearOfferedExcept,
+  currentShortlist,
+  pushFocus,
+  recordEntities,
+  stripLegacyMirrors,
+} from './entity-store.js';
 
 export function initState(convId: string, builderId: string): ConversationState {
   return {
@@ -141,7 +147,7 @@ export function applyExtracted(
 
   let rejected = s.discover.rejectedProjectIds;
   if (ex.rejected) {
-    const hit = resolveRejected(ex, s.discover.lastOffered);
+    const hit = resolveRejected(ex, currentShortlist(s));
     if (hit && !rejected.includes(hit)) rejected = [...rejected, hit];
   }
 
@@ -199,34 +205,65 @@ export function resolvePick(
 
 export function recordOffered(s: ConversationState, matches: readonly Match[]): ConversationState {
   if (matches.length === 0) return s;
-  const lastOffered = matches.map((m) => ({
-    projectId: m.projectId,
-    name: m.name,
-    microMarket: m.microMarket,
-    startingPriceDisplay: m.startingPriceDisplay,
-    ...(m.startingPriceInr > 0 ? { startingPriceInr: m.startingPriceInr } : {}),
-    // Receipts must survive this projection or they never reach the
-    // advisor SPA — cards render from lastOffered, not raw search evidence.
-    ...(m.tradeoffNote ? { tradeoffNote: m.tradeoffNote } : {}),
-    ...(m.dimensionFit ? { dimensionFit: m.dimensionFit } : {}),
-    ...(m.dimensionGap ? { dimensionGap: m.dimensionGap } : {}),
-  }));
-  // Phase 1a dual-write: the entity store records the same fact alongside
-  // lastOffered. Nothing reads it yet (1b migrates consumers, 1c deletes the
-  // legacy field), so this cannot change behaviour.
+  const keep = new Set(matches.map((m) => m.projectId));
+  // Phase 1c — store is authority: clear stale offered roles, write card payload,
+  // set shortlistIds. Legacy lastOffered is revive-only (not mirrored).
+  const cleared = clearOfferedExcept(s, keep);
   const withEntities = recordEntities(
-    s,
-    matches.map((m) => ({ projectId: m.projectId, name: m.name, ...(m.microMarket ? { microMarket: m.microMarket } : {}) })),
+    cleared,
+    matches.map((m, i) => ({
+      projectId: m.projectId,
+      name: m.name,
+      ...(m.microMarket ? { microMarket: m.microMarket } : {}),
+      startingPriceDisplay: m.startingPriceDisplay,
+      ...(m.startingPriceInr > 0 ? { startingPriceInr: m.startingPriceInr } : {}),
+      ...(m.tradeoffNote ? { tradeoffNote: m.tradeoffNote } : {}),
+      ...(m.dimensionFit ? { dimensionFit: m.dimensionFit } : {}),
+      ...(m.dimensionGap ? { dimensionGap: m.dimensionGap } : {}),
+      offeredRank: i,
+    })),
     'offered',
     s.turnCount,
   );
-  return { ...withEntities, discover: { ...withEntities.discover, lastOffered, ignoredProbes: 0 } };
+  return stripLegacyMirrors({
+    ...withEntities,
+    shortlistIds: matches.map((m) => m.projectId),
+    discover: { ...withEntities.discover, ignoredProbes: 0 },
+  });
 }
 
 /** Drop stale shortlist — next successful recommend repopulates (W2). */
 export function clearLastOffered(s: ConversationState): ConversationState {
-  if (s.discover.lastOffered.length === 0) return s;
-  return { ...s, discover: { ...s.discover, lastOffered: [] } };
+  if ((s.shortlistIds?.length ?? 0) === 0 && currentShortlist(s).length === 0) return s;
+  const cleared = clearOfferedExcept(s, new Set());
+  return stripLegacyMirrors({
+    ...cleared,
+    shortlistIds: [],
+    discover: { ...cleared.discover, ignoredProbes: cleared.discover.ignoredProbes },
+  });
+}
+
+/**
+ * One-shot revive: pre-1c KV with only `lastOffered` → shortlistIds + entities.
+ * When the store already has authority, strip stale mirrors so they cannot poison.
+ */
+export function hydrateLegacyDiscourse(s: ConversationState): ConversationState {
+  if ((s.shortlistIds?.length ?? 0) > 0) return stripLegacyMirrors(s);
+  const legacy = s.discover.lastOffered ?? [];
+  if (!legacy.length) return stripLegacyMirrors(s);
+  const matches: Match[] = legacy.map((o) => ({
+    projectId: o.projectId,
+    name: o.name,
+    microMarket: o.microMarket ?? '',
+    startingPriceInr: o.startingPriceInr ?? 0,
+    startingPriceDisplay: o.startingPriceDisplay ?? '',
+    matchReasons: [],
+    ...(o.tradeoffNote ? { tradeoffNote: o.tradeoffNote } : {}),
+  }));
+  return recordOffered(
+    { ...s, discover: { ...s.discover, lastOffered: [] } },
+    matches,
+  );
 }
 
 /** True when search-shaping constraints changed (not purpose/name). No locality hardcode. */
@@ -270,23 +307,15 @@ export function recordDiscussed(
   projects: ReadonlyArray<OfferedProject>,
 ): ConversationState {
   if (projects.length === 0) return s;
-  const prev = s.discover.discussedProjects ?? [];
-  const byId = new Map(prev.map((p) => [p.projectId, p]));
-  for (const p of projects) {
-    if (!p.projectId || !p.name) continue;
-    byId.set(p.projectId, { projectId: p.projectId, name: p.name });
-  }
-  const discussedProjects = [...byId.values()].slice(-6);
-  // Phase 1a dual-write. Note the store does NOT inherit the cap of 6 -- the
-  // cap is a property of this legacy array, and a dropped entity is exactly
-  // how a project the buyer engaged with becomes unreachable later.
-  const withEntities = recordEntities(
-    s,
-    projects.filter((p) => p.projectId && p.name).map((p) => ({ projectId: p.projectId, name: p.name })),
-    'discussed',
-    s.turnCount,
+  // Phase 1c — store is uncapped authority; no legacy mirror write-through.
+  return stripLegacyMirrors(
+    recordEntities(
+      s,
+      projects.filter((p) => p.projectId && p.name).map((p) => ({ projectId: p.projectId, name: p.name })),
+      'discussed',
+      s.turnCount,
+    ),
   );
-  return { ...withEntities, discover: { ...withEntities.discover, discussedProjects } };
 }
 
 export function commitTo(s: ConversationState, projectId: string, projectName: string): ConversationState {
@@ -305,11 +334,13 @@ export function releaseToDiscover(s: ConversationState): ConversationState {
     ? recordDiscussed(s, [{ projectId: focus.projectId, name: focus.projectName }])
     : s;
   const { focus: _f, ...rest } = withDiscussed;
-  return { ...rest, phase: 'discover' };
+  // Dual-write: focusStack[0] means "current focus". Clear it with legacy focus
+  // so focusedEntity / salience do not keep a released project as #1.
+  return { ...rest, phase: 'discover', focusStack: [] };
 }
 
 export function isSameAsLast(s: ConversationState, matches: readonly Match[]): boolean {
-  const prev = s.discover.lastOffered;
+  const prev = currentShortlist(s);
   if (prev.length === 0 || prev.length !== matches.length) return false;
   return prev.every((p, i) => p.projectId === matches[i]?.projectId);
 }

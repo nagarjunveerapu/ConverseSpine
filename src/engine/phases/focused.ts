@@ -1,7 +1,18 @@
 import type { AnswerTopic, ConversationState, Extracted, TurnGoal } from '../types.js';
+import { currentShortlist, discourseEntities, focusedRef } from '../entity-store.js';
 import { splitComposeTopics } from '../facts.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { holdUnitType } from '../hold-intent.js';
+
+/** Unique projects the buyer can honestly compare / deictically address. */
+function discourseProjectCount(s: ConversationState): number {
+  const ids = new Set<string>();
+  for (const e of discourseEntities(s)) ids.add(e.projectId);
+  for (const o of currentShortlist(s)) ids.add(o.projectId);
+  const f = focusedRef(s);
+  if (f) ids.add(f.projectId);
+  return ids.size;
+}
 
 /** Facet topics — P3-B: never collapse these to overview when already extracted. */
 const FACET_TOPICS: ReadonlySet<AnswerTopic> = new Set([
@@ -122,10 +133,17 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   }
 
   if (ex.compareAdvice || ex.askTopic === 'compare' || ex.askTopics?.includes('compare')) {
-    const pid =
-      (ex.compareProjectIds?.length ?? 0) >= 2
-        ? ex.compareProjectIds![0]!
-        : focus.projectId;
+    const compareIds = ex.compareProjectIds ?? [];
+    // <2 resolved compare ids AND <2 discourse projects → clarify, don't fake a compare
+    // by answering overview/compare on the single focus.
+    if (compareIds.length < 2 && discourseProjectCount(s) < 2) {
+      return {
+        kind: 'clarify_discourse',
+        reason: 'need_pair_to_compare',
+        projectName: focus.projectName,
+      };
+    }
+    const pid = compareIds.length >= 2 ? compareIds[0]! : focus.projectId;
     return { kind: 'answer', topic: 'compare', projectId: pid };
   }
   // Correction / multi-name without "compare" verb — keep both in play.

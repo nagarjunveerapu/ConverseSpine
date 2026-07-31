@@ -1,8 +1,9 @@
 import type { ConversationState, Match } from './types.js';
+import { currentShortlist } from './entity-store.js';
 
-/** Rehydrate Match rows from discover.lastOffered for compare/re-list (no new search). */
+/** Rehydrate Match rows from the current shortlist for compare/re-list (no new search). */
 export function matchesFromLastOffered(state: ConversationState): Match[] {
-  return state.discover.lastOffered.map((o) => ({
+  return currentShortlist(state).map((o) => ({
     projectId: o.projectId,
     name: o.name,
     microMarket: o.microMarket ?? '',

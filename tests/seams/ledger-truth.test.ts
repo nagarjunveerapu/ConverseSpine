@@ -54,12 +54,69 @@ describe('tool runs record what was observed, not an assumption', () => {
   });
 
   it('does not overclaim: produced_evidence is not the same as success', () => {
-    // A legitimate absence and a transport failure both read false here. That
-    // distinction belongs to 0b's result wrappers; pretending to have it now
-    // would replace one lie with another.
+    // A legitimate absence and a transport failure both read false here without
+    // toolFailureReason. Phase 0b stamps failure_reason when the port reports !ok.
     const p = base({ tools: ['faqLookup'], faqMiss: { keys: ['lifts'] } });
     const run = p.tool_runs.find((t) => t.name === 'faqLookup')!;
     expect(run).not.toHaveProperty('success', true);
+  });
+
+  it('Phase 0b — absent vs transport are distinct on tool_runs', () => {
+    const absent = buildLedgerWritePayload({
+      state: initState('c1', 'naya-advisor'),
+      ex: { constraints: {} },
+      goal: { kind: 'answer', topic: 'price', projectId: 'p1' },
+      evidence: {
+        tools: ['pricing'],
+        toolLatencyMs: { pricing: 9 },
+        toolFailureReason: { pricing: 'absent' },
+      },
+    });
+    expect(absent.tool_runs[0]).toMatchObject({
+      produced_evidence: false,
+      latency_ms: 9,
+      failure_reason: 'absent',
+    });
+
+    const transport = buildLedgerWritePayload({
+      state: initState('c1', 'naya-advisor'),
+      ex: { constraints: {} },
+      goal: { kind: 'answer', topic: 'overview', projectId: 'p1' },
+      evidence: {
+        tools: ['detail'],
+        toolLatencyMs: { detail: 33 },
+        toolFailureReason: { detail: 'transport' },
+      },
+    });
+    expect(transport.tool_runs[0]).toMatchObject({
+      produced_evidence: false,
+      latency_ms: 33,
+      failure_reason: 'transport',
+    });
+  });
+});
+
+describe('Phase 0a — ledger promotes understanding fields', () => {
+  it('records named_projects as id:name and full extract_provenance', () => {
+    const p = buildLedgerWritePayload({
+      state: initState('c1', 'naya-advisor'),
+      ex: {
+        constraints: {},
+        namedProjects: [{ projectId: 'brigade-eldorado', name: 'Brigade Eldorado' }],
+      },
+      goal: { kind: 'answer', topic: 'price', projectId: 'brigade-eldorado' },
+      evidence: { tools: [] },
+      extractProvenance: {
+        path: 'free_text_funnel',
+        fields: { askTopics: 'regex' },
+        routing_bind: { bind_source: 'embed_intent', embed_fired: true, top_kind: 'get_price', top_score: 0.9 },
+      },
+    });
+    expect(p.resolved_intent.named_projects).toEqual(['brigade-eldorado:Brigade Eldorado']);
+    expect(p.resolved_intent.extract_provenance).toMatchObject({
+      path: 'free_text_funnel',
+      routing_bind: { top_kind: 'get_price' },
+    });
   });
 });
 

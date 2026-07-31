@@ -7,6 +7,8 @@ import { buildChipShadow } from '../chips/shadow.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
 import { summarizeFailure, type Failure } from './outcome.js';
 import { answerRequirements, deliveredFactKeys } from './answer-contract.js';
+import { currentShortlist, focusedRef } from './entity-store.js';
+import { detectFocusedSwitchIntent } from './project_switch.js';
 import type {
   ConversationState,
   EvidenceSet,
@@ -20,7 +22,14 @@ export interface LedgerWritePayload {
   action_plan: Record<string, unknown>;
   offered_project_ids: string[];
   disclosed_facts: DisclosedFact[];
-  tool_runs: Array<{ name: string; args_summary: string; produced_evidence: boolean; latency_ms: number }>;
+  tool_runs: Array<{
+    name: string;
+    args_summary: string;
+    produced_evidence: boolean;
+    latency_ms: number;
+    /** Phase 0b — set when the port returned !ok. */
+    failure_reason?: 'absent' | 'transport';
+  }>;
   verify: Record<string, unknown>;
   composer: string;
 }
@@ -78,17 +87,25 @@ export function buildLedgerWritePayload(input: {
 
   const snapshot_in: Record<string, unknown> = {
     phase: state.phase,
-    ...(state.focus
-      ? { focus: { project_id: state.focus.projectId, name: state.focus.projectName } }
-      : {}),
+    ...(() => {
+      const f = focusedRef(state);
+      return f ? { focus: { project_id: f.projectId, name: f.projectName } } : {};
+    })(),
     constraints: { ...state.constraints },
-    shortlist: state.discover.lastOffered.map((o) => ({
+    shortlist: currentShortlist(state).map((o) => ({
       project_id: o.projectId,
       name: o.name,
     })),
     ...(state.rti?.pendingPrompt ? { pending_prompt: state.rti.pendingPrompt } : {}),
     ...(inputSource ? { input_source: inputSource } : {}),
   };
+
+  // Phase 0a — promote turn-log-snapshot fields into the deployed ledger row
+  // (named_projects as id:name, switch_intent, full extract_provenance).
+  const switchIntent =
+    buyerText && state.phase === 'focused'
+      ? detectFocusedSwitchIntent(buyerText, ex, state)
+      : null;
 
   const resolved_intent: Record<string, unknown> = {
     ...(ex.speechAct ? { speech_act: ex.speechAct } : {}),
@@ -100,6 +117,14 @@ export function buildLedgerWritePayload(input: {
         : {}),
     ...(ex.transition && ex.transition !== 'none' ? { transition: ex.transition } : {}),
     ...(Object.keys(ex.constraints).length ? { constraints: { ...ex.constraints } } : {}),
+    ...(ex.namedProjects?.length
+      ? {
+          named_projects: ex.namedProjects.map((p) => `${p.projectId}:${p.name}`),
+        }
+      : {}),
+    ...(switchIntent ? { switch_intent: switchIntent } : {}),
+    // Full provenance object (deployed ledger), not wrangler-dev-only snapshot.
+    ...(extractProvenance ? { extract_provenance: extractProvenance } : {}),
     ...(extractProvenance
       ? {
           provenance: {
@@ -167,7 +192,7 @@ export function buildLedgerWritePayload(input: {
   };
 
   const fromMatches = evidence.matches?.map((m) => m.projectId) ?? [];
-  const fromOffered = state.discover.lastOffered.map((o) => o.projectId);
+  const fromOffered = currentShortlist(state).map((o) => o.projectId);
   const offered_project_ids = [...new Set([...fromMatches, ...fromOffered])].slice(0, 20);
 
   return {
@@ -176,18 +201,20 @@ export function buildLedgerWritePayload(input: {
     action_plan,
     offered_project_ids,
     disclosed_facts: extractDisclosedFacts({ goal, evidence }),
-    tool_runs: (evidence.tools ?? []).map((name) => ({
-      name,
-      args_summary: '',
-      // OBSERVED, not assumed. `success: true` was hardcoded on every row, so
-      // a swallowed Desk null looked identical to a cost sheet. This reports
-      // only what is checkable without the port change: did the call put
-      // anything in evidence. It deliberately does NOT claim to separate a
-      // legitimate absence from a transport failure -- that is 0b's result
-      // wrappers, and asserting it here would be a new lie for an old one.
-      produced_evidence: toolProducedEvidence(name, evidence),
-      latency_ms: 0,
-    })),
+    tool_runs: (evidence.tools ?? []).map((name) => {
+      const produced = toolProducedEvidence(name, evidence);
+      const latency_ms = evidence.toolLatencyMs?.[name] ?? 0;
+      const failure_reason = evidence.toolFailureReason?.[name];
+      return {
+        name,
+        args_summary: '',
+        // Phase 0b — produced_evidence only when the slot filled; failure_reason
+        // separates catalog absence from transport when the port reported !ok.
+        produced_evidence: produced,
+        latency_ms,
+        ...(failure_reason && !produced ? { failure_reason } : {}),
+      };
+    }),
     verify: {
       grounding: grounding ?? 'pass',
       // v1 instrument only — dump = delivered ≫ asked. Gate later.
@@ -197,6 +224,9 @@ export function buildLedgerWritePayload(input: {
         faq_keys_delivered: faqKeysDelivered,
         education_delivered: Boolean(evidence.education),
       },
+      ...(Object.keys(evidence.toolFailureReason ?? {}).length
+        ? { tool_failures: evidence.toolFailureReason }
+        : {}),
     },
     composer: 'converse_engine',
   };

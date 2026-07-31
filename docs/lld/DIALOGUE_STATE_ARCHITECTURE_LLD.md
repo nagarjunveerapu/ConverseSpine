@@ -97,9 +97,23 @@ But ~15 methods use nullable contracts today (`projectDetail`, `pricing`, `compa
 
 | tier | scope | size |
 |---|---|---|
-| **0a** | `tool_runs[].success` + real `latency_ms`; `postChoiceEvent` `engine_status`; drop the `Math.max(…, 2)` floor on `projects_compared`; promote the fields `observability/turn-log-snapshot.ts` already computes (`named_projects` as `id:name` pairs, `switch_intent`, full `extract_provenance`) from the wrangler-dev-only path into the deployed ledger row | **S — the "one day"** |
-| 0b | result wrappers for the methods 0a measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` | M |
+| **0a** | `tool_runs[].success` + real `latency_ms`; `postChoiceEvent` `engine_status`; drop the `Math.max(…, 2)` floor on `projects_compared`; promote the fields `observability/turn-log-snapshot.ts` already computes (`named_projects` as `id:name` pairs, `switch_intent`, full `extract_provenance`) from the wrangler-dev-only path into the deployed ledger row | **S — the "one day"** (landed) |
+| **0b** | result wrappers for the methods 0a measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy | M — **landed** |
 | 0c | remainder of `EngineData` | separate PR |
+
+### Phase 0b contract (landed)
+
+```ts
+type DataResult<T> =
+  | { ok: true; value: T; latency_ms: number }
+  | { ok: false; reason: 'absent' | 'transport'; latency_ms: number };
+```
+
+- Desk empty / 404 / no row → `absent`
+- thrown / network / unexpected → `transport`
+- success → `ok` with wall-clock `latency_ms`
+- Ledger: `produced_evidence` only on `ok`; carry `latency_ms`; optional `failure_reason` on the tool run
+- Scenario gate: `npm run test:phase-0b` / `test:phase-0b:live` (IDs `0B-01`…`0B-14`, including multi-intent articulation)
 
 ### Gate
 A forced adapter failure appears as `success: false`. One ledger row answers *"what bound, what goal, what reply, and did the data exist."* **0c is not required to merge 0a.**
@@ -385,10 +399,10 @@ A big-bang swap of five state fields read by 21 resolvers is not reviewable. Thr
 `Extracted` gains a channel for **name-shaped tokens that resolved to nothing**, so *"the buyer named nothing"* and *"the buyer named something I could not bind"* stop being the same value. This is a one-field change and it makes J7 **honest** (clarify rather than guess) without waiting for the refactor. Ship it first; the store then makes J7 **correct** (compares the two projects actually named).
 
 ### Gate — buyer-visible, despite being a refactor
-- J7 compares Eldorado + Sanctuary
-- `NAME-06` (currently a standing red scenario) goes green — `"what about cornerstone utopia"` switches to the sibling
-- `"the other one"` resolves
-- Resolver count drops measurably
+- J7 compares Eldorado + Sanctuary (unbound-name / PR-2-lite — landed)
+- `NAME-06` goes green — `"what about cornerstone utopia"` switches to the sibling (`test:name-06` — **landed** for named-resolve/switch family; broader salience migration still open)
+- `"the other one"` resolves (`test:other-one` — **landed** for alternate deixis / focus-stack reader; broader salience migration still open)
+- Resolver count drops measurably (full 1b/1c)
 - **Zero scenario regressions**, proven the way #150 was: deploy `main` to the same worker, run all 89, diff at turn level
 
 ### Size
@@ -436,11 +450,28 @@ Nearest-neighbour retrieval has no `and` operator: the embedding of *"price and 
 - Cap the set (2–3) and order by score, so compose's existing top-2 policy still applies.
 - Hard negatives ride the gate: `find_projects` and `get_price` must not degrade. A lift that breaks the transactional core is a regression wearing a win's clothes.
 
+### Consumer compose contract (ships with Phase 0b — independent of producer)
+
+AB-8 **fetch** (multiple topics → evidence atoms) is necessary but **not sufficient**. Stitching atom templates that each re-stamp the project name produces awkward multi-intent copy:
+
+> Pricing — Eldorado: 2BHK …  
+> Eldorado is in …
+
+**Locked join policy** for `topics.length > 1` under focused evidence (`compose.ts`):
+
+1. Resolve **one** display subject (`focusProjectName` / detail / pricing name).
+2. Emit a **lead** once: `On *{Subject}*:`.
+3. Emit **facet atoms** that do **not** re-prefix the project name (price components, location micro-market, media title+URL, FAQ body, legal snapshot body).
+4. Join facets under the lead (`; ` or short lines); single park/CTA at the end.
+5. **Single-topic path unchanged** — no thinning of “just price” / “just location”.
+
+Proof cases: `0B-13` (price + location), `0B-14` (brochure + starting price), plus Wave-3 multi-atom holds (`0B-07`, `0B-08`). Scenario suite: `npm run test:phase-0b`.
+
 ### Gate
-*"price and is it RERA approved"* answers both facets. Holdout re-scored at the new τ with no per-intent regression.
+*"price and is it RERA approved"* answers both facets. Holdout re-scored at the new τ with no per-intent regression. Articulated multi-intent consumer gate (0b) does **not** wait on the producer.
 
 ### Independence, honestly
-The **scoring** change is independent of Phase 1 — it touches the router, not the state. The **product** gate is not: answering two facets still needs a subject, and on a shortlist that subject comes from the entity store. Phase 3 can be built in parallel; its multi-topic gate may need Phase 1 to pass.
+The **scoring** change is independent of Phase 1 — it touches the router, not the state. The **product** gate is not: answering two facets still needs a subject, and on a shortlist that subject comes from the entity store. Phase 3 can be built in parallel; its multi-topic gate may need Phase 1 to pass. The **compose join policy** above can (and does) ship with 0b without waiting on the multi-label router.
 
 ---
 
@@ -522,7 +553,7 @@ Prod infra cutover (Desk D1, service bindings, Advisor URL matrix, SQL seed hygi
 | **0e verdict precision** | — | no | S — offline, no deploy |
 | **0d understanding before mutation** | 0e | **yes** (the phrasing cliff) | **L — reorders every turn** |
 | 0b/0c port results | 0a | no | M |
-| unbound-name typing | — | **yes** (J7 honest) | S |
+| unbound-name typing | — | **yes** (J7 honest + correct named compare) | S — **landed** (`UN-01`…`UN-05`) |
 | 1 entity store (a/b/c) | 0a to measure | **yes** (J7 correct, NAME-06) | L |
 | 2 state → understanding | 1 | **yes** | M |
 | 3 multi-label | — (gate may need 1) | **yes** | M |
@@ -685,12 +716,20 @@ direction; “small, one day” only holds if scoped.
 
 | Tier | Scope | Size |
 |---|---|---|
-| **0a** | Ledger `tool_runs[].success`, `postChoiceEvent` `engine_status`, drop `projects_compared` floor, promote `turn-log-snapshot` fields into deployed ledger | S — the “one day” |
-| **0b** | Result wrappers for methods Phase 0 measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` | M |
+| **0a** | Ledger `tool_runs[].success`, `postChoiceEvent` `engine_status`, drop `projects_compared` floor, promote `turn-log-snapshot` fields into deployed ledger | S — landed |
+| **0b** | `DataResult<T>` wrappers for `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy + `test:phase-0b` gate (`0B-01`…`0B-14`) | M — **landed** |
+| **unbound-name** | `Extracted.unboundProjectNames` + catalog in compare matching + block pool-guess; gates `test:unbound-name` / `:report` / `:live` (`UN-00` defect probe + `UN-01`…`UN-05`) | S — **landed** (PR-2-lite) |
+| **1b (named-resolve / switch)** | Full sibling overshadows partial; refinement switch over compare; gate `test:name-06` (NAME-06 green). Broader salience consumer migration still open. | S — **partial landed** |
+| **1b (alternate deixis)** | `"the other one"` / go-back via `resolveAlternateProject` + `detectFocusedSwitchIntent`; dual-write sync on `popFocus` / `releaseToDiscover`; gate `test:other-one` | S — **landed** |
+| **1b (salience consumers)** | `discourseEntities` / `discourseOffered` feed compare pool, visit candidates, switch `poolOf`, `resolveNamed`; legacy ⊆ store membership assert in dual-write test. | M — **landed** |
+| **1c (store authority)** | `shortlistIds` + card payload on entities; `currentShortlist` / `discussedList` / `mirrorLegacyPools`. Legacy arrays are write-through mirrors only. **Not a NayaDesk field** — Spine KV only; Desk catalog stays. | M — **landed (authority)** |
+| **1c (raw-reader migration)** | All `src/` identity reads use helpers (`turn.ts`, `discover.ts`, extract, compare, visit, …). `focusedRef()` / stack-first `focusedEntity`; `state.focus` still dual-writes for phase gates. | M — **landed** |
+| **1c (mirror delete)** | `mirrorLegacyPools` is a no-op; writers `stripLegacyMirrors`. `hydrateLegacyDiscourse` on load revives pre-1c KV once. Poison/adversarial still prove store authority. | S — **landed** |
+| **1c adversarial gate** | `npm run test:phase-1c` — poison mirror, diverge focus/stack, thrash shortlist, confuse journeys (other-one / compare / NAME-06 / unbound). Report: `npm run test:phase-1c:report` → `scenarios/runs/phase-1c-adv-*`. | S — **landed** |
 | **0c** | Remainder of `EngineData` | separate PR |
 
-Gate for closing Phase 0 remains: forced adapter failure → `success: false`. Do
-not require 0c to merge 0a.
+Gate for closing Phase 0 remains: forced adapter failure → `success: false` with
+`failure_reason: 'transport' | 'absent'`. Do not require 0c to merge 0a/0b.
 
 ### 14.5 Out of scope for this LLD (Lane B — do not absorb)
 

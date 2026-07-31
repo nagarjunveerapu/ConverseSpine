@@ -3,7 +3,8 @@
  */
 import type { AnswerTopic, ConversationState, Extracted, OfferedProject, TurnGoal } from './types.js';
 import type { EngineDeps } from './ports.js';
-import { bearingTokensOf } from './name-index.js';
+import { bearingTokensOf, tokenizeName } from './name-index.js';
+import { discourseOffered, resolveAlternateProject, currentShortlist, discussedList } from './entity-store.js';
 
 export interface SwitchIntent {
   readonly followUp?: AnswerTopic;
@@ -212,23 +213,21 @@ export function filterNamedProjectsByEvidence(
     const ev = nameEvidenceIn(text, q.name, siblings);
     if (ev === 'full') candidates.push({ p: { projectId: q.projectId, name: q.name }, ev, pool: true });
   }
-  // Same rescue, widened from the board to the catalog — and only when NOTHING
-  // proposed is fully named. Live repro: the buyer typed "tell me about
-  // cornerstone", the embedder's top hit was *Cornerstone Utopia* (partial —
-  // `utopia` is absent), no board existed to contest it, so the partial
-  // proposal won and the buyer was shown the wrong project. `Brigade
-  // Cornerstone` is fully named by that text and sits in the catalog.
-  //
-  // Still veto-shaped: this can only surface a project the buyer's own words
-  // name in FULL, never a guess.
-  if (!candidates.some((c) => c.ev === 'full')) {
-    for (const q of catalogNames) {
-      const qid = 'projectId' in q ? q.projectId : undefined;
-      if (!qid || seen.has(qid)) continue;
-      if (nameEvidenceIn(text, q.name, siblings) !== 'full') continue;
-      seen.add(qid);
-      candidates.push({ p: { projectId: qid, name: q.name }, ev: 'full', pool: false });
-    }
+  // Catalog FULL-name rescue (veto-shaped: buyer's words must fully name it).
+  // (1) Cold "tell me about cornerstone" when embedder proposed Utopia partial.
+  // (2) NAME-06: embedder returns only focused Cornerstone while buyer typed
+  //     "Brigade Cornerstone Utopia" — admit the longer catalog hit, then the
+  //     token-superset rule drops the shorter.
+  // Skip when a candidate already carries the same display name (embedder id
+  // vs catalog id must not invent a false compare pair).
+  for (const q of catalogNames) {
+    const qid = 'projectId' in q ? q.projectId : undefined;
+    if (!qid || seen.has(qid)) continue;
+    const qName = q.name.trim().toLowerCase();
+    if (candidates.some((c) => c.p.name.trim().toLowerCase() === qName)) continue;
+    if (nameEvidenceIn(text, q.name, siblings) !== 'full') continue;
+    seen.add(qid);
+    candidates.push({ p: { projectId: qid, name: q.name }, ev: 'full', pool: false });
   }
   let alive = candidates.filter((c) => c.ev !== 'none');
   if (!alive.length) return [];
@@ -254,6 +253,40 @@ export function filterNamedProjectsByEvidence(
     }
   }
   if (dropped.size) alive = alive.filter((c) => !dropped.has(c.p.projectId));
+  // Full sibling overshadows a partial that shares any name token.
+  // Live NAME-06: "what about cornerstone utopia" → Utopia full, Brigade
+  // Cornerstone partial (bearing fell back to {brigade,cornerstone}; brigade
+  // absent). Matched sets {utopia} vs {cornerstone} are not nested, so the
+  // subset rule above keeps both and the turn becomes a compare. Drop the
+  // partial when a full candidate shares a token — true dual-full compares
+  // ("ayana and krishnaja") are untouched.
+  if (alive.some((c) => c.ev === 'full') && alive.some((c) => c.ev === 'partial')) {
+    const fullTokenSets = alive
+      .filter((c) => c.ev === 'full')
+      .map((c) => new Set(tokenizeName(c.p.name)));
+    alive = alive.filter((c) => {
+      if (c.ev !== 'partial') return true;
+      const pt = tokenizeName(c.p.name);
+      return !fullTokenSets.some((ft) => pt.some((t) => ft.has(t)));
+    });
+  }
+  // Name-token superset (dig NAME-06): both "Brigade Cornerstone" and
+  // "Brigade Cornerstone Utopia" are FULL when the buyer types the longer name.
+  // Drop the shorter when the longer is fully named — token sets nest.
+  {
+    const drop = new Set<string>();
+    for (const a of alive) {
+      const ta = tokenizeName(a.p.name);
+      for (const b of alive) {
+        if (a.p.projectId === b.p.projectId || b.ev !== 'full') continue;
+        const tb = tokenizeName(b.p.name);
+        if (tb.length > ta.length && ta.every((t) => tb.includes(t))) {
+          drop.add(a.p.projectId);
+        }
+      }
+    }
+    if (drop.size) alive = alive.filter((c) => !drop.has(c.p.projectId));
+  }
   // Full-beats-partial and pool-beats-global arbitrate only between candidates the
   // text points at with the SAME words ("conerstone" → board Cornerstone over global
   // Utopia) — distinct names in one utterance ("compare ayana and krishnaja greens")
@@ -310,14 +343,24 @@ function exactPoolPick(pool: readonly OfferedProject[], pickName: string): Offer
 }
 
 function poolOf(s: ConversationState): OfferedProject[] {
-  const pool = [...s.discover.lastOffered];
-  for (const d of s.discover.discussedProjects ?? []) {
+  const fromStore = discourseOffered(s);
+  if (fromStore.length > 0) return fromStore;
+  // Pre-1a sessions.
+  const pool = [...currentShortlist(s)];
+  for (const d of discussedList(s)) {
     if (!pool.some((p) => p.projectId === d.projectId)) pool.push(d);
   }
   if (s.focus && !pool.some((p) => p.projectId === s.focus!.projectId)) {
     pool.push({ projectId: s.focus.projectId, name: s.focus.projectName });
   }
   return pool;
+}
+
+/** "the other one" / prior-focus deixis — resolved via entity-store salience. */
+export function isAlternateDeixis(text: string): boolean {
+  return /\b(?:the\s+other\s+one|the\s+other\s+project|other\s+one|go\s+back(?:\s+to\s+(?:the\s+)?(?:first|previous|other)(?:\s+one)?)?)\b/i.test(
+    text,
+  );
 }
 
 /** Sync detection — returns null when no switch or when compare/handoff paths own the turn. */
@@ -338,15 +381,60 @@ export function detectFocusedSwitchIntent(
       );
     if (bare && !ex.pickName) return null;
   }
-  if ((ex.compareProjectIds?.length ?? 0) >= 2) return null;
-  if (ex.askTopic === 'compare' && (ex.compareProjectIds?.length ?? 0) >= 2) return null;
-  // Two named projects → compare path owns the turn, not a single-project switch.
-  if ((ex.namedProjects?.length ?? 0) >= 2) return null;
-
   const focus = s.focus;
   const fu = followUpTopics(ex);
 
+  // Phase 1b — "the other one" / go-back deixis against salience (not embedder).
+  // Runs before named/compare so a stale namedProjects cannot steal the turn.
+  if (isAlternateDeixis(_text)) {
+    const alt = resolveAlternateProject(s);
+    if (alt && alt.projectId !== focus.projectId) {
+      return { commit: { projectId: alt.projectId, name: alt.name }, ...fu };
+    }
+    return null;
+  }
+
+  const siblings = [...poolOf(s), ...(ex.namedProjects ?? [])];
+
+  /** Longer-sibling refinement while focused — switch, don't compare. */
+  const refinementSwitch = (): (SwitchIntent & { commit: OfferedProject }) | null => {
+    const candidates = ex.namedProjects ?? [];
+    const others = candidates.filter((n) => n.projectId !== focus.projectId);
+    if (others.length !== 1) return null;
+    const other = others[0]!;
+    const otherEv = nameEvidenceIn(_text, other.name, siblings);
+    const focusEv = nameEvidenceIn(_text, focus.projectName, siblings);
+    if (otherEv === 'full' && focusEv !== 'full') {
+      return { commit: other, ...fu };
+    }
+    // Dig: both FULL when buyer types "Brigade Cornerstone Utopia" — still switch
+    // when the other's name tokens are a strict superset of focus.
+    if (otherEv === 'full' && focusEv === 'full') {
+      const ft = tokenizeName(focus.projectName);
+      const ot = tokenizeName(other.name);
+      if (ot.length > ft.length && ft.every((t) => ot.includes(t))) {
+        return { commit: other, ...fu };
+      }
+    }
+    return null;
+  };
+
+  if ((ex.compareProjectIds?.length ?? 0) >= 2) {
+    const refined = refinementSwitch();
+    if (refined) return refined;
+    return null;
+  }
+  if (ex.askTopic === 'compare' && (ex.compareProjectIds?.length ?? 0) >= 2) return null;
+
+  // Two named projects usually mean compare — except NAME-06 refinement.
+  if ((ex.namedProjects?.length ?? 0) >= 2) {
+    const refined = refinementSwitch();
+    if (refined) return refined;
+    return null;
+  }
+
   // Deictic "this one" / "for this" stays on focus — vectors must not invent a switch.
+  // Do NOT match bare "what about <name>" — that is a refinement/switch cue (NAME-06).
   if (/\b(?:this\s+one|this\s+project|for\s+this|about\s+this)\b/i.test(_text) && !ex.pickName) {
     return null;
   }
@@ -359,11 +447,14 @@ export function detectFocusedSwitchIntent(
       // Sticky facet without structural/pool cue → stay on focus (vector noise) —
       // unless the buyer's text itself fully names the project ("and krishnaja
       // greens?"): typed name evidence beats the pool gate.
-      if (
+      //
+      // NAME-06: "what about cornerstone utopia" while focused on Cornerstone —
+      // overview is sticky, but `what about` + full name evidence must switch.
+      const stickyHold =
         isStickyFacetAsk(ex) &&
         !buyerCuedOtherProject(_text, poolOf(s)) &&
-        nameEvidenceIn(_text, n.name) !== 'full'
-      ) {
+        nameEvidenceIn(_text, n.name, siblings) !== 'full';
+      if (stickyHold) {
         return null;
       }
       return { commit: n, ...fu };

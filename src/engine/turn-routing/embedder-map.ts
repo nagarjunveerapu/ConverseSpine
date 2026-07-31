@@ -1,3 +1,4 @@
+import { isConstraintRefinementTurn, parseBudgetToInr } from '../facts.js';
 import type { AnswerTopic } from '../types.js';
 import type { PolicyClass, TurnRoutingInput, TurnRoutingResult } from './types.js';
 
@@ -154,6 +155,19 @@ export function shouldDeclinePolicyForFocusedFacet(input: TurnRoutingInput): boo
 }
 
 /**
+ * "actually budget 50L" is a search-constraint update, not a discount ask.
+ * Declining negotiate_price here lets the pivot arbiter / discover path own it
+ * instead of speakFailure(discount).
+ */
+export function looksLikeBudgetConstraintTurn(text: string): boolean {
+  if (isConstraintRefinementTurn(text)) return true;
+  if (!parseBudgetToInr(text)) return false;
+  return /\b(?:budget|under|below|upto|up\s+to|around|about|within|max(?:imum)?|cap)\b/i.test(
+    text,
+  );
+}
+
+/**
  * Search brief with a configuration + place cue — not a literacy ask.
  * "3 BHK in Mumbai" must stay on discover/search, not definition_bhk.
  */
@@ -222,6 +236,10 @@ export function mapIntentToRouting(
         (policyIntent.policy === 'definition' ||
           (kind === 'negotiate_price' && policyIntent.subject === 'discount'))
       ) {
+        return null;
+      }
+      // Budget refinement ("actually budget 50L") is not a discount negotiation.
+      if (kind === 'negotiate_price' && looksLikeBudgetConstraintTurn(input.text)) {
         return null;
       }
       return {

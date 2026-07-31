@@ -11,6 +11,7 @@ import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../phases/visit.js'
 import { classifyTurnIntentLlm } from './llm-classifier.js';
 import { defaultProbePrompt } from './pending-prompt.js';
 import { AFFIRM_ONLY, DECLINE } from './dialogue-acts.js';
+import { currentShortlist } from '../entity-store.js';
 import type {
   PatchClearKey,
   TurnIntentApplyResult,
@@ -31,6 +32,9 @@ const LIST_AT_BUDGET =
 /** Affirm the locality-widen CTA — "show those" / "yes show me". */
 const SHOW_WIDENED =
   /^(?:yes[,.]?\s+)?(?:please\s+)?(?:show|list|see)(?:\s+me)?(?:\s+(?:those|them|that|it))?(?:\s+please)?\.?!?\s*$/i;
+/** Chip / free-text accept for nearby-offer CTA while location_broaden is pending. */
+const ACCEPT_NEARBY =
+  /\b(?:also\s+)?nearby(?:\s+(?:estates?|projects?|options?))?\b|\bthose\s+nearby\b/i;
 
 /** Free-text that should re-run search/list — not contextual yes/no probe. */
 export function shouldPassthroughRecoverySearch(text: string): boolean {
@@ -150,7 +154,10 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
   }
 
   // Before passthrough "show options" — affirm the widen CTA with stored markets.
-  if (pending?.kind === 'location_broaden' && (AFFIRM_ONLY.test(t) || SHOW_WIDENED.test(t))) {
+  if (
+    pending?.kind === 'location_broaden' &&
+    (AFFIRM_ONLY.test(t) || SHOW_WIDENED.test(t) || ACCEPT_NEARBY.test(t))
+  ) {
     return {
       kind: 'apply_recovery_patch',
       confidence: 'rule',
@@ -350,7 +357,7 @@ export function applyTurnIntentResult(
     const pid = intent.focus_project_id;
     if (pid) {
       const name =
-        next.discover.lastOffered.find((o) => o.projectId === pid)?.name ??
+        currentShortlist(next).find((o) => o.projectId === pid)?.name ??
         next.rti?.pendingPrompt?.project_name ??
         pid;
       next = commitTo(next, pid, name);
@@ -451,7 +458,7 @@ export function buildTurnIntentInput(
     last_reply_excerpt: rti?.lastReplyExcerpt ?? state.feedForward?.priorReplyExcerpt ?? '',
     pending_prompt: rti?.pendingPrompt ?? state.feedForward?.pendingPrompt,
     suggested_actions: rti?.lastSuggestedActions ?? [],
-    last_offered: state.discover.lastOffered.map((o) => ({
+    last_offered: currentShortlist(state).map((o) => ({
       project_id: o.projectId,
       name: o.name,
     })),

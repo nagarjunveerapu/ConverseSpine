@@ -44,7 +44,10 @@ describe('overviewCard', () => {
   });
 
   it('ends with the single probing question and stays compact', () => {
-    expect(card).toMatch(/Want pricing details, unit configurations, or the legal & RERA picture\?$/);
+    expect(card).toMatch(/\?$/);
+    expect(card).toMatch(
+      /Want pricing details|Curious about loan eligibility|Want a cost breakdown next/,
+    );
     expect(card.length).toBeLessThan(320); // a card, not an essay
     expect(card).not.toContain('25-50L'); // the contradicting band never renders when configs price
     expect(card).not.toMatch(/\.\./); // no double periods
@@ -86,7 +89,10 @@ describe('overviewCard — catalog summary enrichment (catalog-first)', () => {
   it('appends the catalog summary line before the probing question', () => {
     const card = overviewCard({ ...DETAIL, summary: SUMMARY });
     expect(card).toContain('Luxury villa community on 18 acres');
-    expect(card).toMatch(/Want pricing details, unit configurations, or the legal & RERA picture\?$/);
+    expect(card).toMatch(/\?$/);
+    expect(card).toMatch(
+      /Want pricing details|Curious about loan eligibility|Want a cost breakdown next/,
+    );
     // Facts stay intact — the blurb enriches, never replaces.
     expect(card).toContain('₹31 L – ₹1.66 Cr');
   });

@@ -7,6 +7,7 @@
  * Cap 6. Board owns depth; chips never dump the full tree.
  */
 import type { ConversationState, TurnDebug, TurnGoal } from '../engine/types.js';
+import { currentShortlist, discussedList, focusedRef } from '../engine/entity-store.js';
 import { rankChips } from '../chips/rank.js';
 import { goalState } from '../chips/shadow.js';
 import { chipActionId, type ChipEvidence } from '../chips/catalogue.js';
@@ -76,9 +77,9 @@ export function engagedProjectIds(state: ConversationState): string[] {
     seen.add(id);
     ids.push(id);
   };
-  for (const o of state.discover.lastOffered) push(o.projectId);
-  for (const d of state.discover.discussedProjects ?? []) push(d.projectId);
-  push(state.focus?.projectId);
+  for (const o of currentShortlist(state)) push(o.projectId);
+  for (const d of discussedList(state)) push(d.projectId);
+  push(focusedRef(state)?.projectId);
   return ids;
 }
 
@@ -107,8 +108,8 @@ function dimensionAndJourney(
   board: AdvisorNbaBoard,
 ): string[] {
   const chips: string[] = [];
-  const offered = state.discover.lastOffered;
-  const focusName = state.focus?.projectName;
+  const offered = currentShortlist(state);
+  const focusName = focusedRef(state)?.projectName;
 
   switch (goal.kind) {
     case 'recommend':
@@ -269,12 +270,13 @@ function rankedPrimaryChips(
   goal: TurnGoal,
   limit: number,
 ): Array<{ label: string; actionId?: string }> {
-  const focusId = state.focus?.projectId;
+  const focus = focusedRef(state);
+  const focusId = focus?.projectId;
   const focused = focusId ? state.projectCache?.[focusId] : undefined;
   const ev: ChipEvidence = {
     ...(focused ? { focused } : {}),
-    ...(state.focus?.projectName ? { focusName: state.focus.projectName } : {}),
-    shortlist: state.discover.lastOffered.map((o) => o.name),
+    ...(focus?.projectName ? { focusName: focus.projectName } : {}),
+    shortlist: currentShortlist(state).map((o) => o.name),
     ...(state.visitBookedCache?.length ? { visitBooked: true } : {}),
   };
   const ranked = rankChips({ phase: state.phase, state: goalState(goal), evidence: ev, limit });
@@ -354,7 +356,7 @@ export function buildAdvisorNba(
     board = 'project';
     board_project_id = state.focus.projectId;
     board_tab = 'overview';
-  } else if (state.phase === 'discover' && state.discover.lastOffered.length > 0) {
+  } else if (state.phase === 'discover' && currentShortlist(state).length > 0) {
     board = 'matches';
   }
 
@@ -365,7 +367,20 @@ export function buildAdvisorNba(
     board_project_id = undefined;
   }
 
-  const { chips, actions } = chipsForGoal(state, goal, board, chipRankLive);
+  let { chips, actions } = chipsForGoal(state, goal, board, chipRankLive);
+
+  // Soft nearby-widen CTA from this turn (or pending location_broaden) — advisory
+  // chip without flipping the board into search_recovery UI.
+  const nearbyChip =
+    debug.nearby_offer?.label ??
+    state.rti?.lastSuggestedActions?.find((a) => a.id.startsWith('nearby_offer:'))?.label;
+  if (nearbyChip && !chips.some((c) => c.toLowerCase() === nearbyChip.toLowerCase())) {
+    chips = [nearbyChip, ...chips].slice(0, MAX_CHIPS);
+    const nearbyAction =
+      state.rti?.lastSuggestedActions?.find((a) => a.id.startsWith('nearby_offer:'))?.id ?? '';
+    actions = [nearbyAction, ...actions].slice(0, chips.length);
+    while (actions.length < chips.length) actions.push('');
+  }
 
   return {
     chips,

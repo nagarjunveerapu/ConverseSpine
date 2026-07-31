@@ -1,6 +1,25 @@
 import type { ComposeRequest, LocationPoiCategories, ProjectDetail } from './types.js';
 import type { EmiFacts } from './emi.js';
 
+/**
+ * Phase 0b — discriminate catalog absence from transport failure on measured ports.
+ * Desk empty / 404 → absent; thrown / network → transport; success carries latency_ms.
+ */
+export type DataResultReason = 'absent' | 'transport';
+export type DataResult<T> =
+  | { ok: true; value: T; latency_ms: number }
+  | { ok: false; reason: DataResultReason; latency_ms: number };
+
+export function dataOk<T>(value: T, latency_ms: number): DataResult<T> {
+  return { ok: true, value, latency_ms };
+}
+export function dataAbsent(latency_ms: number): DataResult<never> {
+  return { ok: false, reason: 'absent', latency_ms };
+}
+export function dataTransport(latency_ms: number): DataResult<never> {
+  return { ok: false, reason: 'transport', latency_ms };
+}
+
 export type SignalKind = 'location' | 'property_type' | 'purpose' | 'transition';
 
 export interface ExtractSignal {
@@ -113,23 +132,33 @@ export interface EngineData {
     builderId: string,
     ndConversationId: string,
     projectId: string,
-  ): Promise<ProjectDetail | null>;
-  pricing(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<{
+  ): Promise<DataResult<ProjectDetail>>;
+  pricing(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<DataResult<{
     projectName: string;
     startingDisplay?: string;
     components: Array<{ label: string; value: string }>;
     withheld?: Array<{ label: string; redirectHint: string }>;
-  } | null>;
-  landedCost(builderId: string, ndConversationId: string, projectId: string, unitType: string): Promise<LandedCostFacts | null>;
+  }>>;
+  landedCost(
+    builderId: string,
+    ndConversationId: string,
+    projectId: string,
+    unitType: string,
+  ): Promise<DataResult<LandedCostFacts>>;
   compare(ndConversationId: string, projectIds: string[]): Promise<{
     tableText: string;
     projects: Array<Record<string, unknown>>;
     matrix?: import('./types.js').CompareMatrixPayload;
   } | null>;
-  priceBasis(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<{
+  priceBasis(
+    builderId: string,
+    ndConversationId: string,
+    projectId: string,
+    unitType?: string,
+  ): Promise<DataResult<{
     priceInr: number;
     display: string;
-  } | null>;
+  }>>;
   listUnits(projectId: string): Promise<UnitConfig[]>;
   mediaShare(ndConversationId: string, projectId: string, assetKind: string, unitType?: string): Promise<MediaShareResult | null>;
   conversationContext(ndConversationId: string): Promise<import('../crm/nayadesk-client.js').NdContextBundle | null>;
@@ -185,7 +214,10 @@ export interface EngineData {
   projectCoords(builderId: string): Promise<
     ReadonlyArray<{ projectId: string; lat: number; lng: number; microMarket?: string }>
   >;
-  faqLookup(projectId: string, questionKey: string): Promise<{ question: string; answer: string } | null>;
+  faqLookup(
+    projectId: string,
+    questionKey: string,
+  ): Promise<DataResult<{ question: string; answer: string }>>;
   /**
    * Platform buyer-education KB (definition asks). Dedicated education index /
    * Desk corpus — never project FAQs. Null = miss (speakable no_data + queue).
@@ -244,7 +276,13 @@ export interface EngineCrm {
     /** `produced_evidence` is OBSERVED (did the call fill its evidence slot);
      *  the adapter maps it onto Desk's `success` wire field. It is not yet a
      *  claim about transport success — see Phase 0b. */
-    toolRuns?: Array<{ name: string; args_summary: string; produced_evidence: boolean; latency_ms: number }>;
+    toolRuns?: Array<{
+      name: string;
+      args_summary: string;
+      produced_evidence: boolean;
+      latency_ms: number;
+      failure_reason?: 'absent' | 'transport';
+    }>;
     /** P2c — claims made this turn (Desk DisclosedFactSchema). */
     disclosedFacts?: Array<{
       kind: string;
@@ -279,6 +317,8 @@ export interface EngineCrm {
     conversationId: string,
     matches: Array<{ projectId: string; name: string }>,
     constraints: Record<string, unknown>,
+    /** Phase 0a — observed engine status; never hardcode `"ok"`. */
+    engineStatus?: string,
   ): Promise<void>;
   postChoiceResponse(conversationId: string, responseText: string, responseIntent?: string): Promise<void>;
   deleteBuyerMemory(conversationId: string): Promise<void>;

@@ -1,4 +1,5 @@
 import { formatInr } from '../engine/compose.js';
+import { currentShortlist, focusedRef } from '../engine/entity-store.js';
 import { filterUnitsByBhk } from '../engine/unit-config.js';
 import { mapProjectDetailDto } from './map-project-detail.js';
 import { mapVisitQueue } from './map-visit-queue.js';
@@ -11,7 +12,7 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     input;
   const projects = mapProjectCards(state);
   const prefs = mapPrefsSnapshot(state);
-  const focusId = state.focus?.projectId;
+  const focusId = focusedRef(state)?.projectId;
   const focusedDetail = focusId ? state.projectCache?.[focusId] : undefined;
   const focusedDto = focusedDetail
     ? scopeFocusedConfigurations(mapProjectDetailDto(focusedDetail), state.constraints.bhk)
@@ -67,9 +68,10 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     ...(visitItinerary ? { visit_itinerary: visitItinerary } : {}),
     ...(compareMatrix ? { compare_matrix: compareMatrix } : {}),
     ...(projects.length ? { projects } : {}),
-    ...(state.discover.lastOffered.length
-      ? { shortlist: state.discover.lastOffered.map((o) => o.projectId) }
-      : {}),
+    ...(() => {
+      const board = currentShortlist(state);
+      return board.length ? { shortlist: board.map((o) => o.projectId) } : {};
+    })(),
     ...(Object.keys(prefs).length ? { prefs_snapshot: prefs } : {}),
     phase: state.phase,
     ...(uiMode ? { ui_mode: uiMode } : {}),
@@ -114,7 +116,7 @@ export function scopeFocusedConfigurations(
 }
 
 function mapProjectCards(state: AdvisorMapInput['state']): AdvisorProjectCard[] {
-  return state.discover.lastOffered.map((o) => ({
+  return currentShortlist(state).map((o) => ({
     id: o.projectId,
     name: o.name,
     micro_market: o.microMarket ?? '',

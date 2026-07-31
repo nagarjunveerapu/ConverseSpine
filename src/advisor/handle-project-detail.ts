@@ -1,3 +1,4 @@
+import { currentShortlist } from '../engine/entity-store.js';
 import { prefetchProjects } from '../engine/project-cache.js';
 import { commitTo, initState, withNdConversation } from '../engine/state.js';
 import type { ConverseRuntime } from '../runtime/deps.js';
@@ -39,7 +40,7 @@ export async function handleAdvisorProjectDetail(
   if (!nd) return { status: 'error', error: 'lead_unavailable' };
 
   const projectName =
-    state.discover.lastOffered.find((p) => p.projectId === project_id)?.name ??
+    currentShortlist(state).find((p) => p.projectId === project_id)?.name ??
     state.focus?.projectName ??
     project_id;
 

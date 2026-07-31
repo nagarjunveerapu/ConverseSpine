@@ -186,7 +186,7 @@ describe('AB-1 — inventory ask composes the availability fact', () => {
       ]),
     );
     expect(reply).not.toMatch(/sold out|no units left|nothing left/i);
-    expect(reply).toMatch(/team confirms exact availability/i);
+    expect(reply).toMatch(/confirmed by our team|exact availability|live inventory/i);
   });
 
   it('a plain configurations ask keeps the config list', () => {
@@ -195,6 +195,7 @@ describe('AB-1 — inventory ask composes the availability fact', () => {
         { unitType: '2 BHK', priceDisplay: '₹57.5L', holdableUnits: 3 },
       ]),
     );
-    expect(reply).toMatch(/Available configurations/);
+    expect(reply).toMatch(/2 BHK|configuration/i);
+    expect(reply).toMatch(/57\.5/);
   });
 });

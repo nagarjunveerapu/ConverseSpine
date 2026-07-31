@@ -1,9 +1,9 @@
 # Phase 0d — Understanding before mutation
 
-**Status:** DESIGN ONLY — no implementation until founder approves this note.  
+**Status:** **0d-1/0d-2 shipped on dig** (`UNDERSTANDING_BEFORE_MUTATION=true`); **0d-3 gate PASSED 2026-07-31** — [`phase-0d-veto-rescore.md`](../reports/phase-0d-veto-rescore.md) **80/80**.  
 **Parent:** [`DIALOGUE_STATE_ARCHITECTURE_LLD.md`](./DIALOGUE_STATE_ARCHITECTURE_LLD.md) §3b–§3c  
 **Evidence:** §3b measurement (possession phrasing cliff); §3c / [`phase-0e-verdict-precision.md`](../reports/phase-0e-verdict-precision.md) (precision **0.712** → verdict = **tiebreaker only**)  
-**Dig posture today:** `ROUTING_IN_GOAL=false` (#160). Wire code may stay; do not revive equal-weight veto.
+**Dig posture today:** `ROUTING_IN_GOAL=false` (#160); `UNDERSTANDING_BEFORE_MUTATION=true`. Do not revive equal-weight veto.
 
 ---
 
@@ -131,7 +131,7 @@ Exact thresholds land with failing unit tests first (LLD §0 rule 3).
 | **0d-0** | This note approved; failing probes / unit stubs committed that fail on current main | Probes fail for the right reason |
 | **0d-1** | Flag + reorder in `turn.ts`: join before mutation; old path when flag off | Unit + dig smoke; flag **off** on dig default until 0d-2 |
 | **0d-2** | Pivot arbiter + `decideGoal` sees routing | Answer + pivot gate table green on dig with flag **on** |
-| **0d-3** | 64-text truth re-score report; decision on dig default | Founder sign-off; then consider dig default `true` |
+| **0d-3** | 80-text truth re-score report; decision on dig default | **DONE 2026-07-31 — 80/80**; dig keeps flag `true` |
 | **Later** | Tiebreaker use of routing-in-goal (if still needed) | Separate PR; never equal-weight veto |
 
 One concern per PR. No bundling with entity store or multi-label.

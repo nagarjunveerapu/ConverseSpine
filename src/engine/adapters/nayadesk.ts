@@ -6,7 +6,8 @@ import {
   type NdMarketIntel,
   type NdProjectSummary,
 } from '../../crm/nayadesk-client.js';
-import type { EngineCrm, EngineData, StoredVisit } from '../ports.js';
+import type { DataResult, EngineCrm, EngineData, StoredVisit } from '../ports.js';
+import { dataAbsent, dataOk, dataTransport } from '../ports.js';
 import type { LocationPoi, LocationPoiCategories, ProjectDetail } from '../types.js';
 import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom, phaseNoteFrom } from '../compose.js';
 import {
@@ -29,6 +30,16 @@ function ctxForProject(
 ): NdContextBundle | null {
   if (!ctx?.project?.project_id || ctx.project.project_id !== projectId) return null;
   return ctx;
+}
+
+/** Phase 0b — 404/204 = catalog absence; everything else is transport. */
+function deskFailureReason(err: unknown): 'absent' | 'transport' {
+  if (err instanceof NayaDeskError && (err.status === 404 || err.status === 204)) return 'absent';
+  return 'transport';
+}
+
+function dataFail(err: unknown, latency_ms: number): DataResult<never> {
+  return deskFailureReason(err) === 'absent' ? dataAbsent(latency_ms) : dataTransport(latency_ms);
 }
 
 async function resolveMarketIntel(
@@ -270,6 +281,8 @@ export function nayadeskData(
     },
 
     async projectDetail(_builderId, nd, projectId) {
+      const t0 = Date.now();
+      let ctxTransport: unknown | undefined;
       try {
         const ctx = await crm.conversationContext(nd);
         const p = ctx.project;
@@ -304,34 +317,38 @@ export function nayadeskData(
           const extras = catalogExtras(p);
           // Project-level RERA wins when set; else first phase with a number.
           const reraNumber = p.rera_number?.trim() || phaseMapped.reraNumber;
-          return {
-            projectId: p.project_id,
-            name: p.name,
-            microMarket: p.micro_market,
-            ...(p.summary ? { summary: p.summary } : {}),
-            ...(reraNumber ? { reraNumber } : {}),
-            // W4 — free-text possession normalised (no double periods/run-ons).
-            ...(p.possession_date ? { possession: formatPossession(formatYearMonth(p.possession_date)) } : {}),
-            ...(p.khata_type ? { khata: p.khata_type } : {}),
-            ...(p.na_status ? { naStatus: p.na_status } : {}),
-            ...(p.ec_status ? { ecStatus: p.ec_status } : {}),
-            ...(p.loan_eligibility ? { loanEligibility: p.loan_eligibility } : {}),
-            // W4 — ONE starting-price truth: min config price (same number the
-            // search rail shows); the configured band is only the fallback.
-            startingPriceDisplay: startingPriceDisplayFrom(
-              configurations.map((u) => u.priceMinInr),
-              p.entry_price_band,
-            ),
-            ...(configurations.length ? { configurations } : {}),
-            ...(phaseNote ? { phaseNote } : {}),
-            ...(phaseMapped.phases?.length ? { phases: phaseMapped.phases } : {}),
-            ...(mediaKinds ? { mediaKinds } : {}),
-            ...(location ? { location } : {}),
-            ...extras,
-            ...(marketIntel ? { marketIntel } : {}),
-          };
+          return dataOk(
+            {
+              projectId: p.project_id,
+              name: p.name,
+              microMarket: p.micro_market,
+              ...(p.summary ? { summary: p.summary } : {}),
+              ...(reraNumber ? { reraNumber } : {}),
+              // W4 — free-text possession normalised (no double periods/run-ons).
+              ...(p.possession_date ? { possession: formatPossession(formatYearMonth(p.possession_date)) } : {}),
+              ...(p.khata_type ? { khata: p.khata_type } : {}),
+              ...(p.na_status ? { naStatus: p.na_status } : {}),
+              ...(p.ec_status ? { ecStatus: p.ec_status } : {}),
+              ...(p.loan_eligibility ? { loanEligibility: p.loan_eligibility } : {}),
+              // W4 — ONE starting-price truth: min config price (same number the
+              // search rail shows); the configured band is only the fallback.
+              startingPriceDisplay: startingPriceDisplayFrom(
+                configurations.map((u) => u.priceMinInr),
+                p.entry_price_band,
+              ),
+              ...(configurations.length ? { configurations } : {}),
+              ...(phaseNote ? { phaseNote } : {}),
+              ...(phaseMapped.phases?.length ? { phases: phaseMapped.phases } : {}),
+              ...(mediaKinds ? { mediaKinds } : {}),
+              ...(location ? { location } : {}),
+              ...extras,
+              ...(marketIntel ? { marketIntel } : {}),
+            },
+            Date.now() - t0,
+          );
         }
-      } catch {
+      } catch (err) {
+        ctxTransport = err;
         /* fall through to getProject */
       }
       try {
@@ -342,32 +359,37 @@ export function nayadeskData(
         const location = mapLocationIntel(p.location_intelligence);
         const marketIntel = await resolveMarketIntel(crm, p.market_intel, p.micro_market);
         const extras = catalogExtras(p);
-        return {
-          projectId: p.project_id,
-          name: p.name,
-          microMarket: p.micro_market,
-          summary: p.summary,
-          reraNumber: p.rera_number,
-          possession: p.possession_date ? formatPossession(formatYearMonth(p.possession_date)) : undefined,
-          projectType: p.project_type,
-          // One price policy: route the band through the shared helper (no config
-          // prices in this fallback branch, so it renders the band) instead of
-          // emitting the raw band directly. Audit P0.2.
-          startingPriceDisplay: startingPriceDisplayFrom([], p.entry_price_band),
-          khata: p.khata_type,
-          naStatus: p.na_status,
-          ecStatus: p.ec_status,
-          loanEligibility: p.loan_eligibility,
-          ...(location ? { location } : {}),
-          ...extras,
-          ...(marketIntel ? { marketIntel } : {}),
-        };
-      } catch {
-        return null;
+        return dataOk(
+          {
+            projectId: p.project_id,
+            name: p.name,
+            microMarket: p.micro_market,
+            summary: p.summary,
+            reraNumber: p.rera_number,
+            possession: p.possession_date ? formatPossession(formatYearMonth(p.possession_date)) : undefined,
+            projectType: p.project_type,
+            // One price policy: route the band through the shared helper (no config
+            // prices in this fallback branch, so it renders the band) instead of
+            // emitting the raw band directly. Audit P0.2.
+            startingPriceDisplay: startingPriceDisplayFrom([], p.entry_price_band),
+            khata: p.khata_type,
+            naStatus: p.na_status,
+            ecStatus: p.ec_status,
+            loanEligibility: p.loan_eligibility,
+            ...(location ? { location } : {}),
+            ...extras,
+            ...(marketIntel ? { marketIntel } : {}),
+          },
+          Date.now() - t0,
+        );
+      } catch (err) {
+        // Prefer the getProject failure; if both failed, report transport.
+        return dataFail(err ?? ctxTransport, Date.now() - t0);
       }
     },
 
     async pricing(_builderId, nd, projectId, unitType) {
+      const t0 = Date.now();
       try {
         const q = await crm.pricingQuote({
           project_id: projectId,
@@ -411,21 +433,28 @@ export function nayadeskData(
             value: startingDisplay.replace(/^from\s+/i, '').trim(),
           });
         }
-        return {
-          projectName: name,
-          components,
-          ...(startingDisplay ? { startingDisplay } : {}),
-          ...(withheld.length ? { withheld } : {}),
-        };
-      } catch {
-        return null;
+        if (!components.length && !startingDisplay) {
+          return dataAbsent(Date.now() - t0);
+        }
+        return dataOk(
+          {
+            projectName: name,
+            components,
+            ...(startingDisplay ? { startingDisplay } : {}),
+            ...(withheld.length ? { withheld } : {}),
+          },
+          Date.now() - t0,
+        );
+      } catch (err) {
+        return dataFail(err, Date.now() - t0);
       }
     },
 
     async landedCost(_builderId, nd, projectId, unitType) {
+      const t0 = Date.now();
       try {
         const r = await crm.landedCost({ project_id: projectId, conversation_id: nd, unit_type: unitType });
-        if (!r?.base_price_display) return null;
+        if (!r?.base_price_display) return dataAbsent(Date.now() - t0);
         const rawCtx = await crm.conversationContext(nd).catch(() => null);
         const ctx = ctxForProject(rawCtx, projectId);
         let projectName = ctx?.project?.name?.trim() || '';
@@ -433,17 +462,20 @@ export function nayadeskData(
           const p = await crm.getProject(projectId).catch(() => null);
           projectName = p?.name?.trim() || projectId;
         }
-        return {
-          projectName,
-          unitType,
-          baseDisplay: r.base_price_display,
-          oneTime: (r.one_time_charges ?? []).map((c) => ({ label: c.label, display: c.amount_display ?? '' })).filter((c) => c.display),
-          recurring: (r.recurring_charges ?? []).map((c) => ({ label: c.label, display: c.amount_display ?? '' })).filter((c) => c.display),
-          totalDisplay: r.total_display ?? '',
-          ...(r.disclaimer ? { disclaimer: r.disclaimer } : {}),
-        };
-      } catch {
-        return null;
+        return dataOk(
+          {
+            projectName,
+            unitType,
+            baseDisplay: r.base_price_display,
+            oneTime: (r.one_time_charges ?? []).map((c) => ({ label: c.label, display: c.amount_display ?? '' })).filter((c) => c.display),
+            recurring: (r.recurring_charges ?? []).map((c) => ({ label: c.label, display: c.amount_display ?? '' })).filter((c) => c.display),
+            totalDisplay: r.total_display ?? '',
+            ...(r.disclaimer ? { disclaimer: r.disclaimer } : {}),
+          },
+          Date.now() - t0,
+        );
+      } catch (err) {
+        return dataFail(err, Date.now() - t0);
       }
     },
 
@@ -475,13 +507,22 @@ export function nayadeskData(
     },
 
     async priceBasis(_builderId, nd, projectId, unitType) {
+      const t0 = Date.now();
+      let lastErr: unknown;
       if (unitType) {
         try {
           const r = await crm.landedCost({ project_id: projectId, conversation_id: nd, unit_type: unitType });
           if (r && typeof r.base_price_low_inr === 'number' && r.base_price_low_inr > 0) {
-            return { priceInr: r.base_price_low_inr, display: r.base_price_display ?? formatInr(r.base_price_low_inr) };
+            return dataOk(
+              {
+                priceInr: r.base_price_low_inr,
+                display: r.base_price_display ?? formatInr(r.base_price_low_inr),
+              },
+              Date.now() - t0,
+            );
           }
-        } catch {
+        } catch (err) {
+          lastErr = err;
           /* fall through */
         }
       }
@@ -493,12 +534,12 @@ export function nayadeskData(
           .filter((p) => p > 0);
         if (prices.length) {
           const p = Math.min(...prices);
-          return { priceInr: p, display: formatInr(p) };
+          return dataOk({ priceInr: p, display: formatInr(p) }, Date.now() - t0);
         }
-      } catch {
-        /* honest null */
+        return dataAbsent(Date.now() - t0);
+      } catch (err) {
+        return dataFail(err ?? lastErr, Date.now() - t0);
       }
-      return null;
     },
 
     async listUnits(projectId) {
@@ -751,15 +792,19 @@ export function nayadeskData(
     },
 
     async faqLookup(projectId, questionKey) {
+      const t0 = Date.now();
       try {
         const r = await crm.faqLookup(projectId, questionKey);
-        if (!r.faq?.approved_answer) return null;
-        return {
-          question: r.faq.canonical_question,
-          answer: r.faq.approved_answer,
-        };
-      } catch {
-        return null;
+        if (!r.faq?.approved_answer) return dataAbsent(Date.now() - t0);
+        return dataOk(
+          {
+            question: r.faq.canonical_question,
+            answer: r.faq.approved_answer,
+          },
+          Date.now() - t0,
+        );
+      } catch (err) {
+        return dataFail(err, Date.now() - t0);
       }
     },
 
@@ -884,6 +929,7 @@ export function nayadeskCrm(
         // the ports discriminated results, a legitimate absence and a
         // transport failure both read false -- which is still strictly more
         // truthful than every row claiming success.
+        // Phase 0a — never fall back to success:true when toolRuns is missing.
         tool_runs:
           entry.toolRuns?.map((t) => ({
             name: t.name,
@@ -894,7 +940,7 @@ export function nayadeskCrm(
           entry.tools.map((name) => ({
             name,
             args_summary: '',
-            success: true,
+            success: false,
             latency_ms: 0,
           })),
       });
@@ -923,12 +969,14 @@ export function nayadeskCrm(
     async postProfileObservations(builderId, buyerPhone, conversationId, observations) {
       await crm.postProfileObservations({ builder_id: builderId, buyer_phone: buyerPhone, conversation_id: conversationId, observations });
     },
-    async postChoiceEvent(builderId, buyerPhone, conversationId, matches, constraints) {
+    async postChoiceEvent(builderId, buyerPhone, conversationId, matches, constraints, engineStatus) {
       await crm.postChoiceEvent({
         builder_id: builderId,
         buyer_phone: buyerPhone,
         conversation_id: conversationId,
-        engine_status: 'ok',
+        // Phase 0a — observed status from the turn (default ok only when caller
+        // did not pass a status; never invent success after a known failure).
+        engine_status: engineStatus ?? 'ok',
         eligible: matches.map((m) => ({ project_id: m.projectId, name: m.name })),
         stretch: [],
         constraints,

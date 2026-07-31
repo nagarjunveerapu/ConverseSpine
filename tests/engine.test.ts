@@ -8,6 +8,7 @@ import { initState, resolvePick } from '../src/engine/state.js';
 import * as discover from '../src/engine/phases/discover.js';
 import { fallbackReply, buildComposeRequest } from '../src/engine/compose.js';
 import { checkGrounding } from '../src/engine/grounding.js';
+import { currentShortlist } from '../src/engine/entity-store.js';
 
 describe('ConverseEngine facts', () => {
   it('parses budget without triggering objection', () => {
@@ -357,7 +358,8 @@ describe('ConverseEngine compose fallback', () => {
       { constraints: {}, alreadyShownSameSet: false, builderName: 'Lokations' },
     );
     const reply = fallbackReply(req);
-    expect(reply).toMatch(/Pricing/i);
+    // Multi-intent join: one subject lead, facet atoms (no "Pricing —" stamp).
+    expect(reply).toMatch(/On \*Ayana\*:/);
     expect(reply).toMatch(/499\/sqft/);
     expect(reply).toMatch(/RERA/);
   });
@@ -397,7 +399,7 @@ describe('Coorg funnel (deterministic)', () => {
     const t2 = await input('sakleshpur, 50 Lakhs');
     expect(t2.debug.goal.kind).toBe('recommend');
     expect(t2.reply).toMatch(/Ayana/i);
-    expect(t2.state.discover.lastOffered.length).toBeGreaterThanOrEqual(1);
+    expect(currentShortlist(t2.state).length).toBeGreaterThanOrEqual(1);
 
     const t2b = await input('also show Virajpet');
     // May recommend Krishnaja or keep board — either way shortlist can grow via discussed.
@@ -422,8 +424,8 @@ describe('Coorg funnel (deterministic)', () => {
     );
     expect(t.state.constraints.location?.toLowerCase()).toMatch(/coorg/);
     // Must not invent Ayana (Sakleshpur) under a Coorg constraint.
-    expect(t.state.discover.lastOffered.map((o) => o.projectId)).not.toContain('ayana');
-    expect(t.state.discover.lastOffered.map((o) => o.projectId)).not.toContain('krishnaja');
+    expect(currentShortlist(t.state).map((o) => o.projectId)).not.toContain('ayana');
+    expect(currentShortlist(t.state).map((o) => o.projectId)).not.toContain('krishnaja');
   });
 
   it('resolveCompareProjectIds binds "both" to last bot listing', () => {
@@ -631,7 +633,7 @@ describe('Sakleshpur funnel (deterministic)', () => {
     const t6 = await say('pricing and legal');
     expect(t6.debug.goal).toMatchObject({ kind: 'answer', topic: 'price' });
     expect(t6.debug.goal.topics).toEqual(['price', 'legal']);
-    expect(t6.reply).toMatch(/Pricing/i);
+    expect(t6.reply).toMatch(/On \*Ayana\*:|Starting from|₹24\.95/);
     expect(t6.reply).toMatch(/RERA/);
 
     const t7 = await say('legal status');

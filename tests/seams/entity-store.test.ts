@@ -12,9 +12,9 @@
  *   NAME-06  focus is a single slot, not a stack, so there is nothing to pop
  *            back to and no way to reach a longer-named sibling
  *
- * 1a writes the store ALONGSIDE the existing fields and changes no behaviour.
- * Nothing reads it yet. 1b migrates consumers family by family, asserting
- * `salience(state)` still matches the old projection at each step; 1c deletes
+ * 1a dual-writes the store. 1b readers start with alternate deixis
+ * (`resolveAlternateProject` / "the other one"). Broader family migration
+ * (compare → visit → chips) still asserts salience vs legacy pools; 1c deletes
  * the old fields once no reader remains.
  *
  * DURABLE SHAPE. `store-kv.ts:28` is `JSON.stringify(state)`, and a Map/Set
@@ -29,10 +29,15 @@ import {
   popFocus,
   salience,
   focusedEntity,
+  resolveAlternateProject,
+  discourseEntities,
+  legacyConversationPoolIds,
+  currentShortlist,
+  discussedList,
   type DiscourseEntityRecord,
 } from '../../src/engine/entity-store.js';
-import { initState } from '../../src/engine/state.js';
-import type { ConversationState } from '../../src/engine/types.js';
+import { initState, recordOffered, releaseToDiscover } from '../../src/engine/state.js';
+import type { ConversationState, Match } from '../../src/engine/types.js';
 
 const ELDORADO = { projectId: 'eldorado', name: 'Brigade Eldorado' };
 const CORNERSTONE = { projectId: 'cornerstone', name: 'Brigade Cornerstone' };
@@ -73,12 +78,51 @@ describe('one salience order, not four pools', () => {
     ]);
   });
 
-  it('popping the stack returns to the previous focus — NAME-06 needs this', () => {
+  it('popping the stack returns to the previous focus and dual-writes legacy focus', () => {
     let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE], 'offered', 1);
     s = pushFocus(s, ELDORADO.projectId, 2);
     s = pushFocus(s, CORNERSTONE.projectId, 3);
     s = popFocus(s);
     expect(names(salience(s))[0]).toBe('Brigade Eldorado');
+    expect(s.focus?.projectId).toBe('eldorado');
+    expect(focusedEntity(s)?.name).toBe('Brigade Eldorado');
+  });
+
+  it('resolveAlternateProject picks the unique non-focus discourse entity', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE], 'offered', 1);
+    s = { ...s, phase: 'focused', focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' } };
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    expect(resolveAlternateProject(s)?.projectId).toBe('cornerstone');
+  });
+
+  it('resolveAlternateProject stays silent when more than one alternate exists', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE, UTOPIA], 'offered', 1);
+    s = { ...s, phase: 'focused', focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' } };
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    // No stack prior → ambiguous among Cornerstone + Utopia.
+    expect(resolveAlternateProject(s)).toBeUndefined();
+  });
+
+  it('resolveAlternateProject uses stack[1] when shortlist is ambiguous', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO, CORNERSTONE, UTOPIA], 'offered', 1);
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    s = pushFocus(s, CORNERSTONE.projectId, 3);
+    s = {
+      ...s,
+      phase: 'focused',
+      focus: { projectId: 'cornerstone', projectName: 'Brigade Cornerstone' },
+    };
+    expect(resolveAlternateProject(s)?.projectId).toBe('eldorado');
+  });
+
+  it('releaseToDiscover clears focusStack so store focus does not outlive legacy focus', () => {
+    let s = recordEntities(initState('c1', 'b'), [ELDORADO], 'offered', 1);
+    s = { ...s, phase: 'focused', focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' } };
+    s = pushFocus(s, ELDORADO.projectId, 2);
+    s = releaseToDiscover(s);
+    expect(s.focus).toBeUndefined();
+    expect(s.focusStack ?? []).toEqual([]);
+    expect(focusedEntity(s)).toBeUndefined();
   });
 
   it('a rejected project ranks last but is never forgotten — a rejection is information', () => {
@@ -119,18 +163,11 @@ describe('1a changes no behaviour — it only writes alongside', () => {
 });
 
 /**
- * THE DUAL-WRITE INVARIANT.
- *
- * LLD open question 6: what asserts `salience(state)` still matches the old
- * projection while both exist? This does. It runs real turns through
- * `runEngineTurn` and checks the store against the legacy fields it shadows.
- *
- * While 1a holds, a divergence here means the dual-write is wrong. Once 1b
- * starts migrating consumers, a divergence means a consumer changed behaviour —
- * which is exactly the signal that phase needs, so this test stays.
+ * Store-authority invariant (post mirror delete).
+ * Legacy lastOffered / discussedProjects are revive-only — empty after writes.
  */
-describe('dual-write invariant: the store agrees with the fields it shadows', () => {
-  it('holds across a real search → focus → switch journey', async () => {
+describe('store authority: shortlistIds + entities own the board', () => {
+  it('holds across a real search → focus journey', async () => {
     const { runEngineTurn } = await import('../../src/engine/turn.js');
     const { fakeDeps } = await import('../fakes.js');
     const deps = fakeDeps();
@@ -142,29 +179,58 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
     const focused = await say('give me details on the project');
     const s = focused.state;
 
-    // Everything the legacy fields know, the store knows.
-    for (const o of s.discover.lastOffered) {
-      expect(s.entities?.[o.projectId], `offered ${o.projectId} missing from store`).toBeDefined();
-      expect(s.entities![o.projectId]!.name).toBe(o.name);
-    }
-    for (const d of s.discover.discussedProjects ?? []) {
-      expect(s.entities?.[d.projectId], `discussed ${d.projectId} missing from store`).toBeDefined();
+    expect(s.discover.lastOffered).toEqual([]);
+    expect(s.shortlistIds?.length).toBeGreaterThan(0);
+    for (const id of s.shortlistIds ?? []) {
+      expect(s.entities?.[id], `shortlist ${id} missing from store`).toBeDefined();
     }
     if (s.focus) {
       expect(s.focusStack?.[0]).toBe(s.focus.projectId);
       expect(focusedEntity(s)?.name).toBe(s.focus.projectName);
     }
-    // And the store never invents an entity the conversation never saw.
-    const known = new Set([
-      ...s.discover.lastOffered.map((o) => o.projectId),
-      ...(s.discover.discussedProjects ?? []).map((d) => d.projectId),
-      ...(s.focus ? [s.focus.projectId] : []),
-    ]);
-    for (const id of Object.keys(s.entities ?? {})) expect(known.has(id)).toBe(true);
+    const discourseIds = new Set(discourseEntities(s).map((e) => e.projectId));
+    for (const id of legacyConversationPoolIds(s)) {
+      expect(discourseIds.has(id), `legacy id ${id} missing from discourseEntities`).toBe(true);
+    }
+  });
+
+  it('1c: shortlistIds + entity card payload are the shortlist authority', () => {
+    const matches: Match[] = [
+      {
+        projectId: 'eldorado',
+        name: 'Brigade Eldorado',
+        microMarket: 'North Bangalore',
+        startingPriceInr: 6_500_000,
+        startingPriceDisplay: '₹65 L',
+        matchReasons: [],
+        tradeoffNote: 'near airport',
+      },
+      {
+        projectId: 'sanctuary',
+        name: 'Brigade Sanctuary',
+        microMarket: 'Sarjapur Road',
+        startingPriceInr: 7_900_000,
+        startingPriceDisplay: '₹79 L',
+        matchReasons: [],
+      },
+    ];
+    let s = recordOffered(initState('c1c', 'b'), matches);
+    expect(s.shortlistIds).toEqual(['eldorado', 'sanctuary']);
+    expect(currentShortlist(s).map((o) => o.projectId)).toEqual(['eldorado', 'sanctuary']);
+    expect(currentShortlist(s)[0]?.tradeoffNote).toBe('near airport');
+    // Mirrors are no longer write-through.
+    expect(s.discover.lastOffered).toEqual([]);
+
+    // New shortlist replaces offered role — Sanctuary drops off the board but
+    // can remain as discussed later without inventing a board card.
+    s = recordOffered(s, [matches[0]!]);
+    expect(s.shortlistIds).toEqual(['eldorado']);
+    expect(currentShortlist(s)).toHaveLength(1);
+    expect(s.entities?.sanctuary?.roles.includes('offered')).toBe(false);
   });
 
   it('keeps a project the legacy cap of 6 would have dropped', async () => {
-    // recordDiscussed slices to the last 6. The store does not, because a
+    // Legacy discussedProjects capped at 6; the store does not, because a
     // dropped entity is how a project the buyer engaged with becomes
     // unreachable to every later resolver.
     const { recordDiscussed } = await import('../../src/engine/state.js');
@@ -172,7 +238,8 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
     for (let i = 0; i < 8; i++) {
       s = recordDiscussed(s, [{ projectId: `p${i}`, name: `Project ${i}` }]);
     }
-    expect(s.discover.discussedProjects).toHaveLength(6);
+    expect(s.discover.discussedProjects ?? []).toEqual([]);
+    expect(discussedList(s)).toHaveLength(8);
     expect(Object.keys(s.entities ?? {})).toHaveLength(8);
   });
 });

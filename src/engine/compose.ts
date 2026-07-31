@@ -36,6 +36,8 @@ function relaxedLead(relaxed: readonly RelaxedDimension[] | undefined): string {
   return `I couldn't match ${phrase} — here's what we do have`;
 }
 import { isInventoryAsk } from './facts.js';
+import { resolveFaqQuestionKeys } from './faq-keys.js';
+import { answerRequirements } from './answer-contract.js';
 
 const PARK_TOPIC_LABEL: Partial<Record<AnswerTopic, string>> = {
   price: 'pricing',
@@ -59,6 +61,69 @@ function parkContinuation(parked: readonly AnswerTopic[] | undefined): string {
       ? labels[0]!
       : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]!}`;
   return ` I can cover ${phrase} next if you want.`;
+}
+
+/** Buyer asked about loan / banks / LTV — not a generic legal dump. */
+function isLoanEligibilityAsk(text: string | undefined): boolean {
+  if (!text?.trim()) return false;
+  if (answerRequirements(text).includes('loan_eligibility')) return true;
+  const keys = resolveFaqQuestionKeys(text);
+  return keys.includes('banks') || keys.includes('loan_eligibility');
+}
+
+/** Buyer asked about possession / handover timing. */
+function isPossessionAsk(text: string | undefined): boolean {
+  if (!text?.trim()) return false;
+  return resolveFaqQuestionKeys(text).includes('possession');
+}
+
+/**
+ * End-of-reply closer — contextual when we can, lightly rotated otherwise.
+ * Avoids the same "Want anything else… or a visit?" after every turn.
+ */
+function closingCta(opts: {
+  buyerText?: string;
+  topics?: readonly AnswerTopic[];
+  projectName?: string;
+  park?: string;
+}): string {
+  if (opts.park) return opts.park;
+  const t = (opts.buyerText ?? '').toLowerCase();
+  const topics = opts.topics ?? [];
+  const pname = opts.projectName || 'this project';
+
+  if (isLoanEligibilityAsk(opts.buyerText)) {
+    return ' I can also break down the payment schedule if you are weighing affordability.';
+  }
+  if (isPossessionAsk(opts.buyerText)) {
+    return ' Want the configurations that deliver in that window, or pricing next?';
+  }
+  if (topics.includes('price') && topics.includes('location')) {
+    return ' If you are comparing projects, I can also explain how this differs from nearby options.';
+  }
+  if (topics.includes('price') || /\b(?:price|pricing|cost|how much)\b/.test(t)) {
+    return ' Would it help if I estimated the total cost for a specific BHK?';
+  }
+  if (topics.includes('availability') || /\b(?:config|bhk|inventory|sizes?)\b/.test(t)) {
+    return ' Want pricing on a specific size, or shall I check live unit availability?';
+  }
+  if (topics.includes('location') || /\b(?:location|connect|nearby|metro|airport)\b/.test(t)) {
+    return ' I can also share pricing or legal approvals next if that helps the comparison.';
+  }
+  if (topics.includes('legal') || /\b(?:rera|khata|legal)\b/.test(t)) {
+    return ' Want loan eligibility, pricing, or a site visit next?';
+  }
+
+  const pool = [
+    ` Anything else you want to dig into on *${pname}*?`,
+    ` I can also compare this with nearby options if that helps.`,
+    ` I can go deeper on pricing, legal, or a visit whenever you are ready.`,
+    ` Want the payment schedule next, or a walkthrough of configs?`,
+  ];
+  const seed = opts.buyerText || topics.join(',') || pname;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i) * (i + 1)) % 997;
+  return pool[h % pool.length]!;
 }
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
@@ -209,6 +274,11 @@ function describeGoal(g: TurnGoal): string {
       return 'recommend matching projects from EVIDENCE';
     case 'clarify_project_pick':
       return 'ask which shortlisted project they want details on — do not invent a pick';
+    case 'clarify_discourse':
+      return (
+        'you cannot resolve their deixis/compare honestly from the board. Say so in one short line ' +
+        'and ask ONE clarifying question — do NOT recycle a project overview'
+      );
     case 'shortlist_answer':
       return `answer their ${g.topic} question for EVERY shortlisted project from EVIDENCE — never ask which one to open`;
     case 'advance':
@@ -426,13 +496,30 @@ export function fallbackReply(req: ComposeRequest): string {
           context.constraints.bhk,
         );
         const places = joinPlaceLabels(markets) || 'nearby areas I cover';
+        const exact = ev.localityWiden.exactFitName;
+        if (exact) {
+          // wantsMore after a singleton — list the nearby matches as a widen, not a Sakleshpur fit.
+          return `${pre}I've only got *${exact}* in *${ev.localityWiden.asked}* for ${noun}. Nearby: ${list}.${tail} Want details on any of these?`;
+        }
         return `${pre}I don't have ${noun} in *${ev.localityWiden.asked}* — I do have ${noun} in ${places}. Want me to show those?`;
       }
       // Some part of the ask had to be relaxed for this list to exist, so it is
       // NOT a fit — say which dimension gave. Dimensions only, never the buyer's
       // raw values: a location capture may be dialogue noise.
       const lead = relaxedLead(ev.relaxed);
-      return `${pre}${lead}: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
+      let body = `${pre}${lead}: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
+      // Singleton exact fit — soft nearby CTA (board stays exact until they opt in).
+      if (ev.nearbyOffer?.asked && ev.nearbyOffer.nearbyAreas.length && ms.length === 1) {
+        const noun = inventoryNoun(
+          context.constraints.propertyType,
+          context.constraints.bhk,
+        );
+        const places =
+          joinPlaceLabels(collapseCoverageMarkets(ev.nearbyOffer.nearbyAreas, 3)) ||
+          'nearby areas I cover';
+        body += ` *${ms[0]!.name}* is the only match I have in *${ev.nearbyOffer.asked}* for ${noun}. I also have ${noun} nearby in ${places} — want those too?`;
+      }
+      return body;
     }
     case 'clarify_project_pick': {
       const ms = (ev.matches ?? []).slice(0, 3);
@@ -441,6 +528,26 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const list = ms.map((m, i) => `${i + 1}) *${m.name}*`).join(', ');
       return `Which one should I open for details — ${list}?`;
+    }
+    case 'clarify_discourse': {
+      const name = goal.projectName;
+      switch (goal.reason) {
+        case 'need_pair_to_compare':
+          return `I've only opened *${name}* so far — name another project to compare, or I can pull a second option from search.`;
+        case 'no_prior_focus':
+          return `We're already on *${name}* — there's no earlier project to go back to. Want me to find another option?`;
+        case 'ambiguous_alternate': {
+          const alts = (goal.alternateNames ?? []).filter(Boolean);
+          if (alts.length >= 2) {
+            const list = alts.map((n, i) => `${i + 1}) *${n}*`).join(', ');
+            return `I've got a few in play besides *${name}* — which one did you mean: ${list}?`;
+          }
+          return `Which of the other projects on our list did you mean — or stay with *${name}*?`;
+        }
+        case 'no_alternate':
+        default:
+          return `I've only got *${name}* on our list so far — want me to find another to compare, or dig deeper into *${name}*?`;
+      }
     }
     case 'shortlist_answer': {
       const ms = (ev.matches ?? []).slice(0, 3);
@@ -546,17 +653,32 @@ export function fallbackReply(req: ComposeRequest): string {
             k === 'operator_model' ||
             k === 'visit_logistics',
         ) ?? false;
+      // Possession / loan facet asks must never be swallowed by the overview card
+      // (configs + price first) — answer the asked atom, then optional follow-ups.
+      if (isPossessionAsk(context.buyerText) && ev.detail?.possession && !ev.detail.faqs?.length) {
+        const pname = ev.detail.name || context.focusProjectName || 'this project';
+        return `Possession at *${pname}* is ${formatPossession(ev.detail.possession)}.${closingCta({
+          buyerText: context.buyerText,
+          topics: ['availability'],
+          projectName: pname,
+        })}`;
+      }
       if (
         topics[0] === 'overview' &&
         ev.detail &&
         !ev.detail.faqs?.length &&
         !ev.faqMiss?.taught &&
-        !advisoryRequired
+        !advisoryRequired &&
+        !isPossessionAsk(context.buyerText) &&
+        !isLoanEligibilityAsk(context.buyerText)
       ) {
         return overviewCard(ev.detail);
       }
 
       const chunks: string[] = [];
+      // Phase 0b / dialogue-state — multi-intent join: one subject lead, facet
+      // atoms without re-stamping the project name on every line.
+      const multiTopic = topics.length > 1;
 
       if (ev.detail) {
         for (const line of advisoryFactLines(ev.detail, goal.requires, context.buyerText ?? '')) {
@@ -574,25 +696,29 @@ export function fallbackReply(req: ComposeRequest): string {
         const asked = componentsForAsk(context.buyerText ?? '', p.components);
         const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 4);
         const parts = shown.map(formatPriceComponent).join(', ');
-        chunks.push(`*Pricing — ${p.projectName}:* ${parts || formatStartingPrice(p.startingDisplay) || 'on file'}`);
+        const atom = parts || formatStartingPrice(p.startingDisplay) || 'on file';
+        chunks.push(multiTopic ? atom : `*Pricing — ${p.projectName}:* ${atom}`);
       }
       if (topics.includes('price') && ev.landedCost && !suppressPrice) {
-        chunks.push(landedCostLine(ev.landedCost));
+        chunks.push(landedCostLine(ev.landedCost, { omitProjectName: multiTopic }));
       }
       if (topics.includes('property_type') && ev.detail?.projectType) {
-        chunks.push(projectTypeLine(ev.detail));
+        chunks.push(
+          multiTopic
+            ? `a *${humanizeProjectType(ev.detail.projectType)}* in ${ev.detail.microMarket || 'this market'}`
+            : projectTypeLine(ev.detail),
+        );
       }
       // AB-8 — media must join the multi-topic chunk path. Primary topic is often
       // price (TOPIC_ORDER), so the single-topic `goal.topic === 'media'` branch
       // never runs for "brochure and starting price" even when mediaShare succeeded.
       if (topics.includes('media') && ev.media) {
-        chunks.push(mediaShareLine(ev.media, context.focusProjectName));
+        chunks.push(mediaShareLine(ev.media, context.focusProjectName, { omitProjectName: multiTopic }));
       }
       // AB-8 — in a MULTI-topic ask the FAQ body carries the OTHER atom(s), so the
       // legal snapshot (RERA/khata) must still render rather than be swallowed by a
       // non-legal FAQ. "RERA and possession" was dropping RERA because a possession
       // FAQ was present. Single-topic behaviour is unchanged.
-      const multiTopic = topics.length > 1;
       const faqPresent = !!ev.detail?.faqs?.length;
       // AB-8b — render the legal SNAPSHOT (RERA/khata) when no FAQ owns it, OR it's
       // a multi-topic ask, OR the buyer named a snapshot atom (RERA/khata/EC) that
@@ -603,21 +729,32 @@ export function fallbackReply(req: ComposeRequest): string {
         topics.includes('legal') &&
         !!ev.detail &&
         asksLegalSnapshotAtom(context.buyerText, ev.detail!.faqs ?? []);
+      // Loan asks own the legal topic — FAQ / loanEligibility lead; do not open
+      // with a khata/RERA snapshot that answers the wrong abstraction.
+      const loanAsk = isLoanEligibilityAsk(context.buyerText);
       const legalSnapshotRendered =
-        topics.includes('legal') && !!ev.detail && (!faqPresent || multiTopic || snapshotAtomAsked);
+        topics.includes('legal') &&
+        !!ev.detail &&
+        (!faqPresent || multiTopic || snapshotAtomAsked) &&
+        !(loanAsk && !snapshotAtomAsked);
       if (legalSnapshotRendered) {
         // When the buyer named a TITLE atom (RERA/khata/EC) and a separate FAQ carries
         // the other legal atom (loan), render the title snapshot ONLY — focusedLegalLine
         // would pick the loan facet and drop RERA. Snapshot=RERA/khata, FAQ body=loan,
         // so both survive. Otherwise keep the facet-routed line (EC/banks/loan / full).
-        chunks.push(
-          snapshotAtomAsked
-            ? legalTitleSnapshot(ev.detail!, ev.detail!.faqs ?? [])
-            : focusedLegalLine(ev.detail!, context.buyerText, context.disclosedFacts),
-        );
+        const legalLine = snapshotAtomAsked
+          ? legalTitleSnapshot(ev.detail!, ev.detail!.faqs ?? [])
+          : focusedLegalLine(ev.detail!, context.buyerText, context.disclosedFacts);
+        const legalAtom = multiTopic ? stripProjectNameLead(legalLine) : legalLine;
+        // Multi-topic + FAQ already owns the legal atom — skip empty "on file" filler.
+        const emptyLegalFiller =
+          multiTopic &&
+          faqPresent &&
+          /^legal details on file with our team\.?$/i.test(legalAtom);
+        if (!emptyLegalFiller) chunks.push(legalAtom);
       }
       if (topics.includes('location') && ev.location) {
-        chunks.push(locationSnapshotLine(ev.location));
+        chunks.push(locationSnapshotLine(ev.location, { omitProjectName: multiTopic }));
       }
       // AB-8b — a structural atom the buyer explicitly named (configs → units,
       // EMI → schedule) must render as its OWN chunk when a FAQ body is also present,
@@ -626,7 +763,9 @@ export function fallbackReply(req: ComposeRequest): string {
       // and stays additive below. When no FAQ is present the richer single-topic
       // handlers further down own these — unchanged.
       if (faqPresent && topics.includes('availability') && ev.units?.length) {
-        chunks.push(availabilityChunk(ev, context.buyerText ?? '', context.focusProjectName));
+        chunks.push(
+          summarizeUnitConfigs(ev.units, multiTopic ? undefined : context.focusProjectName),
+        );
       }
       if (faqPresent && topics.includes('emi') && ev.emi) {
         chunks.push(emiSnapshotLine(ev.emi));
@@ -648,22 +787,42 @@ export function fallbackReply(req: ComposeRequest): string {
         chunks.push(emiSnapshotLine(ev.emi));
       }
       const park = parkContinuation(goal.parkedTopics);
+      const subjectName =
+        context.focusProjectName ||
+        ev.detail?.name ||
+        ev.pricing?.projectName ||
+        ev.landedCost?.projectName ||
+        'this project';
+      const cta = (extra?: { projectName?: string }) =>
+        closingCta({
+          buyerText: context.buyerText,
+          topics,
+          projectName: extra?.projectName ?? subjectName,
+          park,
+        });
+      if (multiTopic && chunks.length >= 1) {
+        const body = chunks
+          .map((c) => c.replace(/[.。]\s*$/, '').trim())
+          .filter(Boolean)
+          .join('; ');
+        return `On *${subjectName}*: ${body}.${cta()}`;
+      }
       if (chunks.length > 1) {
-        return `${chunks.join('\n\n')}.${park || ' Want the full breakdown or a site visit?'}`;
+        return `${chunks.join('\n\n')}.${cta()}`;
       }
       if (chunks.length === 1) {
-        return `${chunks[0]}.${park || ` Want anything else on *${ev.detail?.name ?? ev.pricing?.projectName ?? 'this project'}*, or a visit?`}`;
+        return `${chunks[0]}.${cta()}`;
       }
 
       if (goal.topic === 'price' && ev.landedCost && !suppressPrice) {
-        return `${landedCostLine(ev.landedCost)}. Want anything else on *${ev.landedCost.projectName}*, or a visit?`;
+        return `${landedCostLine(ev.landedCost)}.${cta({ projectName: ev.landedCost.projectName })}`;
       }
       if (goal.topic === 'price' && ev.pricing && !suppressPrice) {
         const p = ev.pricing;
         const asked = componentsForAsk(context.buyerText ?? '', p.components);
         const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 3);
         const parts = shown.map(formatPriceComponent).join(', ');
-        return `For *${p.projectName}*: ${parts || formatStartingPrice(p.startingDisplay) || 'pricing on file'}. Want the full breakdown or a visit?`;
+        return `For *${p.projectName}*: ${parts || formatStartingPrice(p.startingDisplay) || 'pricing on file'}.${cta({ projectName: p.projectName })}`;
       }
       if (goal.topic === 'property_type' && ev.detail?.projectType) {
         return `${projectTypeLine(ev.detail)} Want pricing, plot sizes, or a visit?`;
@@ -673,10 +832,31 @@ export function fallbackReply(req: ComposeRequest): string {
         return advice ? `${advice}\n\n${ev.compare.tableText.trim()}` : ev.compare.tableText.trim();
       }
       if (goal.topic === 'legal' && ev.detail) {
-        return `${focusedLegalLine(ev.detail, context.buyerText, context.disclosedFacts)}. I can share the full approval checklist on a call or at your site visit.`;
+        // Loan asks must lead with loan — never open on khata/RERA snapshot.
+        if (isLoanEligibilityAsk(context.buyerText)) {
+          const loanFaq = (ev.detail.faqs ?? []).filter((f) =>
+            /^(?:banks|loan_eligibility|loan)$/i.test(f.questionKey),
+          );
+          const loanBody = loanFaq
+            .map((f) => f.answer.trim())
+            .filter(Boolean)
+            .join(' ');
+          const lead = loanBody
+            ? loanBody
+            : ev.detail.loanEligibility
+              ? `Yes. Major banks finance this project — ${ev.detail.loanEligibility}`
+              : '';
+          if (lead) {
+            const approvalHint = ev.detail.khata
+              ? ` Approvals on file include ${ev.detail.khata}.`
+              : '';
+            return `${lead}${approvalHint}.${cta({ projectName: ev.detail.name })}`;
+          }
+        }
+        return `${focusedLegalLine(ev.detail, context.buyerText, context.disclosedFacts)}.${cta({ projectName: ev.detail.name })}`;
       }
       if (goal.topic === 'location' && ev.location) {
-        return `${locationSnapshotLine(ev.location)}. Want pricing, legal details, or a visit?`;
+        return `${locationSnapshotLine(ev.location)}.${cta()}`;
       }
       if (goal.topic === 'media' && ev.media) {
         return mediaShareLine(ev.media, context.focusProjectName);
@@ -689,16 +869,14 @@ export function fallbackReply(req: ComposeRequest): string {
           .filter(Boolean)
           .join(' ');
         if (body) {
-          return `${body} Want anything else on *${pname}*, or a visit?`;
+          return `${body}.${cta({ projectName: pname })}`;
         }
       }
       if (goal.topic === 'emi' && ev.emi) {
-        return `${emiSnapshotLine(ev.emi)}. Want the full cost breakdown or a visit?`;
+        return `${emiSnapshotLine(ev.emi)}.${cta()}`;
       }
       if (goal.topic === 'availability' && ev.units?.length) {
         const pname = ev.detail?.name ?? context.focusProjectName;
-        const lead = pname ? `For *${pname}*: ` : '';
-        const list = ev.units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
         // AB-1 — an inventory ask ("is there any inventory left?") wants the
         // availability FACT. A config card list without it is a non-answer.
         if (isInventoryAsk(context.buyerText ?? '')) {
@@ -708,24 +886,35 @@ export function fallbackReply(req: ComposeRequest): string {
               .slice(0, 4)
               .map((u) => `${u.holdableUnits} × ${u.unitType}`)
               .join(', ');
-            return `Yes — still open${pname ? ` at *${pname}*` : ''}: ${lines}. Want me to hold one, or share pricing?`;
+            return `Yes — still open${pname ? ` at *${pname}*` : ''}: ${lines}.${cta({ projectName: pname })}`;
           }
           // All-zero counts can mean "not tracked" as much as "sold out" — Desk
           // sends 0 for every config when a project has no unit rows at all.
           // Never claim sold out without positive evidence; route the exact
           // count to the team instead.
-          return `${lead}${list} are the configurations on offer — I don't have live unit-level counts here, our team confirms exact availability. Want me to check on a specific type?`;
+          return `${summarizeUnitConfigs(ev.units, pname)} Exact unit-level counts are confirmed by our team.${cta({ projectName: pname })}`;
         }
-        return `${lead}Available configurations: ${list}. Want pricing on a specific size?`;
+        return `${summarizeUnitConfigs(ev.units, pname)}.${cta({ projectName: pname })}`;
       }
       // SA-3: availability with empty units — honest empty, not generic overview.
       if (goal.topic === 'availability') {
         const pname = ev.detail?.name ?? context.focusProjectName ?? 'this project';
         return `Configuration details for *${pname}* aren't published yet — I can share pricing or book a visit to see options on site.`;
       }
+      // Possession ask — answer possession first; never dump the overview card
+      // (configs + price) ahead of the timeline the buyer asked for.
+      if (isPossessionAsk(context.buyerText) && ev.detail?.possession) {
+        const pname = ev.detail.name || context.focusProjectName || 'this project';
+        const pos = formatPossession(ev.detail.possession);
+        return `Possession at *${pname}* is ${pos}.${cta({ projectName: pname })}`;
+      }
       if (ev.faqMiss?.keys.length) {
         const pname = context.focusProjectName || 'this project';
-        return `I don't have that detail on file for *${pname}* yet — I can share pricing, legal status, or set up a visit instead.`;
+        if (ev.faqMiss.keys.includes('possession') && ev.detail?.possession) {
+          const pos = formatPossession(ev.detail.possession);
+          return `Possession at *${pname}* is ${pos}.${cta({ projectName: pname })}`;
+        }
+        return `I don't have that detail on file for *${pname}* yet.${cta({ projectName: pname })}`;
       }
       if (ev.detail) {
         // Overview fallthrough — the founder-spec card: sizes, one price
@@ -885,21 +1074,56 @@ function legalTitleSnapshot(
  * as a bare chunk (the assembly appends its own follow-up). Mirrors the single-topic
  * availability logic so a co-fetched FAQ can't shadow the configs the buyer asked for.
  */
-function availabilityChunk(ev: EvidenceSet, buyerText: string, focusName?: string): string {
-  const units = ev.units ?? [];
-  const pname = ev.detail?.name ?? focusName;
-  const lead = pname ? `For *${pname}*: ` : '';
-  const list = units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
-  if (isInventoryAsk(buyerText)) {
-    const tracked = units.filter((u) => (u.holdableUnits ?? 0) > 0);
-    if (tracked.length) {
-      const lines = tracked.slice(0, 4).map((u) => `${u.holdableUnits} × ${u.unitType}`).join(', ');
-      return `Still open${pname ? ` at *${pname}*` : ''}: ${lines}`;
-    }
-    // 0/absent counts are unknown, never "sold out" — route exact counts to the team.
-    return `${lead}${list} are the configurations on offer — our team confirms exact unit-level availability`;
+/**
+ * Summary-first config copy — group by BHK family before listing variants.
+ * Avoids a flat database dump of every row.
+ */
+export function summarizeUnitConfigs(
+  units: ReadonlyArray<{
+    unitType: string;
+    priceDisplay: string;
+    sizeDisplay?: string;
+    holdableUnits?: number;
+  }>,
+  projectName?: string,
+): string {
+  const lead = projectName ? `For *${projectName}*: ` : '';
+  if (!units.length) return `${lead}configurations aren't published yet`;
+
+  type UnitRow = (typeof units)[number];
+  const byFamily = new Map<string, UnitRow[]>();
+  for (const u of units) {
+    const m = /(\d+)\s*bhk/i.exec(u.unitType);
+    const family = m ? `${m[1]} BHK` : u.unitType.trim() || 'Unit';
+    const list = byFamily.get(family) ?? [];
+    list.push(u);
+    byFamily.set(family, list);
   }
-  return `${lead}Available configurations: ${list}`;
+
+  const families = [...byFamily.entries()];
+  if (families.length === 1 && families[0]![1].length === 1) {
+    const u = families[0]![1][0]!;
+    return `${lead}${formatUnitConfigLine(u)}`;
+  }
+
+  const head =
+    families.length === 1
+      ? `Yes — ${families[0]![1].length} ${families[0]![0]} variant${families[0]![1].length > 1 ? 's' : ''} on file`
+      : `Yes — ${families.length} configuration families on file (${families.map(([f]) => f).join(', ')})`;
+
+  const lines = families.slice(0, 4).map(([family, rows]) => {
+    const sizes = rows
+      .map((r) => r.sizeDisplay)
+      .filter(Boolean)
+      .slice(0, 2);
+    const sizeBit = sizes.length ? ` ranges from ${sizes.join(' / ')}` : '';
+    if (rows.length === 1) {
+      return `${family}${sizeBit || ` — ${formatUnitConfigLine(rows[0]!).replace(rows[0]!.unitType, '').trim()}`}`;
+    }
+    return `${family}: ${rows.length} variants${sizeBit}`;
+  });
+
+  return `${lead}${head}. ${lines.join('. ')}. Exact availability depends on live inventory`;
 }
 
 function projectTypeLine(d: import('./types.js').ProjectDetail): string {
@@ -972,20 +1196,38 @@ export function typeComparisonReply(types: readonly string[], investment: boolea
   return head + tail;
 }
 
+/** Phase 0b multi-intent — drop per-atom project-name headers under the shared lead. */
+function stripProjectNameLead(line: string): string {
+  return line
+    .replace(/^For \*[^*]+\*,\s*/i, '')
+    .replace(/^Regulatory snapshot for \*[^*]+\*:\s*/i, '')
+    .replace(
+      /^Legal and title details for \*[^*]+\* are on file with our team\.?$/i,
+      'legal details on file with our team',
+    )
+    .trim();
+}
+
 /** Buyer-safe media line — shared by single-topic and AB-8 multi-topic paths. */
 function mediaShareLine(
   media: NonNullable<EvidenceSet['media']>,
   focusProjectName?: string,
+  opts?: { omitProjectName?: boolean },
 ): string {
+  const asset = media.title ?? humanizeAsset(media.assetKind);
   if (media.allowed && media.cdnUrl) {
+    if (opts?.omitProjectName) return `here's the ${asset}: ${media.cdnUrl}`;
     const pname = media.projectName || focusProjectName || 'this project';
-    return `Here's the ${media.title ?? humanizeAsset(media.assetKind)} for *${pname}*: ${media.cdnUrl}`;
+    return `Here's the ${asset} for *${pname}*: ${media.cdnUrl}`;
   }
   const pname = media.projectName || focusProjectName || 'this project';
   // media.redirectHint / reason are INTERNAL composer instructions — Desk
   // authors them for the RM ("offer site visit; do not quote this number"),
   // never as buyer copy (see NayaDesk disclosure.ts). Translate the miss into
   // buyer-safe copy; never recite the hint.
+  if (opts?.omitProjectName) {
+    return `I don't have the ${humanizeAsset(media.assetKind)} on file yet — I can walk you through the details here or share it at your site visit`;
+  }
   return `I don't have the ${humanizeAsset(media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
 }
 
@@ -1071,11 +1313,14 @@ function locationCategoryFacts(
 }
 
 /** Exported for tests. */
-export function locationSnapshotLine(l: import('./types.js').LocationEvidence): string {
+export function locationSnapshotLine(
+  l: import('./types.js').LocationEvidence,
+  opts?: { omitProjectName?: boolean },
+): string {
   const pname = (l.projectName || 'This project').trim();
   const mm = (l.microMarket ?? '').trim();
   const bits: string[] = [];
-  if (mm) bits.push(`*${pname}* is in ${mm}`);
+  if (mm) bits.push(opts?.omitProjectName ? `located in ${mm}` : `*${pname}* is in ${mm}`);
   const asked = l.askedCategories ?? [];
   if (asked.length) {
     // The buyer asked about specific POI categories — answer those with named,
@@ -1085,7 +1330,10 @@ export function locationSnapshotLine(l: import('./types.js').LocationEvidence): 
       bits.push(`${f.label} nearby: ${f.pois.map(poiFactLine).join('; ')}`);
     }
     if (askedFacts.length) {
-      return bits.length ? bits.join('. ') : `*${pname}*: ${askedFacts[0]!.label} on file.`;
+      if (bits.length) return bits.join('. ');
+      return opts?.omitProjectName
+        ? `${askedFacts[0]!.label} on file`
+        : `*${pname}*: ${askedFacts[0]!.label} on file.`;
     }
   }
   if (l.microMarketOverview) bits.push(l.microMarketOverview);
@@ -1094,7 +1342,9 @@ export function locationSnapshotLine(l: import('./types.js').LocationEvidence): 
   if (l.driveTimes?.length) bits.push(l.driveTimes.slice(0, 2).join('; '));
   // Wave 3 — never emit "*X* is in ." when Desk left micro_market blank; honest miss.
   if (!bits.length) {
-    return `I don't have connectivity / location details on file for *${pname}* yet`;
+    return opts?.omitProjectName
+      ? `I don't have connectivity / location details on file yet`
+      : `I don't have connectivity / location details on file for *${pname}* yet`;
   }
   return bits.join('. ');
 }
@@ -1114,12 +1364,17 @@ function emiSnapshotLine(e: import('./types.js').EmiEvidence): string {
   return `Indicative EMI: *${e.emiFormatted}/month* on a ${ltv}% loan (${e.principalFormatted} principal${down}) against ${e.basisFormatted} project price, at ${e.ratePercent}% for ${e.tenureYears} years`;
 }
 
-function landedCostLine(lc: import('./types.js').LandedCostEvidence): string {
+function landedCostLine(
+  lc: import('./types.js').LandedCostEvidence,
+  opts?: { omitProjectName?: boolean },
+): string {
   const oneTime = lc.oneTime
     .slice(0, 3)
     .map((c) => `${c.label}: ${c.display}`)
     .join('; ');
-  const base = `*Cost breakdown — ${lc.projectName} (${lc.unitType}):* base ${lc.baseDisplay}`;
+  const base = opts?.omitProjectName
+    ? `cost breakdown (${lc.unitType}): base ${lc.baseDisplay}`
+    : `*Cost breakdown — ${lc.projectName} (${lc.unitType}):* base ${lc.baseDisplay}`;
   const charges = oneTime ? `; ${oneTime}` : '';
   const total = lc.totalDisplay ? `; all-in ~${lc.totalDisplay}` : '';
   return `${base}${charges}${total}`;
@@ -1338,7 +1593,17 @@ export function overviewCard(d: NonNullable<EvidenceSet['detail']>): string {
   const facts = bits.length ? ` ${bits.join(' · ')}.` : '';
   const phase = d.phaseNote ? ` ${d.phaseNote}.` : '';
   const blurb = summaryBlurb(d.summary);
-  return `*${d.name}*${where}.${facts}${phase}${blurb} Want pricing details, unit configurations, or the legal & RERA picture?`;
+  // Overview keeps a short probing question (founder-spec card), but rotates
+  // the ask so every project card does not end on the same visit prompt.
+  const overviewClosers = [
+    ' Want pricing details, unit configurations, or the legal & RERA picture?',
+    ' Curious about loan eligibility, or shall I walk through the configs?',
+    ' Want a cost breakdown next, or how this compares nearby?',
+  ];
+  let h = 0;
+  const seed = d.name + (d.microMarket ?? '');
+  for (let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i) * (i + 1)) % 997;
+  return `*${d.name}*${where}.${facts}${phase}${blurb}${overviewClosers[h % overviewClosers.length]}`;
 }
 
 /**
