@@ -824,6 +824,16 @@ export function nayadeskCrm(
         await crm.applyStateWrites(conversationId, [{ op: 'set_slot', slot: 'location', value: facts.location_pref }]);
       }
     },
+    async setPendingAction(conversationId, pending) {
+      await crm.applyStateWrites(conversationId, [
+        {
+          op: 'set_pending_action',
+          pending: pending
+            ? { kind: pending.kind, payload: pending.payload }
+            : null,
+        },
+      ]);
+    },
     async commitProject(conversationId, projectId) {
       await crm.commitProject(conversationId, projectId);
     },

@@ -17,6 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:scenarios": "tsx scripts/run-buyer-scenarios.ts",
+    "test:focus-hold": "vitest run tests/focus-hold-major-fix-regression.test.ts tests/pivot-arbiter.test.ts tests/bot-lane-a-b.test.ts",
+    "test:focus-hold:live": "tsx scripts/run-focus-hold-regression.ts",
     "test:probe": "tsx scripts/probe-project-vectors.ts",
     "smoke:p7": "bash scripts/smoke-p7-focused-chips.sh"
   },

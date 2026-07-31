@@ -154,6 +154,7 @@ export function shouldSurfaceUnknownIntent(
     ex.decline ||
     ex.recall ||
     ex.wantsMore ||
+    ex.firstHomeHelp ||
     ex.askTopic ||
     ex.askTopics?.length ||
     ex.namedProjects?.length ||

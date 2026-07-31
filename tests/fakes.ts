@@ -485,6 +485,9 @@ export function fakeCrm(): EngineCrm & { calls: string[] } {
     },
     async appendMessage() {},
     async updateFacts() {},
+    async setPendingAction(_nd, pending) {
+      calls.push(pending ? `pending:${pending.kind}` : 'pending:clear');
+    },
     async commitProject(_nd, pid) {
       calls.push(`commit:${pid}`);
     },

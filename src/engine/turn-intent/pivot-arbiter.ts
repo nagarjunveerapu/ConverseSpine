@@ -105,22 +105,50 @@ function plausibleLocationDelta(prior: string | undefined, next: string | undefi
   return true;
 }
 
-export function hasStrongSearchConstraintDelta(
+/** Budget / locality / explore — genuine search pivots (not inventory filters). */
+function hasGeographyOrBudgetOrExploreDelta(
   prior: Constraints,
   ex: Extracted,
   text: string,
 ): boolean {
   if (EXPLORE_MORE_RE.test(text)) return true;
-
   const c = ex.constraints;
   if (c.budgetMaxInr !== undefined && c.budgetMaxInr !== prior.budgetMaxInr) return true;
   if (c.budgetMinInr !== undefined && c.budgetMinInr !== prior.budgetMinInr) return true;
-  if (c.bhk && c.bhk !== prior.bhk) return true;
-  if (c.propertyType && c.propertyType !== prior.propertyType) return true;
   if (plausibleLocationDelta(prior.location, c.location, text)) return true;
   // Focused extract skips bare localities (phase gate). isFocusedSearchPivot still
   // sees them via extractLocation(text) — count that as a real place move.
   if (plausibleLocationDelta(prior.location, extractLocation(text), text)) return true;
+  return false;
+}
+
+function hasBhkOrTypeDelta(prior: Constraints, ex: Extracted): boolean {
+  const c = ex.constraints;
+  if (c.bhk && c.bhk !== prior.bhk) return true;
+  if (c.propertyType && c.propertyType !== prior.propertyType) return true;
+  return false;
+}
+
+/**
+ * Wave 3 — "loan eligibility … what's the 2 BHK available" is an inventory
+ * filter on the focused project, not "2 BHK in Jayanagar" search.
+ */
+function isFocusedInventoryFilterAsk(text: string): boolean {
+  if (
+    !/\b(?:\d+\s*bhk|configs?|configurations?|units?|inventory|what'?s\s+available)\b/i.test(text)
+  ) {
+    return false;
+  }
+  return /\b(?:available|availability|inventory|units?\s+left|on\s+offer|configs?)\b/i.test(text);
+}
+
+export function hasStrongSearchConstraintDelta(
+  prior: Constraints,
+  ex: Extracted,
+  text: string,
+): boolean {
+  if (hasGeographyOrBudgetOrExploreDelta(prior, ex, text)) return true;
+  if (hasBhkOrTypeDelta(prior, ex)) return true;
   return false;
 }
 
@@ -163,7 +191,23 @@ export function arbitrateFocusPivot(input: PivotArbiterInput): PivotArbiterDecis
   }
 
   // Genuine search move — bind cannot pin the buyer on the old project.
+  // Exception: BHK/type delta alone with a focused facet (loan/price/…) or an
+  // on-project inventory ask — hold. "2 BHK in Jayanagar" still releases via
+  // geography delta above.
   if (strongConstraintDelta) {
+    const inventoryOnly =
+      !hasGeographyOrBudgetOrExploreDelta(input.priorConstraints, input.ex, input.text) &&
+      hasBhkOrTypeDelta(input.priorConstraints, input.ex) &&
+      (isFocusedFacetRequirement(input.text) || isFocusedInventoryFilterAsk(input.text));
+    if (inventoryOnly) {
+      return {
+        action: 'hold_focus',
+        reason: 'focused_facet_inventory_filter',
+        regexPivot,
+        strongConstraintDelta,
+        answerHold,
+      };
+    }
     return {
       action: 'release_to_discover',
       reason: 'strong_constraint_delta',

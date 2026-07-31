@@ -30,6 +30,21 @@ Generated from `docs/reports/intent-stress-2026-07-29T12-12-10/fails-for-train.j
 - Artifacts: `P2-promoted.jsonl`, `P2-upsert-items.jsonl`, `P2-upsert-result.json`, `P2-reprobe-corpus.jsonl`, `P2-reprobe-sample-600.jsonl`
 - Sample re-probe (572 stratified): **527/572 (92.1%)** — weakest: `ask_investment_return`
 
+## P2 residual topic triage (2026-07-30)
+
+Branch `fix/p2-residual-topic-triage` — **extractors**, not another Vectorize dump.
+
+- Input: `P2-residual-topic.jsonl` (~687 topic/focus fails after full P2 re-probe)
+- Focus: `ask_investment_return` + `get_legal_info`
+- Code: Hinglish/banks/approvals → `loan_eligibility` + FAQ `banks` + legal topic; `resale`/`एप्रिसिएशन` → `appreciation`; force overview alongside price; Devanagari `\b` fix
+- Dig re-probe (`P2-residual-inv-legal-reprobe.jsonl`, 166):
+  - Round 1: legal **75/106**; investment mostly honest-miss scorer-blind
+  - Round 2 (banks/approvals/Devanagari + scorer cue): **139/166 (83.7%)** — legal **88/106 (83%)**, investment **51/60 (85%)**
+  - Round 3–4 (bare `loan?`, `tell me about banks`, bare `returns?`): recovered **15/21** of remaining fails; smoke confirms extractors on dig
+  - Targeted cues (loan mil / banks available / approvals): **73/74**
+  - Hard leftover (~6): OC+price multi (no OC FactKey), `loan eligibility available`+BHK → shortlist focus, khata-primary swallowing returns atom in compose
+- Artifacts: `P2-residual-topic.jsonl`, `P2-residual-inv-legal-reprobe.jsonl`, reports `…T13-56-28`, `…T14-04-19`, `…T14-10-31`, `…T14-13-39`
+
 ## Priority
 
 | Pri | Meaning | Count |

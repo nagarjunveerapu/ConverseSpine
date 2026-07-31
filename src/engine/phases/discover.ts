@@ -140,14 +140,41 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   //
   // Smalltalk still wins: "hi there" is understood, not a miss. A question we
   // DID route (askTopic/askTopics) never reaches here.
+  // First-home / "not sure where to start" — discovery help, not clarify.
+  if (isFirstHomeHelpAsk(ex)) {
+    if (!d.oriented) return { kind: 'orient' };
+    if (firstMissingSlot(s) === undefined || d.ignoredProbes >= 3) return { kind: 'recommend' };
+    return { kind: 'probe', slot: nextSlot(s) };
+  }
   if (ex.isQuestion && !ex.smalltalk && !ex.askTopic && !(ex.askTopics?.length)) {
     return { kind: 'clarify_intent' };
   }
-  if (s.turnCount === 0) return { kind: 'greet' };
+  // Turn-0 greet only when there is nothing to route — never discard a facet,
+  // named project, search brief, or first-home help ask.
+  if (s.turnCount === 0 && !hasRoutableTurnZeroAsk(ex, s)) {
+    return { kind: 'greet' };
+  }
   if (ex.smalltalk) return { kind: 'smalltalk' };
   if (!d.oriented) return { kind: 'orient' };
   if (firstMissingSlot(s) === undefined || d.ignoredProbes >= 3) return { kind: 'recommend' };
   return { kind: 'probe', slot: nextSlot(s) };
+}
+
+/** True when turn-0 content must not be swallowed by the welcome greet. */
+export function hasRoutableTurnZeroAsk(ex: Extracted, s: ConversationState): boolean {
+  if (ex.askTopic || (ex.askTopics?.length ?? 0) > 0) return true;
+  if ((ex.namedProjects?.length ?? 0) > 0) return true;
+  if (ex.forceRecommendList || ex.speechAct === 'search') return true;
+  if (ex.transition === 'want_details' || ex.transition === 'want_visit') return true;
+  if (hasNarrowingConstraint(s.constraints) || hasNarrowingConstraint(ex.constraints)) return true;
+  if (isFirstHomeHelpAsk(ex)) return true;
+  if (ex.isQuestion && !ex.smalltalk) return true;
+  return false;
+}
+
+/** Open-ended first-home / help-me-start — stamped by extractFacts. */
+export function isFirstHomeHelpAsk(ex: Extracted): boolean {
+  return Boolean(ex.firstHomeHelp);
 }
 
 export function searchFilters(c: Constraints): SearchFilters {

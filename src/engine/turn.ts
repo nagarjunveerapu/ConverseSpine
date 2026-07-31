@@ -752,12 +752,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  // Cold catalog name resolve BEFORE routing/unsupported — so "Brigade Eldorado
+  // what's the price?" stamps namedProjects and declines definition→education.
+  // Not gated on location (that wrongly skipped pure named+facet asks).
   let prevalidatedCatalogHit:
     | { projectId: string; name: string }
     | undefined;
   if (
     deps.failureSearch &&
-    ex.constraints.location &&
     !state.stopConfirmPending &&
     !(ex.namedProjects?.length)
   ) {
@@ -1104,22 +1106,49 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
   // Loan FactKey/FAQ owns the turn — never let a brochure embedder leave
   // askTopic=media (that shared the PDF for "can I get the loan?").
+  // Wave 3 — keep media when the buyer also explicitly asked for photos/brochure.
   if (
     answerRequirements(trimmedText).includes('loan_eligibility') ||
     resolveFaqQuestionKeys(trimmedText).includes('loan_eligibility') ||
     resolveFaqQuestionKeys(trimmedText).includes('banks')
   ) {
+    const wantsExplicitMedia =
+      /\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(
+        trimmedText,
+      );
     const topics = (ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []).filter(
-      (t) => t !== 'media',
+      (t) => t !== 'media' || wantsExplicitMedia,
     );
     const withLegal = topics.includes('legal')
       ? topics
       : (['legal', ...topics] as NonNullable<Extracted['askTopics']>);
-    const { mediaAssetKind: _dropMedia, ...rest } = ex;
+    const withMedia =
+      wantsExplicitMedia && !withLegal.includes('media')
+        ? ([...withLegal, 'media'] as NonNullable<Extracted['askTopics']>)
+        : withLegal;
+    // Focused loan + BHK/config — stay on answer multi; do not search-pivot.
+    const keepFocusedInventory =
+      !!state.focus &&
+      /\b(?:\d+\s*bhk|configs?|configurations?|units?|inventory|what'?s\s+available)\b/i.test(
+        trimmedText,
+      );
+    const withAvail =
+      keepFocusedInventory && !withMedia.includes('availability')
+        ? ([...withMedia, 'availability'] as NonNullable<Extracted['askTopics']>)
+        : withMedia;
+    const rest = wantsExplicitMedia
+      ? ex
+      : (() => {
+          const { mediaAssetKind: _dropMedia, ...stripped } = ex;
+          return stripped;
+        })();
     ex = {
       ...rest,
       askTopic: 'legal',
-      askTopics: withLegal,
+      askTopics: withAvail,
+      ...(keepFocusedInventory
+        ? { speechAct: 'answer' as const, forceRecommendList: false, wantsMore: false }
+        : {}),
     };
   }
   if (
@@ -1474,6 +1503,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (!freshSearchBrief) {
       state = { ...state, phase: 'visit' };
     }
+  }
+
+  // Keep / re-enter visit when awaiting a day-window reply (morning/afternoon).
+  // Otherwise "Morning around 11am" falls into discover → clarify_intent.
+  if (
+    state.phase !== 'visit' &&
+    state.visit &&
+    (state.visit.lastAsk === 'window' || Boolean(state.visit.pendingDayIso))
+  ) {
+    state = { ...state, phase: 'visit' };
   }
 
   const visitDayTurn = isVisitDayUtterance(trimmedText);
@@ -3121,12 +3160,16 @@ async function fetchAnswer(
   }
 
   if (topics.includes('media') || ex.mediaAssetKind) {
-    // Loan asks must never fetch/share a brochure — even if topic merge missed.
-    if (
-      answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
-      resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
-      resolveFaqQuestionKeys(buyerText ?? '').includes('banks')
-    ) {
+    // Loan asks must never fetch/share a brochure — unless the buyer also
+    // explicitly co-asked for photos/brochure (Wave 3 media+loan).
+    const loanOwnsMedia =
+      (answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
+        resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
+        resolveFaqQuestionKeys(buyerText ?? '').includes('banks')) &&
+      !/\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(
+        buyerText ?? '',
+      );
+    if (loanOwnsMedia) {
       // fall through — legal/detail path below answers LTV / honest miss
     } else {
     const rawKind = ex.mediaAssetKind ?? 'brochure';
@@ -3440,7 +3483,11 @@ async function fetchAnswer(
     if (detail && wantsLocation) {
       const leadCategories = [...new Set([...askedCategories, ...faqLocationCategories])];
       const location = buildLocationEvidence(detail, leadCategories);
-      if (locationHasAskedData(location, leadCategories)) {
+      // Wave 3 — when `location` is an explicit multi-topic atom ("price and
+      // connectivity"), attach even a sparse snapshot so compose is not price-only.
+      const attachLocation =
+        locationHasAskedData(location, leadCategories) || topics.includes('location');
+      if (attachLocation) {
         tools.push('location');
         evidence = { ...evidence, tools: [...new Set(tools)], location };
         // The asked POI category is answerable from LI — the FAQ miss is no
@@ -3473,9 +3520,12 @@ function locationHasAskedData(
   asked: readonly LocationCategoryKey[],
 ): boolean {
   if (asked.length > 0) return asked.some((k) => (loc[k]?.length ?? 0) > 0);
+  // Wave 3 — "price and connectivity": microMarket / summary alone is enough
+  // to attach location evidence so compose is not price-only.
   return Boolean(
     loc.connectivitySummary ||
       loc.microMarketOverview ||
+      loc.microMarket ||
       loc.nearbyPois?.length ||
       loc.driveTimes?.length ||
       loc.schools?.length ||
@@ -3735,6 +3785,23 @@ async function syncFacts(
   if (s.constraints.purpose) facts.purpose = s.constraints.purpose;
   if (goal.kind === 'visit_booked') facts.visit_date_pref = goal.label;
   if (Object.keys(facts).length) await deps.crm.updateFacts(nd, facts);
+
+  // CRM safety net: mirror visit window await / clear on book.
+  if (goal.kind === 'visit_ask' && goal.ask === 'window' && goal.state.pendingDayIso) {
+    await deps.crm
+      .setPendingAction(nd, {
+        kind: 'visit_window',
+        payload: {
+          project_id: goal.state.projectId ?? '',
+          project_name: goal.state.projectName ?? '',
+          day_iso: goal.state.pendingDayIso,
+          day_label: goal.state.pendingDayLabel ?? '',
+        },
+      })
+      .catch(() => {});
+  } else if (goal.kind === 'visit_booked') {
+    await deps.crm.setPendingAction(nd, null).catch(() => {});
+  }
 
   if ((goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') && ev.matches?.length) {
     await deps.crm.syncShortlist(nd, ev.matches.map((m) => m.projectId));

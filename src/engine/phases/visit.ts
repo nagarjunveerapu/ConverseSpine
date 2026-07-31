@@ -111,12 +111,17 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
   // overview was missing from the shared facet list, so builder/ROI Hindi asks
   // fell through to visit_ask (P1 residual-22). Do not steal SA-4 "what about
   // <next stop>?" follow-ups — those resolve to overview but stay on visit day.
+  // Never defer while awaiting morning/afternoon — "Morning around 11am" must
+  // bind the window (embedder can spuriously stamp availability/FAQ keys).
+  const awaitingWindow =
+    prior.lastAsk === 'window' || Boolean(prior.pendingDayIso);
   const deferTopic =
     (ex.askTopic && VISIT_DEFERRABLE_TOPICS.includes(ex.askTopic)) ||
     (ex.askTopics ?? []).some((t) => VISIT_DEFERRABLE_TOPICS.includes(t)) ||
     resolveFaqQuestionKeys(ctx.text).length > 0;
   if (
     deferTopic &&
+    !awaitingWindow &&
     !isVisitFollowUpQuestion(ctx.text, ex) &&
     !parseVisitSlot(ctx.text, now) &&
     !parseDayAnchor(ctx.text, now) &&

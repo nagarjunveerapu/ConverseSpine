@@ -31,6 +31,10 @@ interface AssertSpec {
   goal_kind_not?: string;
   /** Optional debug.goal.topic */
   goal_topic?: string;
+  /** Optional conversation phase (focused / discover / …). */
+  phase?: string;
+  /** Phase must not equal this (e.g. discover after a focus-hold ask). */
+  phase_not?: string;
   /** debug.tools must include each of these */
   tools_include?: string[];
   /**
@@ -181,6 +185,13 @@ function checkAssert(
   }
   if (a.goal_topic && goal.topic && goal.topic !== a.goal_topic) {
     fails.push(`goal.topic=${goal.topic} want ${a.goal_topic}`);
+  }
+  const phase = typeof debug?.phase === 'string' ? debug.phase : undefined;
+  if (a.phase && phase && phase !== a.phase) {
+    fails.push(`phase=${phase} want ${a.phase}`);
+  }
+  if (a.phase_not && phase && phase === a.phase_not) {
+    fails.push(`phase must not be ${a.phase_not}`);
   }
   if (a.tools_include?.length) {
     const tools = Array.isArray(debug?.tools) ? (debug!.tools as string[]) : [];

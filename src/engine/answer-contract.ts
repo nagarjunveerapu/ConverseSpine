@@ -8,6 +8,11 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   { key: 'possession', pattern: /\b(?:possession|handover)(?:\s+(?:date|timeline|when))?\b/i },
   // Focused menu chip — bare "when" means possession on the open project.
   { key: 'possession', pattern: /^when\s*[?.!]?\s*$/i },
+  // B5.1 — "when ready?" is delivery timeline, not config inventory.
+  {
+    key: 'possession',
+    pattern: /\bwhen(?:'s| is)?(?:\s+it)?\s+ready(?!\s+to\s+move)\b|\bwhen\s+ready\b/i,
+  },
   { key: 'rera', pattern: /\brera(?:\s+(?:number|status|registration))?\b/i },
   { key: 'khata', pattern: /\bkhata\b/i },
   { key: 'ec_status', pattern: /\b(?:ec|encumbrance)\s+(?:status|certificate|clear)?\b/i },
@@ -16,10 +21,22 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   {
     key: 'loan_eligibility',
     pattern:
-      /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:eligib|approv|availab|for\s+this|on\s+this|against)|bank\s+loan|housing\s+loan|\bltv\b)\b/i,
+      /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:eligib|approv|availab|for\s+this|on\s+this|against)|bank\s+loan|housing\s+loan|\bltv\b)\b|\bloans?\s*[?.!]/i,
+  },
+  // P2 residual: Hinglish loan + "is banks available" (not inventory).
+  {
+    key: 'loan_eligibility',
+    pattern:
+      /\b(?:loan\s+mil(?:e(?:ga|gi)?)?|ispe\s+loan|loan\s+ho\s+jayega|banks?\s+available|is\s+banks?\s+available|can\s+i\s+get\s+(?:banks?|approvals?)|get\s+banks?\s+for|what\s+about\s+(?:banks?|loans?|approvals?)|approvals?\s+for\s+this|(?:tell\s+me\s+about|need)\s+(?:banks?|loan(?:\s+details)?|loan\s+eligibility)|about\s+banks?)\b|\bapprovals?\b/i,
   },
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
+  // Wave 3 — "whats the cost here" co-asked with returns (not "cost of living").
+  {
+    key: 'price',
+    pattern:
+      /\b(?:what(?:'s|\s+is)\s+the\s+)?cost(?:\s+(?:here|there|for\s+this|of\s+this))?\b|\bcost\s*[?.!]/i,
+  },
   // Focused chip + free-text negotiate ("any discount on this", "best price?").
   {
     key: 'price',
@@ -30,7 +47,21 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   // Advisory atoms — deliver when approved market intel / project ROI is on
   // detail; otherwise no_data (C1: never invent a %).
   { key: 'rental_yield', pattern: /\b(?:rental\s+yield|yield|roi|return\s+on\s+investment|rental\s+returns?|rental\s+income)\b/i },
-  { key: 'appreciation', pattern: /\b(?:appreciat\w*|how\s+much\s+has\s+(?:this\s+)?(?:area|corridor)\s+grown|corridor\s+growth)\b/i },
+  // Bare "returns?" / "what returns can I expect" — P2 residual investment atom.
+  {
+    key: 'rental_yield',
+    pattern:
+      /^(?:returns?)\s*[?.!]?\s*$|\b(?:what\s+returns?(?:\s+can\s+i\s+expect)?|returns?\s+can\s+i\s+expect|about\s+returns?)\b|\breturns?\s*[?.!]/i,
+  },
+  // Include resale / capital-gains phrasing — P2 multis often say "resale value?"
+  // without "appreciation", so requires never fired and price-only compose won.
+  {
+    // Devanagari must not sit inside `\b…\b` — JS word boundaries are ASCII-only,
+    // so `एप्रिसिएशन` never matched.
+    key: 'appreciation',
+    pattern:
+      /\b(?:appreciat\w*|resale(?:\s+value)?|capital\s+gains?|how\s+much\s+has\s+(?:this\s+)?(?:area|corridor)\s+grown|corridor\s+growth)\b|एप्रिसिएशन/i,
+  },
   {
     key: 'growth_drivers',
     pattern:
@@ -65,6 +96,9 @@ const FACT_KEY_TOPIC: Partial<Record<FactKey, AnswerTopic>> = {
   ec_status: 'legal',
   loan_eligibility: 'legal',
   project_type: 'property_type',
+  appreciation: 'overview',
+  rental_yield: 'overview',
+  growth_drivers: 'overview',
 };
 
 export function withAnswerRequirements(
@@ -78,16 +112,63 @@ export function withAnswerRequirements(
   });
   if (!requires.length) return goal;
 
-  // Brochure/media embedder misbinds must not outrank a FactKey loan ask.
+  // Brochure/media embedder misbinds must not outrank a FactKey loan ask —
+  // unless the buyer also explicitly asked for photos/brochure.
+  const wantsExplicitMedia =
+    /\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(text);
   let next: Extract<TurnGoal, { kind: 'answer' }> = { ...goal, requires };
   if (requires.includes('loan_eligibility')) {
-    const topics = (goal.topics?.length ? goal.topics : [goal.topic]).filter((t) => t !== 'media');
+    const topics = (goal.topics?.length ? goal.topics : [goal.topic]).filter(
+      (t) => t !== 'media' || wantsExplicitMedia,
+    );
     const withLegal = topics.includes('legal') ? topics : (['legal', ...topics] as AnswerTopic[]);
+    const withMedia =
+      wantsExplicitMedia && !withLegal.includes('media')
+        ? ([...withLegal, 'media'] as AnswerTopic[])
+        : withLegal;
     next = {
       ...next,
       topic: 'legal',
-      ...(withLegal.length > 1 ? { topics: withLegal } : { topics: undefined }),
+      ...(withMedia.length > 1 ? { topics: withMedia } : { topics: undefined }),
     };
+  }
+  // P2 residual: appreciation/resale/returns co-asked with price or loan —
+  // keep overview so advisory/honest-miss is not swallowed by pricing/legal.
+  if (requires.includes('appreciation') || requires.includes('rental_yield')) {
+    const topics = next.topics?.length ? [...next.topics] : [next.topic];
+    if (!topics.includes('overview')) {
+      const withOverview = [...topics, 'overview'] as AnswerTopic[];
+      next = {
+        ...next,
+        ...(withOverview.length > 1 ? { topics: withOverview } : {}),
+      };
+    }
+  }
+  // Wave 3 — returns + cost: keep price topic so pricing evidence is not dropped.
+  if (requires.includes('price')) {
+    const topics = next.topics?.length ? [...next.topics] : [next.topic];
+    if (!topics.includes('price')) {
+      const withPrice = [...topics, 'price'] as AnswerTopic[];
+      next = {
+        ...next,
+        ...(withPrice.length > 1 ? { topics: withPrice } : {}),
+      };
+    }
+  }
+  // Loan + BHK/config inventory on a focused project — keep availability in
+  // the multi set (do not let legal-only compose drop the unit ask).
+  if (
+    requires.includes('loan_eligibility') &&
+    /\b(?:\d+\s*bhk|configs?|configurations?|units?|inventory|what'?s\s+available)\b/i.test(text)
+  ) {
+    const topics = next.topics?.length ? [...next.topics] : [next.topic];
+    if (!topics.includes('availability')) {
+      const withAvail = [...topics, 'availability'] as AnswerTopic[];
+      next = {
+        ...next,
+        ...(withAvail.length > 1 ? { topics: withAvail } : {}),
+      };
+    }
   }
   return next;
 }
@@ -174,6 +255,21 @@ function missingFactFailure(subject: FactKey): Failure {
  * Verify delivery before compose. A partial answer keeps supported evidence and
  * carries notices; a turn with none of its required atoms becomes terminal.
  */
+/** Multi-topic sibling evidence that can still speak when a FactKey misses. */
+function hasSpeakableSiblingEvidence(
+  goal: Extract<TurnGoal, { kind: 'answer' }>,
+  evidence: EvidenceSet,
+): boolean {
+  const topics = goal.topics?.length ? goal.topics : [goal.topic];
+  if (topics.includes('location') && evidence.location) return true;
+  if (topics.includes('price') && (evidence.pricing || evidence.landedCost)) return true;
+  if (topics.includes('media') && evidence.media) return true;
+  if (topics.includes('availability') && (evidence.units?.length || evidence.detail)) return true;
+  if (topics.includes('legal') && evidence.detail) return true;
+  if (topics.includes('amenities') && evidence.detail?.amenities?.length) return true;
+  return false;
+}
+
 export function enforceAnswerContract(
   goal: Extract<TurnGoal, { kind: 'answer' }>,
   evidence: EvidenceSet,
@@ -186,7 +282,16 @@ export function enforceAnswerContract(
 
   const failures = missing.map(missingFactFailure);
   const deliveredRequired = goal.requires.filter((key) => delivered.has(key));
+  // Wave 3 — "schools + when ready": possession miss must not terminal-kill
+  // location LI that answers the co-asked atom.
   if (!deliveredRequired.length) {
+    if (hasSpeakableSiblingEvidence(goal, evidence)) {
+      return {
+        ...evidence,
+        deliveredFacts,
+        notices: failures,
+      };
+    }
     return {
       ...evidence,
       deliveredFacts,

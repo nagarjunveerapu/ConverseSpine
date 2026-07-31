@@ -26,13 +26,13 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'banks',
-    re: /\b(?:loan\s+eligib|home\s+loan|bank\s+loan|housing\s+loan|which\s+banks?\s+(?:give|provide|approve))\b/i,
+    re: /\b(?:loan\s+eligib|home\s+loan|bank\s+loan|housing\s+loan|which\s+banks?\s+(?:give|provide|approve)|banks?\s+available|is\s+banks?\s+available|can\s+i\s+get\s+banks?|get\s+banks?\s+for|what\s+about\s+(?:banks?|loans?)|(?:tell\s+me\s+about|need)\s+(?:banks?|loan(?:\s+details)?|loan\s+eligibility)|about\s+banks?|loan\s+mil(?:e(?:ga|gi)?)?|ispe\s+loan|loan\s+ho\s+jayega)\b/i,
   },
   {
     // Desk canonical FAQ key is `banks` (loan_eligibility aliases there).
     // Focused chips + natural loan asks (incl. trailing ? / LTV).
     key: 'banks',
-    re: /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:for\s+this|on\s+this|against)|\bltv\b|loan\s+to\s+value)\b/i,
+    re: /^(?:loans?)\s*[?.!]?\s*$|\b(?:(?:can|could|may|will)\s+(?:i|we)\s+(?:get|avail|take)\s+(?:a\s+|the\s+)?loan|(?:get|avail|take)\s+(?:a\s+|the\s+)?loan(?:\s+for|\s+on)?|eligible\s+for\s+(?:a\s+|the\s+)?loan|loan\s+(?:for\s+this|on\s+this|against)|\bltv\b|loan\s+to\s+value|can\s+i\s+get\s+approvals?)\b|\bloans?\s*[?.!]/i,
   },
   {
     // "is it ready to move?" (no trailing "in") is the same possession ask —
@@ -44,6 +44,11 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     // Focused menu chip — bare "when" → possession on the open project.
     key: 'possession',
     re: /^when\s*[?.!]?\s*$/i,
+  },
+  {
+    // Wave 3 / B5.1 — "when ready?" chip (not config inventory).
+    key: 'possession',
+    re: /\bwhen(?:'s| is)?(?:\s+it)?\s+ready(?!\s+to\s+move)\b|\bwhen\s+ready\b|^(?:delivery|handover)\s*[?.!]?\s*$/i,
   },
   {
     // Discount/offer chip + free-text negotiate — land on payment_plan FAQ when

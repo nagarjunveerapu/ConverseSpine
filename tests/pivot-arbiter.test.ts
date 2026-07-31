@@ -183,4 +183,29 @@ describe('arbitrateFocusPivot', () => {
     expect(d.action).toBe('hold_focus');
     expect(d.reason).toBe('focused_facet_requirement');
   });
+
+  it('holds loan + 2 BHK available (inventory filter, not search pivot)', () => {
+    const d = arbitrateFocusPivot({
+      text: 'is loan eligibility available as well as whats the 2 BHK available if available',
+      priorConstraints: {},
+      ex: ex({ bhk: '2' }),
+      routing: undefined,
+      enabled: true,
+    });
+    expect(d.action).toBe('hold_focus');
+    expect(d.reason).toBe('focused_facet_inventory_filter');
+    expect(d.strongConstraintDelta).toBe(true);
+  });
+
+  it('still releases 2 BHK in a new locality', () => {
+    const d = arbitrateFocusPivot({
+      text: '2 BHK in Jayanagar',
+      priorConstraints: {},
+      ex: ex({ bhk: '2', location: 'Jayanagar' }),
+      routing: undefined,
+      enabled: true,
+    });
+    expect(d.action).toBe('release_to_discover');
+    expect(d.reason).toBe('strong_constraint_delta');
+  });
 });
