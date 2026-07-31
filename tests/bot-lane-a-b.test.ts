@@ -16,6 +16,27 @@ describe('Bot lane A1 — first-home help', () => {
     expect(goal.kind).not.toBe('clarify_intent');
     expect(['orient', 'probe', 'recommend']).toContain(goal.kind);
   });
+
+  it('does not surface unknown-intent clarify when firstHomeHelp is stamped', async () => {
+    const { shouldSurfaceUnknownIntent } = await import(
+      '../src/engine/turn-routing/intent-authority.js'
+    );
+    const text =
+      'Hi, I am looking to buy my first home but I am not sure where to start, can you help?';
+    const ex = extractFactsSync(text, initState('t', 'naya-advisor'));
+    expect(
+      shouldSurfaceUnknownIntent(
+        ex,
+        {
+          routing: 'defer',
+          confidence: 'abstain',
+          bind: { embed_fired: true, miss_reason: 'below_tau', bind_source: 'embed_intent' },
+        } as never,
+        false,
+        text,
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('Bot lane A3b — turn-0 greet gate', () => {
