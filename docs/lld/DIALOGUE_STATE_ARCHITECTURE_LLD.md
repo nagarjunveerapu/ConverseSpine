@@ -718,7 +718,7 @@ direction; “small, one day” only holds if scoped.
 |---|---|---|
 | **0a** | Ledger `tool_runs[].success`, `postChoiceEvent` `engine_status`, drop `projects_compared` floor, promote `turn-log-snapshot` fields into deployed ledger | S — landed |
 | **0b** | `DataResult<T>` wrappers for `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy + `test:phase-0b` gate (`0B-01`…`0B-14`) | M — **landed** |
-| **unbound-name** | `Extracted.unboundProjectNames` + catalog in compare matching + block pool-guess; gate `test:unbound-name` (`UN-01`…`UN-05`) | S — **landed** (PR-2-lite; NAME-06 stays known-fail until 1b) |
+| **unbound-name** | `Extracted.unboundProjectNames` + catalog in compare matching + block pool-guess; gates `test:unbound-name` / `:report` / `:live` (`UN-00` defect probe + `UN-01`…`UN-05`) | S — **landed** (PR-2-lite; NAME-06 stays known-fail until 1b) |
 | **0c** | Remainder of `EngineData` | separate PR |
 
 Gate for closing Phase 0 remains: forced adapter failure → `success: false` with

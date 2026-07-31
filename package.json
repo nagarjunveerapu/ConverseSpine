@@ -22,6 +22,8 @@
     "test:phase-0b": "vitest run tests/phase-0b-scenario-gate.test.ts tests/seams/ledger-truth.test.ts",
     "test:phase-0b:live": "tsx scripts/run-phase-0b-scenarios.ts",
     "test:unbound-name": "vitest run tests/unbound-name.test.ts",
+    "test:unbound-name:report": "tsx scripts/run-unbound-name-scenarios.ts",
+    "test:unbound-name:live": "tsx scripts/run-unbound-name-scenarios.ts --live",
     "test:probe": "tsx scripts/probe-project-vectors.ts",
     "smoke:p7": "bash scripts/smoke-p7-focused-chips.sh"
   },

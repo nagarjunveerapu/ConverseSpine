@@ -138,6 +138,15 @@ describe('UN — unbound-name typing + catalog compare match', () => {
         lastOffered: SHORTLIST.map((o) => ({ ...o })),
       },
     };
+
+    // Prior-state defect: compare topic + no catalog + no unbound → shortlist pool-guess.
+    const priorIds = resolveCompareProjectIds(
+      'comparing Eldorado and Sanctuary',
+      { constraints: {}, askTopic: 'compare' },
+      state,
+      [],
+    );
+    expect(priorIds).toEqual(['ayana', 'desire-spaces', 'vanam']);
     const stamped = stampNamedAndUnbound(
       'compare Prestige Lakeside and Eldorado',
       { constraints: {}, askTopic: 'compare' },
