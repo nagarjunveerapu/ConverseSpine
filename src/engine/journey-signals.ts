@@ -3,6 +3,7 @@
  * Desk Zod strips unknown keys (phase/goal/committed_project_id) — this is the adapter.
  */
 import type { ConversationState, EvidenceSet, TurnGoal } from './types.js';
+import { currentShortlist, discussedList } from './entity-store.js';
 
 export type DeskJourneySignals = {
   facts_known?: number;
@@ -59,14 +60,15 @@ export function buildJourneySignalPost(
     // No floor. A compare goal with one engaged project compared ONE project;
     // reporting 2 made Desk's funnel unable to see a compare that did not
     // happen -- the same class as tool_runs.success being hardcoded true.
-    const n = Math.max(
-      state.discover.discussedProjects?.length ?? 0,
-      state.discover.lastOffered.length,
-    );
+    const discussedN = discussedList(state).length;
+    const n = Math.max(discussedN, currentShortlist(state).length);
     if (n > 0) signals.projects_compared = n;
-  } else if ((state.discover.discussedProjects?.length ?? 0) >= 2) {
-    // Soft signal when buyer has engaged 2+ projects even without compare goal this turn.
-    signals.projects_compared = state.discover.discussedProjects!.length;
+  } else {
+    const discussedN = discussedList(state).length;
+    if (discussedN >= 2) {
+      // Soft signal when buyer has engaged 2+ projects even without compare goal this turn.
+      signals.projects_compared = discussedN;
+    }
   }
 
   if (goal.kind === 'commit') {

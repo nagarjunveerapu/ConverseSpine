@@ -722,7 +722,8 @@ direction; “small, one day” only holds if scoped.
 | **1b (named-resolve / switch)** | Full sibling overshadows partial; refinement switch over compare; gate `test:name-06` (NAME-06 green). Broader salience consumer migration still open. | S — **partial landed** |
 | **1b (alternate deixis)** | `"the other one"` / go-back via `resolveAlternateProject` + `detectFocusedSwitchIntent`; dual-write sync on `popFocus` / `releaseToDiscover`; gate `test:other-one` | S — **landed** |
 | **1b (salience consumers)** | `discourseEntities` / `discourseOffered` feed compare pool, visit candidates, switch `poolOf`, `resolveNamed`; legacy ⊆ store membership assert in dual-write test. | M — **landed** |
-| **1c (store authority)** | `shortlistIds` + card payload on entities; `currentShortlist` / `discussedList` / `mirrorLegacyPools`. Legacy arrays are write-through mirrors only. **Not a NayaDesk field** — Spine KV only; Desk catalog stays. Field delete of `lastOffered` deferred until raw readers in `turn.ts` / `discover.ts` are gone; `focus` still dual-writes. | M — **landed (authority)** |
+| **1c (store authority)** | `shortlistIds` + card payload on entities; `currentShortlist` / `discussedList` / `mirrorLegacyPools`. Legacy arrays are write-through mirrors only. **Not a NayaDesk field** — Spine KV only; Desk catalog stays. | M — **landed (authority)** |
+| **1c (raw-reader migration)** | All `src/` identity reads use helpers (`turn.ts`, `discover.ts`, extract, compare, visit, …). Mirrors remain for old KV revive + test fixtures. `focusedRef()` / stack-first `focusedEntity`; `state.focus` still dual-writes for phase gates. Field delete of mirrors = follow-up once tests stop constructing `lastOffered` directly. | M — **landed** |
 | **0c** | Remainder of `EngineData` | separate PR |
 
 Gate for closing Phase 0 remains: forced adapter failure → `success: false` with

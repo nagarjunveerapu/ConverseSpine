@@ -8,13 +8,7 @@ import type {
   Match,
   OfferedProject,
 } from './types.js';
-import {
-  clearOfferedExcept,
-  currentShortlist,
-  mirrorLegacyPools,
-  pushFocus,
-  recordEntities,
-} from './entity-store.js';
+import { clearOfferedExcept, currentShortlist, mirrorLegacyPools, pushFocus, recordEntities } from './entity-store.js';
 
 export function initState(convId: string, builderId: string): ConversationState {
   return {
@@ -147,7 +141,7 @@ export function applyExtracted(
 
   let rejected = s.discover.rejectedProjectIds;
   if (ex.rejected) {
-    const hit = resolveRejected(ex, s.discover.lastOffered);
+    const hit = resolveRejected(ex, currentShortlist(s));
     if (hit && !rejected.includes(hit)) rejected = [...rejected, hit];
   }
 
@@ -235,7 +229,7 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
 
 /** Drop stale shortlist — next successful recommend repopulates (W2). */
 export function clearLastOffered(s: ConversationState): ConversationState {
-  if ((s.shortlistIds?.length ?? 0) === 0 && s.discover.lastOffered.length === 0) return s;
+  if ((s.shortlistIds?.length ?? 0) === 0 && currentShortlist(s).length === 0) return s;
   const cleared = clearOfferedExcept(s, new Set());
   return mirrorLegacyPools({
     ...cleared,

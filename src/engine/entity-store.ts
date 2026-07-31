@@ -194,16 +194,37 @@ export function salience(state: ConversationState): DiscourseEntityRecord[] {
 
 /**
  * The focused entity, if any.
- * Trust legacy `state.focus` first while the focus field still dual-writes.
+ * Prefer focusStack[0] when phase is focused; fall back to legacy `state.focus`
+ * for sessions that predate the stack.
  */
 export function focusedEntity(state: ConversationState): DiscourseEntityRecord | undefined {
+  if (state.phase === 'focused') {
+    const stackId = (state.focusStack ?? [])[0];
+    if (stackId && state.entities?.[stackId]) return state.entities[stackId];
+  }
   if (state.focus) {
     const fromStore = state.entities?.[state.focus.projectId];
     if (fromStore) return fromStore;
+    return {
+      projectId: state.focus.projectId,
+      name: state.focus.projectName,
+      roles: ['focused'],
+      firstSeenTurn: state.turnCount,
+      lastTouchedTurn: state.turnCount,
+    };
   }
-  if (state.phase !== 'focused') return undefined;
-  const id = (state.focusStack ?? [])[0];
-  return id ? state.entities?.[id] : undefined;
+  return undefined;
+}
+
+/** Legacy FocusState shape — prefer this over reading `state.focus` directly. */
+export function focusedRef(
+  state: ConversationState,
+): { projectId: string; projectName: string } | undefined {
+  const e = focusedEntity(state);
+  if (e) return { projectId: e.projectId, projectName: e.name };
+  return state.focus
+    ? { projectId: state.focus.projectId, projectName: state.focus.projectName }
+    : undefined;
 }
 
 function isDiscourseRole(roles: readonly EntityRole[]): boolean {

@@ -8,6 +8,7 @@
  */
 import type { SemanticNluPort } from './adapters/semantic-nlu.js';
 import type { EngineLlm } from './ports.js';
+import { currentShortlist, discussedList } from './entity-store.js';
 import {
   buildBamlExtractInput,
   buildBamlShadowReport,
@@ -157,7 +158,7 @@ export async function extractTurnAuthority(
     phase: state.phase,
     microMarkets: deps.microMarkets,
     offeredProjectNames: [
-      ...state.discover.lastOffered.map((o) => o.name),
+      ...currentShortlist(state).map((o) => o.name),
       ...(state.focus?.projectName ? [state.focus.projectName] : []),
     ],
     pendingOfferPricing: state.rti?.pendingPrompt?.kind === 'offer_pricing',
@@ -179,14 +180,14 @@ export async function extractTurnAuthority(
     chipResolution,
   );
   merged = scrubEmbedderIdentityNoise(text, state.phase, merged, [
-    ...state.discover.lastOffered,
-    ...(state.discover.discussedProjects ?? []),
+    ...currentShortlist(state),
+    ...discussedList(state),
     ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
   ], deps.catalogNames ?? []);
   // PR-2-lite: bind compare name spans against session ∪ catalog; stamp unbound.
   const sessionForBind = [
-    ...state.discover.lastOffered,
-    ...(state.discover.discussedProjects ?? []),
+    ...currentShortlist(state),
+    ...discussedList(state),
     ...(state.focus
       ? [{ projectId: state.focus.projectId, name: state.focus.projectName }]
       : []),
@@ -248,8 +249,8 @@ export async function extractTurnAuthority(
         chipResolution,
       );
       promoted = scrubEmbedderIdentityNoise(text, state.phase, promoted, [
-        ...state.discover.lastOffered,
-        ...(state.discover.discussedProjects ?? []),
+        ...currentShortlist(state),
+        ...discussedList(state),
         ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
       ], deps.catalogNames ?? []);
       if (isConstraintRefinementTurn(text) && !promoted.namedProjects?.length && !promoted.pickName) {
@@ -544,7 +545,7 @@ export function demoteNonSearchOnFreshSearch(
   state: ConversationState,
   resolution: ChipResolution,
 ): ChipResolution {
-  if (state.focus || state.discover.lastOffered.length > 0) return resolution;
+  if (state.focus || currentShortlist(state).length > 0) return resolution;
   if (!looksLikeSearchBriefText(text)) return resolution;
   if (resolution.speechAct === 'visit_book') {
     return { primary: null, secondary: null, speechAct: 'search', chipPathIds: [] };

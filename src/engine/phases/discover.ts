@@ -3,6 +3,7 @@ import { splitComposeTopics } from '../facts.js';
 import { nameMentioned } from '../project_references.js';
 import { resolvePick } from '../state.js';
 import { formatInr } from '../compose.js';
+import { currentShortlist, discussedList } from '../entity-store.js';
 
 export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   const d = s.discover;
@@ -11,7 +12,7 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
     ex.askTopic === 'emi' || (ex.askTopics?.includes('emi') ?? false);
   if (
     ex.emiContractV1 &&
-    (ex.emiPrincipalInr !== undefined || (asksEmi && d.lastOffered.length === 0))
+    (ex.emiPrincipalInr !== undefined || (asksEmi && currentShortlist(s).length === 0))
   ) {
     return { kind: 'emi_calculate' };
   }
@@ -33,13 +34,13 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
     !ex.wantsMore &&
     !ex.rejected
   ) {
-    const namedPick = resolvePick(ex, d.lastOffered, s);
+    const namedPick = resolvePick(ex, currentShortlist(s), s);
     if (namedPick) return commitPickWithFollowUp(namedPick, ex);
   }
 
   // Fresh search board: narrowing + empty shortlist beats embedder compare/visit noise.
   const freshSearchBoard =
-    d.lastOffered.length === 0 &&
+    currentShortlist(s).length === 0 &&
     !s.focus &&
     (hasNarrowingConstraint(s.constraints) || hasNarrowingConstraint(ex.constraints));
   if (
@@ -54,11 +55,11 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
 
   if (
     (ex.budgetPickQuestion || ex.compareAdvice) &&
-    d.lastOffered.length >= 2 &&
+    currentShortlist(s).length >= 2 &&
     !ex.wantsMore &&
     !ex.rejected
   ) {
-    return { kind: 'answer', topic: 'compare', projectId: d.lastOffered[0]!.projectId };
+    return { kind: 'answer', topic: 'compare', projectId: currentShortlist(s)[0]!.projectId };
   }
 
   // Compare before pick — "compare ayana and krishnaja" must not commit to Ayana.
@@ -78,12 +79,12 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   // Multi shortlist without a name → answer the facet across the shortlist when
   // one was asked; only a topicless "tell me more" earns the pick-menu.
   if (ex.implicitProjectPick || ex.transition === 'want_details') {
-    const explicit = resolvePick(ex, d.lastOffered, s);
+    const explicit = resolvePick(ex, currentShortlist(s), s);
     if (explicit) return commitPickWithFollowUp(explicit, ex);
-    if (d.lastOffered.length === 1) {
-      return commitPickWithFollowUp(d.lastOffered[0]!, ex);
+    if (currentShortlist(s).length === 1) {
+      return commitPickWithFollowUp(currentShortlist(s)[0]!, ex);
     }
-    if (d.lastOffered.length >= 2) {
+    if (currentShortlist(s).length >= 2) {
       const across = shortlistAnswerGoal(s, ex);
       if (across) return across;
       return { kind: 'clarify_project_pick' };
@@ -96,10 +97,10 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
     return { kind: 'recommend' };
   }
 
-  const pick = resolvePick(ex, d.lastOffered, s);
+  const pick = resolvePick(ex, currentShortlist(s), s);
   if (pick) return commitPickWithFollowUp(pick, ex);
 
-  if (d.lastOffered.length > 0) {
+  if (currentShortlist(s).length > 0) {
     const detailGoal = offeredDetailGoal(s, ex);
     if (detailGoal) return detailGoal;
   }
@@ -109,7 +110,7 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
   if (ex.transition === 'want_visit' || ex.speechAct === 'visit_book') {
     const narrowing =
       hasNarrowingConstraint(s.constraints) || hasNarrowingConstraint(ex.constraints);
-    if (narrowing && d.lastOffered.length === 0 && !s.focus) {
+    if (narrowing && currentShortlist(s).length === 0 && !s.focus) {
       return { kind: 'recommend' };
     }
     if (!(ex.namedProjects?.length)) {
@@ -448,13 +449,14 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
   if (!hasTopic) return null;
 
   const pick =
-    resolvePick(ex, s.discover.lastOffered, s) ??
-    recentBuyerNamedPick(s, s.discover.lastOffered) ??
+    resolvePick(ex, currentShortlist(s), s) ??
+    recentBuyerNamedPick(s, currentShortlist(s)) ??
     (s.focus ? { projectId: s.focus.projectId, name: s.focus.projectName } : undefined) ??
-    (s.discover.lastOffered.length === 1 ? s.discover.lastOffered[0]! : undefined) ??
-    (s.discover.discussedProjects?.length
-      ? s.discover.discussedProjects[s.discover.discussedProjects.length - 1]
-      : undefined);
+    (currentShortlist(s).length === 1 ? currentShortlist(s)[0]! : undefined) ??
+    (() => {
+      const discussed = discussedList(s);
+      return discussed.length ? discussed[discussed.length - 1] : undefined;
+    })();
   // Facet ask ("Starting prices") with multi shortlist but no pick → answer the
   // facet for every shortlisted project (4q-fix3 kill #1: the clarify-pick
   // sinkhole ate EMI/legal/cost asks with "Which one should I open — 1) 2) 3)?").
@@ -462,7 +464,7 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
   // without a named pick still re-searches (PIV-03).
   if (!pick) {
     const refine = ex.speechAct === 'search' && hasNarrowingConstraint(s.constraints);
-    if (s.discover.lastOffered.length >= 2 && !refine) {
+    if (currentShortlist(s).length >= 2 && !refine) {
       // shortlistAnswerGoal reads askTopic AND askTopics; the clarify fallback
       // keeps its original askTopics-only condition — nothing NEW clarifies.
       const across = shortlistAnswerGoal(s, ex);
@@ -496,7 +498,7 @@ function shortlistAnswerGoal(s: ConversationState, ex: Extracted): TurnGoal | nu
     (t) => SHORTLIST_ANSWERABLE.has(t),
   );
   if (!asked.length) return null;
-  const ids = s.discover.lastOffered.slice(0, 3).map((o) => o.projectId);
+  const ids = currentShortlist(s).slice(0, 3).map((o) => o.projectId);
   if (ids.length < 2) return null;
   const { active, parked } = splitComposeTopics(asked);
   return {

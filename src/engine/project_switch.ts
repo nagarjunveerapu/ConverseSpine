@@ -4,7 +4,7 @@
 import type { AnswerTopic, ConversationState, Extracted, OfferedProject, TurnGoal } from './types.js';
 import type { EngineDeps } from './ports.js';
 import { bearingTokensOf, tokenizeName } from './name-index.js';
-import { discourseOffered, resolveAlternateProject } from './entity-store.js';
+import { discourseOffered, resolveAlternateProject, currentShortlist, discussedList } from './entity-store.js';
 
 export interface SwitchIntent {
   readonly followUp?: AnswerTopic;
@@ -346,8 +346,8 @@ function poolOf(s: ConversationState): OfferedProject[] {
   const fromStore = discourseOffered(s);
   if (fromStore.length > 0) return fromStore;
   // Pre-1a sessions.
-  const pool = [...s.discover.lastOffered];
-  for (const d of s.discover.discussedProjects ?? []) {
+  const pool = [...currentShortlist(s)];
+  for (const d of discussedList(s)) {
     if (!pool.some((p) => p.projectId === d.projectId)) pool.push(d);
   }
   if (s.focus && !pool.some((p) => p.projectId === s.focus!.projectId)) {

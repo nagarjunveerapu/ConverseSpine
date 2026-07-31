@@ -11,6 +11,7 @@ import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../phases/visit.js'
 import { classifyTurnIntentLlm } from './llm-classifier.js';
 import { defaultProbePrompt } from './pending-prompt.js';
 import { AFFIRM_ONLY, DECLINE } from './dialogue-acts.js';
+import { currentShortlist } from '../entity-store.js';
 import type {
   PatchClearKey,
   TurnIntentApplyResult,
@@ -350,7 +351,7 @@ export function applyTurnIntentResult(
     const pid = intent.focus_project_id;
     if (pid) {
       const name =
-        next.discover.lastOffered.find((o) => o.projectId === pid)?.name ??
+        currentShortlist(next).find((o) => o.projectId === pid)?.name ??
         next.rti?.pendingPrompt?.project_name ??
         pid;
       next = commitTo(next, pid, name);
@@ -451,7 +452,7 @@ export function buildTurnIntentInput(
     last_reply_excerpt: rti?.lastReplyExcerpt ?? state.feedForward?.priorReplyExcerpt ?? '',
     pending_prompt: rti?.pendingPrompt ?? state.feedForward?.pendingPrompt,
     suggested_actions: rti?.lastSuggestedActions ?? [],
-    last_offered: state.discover.lastOffered.map((o) => ({
+    last_offered: currentShortlist(state).map((o) => ({
       project_id: o.projectId,
       name: o.name,
     })),

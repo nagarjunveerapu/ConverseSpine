@@ -1,5 +1,5 @@
 import { formatInr } from '../engine/compose.js';
-import { currentShortlist } from '../engine/entity-store.js';
+import { currentShortlist, focusedRef } from '../engine/entity-store.js';
 import { filterUnitsByBhk } from '../engine/unit-config.js';
 import { mapProjectDetailDto } from './map-project-detail.js';
 import { mapVisitQueue } from './map-visit-queue.js';
@@ -12,7 +12,7 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     input;
   const projects = mapProjectCards(state);
   const prefs = mapPrefsSnapshot(state);
-  const focusId = state.focus?.projectId;
+  const focusId = focusedRef(state)?.projectId;
   const focusedDetail = focusId ? state.projectCache?.[focusId] : undefined;
   const focusedDto = focusedDetail
     ? scopeFocusedConfigurations(mapProjectDetailDto(focusedDetail), state.constraints.bhk)

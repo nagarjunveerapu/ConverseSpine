@@ -4,7 +4,7 @@ import {
   type ContextMessage,
   type ProjectRef,
 } from './project_references.js';
-import { discourseEntities, discussedList } from './entity-store.js';
+import { discourseEntities, discussedList, currentShortlist } from './entity-store.js';
 
 const GENERIC_COMPARE_RE =
   /\b(?:compare|which\s+(?:is|one)\s+better|what(?:'s|\s+is)\s+the\s+difference|difference\s+between|vs\.?|versus)\b/i;
@@ -22,7 +22,7 @@ function projectPool(s: ConversationState): ProjectRef[] {
   const ents = discourseEntities(s);
   if (ents.length === 0) {
     // Pre-1a sessions / empty store — legacy projection.
-    const discussed = s.discover.discussedProjects ?? [];
+    const discussed = discussedList(s);
     const pool: ProjectRef[] = [];
     const seen = new Set<string>();
     const push = (project_id: string, name: string) => {
@@ -32,7 +32,7 @@ function projectPool(s: ConversationState): ProjectRef[] {
     };
     for (const p of discussed) push(p.projectId, p.name);
     if (s.focus) push(s.focus.projectId, s.focus.projectName);
-    for (const o of s.discover.lastOffered) push(o.projectId, o.name);
+    for (const o of currentShortlist(s)) push(o.projectId, o.name);
     return pool;
   }
 
@@ -43,7 +43,7 @@ function projectPool(s: ConversationState): ProjectRef[] {
     seen.add(project_id);
     pool.push({ project_id, name });
   };
-  for (const p of s.discover.discussedProjects ?? []) {
+  for (const p of discussedList(s)) {
     if (ents.some((e) => e.projectId === p.projectId)) push(p.projectId, p.name);
   }
   for (const e of ents) push(e.projectId, e.name);

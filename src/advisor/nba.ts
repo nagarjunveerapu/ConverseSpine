@@ -7,7 +7,7 @@
  * Cap 6. Board owns depth; chips never dump the full tree.
  */
 import type { ConversationState, TurnDebug, TurnGoal } from '../engine/types.js';
-import { currentShortlist, discussedList } from '../engine/entity-store.js';
+import { currentShortlist, discussedList, focusedRef } from '../engine/entity-store.js';
 import { rankChips } from '../chips/rank.js';
 import { goalState } from '../chips/shadow.js';
 import { chipActionId, type ChipEvidence } from '../chips/catalogue.js';
@@ -79,7 +79,7 @@ export function engagedProjectIds(state: ConversationState): string[] {
   };
   for (const o of currentShortlist(state)) push(o.projectId);
   for (const d of discussedList(state)) push(d.projectId);
-  push(state.focus?.projectId);
+  push(focusedRef(state)?.projectId);
   return ids;
 }
 
@@ -109,7 +109,7 @@ function dimensionAndJourney(
 ): string[] {
   const chips: string[] = [];
   const offered = currentShortlist(state);
-  const focusName = state.focus?.projectName;
+  const focusName = focusedRef(state)?.projectName;
 
   switch (goal.kind) {
     case 'recommend':
@@ -270,11 +270,12 @@ function rankedPrimaryChips(
   goal: TurnGoal,
   limit: number,
 ): Array<{ label: string; actionId?: string }> {
-  const focusId = state.focus?.projectId;
+  const focus = focusedRef(state);
+  const focusId = focus?.projectId;
   const focused = focusId ? state.projectCache?.[focusId] : undefined;
   const ev: ChipEvidence = {
     ...(focused ? { focused } : {}),
-    ...(state.focus?.projectName ? { focusName: state.focus.projectName } : {}),
+    ...(focus?.projectName ? { focusName: focus.projectName } : {}),
     shortlist: currentShortlist(state).map((o) => o.name),
     ...(state.visitBookedCache?.length ? { visitBooked: true } : {}),
   };

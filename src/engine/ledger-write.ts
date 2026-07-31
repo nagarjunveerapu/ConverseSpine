@@ -7,7 +7,7 @@ import { buildChipShadow } from '../chips/shadow.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
 import { summarizeFailure, type Failure } from './outcome.js';
 import { answerRequirements, deliveredFactKeys } from './answer-contract.js';
-import { currentShortlist } from './entity-store.js';
+import { currentShortlist, focusedRef } from './entity-store.js';
 import { detectFocusedSwitchIntent } from './project_switch.js';
 import type {
   ConversationState,
@@ -87,9 +87,10 @@ export function buildLedgerWritePayload(input: {
 
   const snapshot_in: Record<string, unknown> = {
     phase: state.phase,
-    ...(state.focus
-      ? { focus: { project_id: state.focus.projectId, name: state.focus.projectName } }
-      : {}),
+    ...(() => {
+      const f = focusedRef(state);
+      return f ? { focus: { project_id: f.projectId, name: f.projectName } } : {};
+    })(),
     constraints: { ...state.constraints },
     shortlist: currentShortlist(state).map((o) => ({
       project_id: o.projectId,

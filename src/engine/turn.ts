@@ -17,6 +17,7 @@ import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
 import { searchLocalityWiden } from './locality-widen.js';
+import { currentShortlist, discussedList } from './entity-store.js';
 import {
   collapseCoverageMarkets,
   coverageCityCoverBit,
@@ -591,7 +592,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Named multi-project turns without the word "compare" still need compare IDs —
   // but not on a fresh search board (embedder names are not a shortlist).
   const freshSearchBoard =
-    state.discover.lastOffered.length === 0 &&
+    currentShortlist(state).length === 0 &&
     !state.focus &&
     (discover.hasNarrowingConstraint(state.constraints) ||
       discover.hasNarrowingConstraint(ex.constraints) ||
@@ -655,8 +656,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const anchorNames = [
       ...(state.phase === 'focused' && state.focus ? [state.focus.projectName] : []),
       ...(ex.namedProjects ?? []).map((p) => p.name),
-      ...state.discover.lastOffered.map((o) => o.name),
-      ...(state.discover.discussedProjects ?? []).map((p) => p.name),
+      ...currentShortlist(state).map((o) => o.name),
+      ...discussedList(state).map((p) => p.name),
     ].filter(Boolean);
     const noNewLocality =
       !ex.constraints.location || locationEchoesProjectName(ex.constraints.location, anchorNames);
@@ -683,7 +684,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (ex.constraints.location) {
     const knownNames = [
       ...(state.focus?.projectName ? [state.focus.projectName] : []),
-      ...state.discover.lastOffered.map((o) => o.name),
+      ...currentShortlist(state).map((o) => o.name),
     ];
     if (knownNames.length) {
       const kept = ex.constraints.location
@@ -1041,7 +1042,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   // W2: constraint pivot invalidates stale shortlist — no catalog names; delta-driven.
   if (
-    state.discover.lastOffered.length > 0 &&
+    currentShortlist(state).length > 0 &&
     shouldInvalidateLastOffered(prevConstraints, state.constraints, trimmedText, ex)
   ) {
     state = clearLastOffered(state);
@@ -1505,7 +1506,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       (discover.hasNarrowingConstraint(state.constraints) ||
         discover.hasNarrowingConstraint(ex.constraints)) &&
       !state.focus &&
-      state.discover.lastOffered.length === 0;
+      currentShortlist(state).length === 0;
     if (!freshSearchBrief) {
       state = { ...state, phase: 'visit' };
     }
@@ -1540,7 +1541,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (
     (state.phase === 'discover' || state.phase === 'handoff') &&
     (ex.namedProjects?.length ?? 0) >= 1 &&
-    state.discover.lastOffered.length >= 1 &&
+    currentShortlist(state).length >= 1 &&
     routing.routing === 'visit_schedule_stop'
   ) {
     state = { ...state, phase: 'visit' };
@@ -1650,7 +1651,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const coldNameEligible =
     state.phase === 'discover' &&
     !state.focus &&
-    state.discover.lastOffered.length === 0 &&
+    currentShortlist(state).length === 0 &&
     (ex.namedProjects?.length ?? 0) < 2 &&
     (ex.isQuestion || isDetailAskTurn(ex) || /^(?:is|are|does|do|what|which|how|can|tell me)\b/i.test(trimmedText));
   if (coldNameEligible) {
@@ -1676,8 +1677,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   ) {
     const answerGoal = goal;
     const pool = [
-      ...state.discover.lastOffered,
-      ...(state.discover.discussedProjects ?? []),
+      ...currentShortlist(state),
+      ...discussedList(state),
       { projectId: state.focus.projectId, name: state.focus.projectName },
     ];
     const namedOk =
@@ -1858,7 +1859,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Hold copy is a commitment ("held until 5:30 pm") — never LLM-paraphrased.
   const holdDeterministic = goal.kind === 'hold_propose' || goal.kind === 'hold_booked';
   const firstShortlistTurn =
-    state.discover.lastOffered.length === 0 &&
+    currentShortlist(state).length === 0 &&
     (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
     (evidence.matches?.length ?? 0) > 0;
   const clarifyPickDeterministic = goal.kind === 'clarify_project_pick';
@@ -2216,8 +2217,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       tools: evidence.tools,
       grounding,
       ...(repeat_guard ? { repeat_guard } : {}),
-      last_offered_count: state.discover.lastOffered.length,
-      last_offered_ids: state.discover.lastOffered.map((o) => o.projectId),
+      last_offered_count: currentShortlist(state).length,
+      last_offered_ids: currentShortlist(state).map((o) => o.projectId),
     },
     inputSource,
     extractProvenance,
@@ -2530,7 +2531,7 @@ async function fetchRecommend(
     strictSearch = await searchWithFilters(deps, s.builderId, filters);
   }
 
-  const offeredIds = new Set(s.discover.lastOffered.map((o) => o.projectId));
+  const offeredIds = new Set(currentShortlist(s).map((o) => o.projectId));
 
   const rawMatches: Match[] = strictSearch.matches
     .map((m) => ({
@@ -2555,7 +2556,7 @@ async function fetchRecommend(
     { locationAliases: strictSearch.expandedLocations ?? [] },
   );
 
-  if (matches.length === 0 && base.kind === 'recommend' && s.discover.lastOffered.length === 0) {
+  if (matches.length === 0 && base.kind === 'recommend' && currentShortlist(s).length === 0) {
     const broadened = await broadenInitialShortlist(
       deps,
       s.builderId,
@@ -2653,7 +2654,7 @@ async function fetchRecommend(
         const relist = relistShortlist();
         if (relist) return relist;
       }
-      if (s.discover.lastOffered.length === 0) {
+      if (currentShortlist(s).length === 0) {
         const broadened = await broadenInitialShortlist(
           deps,
           s.builderId,
@@ -2732,7 +2733,7 @@ async function fetchRecommend(
     // Padding a short-but-real shortlist up to three (RTI-D+). Anything the
     // padding gave up rides along so compose never calls the padded entries a fit.
     let padRelaxed: RelaxedDimension[] = [];
-    if (base.kind === 'recommend' && s.discover.lastOffered.length === 0 && listed.length < 3) {
+    if (base.kind === 'recommend' && currentShortlist(s).length === 0 && listed.length < 3) {
       const padded = await broadenInitialShortlist(deps, s.builderId, filters, s.constraints, s.discover.rejectedProjectIds, listed);
       listed = padded.matches;
       padRelaxed = padded.relaxed;
@@ -3192,7 +3193,7 @@ async function fetchAnswer(
     const assetKind = normalizeMediaAssetKind(rawKind) ?? rawKind;
     const mediaName =
       (s.focus?.projectId === goal.projectId ? focusName : '') ||
-      s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
+      currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
       focusName;
     const projectName = mediaName || focusName || 'this project';
     // Inventory gate: when focused detail lists media kinds and the requested
@@ -3343,7 +3344,7 @@ async function fetchAnswer(
     // "Regulatory snapshot for Sanctuary" on an Eldorado FAQ hit.
     const stubName =
       (s.focus?.projectId === goal.projectId ? focusName : '') ||
-      s.discover.lastOffered.find((o) => o.projectId === goal.projectId)?.name ||
+      currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
       'this project';
     evidence = {
       ...evidence,
@@ -3704,9 +3705,9 @@ async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineD
 }
 
 function compareIds(s: ConversationState): string[] {
-  const discussed = s.discover.discussedProjects ?? [];
+  const discussed = discussedList(s);
   if (discussed.length >= 2) return discussed.map((p) => p.projectId).slice(0, 3);
-  const ids = s.discover.lastOffered.map((o) => o.projectId);
+  const ids = currentShortlist(s).map((o) => o.projectId);
   if (s.focus && !ids.includes(s.focus.projectId)) ids.unshift(s.focus.projectId);
   return ids.slice(0, 3);
 }
@@ -3740,8 +3741,8 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
           for (const p of matrixPs) discussed.push({ projectId: p.project_id, name: p.name });
         }
       } else if (goal.projectId) {
-        const fromOffered = s.discover.lastOffered.find((o) => o.projectId === goal.projectId);
-        const fromDiscussed = (s.discover.discussedProjects ?? []).find((o) => o.projectId === goal.projectId);
+        const fromOffered = currentShortlist(s).find((o) => o.projectId === goal.projectId);
+        const fromDiscussed = discussedList(s).find((o) => o.projectId === goal.projectId);
         const name = fromOffered?.name ?? fromDiscussed?.name ?? s.focus?.projectName;
         if (name) discussed.push({ projectId: goal.projectId, name });
       }
@@ -4213,7 +4214,7 @@ function deriveAdvisorUiMode(
   if (state.phase === 'focused') return 'focused';
 
   const matchCount = evidence.matches?.length ?? 0;
-  const hasShortlist = state.discover.lastOffered.length > 0;
+  const hasShortlist = currentShortlist(state).length > 0;
 
   if (goal.kind === 'no_fit' || searchRecovery?.mode === 'search_recovery') {
     return 'search_recovery';

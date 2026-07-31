@@ -16,6 +16,7 @@
 import { rankChips, type ChipRanking } from './rank.js';
 import type { ChipEvidence } from './catalogue.js';
 import type { ConversationState, EvidenceSet, TurnGoal } from '../engine/types.js';
+import { currentShortlist } from '../engine/entity-store.js';
 
 export interface ChipShadowLog {
   /** Artifact the ranking came from — a table swap must be visible in the data. */
@@ -51,7 +52,7 @@ export function buildChipShadow(input: {
     // only when the turn hydrated the detail. Keeping these separate is what
     // lets availability say "unknown" instead of lying in either direction.
     ...(state.focus?.projectName ? { focusName: state.focus.projectName } : {}),
-    shortlist: state.discover.lastOffered.map((o) => o.name),
+    shortlist: currentShortlist(state).map((o) => o.name),
     ...(state.visitBookedCache?.length ? { visitBooked: true } : {}),
   };
 

@@ -10,7 +10,7 @@ import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 import { answerRequirements } from './answer-contract.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
-import { discourseOffered } from './entity-store.js';
+import { discourseOffered, currentShortlist, discussedList } from './entity-store.js';
 
 /** Keep aligned with turn-intent AFFIRM_ONLY (dialogue acts, not localities). */
 const AFFIRM =
@@ -218,8 +218,8 @@ export async function extractFacts(
 
   const transition = transitionKw ?? transitionFromLlm;
   const detailsPick = detectDetailsPick(text, s);
-  const shortlistPick = matchOfferedName(text, s.discover.lastOffered);
-  const implicitProjectPick = wantsImplicitProjectPick(text, s.discover.lastOffered, s.focus);
+  const shortlistPick = matchOfferedName(text, currentShortlist(s));
+  const implicitProjectPick = wantsImplicitProjectPick(text, currentShortlist(s), s.focus);
   const pickName =
     detailsPick ??
     shortlistPick ??
@@ -329,11 +329,11 @@ export function extractFactsSync(
   const transitionKw = detectTransition(text);
   const namedProjects = resolveNamed(text, s);
   const detailsPick = detectDetailsPick(text, s);
-  const shortlistPick = matchOfferedName(text, s.discover.lastOffered);
+  const shortlistPick = matchOfferedName(text, currentShortlist(s));
   const pickName = detailsPick ?? shortlistPick;
   const ordinal = detectOrdinal(text);
   const affirm = AFFIRM.test(text.trim());
-  const implicitProjectPick = wantsImplicitProjectPick(text, s.discover.lastOffered, s.focus);
+  const implicitProjectPick = wantsImplicitProjectPick(text, currentShortlist(s), s.focus);
   const emiRate = parseEmiRate(text);
   const emiTenure = parseEmiTenure(text);
   return {
@@ -499,12 +499,12 @@ function resolveNamed(text: string, s: ConversationState): OfferedProject[] {
   // Discourse pool (entity store) — full catalog names still come from PROJECT_VECTORS.
   // Store membership includes discussed that fell off the legacy last-6 cap.
   const fromStore = discourseOffered(s);
-  const offered = s.discover.lastOffered;
+  const offered = currentShortlist(s);
   const pool: OfferedProject[] =
     fromStore.length > 0
       ? fromStore
       : (() => {
-          const discussed = s.discover.discussedProjects ?? [];
+          const discussed = discussedList(s);
           const legacy: OfferedProject[] = [...offered];
           for (const d of discussed) {
             if (!legacy.some((p) => p.projectId === d.projectId)) legacy.push(d);
@@ -1054,8 +1054,8 @@ export type ExtractLocationContext = {
 };
 
 function projectNameHints(s: ConversationState): string[] {
-  const names = s.discover.lastOffered.map((o) => o.name);
-  for (const d of s.discover.discussedProjects ?? []) names.push(d.name);
+  const names = currentShortlist(s).map((o) => o.name);
+  for (const d of discussedList(s)) names.push(d.name);
   if (s.focus?.projectName) names.push(s.focus.projectName);
   return names;
 }
@@ -1494,7 +1494,7 @@ function detectDetailsPick(text: string, s: ConversationState): string | undefin
   const needle = m[1].trim().toLowerCase();
   // "details on the project" / "this project" — not a named pick
   if (/^(?:the|this)(?:\s+project)?$/i.test(needle)) return undefined;
-  for (const o of s.discover.lastOffered) {
+  for (const o of currentShortlist(s)) {
     const distinctive = o.name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
     if (needle.includes(distinctive) || distinctive.includes(needle)) return o.name;
   }

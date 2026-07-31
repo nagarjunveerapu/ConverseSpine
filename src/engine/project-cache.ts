@@ -1,5 +1,6 @@
 import type { DataResult, EngineDeps } from './ports.js';
 import type { ConversationState, Match, ProjectDetail } from './types.js';
+import { currentShortlist, discussedList } from './entity-store.js';
 
 /**
  * Identity we already hold for a project. Search results and the focused
@@ -9,7 +10,7 @@ function knownIdentity(
   s: ConversationState,
   projectId: string,
 ): { name: string; microMarket: string } | null {
-  const offered = [...s.discover.lastOffered, ...(s.discover.discussedProjects ?? [])].find(
+  const offered = [...currentShortlist(s), ...discussedList(s)].find(
     (p) => p.projectId === projectId && p.name.trim(),
   );
   if (offered) return { name: offered.name, microMarket: offered.microMarket ?? '' };

@@ -1,4 +1,5 @@
 import type { ConversationState, Extracted } from '../types.js';
+import { currentShortlist, discussedList } from '../entity-store.js';
 
 /** Compare / shortlist hub turns — must bypass RTI recovery and use lastOffered, not re-search no_fit. */
 export function isCompareAmongOfferedTurn(text: string): boolean {
@@ -41,8 +42,8 @@ export function prepareCompareExtracted(
   ex: Extracted,
 ): Extracted {
   if (!isCompareAmongOfferedTurn(text)) return ex;
-  const offered = state.discover.lastOffered;
-  const discussed = state.discover.discussedProjects ?? [];
+  const offered = currentShortlist(state);
+  const discussed = discussedList(state);
   const topics = ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : [];
   const withCompare = topics.includes('compare') ? topics : (['compare', ...topics] as Extracted['askTopics']);
 
@@ -85,7 +86,7 @@ export function prepareCompareExtracted(
 
 /** When buyer already has a multi-project shortlist, do not emit budget-gap no_fit on compare-ish turns. */
 export function shouldAllowBudgetGapNoFit(state: ConversationState, text: string): boolean {
-  if (state.discover.lastOffered.length < 2) return true;
+  if (currentShortlist(state).length < 2) return true;
   if (isCompareAmongOfferedTurn(text)) return false;
   if (/\bcompare\b/i.test(text)) return false;
   return true;
