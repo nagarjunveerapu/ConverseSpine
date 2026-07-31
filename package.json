@@ -32,7 +32,8 @@
     "test:phase-1c:report": "tsx scripts/run-phase-1c-adversarial.ts",
     "test:probe": "tsx scripts/probe-project-vectors.ts",
     "smoke:p7": "bash scripts/smoke-p7-focused-chips.sh",
-    "dev:local": "wrangler dev --env local --port 8789"
+    "dev:local": "wrangler dev --env local --port 8789",
+    "dev:remote": "wrangler dev --env local --port 8789"
   },
   "dependencies": {
     "handlebars": "^4.7.8"

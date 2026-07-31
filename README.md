@@ -31,6 +31,32 @@ Worker, so your local turns go to the shared dev database no matter what
 `NAYADESK_URL` says. `--env local` has no such binding and takes the HTTP path to
 `localhost:8787`.
 
+### `dev:local` and `dev:remote` are the same command
+
+They are aliases, on purpose. **ConverseSpine has no database** — zero D1
+bindings — so there is no local-vs-remote data choice to make here. Its facts
+come from whichever NayaDesk it is pointed at, and both scripts point at
+`localhost:8787`.
+
+What decides your data is the **Desk** command:
+
+| NayaDesk | ConverseSpine | Data the bot answers from |
+|---|---|---|
+| `npm run dev:local` | `dev:local` *or* `dev:remote` | local SQLite |
+| `npm run dev:remote` | `dev:local` *or* `dev:remote` | `naya-db-dev` (shared) |
+
+Both names exist so the pair reads the same across repos — run `dev:remote` in
+NayaDesk and `dev:remote` here and you get exactly the stack you expect. The one
+command that is **not** equivalent is `npm run dev`, which reaches the deployed
+Desk.
+
+Confirm it rather than assuming:
+
+```bash
+curl -s localhost:8789/health   # → "nayadesk":"http://localhost:8787"
+curl -s localhost:8787/api/health   # → "mode":"localremote","data":"naya-db-dev"
+```
+
 Check the two agree about each other before debugging anything else:
 
 ```bash
