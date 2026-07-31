@@ -337,3 +337,80 @@ LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 NAYADESK_URL = "https://nayadesk-prod.nagarjun-arjun.workers.dev"
 # Milestone 1: FAILURE_*/SIL_*/CHIP_RANK_LIVE stay unset (off). Flag soak = milestone 2.
 # Cutover runbook: NayaDesk docs/PROD_CUTOVER.md
+
+# ── Fully local stack (env.local) ─────────────────────────────────────────
+# Everything on one laptop: this Worker and NayaDesk both on localhost, against
+# NayaDesk's LOCAL D1 — so a database you just bootstrapped is the one the bot
+# reads and writes.
+#
+# The one real difference from env.dev: no [[services]] block. A service binding
+# always wins over NAYADESK_URL in crm/nayadesk-client.ts, and a bound service
+# can only point at a DEPLOYED worker — which would quietly send local turns to
+# the shared dev database. Dropping the binding takes the HTTP path to localhost.
+#
+# Vectorize, Workers AI and KV stay remote = true: none has a local simulator and
+# all are read-mostly here. So this env still needs Cloudflare auth
+# (`wrangler login`) even though the Worker code runs on your machine.
+#
+# Vars mirror [env.dev.vars] — keep them in step when you change a flag there.
+#   Terminal 1:  cd ../NayaDesk && npm run dev:local
+#   Terminal 2:  npm run dev:local
+[env.local]
+name = "converse-spine-local"
+
+[[env.local.kv_namespaces]]
+binding = "TURN_CACHE"
+id = "66ef723ea8614317b80aac74b77f03d1"
+preview_id = "66ef723ea8614317b80aac74b77f03d1"
+remote = true
+
+[[env.local.durable_objects.bindings]]
+name = "TURN_DEBOUNCER"
+class_name = "TurnDebouncer"
+
+[[env.local.vectorize]]
+binding = "INTENT_VECTORS"
+index_name = "naya-intent-p256-f6665e0b79-full-dev"
+remote = true
+
+[[env.local.vectorize]]
+binding = "PROJECT_VECTORS"
+index_name = "naya-project-names-dev"
+remote = true
+
+[[env.local.vectorize]]
+binding = "EDUCATION_VECTORS"
+index_name = "naya-buyer-education-dev"
+remote = true
+
+[env.local.ai]
+binding = "AI"
+remote = true
+
+[env.local.vars]
+NAYADESK_URL = "http://localhost:8787"
+ADVISOR_BUILDER_ID = "naya-advisor"
+LOG_LEVEL = "info"
+LOCAL_TURN_LOG = "on"
+FAILURE_LOG = "true"
+FAILURE_TOOLS = "true"
+FAILURE_ROUTING = "true"
+FAILURE_SEARCH = "true"
+FAILURE_ANSWER = "true"
+ROUTING_IN_GOAL = "false"
+UNDERSTANDING_BEFORE_MUTATION = "true"
+TOPIC_UNION = "true"
+CHIP_RANK_LIVE = "true"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+DEFAULT_BUILDER_ID = "lokations"
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
+SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/feat/phase-2-state-conditioned-embed/corpus/intent-registry.jsonl"
+SIL_CANONICAL_EMBED = "false"
+SIL_STATE_TOKENS = "true"
+UNDERSTANDING_CAPTURE = "true"
+SIL_EVAL_ENABLED = "true"
+UNDERSTANDING_AUTO_TEACH = "false"
+SIL_INTENT_PROJECTION = "p256-f6665e0b79"
+SIL_EMBED_FIRST = "true"
