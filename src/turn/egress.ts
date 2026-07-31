@@ -14,6 +14,10 @@ export function postTurnEgress(
     understood: UnderstandResult;
     visitBooked: boolean;
     project_id?: string;
+    /** Resolved IST instant for the booked slot (engine/visit-slot.ts). */
+    visit_iso?: string;
+    /** What the buyer actually said — kept for display, never for arithmetic. */
+    visit_label?: string;
   },
 ): void {
   const observations: Array<{ fact_key: string; value: unknown; provenance: string; confidence?: number }> =
@@ -27,7 +31,14 @@ export function postTurnEgress(
   if (input.visitBooked && input.project_id) {
     observations.push({
       fact_key: 'visit_booked',
-      value: { project_id: input.project_id, at: new Date().toISOString() },
+      value: {
+        project_id: input.project_id,
+        // WHEN THE VISIT IS. `at` below is when it was booked — the previous
+        // shape carried only that, so Desk had a booking with no appointment.
+        ...(input.visit_iso ? { visit_iso: input.visit_iso } : {}),
+        ...(input.visit_label ? { said: input.visit_label } : {}),
+        at: new Date().toISOString(),
+      },
       provenance: 'regex',
       confidence: 1,
     });
