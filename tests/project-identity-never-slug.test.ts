@@ -42,13 +42,17 @@ function depsWith(detailFor: string | null) {
     data: {
       projectDetail: async (_b: string, _nd: string, pid: string) =>
         pid === detailFor
-          ? ({
-              projectId: pid,
-              name: 'Brigade Eldorado',
-              microMarket: 'Aerospace Park / Devanahalli Corridor',
-              summary: '50-acre integrated township.',
-            } as ProjectDetail)
-          : null,
+          ? {
+              ok: true as const,
+              latency_ms: 1,
+              value: {
+                projectId: pid,
+                name: 'Brigade Eldorado',
+                microMarket: 'Aerospace Park / Devanahalli Corridor',
+                summary: '50-acre integrated township.',
+              } as ProjectDetail,
+            }
+          : { ok: false as const, reason: 'absent' as const, latency_ms: 1 },
       listUnits: async () => [
         { unitType: '2 BHK', priceDisplay: '₹57.5 L', priceMinInr: 5750000 },
       ],
@@ -60,7 +64,7 @@ describe('a project is never named after its id', () => {
   it('uses the search result identity when Desk is focused elsewhere', async () => {
     // The exact live shape: prefetching a match while Desk's focus is another
     // project. Previously this cached { name: projectId, microMarket: '' }.
-    const detail = await hydrateProjectDetail(depsWith('some-other-project'), stateWith(), PID);
+    const { detail } = await hydrateProjectDetail(depsWith('some-other-project'), stateWith(), PID);
 
     expect(detail).not.toBeNull();
     expect(detail!.name).toBe('Brigade Eldorado');
@@ -74,7 +78,7 @@ describe('a project is never named after its id', () => {
     const blank = stateWith({
       discover: { ...stateWith().discover, lastOffered: [] },
     });
-    expect(await hydrateProjectDetail(depsWith(null), blank, PID)).toBeNull();
+    expect((await hydrateProjectDetail(depsWith(null), blank, PID)).detail).toBeNull();
   });
 
   it('re-hydrates an identity-only card once the project becomes the focus', async () => {
@@ -84,7 +88,7 @@ describe('a project is never named after its id', () => {
       microMarket: 'Aerospace Park / Devanahalli Corridor',
       identityOnly: true,
     };
-    const detail = await hydrateProjectDetail(
+    const { detail } = await hydrateProjectDetail(
       depsWith(PID),
       stateWith({ projectCache: { [PID]: cached } }),
       PID,
@@ -101,7 +105,7 @@ describe('a project is never named after its id', () => {
       microMarket: 'Aerospace Park / Devanahalli Corridor',
       summary: 'cached',
     };
-    const detail = await hydrateProjectDetail(
+    const { detail } = await hydrateProjectDetail(
       // projectDetail would throw if called — it must not be.
       { data: { projectDetail: () => { throw new Error('refetched'); }, listUnits: async () => [] } } as never,
       stateWith({ projectCache: { [PID]: full } }),

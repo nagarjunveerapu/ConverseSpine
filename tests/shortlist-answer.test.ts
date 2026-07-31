@@ -129,7 +129,7 @@ describe('shortlist facet answers end-to-end', () => {
     const { deps, turn } = harness('sla-basis-fallback');
     const original = deps.data.priceBasis.bind(deps.data);
     deps.data.priceBasis = async (b, nd, id, ut) =>
-      id === 'ayana' ? null : original(b, nd, id, ut);
+      id === 'ayana' ? { ok: false, reason: 'absent', latency_ms: 1 } : original(b, nd, id, ut);
     await turn('plantation under 50 lakhs');
     const r = await turn('ohh ok. emi will be how much');
     // Ayana's EMI computes from its own shortlist price (₹24.95 L basis).
@@ -140,7 +140,7 @@ describe('shortlist facet answers end-to-end', () => {
     const { deps, turn } = harness('sla-missing');
     const originalBasis = deps.data.priceBasis.bind(deps.data);
     deps.data.priceBasis = async (b, nd, id, ut) =>
-      id === 'ayana' ? null : originalBasis(b, nd, id, ut);
+      id === 'ayana' ? { ok: false, reason: 'absent', latency_ms: 1 } : originalBasis(b, nd, id, ut);
     const originalSearch = deps.data.search.bind(deps.data);
     deps.data.search = async (b, f) => {
       const r = await originalSearch(b, f);

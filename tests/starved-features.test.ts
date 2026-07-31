@@ -16,7 +16,8 @@ function harness(convId: string, detailPatch?: Record<string, unknown>) {
     const orig = deps.data.projectDetail.bind(deps.data);
     deps.data.projectDetail = async (b, nd, id) => {
       const d = await orig(b, nd, id);
-      return d ? { ...d, ...detailPatch } : d;
+      if (!d.ok) return d;
+      return { ...d, value: { ...d.value, ...detailPatch } };
     };
   }
   const turn = (text: string) =>

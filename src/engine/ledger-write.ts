@@ -21,7 +21,14 @@ export interface LedgerWritePayload {
   action_plan: Record<string, unknown>;
   offered_project_ids: string[];
   disclosed_facts: DisclosedFact[];
-  tool_runs: Array<{ name: string; args_summary: string; produced_evidence: boolean; latency_ms: number }>;
+  tool_runs: Array<{
+    name: string;
+    args_summary: string;
+    produced_evidence: boolean;
+    latency_ms: number;
+    /** Phase 0b — set when the port returned !ok. */
+    failure_reason?: 'absent' | 'transport';
+  }>;
   verify: Record<string, unknown>;
   composer: string;
 }
@@ -192,18 +199,20 @@ export function buildLedgerWritePayload(input: {
     action_plan,
     offered_project_ids,
     disclosed_facts: extractDisclosedFacts({ goal, evidence }),
-    tool_runs: (evidence.tools ?? []).map((name) => ({
-      name,
-      args_summary: '',
-      // OBSERVED, not assumed. `success: true` was hardcoded on every row, so
-      // a swallowed Desk null looked identical to a cost sheet. This reports
-      // only what is checkable without the port change: did the call put
-      // anything in evidence. It deliberately does NOT claim to separate a
-      // legitimate absence from a transport failure -- that is 0b's result
-      // wrappers, and asserting it here would be a new lie for an old one.
-      produced_evidence: toolProducedEvidence(name, evidence),
-      latency_ms: 0,
-    })),
+    tool_runs: (evidence.tools ?? []).map((name) => {
+      const produced = toolProducedEvidence(name, evidence);
+      const latency_ms = evidence.toolLatencyMs?.[name] ?? 0;
+      const failure_reason = evidence.toolFailureReason?.[name];
+      return {
+        name,
+        args_summary: '',
+        // Phase 0b — produced_evidence only when the slot filled; failure_reason
+        // separates catalog absence from transport when the port reported !ok.
+        produced_evidence: produced,
+        latency_ms,
+        ...(failure_reason && !produced ? { failure_reason } : {}),
+      };
+    }),
     verify: {
       grounding: grounding ?? 'pass',
       // v1 instrument only — dump = delivered ≫ asked. Gate later.
@@ -213,6 +222,9 @@ export function buildLedgerWritePayload(input: {
         faq_keys_delivered: faqKeysDelivered,
         education_delivered: Boolean(evidence.education),
       },
+      ...(Object.keys(evidence.toolFailureReason ?? {}).length
+        ? { tool_failures: evidence.toolFailureReason }
+        : {}),
     },
     composer: 'converse_engine',
   };

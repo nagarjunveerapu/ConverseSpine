@@ -133,11 +133,12 @@ import type {
   Match,
   ObjectionTopic,
   OfferedProject,
+  ProjectDetail,
   RelaxedDimension,
   TurnDebug,
   TurnGoal,
 } from './types.js';
-import type { EngineDeps } from './ports.js';
+import type { DataResult, EngineDeps } from './ports.js';
 
 export interface EngineTurnInput {
   convId: string;
@@ -1693,9 +1694,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // front instead of propose→fail. Counts absent (pre-#203 payloads) →
     // fail open and keep the honest propose→409 path.
     const wantType = goal.unitType.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const detail = await deps.data
+    const detailRes = await deps.data
       .projectDetail(state.builderId, nd, goal.projectId)
       .catch(() => null);
+    const detail = detailRes?.ok ? detailRes.value : null;
     const cfg = detail?.configurations?.find(
       (u) => u.unitType.toLowerCase().replace(/[^a-z0-9]/g, '') === wantType,
     );
@@ -2985,7 +2987,7 @@ async function fetchShortlistAnswer(
       topic: 'legal',
       label: 'Legal & approvals',
       perProject: matches.map((m, i) => {
-        const d = details[i];
+        const d = details[i]?.ok ? details[i]!.value : null;
         const parts = [
           d?.reraNumber?.trim() ? `RERA ${d.reraNumber.trim()}` : '',
           d?.khata?.trim() ?? '',
@@ -3014,7 +3016,9 @@ async function fetchShortlistAnswer(
         // honest fallback (s01: no BHK on the brief → priceBasis missed and
         // the whole EMI block silently vanished). basisFormatted names the
         // basis either way, so the figure is never presented as unit-exact.
-        const basisInr = bases[i]?.priceInr ?? (m.startingPriceInr > 0 ? m.startingPriceInr : 0);
+        const basisInr =
+          (bases[i]?.ok ? bases[i]!.value.priceInr : 0) ||
+          (m.startingPriceInr > 0 ? m.startingPriceInr : 0);
         const outcome = computeEmi({
           ...(basisInr > 0 ? { projectPriceInr: basisInr } : {}),
           ratePercent: rate,
@@ -3081,7 +3085,7 @@ async function fetchAnswer(
   const unitType = s.constraints.bhk;
   const focusName = s.focus?.projectName ?? '';
   const topics = goal.topics?.length ? goal.topics : [goal.topic];
-  const tools: string[] = [];
+  let tools: string[] = [];
   let evidence: EvidenceSet = { tools };
 
   if (goal.topic === 'compare' || topics.includes('compare')) {
@@ -3105,20 +3109,23 @@ async function fetchAnswer(
   if (topics.includes('price')) {
     const breakdownAsk = buyerText ? wantsCostBreakdown(buyerText) : false;
     if (breakdownAsk && unitType) {
-      const landed = await deps.data.landedCost(s.builderId, nd, goal.projectId, unitType).catch(() => null);
-      if (landed) {
-        tools.push('landedCost');
-        evidence = {
-          ...evidence,
-          tools: [...new Set(tools)],
-          landedCost: landed,
-        };
+      const landedRes = await deps.data
+        .landedCost(s.builderId, nd, goal.projectId, unitType)
+        .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+      evidence = stampToolRun(evidence, 'landedCost', landedRes);
+      tools = evidence.tools;
+      if (landedRes.ok) {
+        evidence = { ...evidence, landedCost: landedRes.value };
       }
     }
     if (!evidence.landedCost) {
-      const pricing = await deps.data.pricing(s.builderId, nd, goal.projectId, unitType).catch(() => null);
-      if (pricing) {
-        tools.push('pricing');
+      const pricingRes = await deps.data
+        .pricing(s.builderId, nd, goal.projectId, unitType)
+        .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+      evidence = stampToolRun(evidence, 'pricing', pricingRes);
+      tools = evidence.tools;
+      if (pricingRes.ok) {
+        const pricing = pricingRes.value;
         // AB-1 — a cost-component ask gets THE component(s), filtered at the
         // EVIDENCE level so both the LLM composer and the template floor see
         // only the asked rows ("club membership fee?" led with base price when
@@ -3130,7 +3137,6 @@ async function fetchAnswer(
         const components = asked.length ? asked : pricing.components;
         evidence = {
           ...evidence,
-          tools: [...new Set(tools)],
           pricing: { ...pricing, components, projectName: pricing.projectName || focusName },
         };
       }
@@ -3138,14 +3144,19 @@ async function fetchAnswer(
   }
 
   if (topics.includes('emi')) {
-    const basis = await deps.data.priceBasis(s.builderId, nd, goal.projectId, unitType).catch(() => null);
+    const basisRes = await deps.data
+      .priceBasis(s.builderId, nd, goal.projectId, unitType)
+      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+    evidence = stampToolRun(evidence, 'priceBasis', basisRes);
+    tools = evidence.tools;
+    const basis = basisRes.ok ? basisRes.value : null;
     const outcome = computeEmi({
       ...(basis ? { projectPriceInr: basis.priceInr } : {}),
       ratePercent: ex.emiRatePercent ?? DEFAULT_RATE_PERCENT,
       tenureYears: ex.emiTenureYears ?? DEFAULT_TENURE_YEARS,
     });
     if (outcome.ok) {
-      tools.push('priceBasis', 'emi');
+      tools.push('emi');
       evidence = {
         ...evidence,
         tools: [...new Set(tools)],
@@ -3188,11 +3199,15 @@ async function fetchAnswer(
         : s.projectCache?.[goal.projectId]?.mediaKinds;
     let inventoryKinds = cachedKinds;
     if (inventoryKinds === undefined) {
-      const detailForMedia = await hydrateProjectDetail(deps, s, goal.projectId).catch(() => null);
-      if (detailForMedia) {
-        inventoryKinds = detailForMedia.mediaKinds;
+      const hydratedMedia = await hydrateProjectDetail(deps, s, goal.projectId).catch(() => null);
+      if (hydratedMedia?.fetch) {
+        evidence = stampToolRun(evidence, 'detail', hydratedMedia.fetch);
+        tools = evidence.tools;
+      }
+      if (hydratedMedia?.detail) {
+        inventoryKinds = hydratedMedia.detail.mediaKinds;
         if (!evidence.detail) {
-          evidence = { ...evidence, detail: detailForMedia };
+          evidence = { ...evidence, detail: hydratedMedia.detail };
         }
       }
     }
@@ -3305,13 +3320,20 @@ async function fetchAnswer(
   const faqBlockedForIntel = new Set(['rental_yield', 'resale_value']);
   for (const key of faqKeys) {
     if (deps.failureAnswer && faqBlockedForIntel.has(key)) continue;
-    const faq = await deps.data.faqLookup(goal.projectId, key).catch(() => null);
-    if (faq?.answer) {
-      faqHits.push({ questionKey: key, question: faq.question, answer: faq.answer });
+    const faqRes = await deps.data
+      .faqLookup(goal.projectId, key)
+      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+    evidence = stampToolRun(evidence, 'faqLookup', faqRes);
+    tools = evidence.tools;
+    if (faqRes.ok && faqRes.value.answer) {
+      faqHits.push({
+        questionKey: key,
+        question: faqRes.value.question,
+        answer: faqRes.value.answer,
+      });
     }
   }
   if (faqHits.length) {
-    tools.push('faqLookup');
     // Stub name must follow goal.projectId — lagging focus used to print
     // "Regulatory snapshot for Sanctuary" on an Eldorado FAQ hit.
     const stubName =
@@ -3430,12 +3452,16 @@ async function fetchAnswer(
       const { [goal.projectId]: _stale, ...restCache } = s.projectCache;
       hydrateState = { ...s, projectCache: restCache };
     }
-    let detail = await hydrateProjectDetail(deps, hydrateState, goal.projectId);
+    const hydrated = await hydrateProjectDetail(deps, hydrateState, goal.projectId);
+    if (hydrated.fetch) {
+      evidence = stampToolRun(evidence, 'detail', hydrated.fetch);
+      tools = evidence.tools;
+    }
+    let detail = hydrated.detail;
     if (detail && topics.includes('legal')) {
       detail = await enrichDetailLegal(deps, nd, detail);
     }
     if (detail && needsDetail) {
-      tools.push('detail');
       // Detail replaces any topic-hint FAQ attach (original single-owner
       // behavior) — only text-bound faq-shaped asks keep their FAQ answer.
       // AB-8b — but a multi-atom legal ask (legalSnapshotNeeded) DOES carry a
@@ -3446,17 +3472,18 @@ async function fetchAnswer(
       // Desk often stores LTV as a pricing "Loan LTV" info row, not
       // projects.loan_eligibility — lift it when the buyer asked about loan.
       if (loanEligibilityNeeded && !nextDetail.loanEligibility) {
-        const pricing = await deps.data
+        const pricingRes = await deps.data
           .pricing(s.builderId, nd, goal.projectId, unitType)
-          .catch(() => null);
+          .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+        evidence = stampToolRun(evidence, 'pricing', pricingRes);
+        tools = evidence.tools;
+        const pricing = pricingRes.ok ? pricingRes.value : null;
         const ltv = pricing?.components?.find((c) => /loan\s*ltv|ltv/i.test(c.label));
-        if (ltv?.value) {
-          tools.push('pricing');
+        if (ltv?.value && pricing) {
           nextDetail = { ...nextDetail, loanEligibility: ltv.value };
           evidence = {
             ...evidence,
-            tools: [...new Set(tools)],
-            pricing: { ...pricing!, projectName: pricing!.projectName || focusName },
+            pricing: { ...pricing, projectName: pricing.projectName || focusName },
           };
         }
       }
@@ -3587,11 +3614,40 @@ async function fetchVisitRecall(
   };
 }
 
+/** Phase 0b — record tool name + latency + failure_reason onto evidence. */
+function stampToolRun<T>(
+  evidence: EvidenceSet,
+  name: string,
+  result: DataResult<T>,
+): EvidenceSet {
+  const tools = [...new Set([...(evidence.tools ?? []), name])];
+  const toolLatencyMs = { ...(evidence.toolLatencyMs ?? {}), [name]: result.latency_ms };
+  if (result.ok) {
+    if (!evidence.toolFailureReason?.[name]) {
+      return { ...evidence, tools, toolLatencyMs };
+    }
+    const nextFail = { ...evidence.toolFailureReason };
+    delete nextFail[name];
+    return {
+      ...evidence,
+      tools,
+      toolLatencyMs,
+      ...(Object.keys(nextFail).length ? { toolFailureReason: nextFail } : {}),
+    };
+  }
+  return {
+    ...evidence,
+    tools,
+    toolLatencyMs,
+    toolFailureReason: { ...(evidence.toolFailureReason ?? {}), [name]: result.reason },
+  };
+}
+
 async function enrichDetailLegal(
   deps: EngineDeps,
   nd: string,
-  detail: NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>,
-): Promise<NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>> {
+  detail: ProjectDetail,
+): Promise<ProjectDetail> {
   if (detail.reraNumber?.trim() && detail.phases?.length) return detail;
   const ctx = await deps.data.conversationContext(nd).catch(() => null);
   // Context is Desk-focus-scoped — never overlay another project's RERA/phases.

@@ -31,7 +31,9 @@ function depsWithTaughtFacet(opts: { withFaqRow: boolean }) {
   const baseLookup = deps.data.faqLookup.bind(deps.data);
   deps.data.faqLookup = async (pid: string, key: string) => {
     if (key === 'resale_value') {
-      return opts.withFaqRow ? { question: 'Can I resell?', answer: RESALE_ANSWER } : null;
+      return opts.withFaqRow
+        ? { ok: true, latency_ms: 1, value: { question: 'Can I resell?', answer: RESALE_ANSWER } }
+        : { ok: false, reason: 'absent', latency_ms: 1 };
     }
     return baseLookup(pid, key);
   };

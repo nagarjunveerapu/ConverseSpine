@@ -97,9 +97,23 @@ But ~15 methods use nullable contracts today (`projectDetail`, `pricing`, `compa
 
 | tier | scope | size |
 |---|---|---|
-| **0a** | `tool_runs[].success` + real `latency_ms`; `postChoiceEvent` `engine_status`; drop the `Math.max(…, 2)` floor on `projects_compared`; promote the fields `observability/turn-log-snapshot.ts` already computes (`named_projects` as `id:name` pairs, `switch_intent`, full `extract_provenance`) from the wrangler-dev-only path into the deployed ledger row | **S — the "one day"** |
-| 0b | result wrappers for the methods 0a measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` | M |
+| **0a** | `tool_runs[].success` + real `latency_ms`; `postChoiceEvent` `engine_status`; drop the `Math.max(…, 2)` floor on `projects_compared`; promote the fields `observability/turn-log-snapshot.ts` already computes (`named_projects` as `id:name` pairs, `switch_intent`, full `extract_provenance`) from the wrangler-dev-only path into the deployed ledger row | **S — the "one day"** (landed) |
+| **0b** | result wrappers for the methods 0a measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` | M — **in progress** |
 | 0c | remainder of `EngineData` | separate PR |
+
+### Phase 0b contract (in progress)
+
+```ts
+type DataResult<T> =
+  | { ok: true; value: T; latency_ms: number }
+  | { ok: false; reason: 'absent' | 'transport'; latency_ms: number };
+```
+
+- Desk empty / 404 / no row → `absent`
+- thrown / network / unexpected → `transport`
+- success → `ok` with wall-clock `latency_ms`
+- Ledger: `produced_evidence` only on `ok`; carry `latency_ms`; optional `failure_reason` on the tool run
+- Scenario gate: `npm run test:phase-0b` / `test:phase-0b:live` (IDs `0B-01`…`0B-14`, including multi-intent articulation)
 
 ### Gate
 A forced adapter failure appears as `success: false`. One ledger row answers *"what bound, what goal, what reply, and did the data exist."* **0c is not required to merge 0a.**
@@ -436,11 +450,28 @@ Nearest-neighbour retrieval has no `and` operator: the embedding of *"price and 
 - Cap the set (2–3) and order by score, so compose's existing top-2 policy still applies.
 - Hard negatives ride the gate: `find_projects` and `get_price` must not degrade. A lift that breaks the transactional core is a regression wearing a win's clothes.
 
+### Consumer compose contract (ships with Phase 0b — independent of producer)
+
+AB-8 **fetch** (multiple topics → evidence atoms) is necessary but **not sufficient**. Stitching atom templates that each re-stamp the project name produces awkward multi-intent copy:
+
+> Pricing — Eldorado: 2BHK …  
+> Eldorado is in …
+
+**Locked join policy** for `topics.length > 1` under focused evidence (`compose.ts`):
+
+1. Resolve **one** display subject (`focusProjectName` / detail / pricing name).
+2. Emit a **lead** once: `On *{Subject}*:`.
+3. Emit **facet atoms** that do **not** re-prefix the project name (price components, location micro-market, media title+URL, FAQ body, legal snapshot body).
+4. Join facets under the lead (`; ` or short lines); single park/CTA at the end.
+5. **Single-topic path unchanged** — no thinning of “just price” / “just location”.
+
+Proof cases: `0B-13` (price + location), `0B-14` (brochure + starting price), plus Wave-3 multi-atom holds (`0B-07`, `0B-08`). Scenario suite: `npm run test:phase-0b`.
+
 ### Gate
-*"price and is it RERA approved"* answers both facets. Holdout re-scored at the new τ with no per-intent regression.
+*"price and is it RERA approved"* answers both facets. Holdout re-scored at the new τ with no per-intent regression. Articulated multi-intent consumer gate (0b) does **not** wait on the producer.
 
 ### Independence, honestly
-The **scoring** change is independent of Phase 1 — it touches the router, not the state. The **product** gate is not: answering two facets still needs a subject, and on a shortlist that subject comes from the entity store. Phase 3 can be built in parallel; its multi-topic gate may need Phase 1 to pass.
+The **scoring** change is independent of Phase 1 — it touches the router, not the state. The **product** gate is not: answering two facets still needs a subject, and on a shortlist that subject comes from the entity store. Phase 3 can be built in parallel; its multi-topic gate may need Phase 1 to pass. The **compose join policy** above can (and does) ship with 0b without waiting on the multi-label router.
 
 ---
 
@@ -685,12 +716,12 @@ direction; “small, one day” only holds if scoped.
 
 | Tier | Scope | Size |
 |---|---|---|
-| **0a** | Ledger `tool_runs[].success`, `postChoiceEvent` `engine_status`, drop `projects_compared` floor, promote `turn-log-snapshot` fields into deployed ledger | S — the “one day” |
-| **0b** | Result wrappers for methods Phase 0 measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` | M |
+| **0a** | Ledger `tool_runs[].success`, `postChoiceEvent` `engine_status`, drop `projects_compared` floor, promote `turn-log-snapshot` fields into deployed ledger | S — landed |
+| **0b** | `DataResult<T>` wrappers for `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy + `test:phase-0b` gate (`0B-01`…`0B-14`) | M — in progress |
 | **0c** | Remainder of `EngineData` | separate PR |
 
-Gate for closing Phase 0 remains: forced adapter failure → `success: false`. Do
-not require 0c to merge 0a.
+Gate for closing Phase 0 remains: forced adapter failure → `success: false` with
+`failure_reason: 'transport' | 'absent'`. Do not require 0c to merge 0a/0b.
 
 ### 14.5 Out of scope for this LLD (Lane B — do not absorb)
 

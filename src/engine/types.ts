@@ -607,6 +607,10 @@ export type RelaxedDimension = 'type' | 'area' | 'size' | 'budget';
 
 export interface EvidenceSet {
   tools: string[];
+  /** Phase 0b — wall-clock ms per tool name (last call wins). */
+  toolLatencyMs?: Record<string, number>;
+  /** Phase 0b — absent vs transport when the port returned !ok. */
+  toolFailureReason?: Record<string, 'absent' | 'transport'>;
   matches?: Match[];
   /**
    * Dimensions of the buyer's ask that had to be RELAXED for these matches to

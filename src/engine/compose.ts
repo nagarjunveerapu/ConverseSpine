@@ -557,6 +557,9 @@ export function fallbackReply(req: ComposeRequest): string {
       }
 
       const chunks: string[] = [];
+      // Phase 0b / dialogue-state — multi-intent join: one subject lead, facet
+      // atoms without re-stamping the project name on every line.
+      const multiTopic = topics.length > 1;
 
       if (ev.detail) {
         for (const line of advisoryFactLines(ev.detail, goal.requires, context.buyerText ?? '')) {
@@ -574,25 +577,29 @@ export function fallbackReply(req: ComposeRequest): string {
         const asked = componentsForAsk(context.buyerText ?? '', p.components);
         const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 4);
         const parts = shown.map(formatPriceComponent).join(', ');
-        chunks.push(`*Pricing — ${p.projectName}:* ${parts || formatStartingPrice(p.startingDisplay) || 'on file'}`);
+        const atom = parts || formatStartingPrice(p.startingDisplay) || 'on file';
+        chunks.push(multiTopic ? atom : `*Pricing — ${p.projectName}:* ${atom}`);
       }
       if (topics.includes('price') && ev.landedCost && !suppressPrice) {
-        chunks.push(landedCostLine(ev.landedCost));
+        chunks.push(landedCostLine(ev.landedCost, { omitProjectName: multiTopic }));
       }
       if (topics.includes('property_type') && ev.detail?.projectType) {
-        chunks.push(projectTypeLine(ev.detail));
+        chunks.push(
+          multiTopic
+            ? `a *${humanizeProjectType(ev.detail.projectType)}* in ${ev.detail.microMarket || 'this market'}`
+            : projectTypeLine(ev.detail),
+        );
       }
       // AB-8 — media must join the multi-topic chunk path. Primary topic is often
       // price (TOPIC_ORDER), so the single-topic `goal.topic === 'media'` branch
       // never runs for "brochure and starting price" even when mediaShare succeeded.
       if (topics.includes('media') && ev.media) {
-        chunks.push(mediaShareLine(ev.media, context.focusProjectName));
+        chunks.push(mediaShareLine(ev.media, context.focusProjectName, { omitProjectName: multiTopic }));
       }
       // AB-8 — in a MULTI-topic ask the FAQ body carries the OTHER atom(s), so the
       // legal snapshot (RERA/khata) must still render rather than be swallowed by a
       // non-legal FAQ. "RERA and possession" was dropping RERA because a possession
       // FAQ was present. Single-topic behaviour is unchanged.
-      const multiTopic = topics.length > 1;
       const faqPresent = !!ev.detail?.faqs?.length;
       // AB-8b — render the legal SNAPSHOT (RERA/khata) when no FAQ owns it, OR it's
       // a multi-topic ask, OR the buyer named a snapshot atom (RERA/khata/EC) that
@@ -610,14 +617,19 @@ export function fallbackReply(req: ComposeRequest): string {
         // the other legal atom (loan), render the title snapshot ONLY — focusedLegalLine
         // would pick the loan facet and drop RERA. Snapshot=RERA/khata, FAQ body=loan,
         // so both survive. Otherwise keep the facet-routed line (EC/banks/loan / full).
-        chunks.push(
-          snapshotAtomAsked
-            ? legalTitleSnapshot(ev.detail!, ev.detail!.faqs ?? [])
-            : focusedLegalLine(ev.detail!, context.buyerText, context.disclosedFacts),
-        );
+        const legalLine = snapshotAtomAsked
+          ? legalTitleSnapshot(ev.detail!, ev.detail!.faqs ?? [])
+          : focusedLegalLine(ev.detail!, context.buyerText, context.disclosedFacts);
+        const legalAtom = multiTopic ? stripProjectNameLead(legalLine) : legalLine;
+        // Multi-topic + FAQ already owns the legal atom — skip empty "on file" filler.
+        const emptyLegalFiller =
+          multiTopic &&
+          faqPresent &&
+          /^legal details on file with our team\.?$/i.test(legalAtom);
+        if (!emptyLegalFiller) chunks.push(legalAtom);
       }
       if (topics.includes('location') && ev.location) {
-        chunks.push(locationSnapshotLine(ev.location));
+        chunks.push(locationSnapshotLine(ev.location, { omitProjectName: multiTopic }));
       }
       // AB-8b — a structural atom the buyer explicitly named (configs → units,
       // EMI → schedule) must render as its OWN chunk when a FAQ body is also present,
@@ -626,7 +638,11 @@ export function fallbackReply(req: ComposeRequest): string {
       // and stays additive below. When no FAQ is present the richer single-topic
       // handlers further down own these — unchanged.
       if (faqPresent && topics.includes('availability') && ev.units?.length) {
-        chunks.push(availabilityChunk(ev, context.buyerText ?? '', context.focusProjectName));
+        chunks.push(
+          availabilityChunk(ev, context.buyerText ?? '', context.focusProjectName, {
+            omitProjectName: multiTopic,
+          }),
+        );
       }
       if (faqPresent && topics.includes('emi') && ev.emi) {
         chunks.push(emiSnapshotLine(ev.emi));
@@ -648,6 +664,19 @@ export function fallbackReply(req: ComposeRequest): string {
         chunks.push(emiSnapshotLine(ev.emi));
       }
       const park = parkContinuation(goal.parkedTopics);
+      if (multiTopic && chunks.length >= 1) {
+        const subject =
+          context.focusProjectName ||
+          ev.detail?.name ||
+          ev.pricing?.projectName ||
+          ev.landedCost?.projectName ||
+          'this project';
+        const body = chunks
+          .map((c) => c.replace(/[.。]\s*$/, '').trim())
+          .filter(Boolean)
+          .join('; ');
+        return `On *${subject}*: ${body}.${park || ' Want the full breakdown or a site visit?'}`;
+      }
       if (chunks.length > 1) {
         return `${chunks.join('\n\n')}.${park || ' Want the full breakdown or a site visit?'}`;
       }
@@ -885,16 +914,23 @@ function legalTitleSnapshot(
  * as a bare chunk (the assembly appends its own follow-up). Mirrors the single-topic
  * availability logic so a co-fetched FAQ can't shadow the configs the buyer asked for.
  */
-function availabilityChunk(ev: EvidenceSet, buyerText: string, focusName?: string): string {
+function availabilityChunk(
+  ev: EvidenceSet,
+  buyerText: string,
+  focusName?: string,
+  opts?: { omitProjectName?: boolean },
+): string {
   const units = ev.units ?? [];
   const pname = ev.detail?.name ?? focusName;
-  const lead = pname ? `For *${pname}*: ` : '';
+  const lead = opts?.omitProjectName ? '' : pname ? `For *${pname}*: ` : '';
   const list = units.slice(0, 4).map((u) => formatUnitConfigLine(u)).join('; ');
   if (isInventoryAsk(buyerText)) {
     const tracked = units.filter((u) => (u.holdableUnits ?? 0) > 0);
     if (tracked.length) {
       const lines = tracked.slice(0, 4).map((u) => `${u.holdableUnits} × ${u.unitType}`).join(', ');
-      return `Still open${pname ? ` at *${pname}*` : ''}: ${lines}`;
+      const at =
+        opts?.omitProjectName || !pname ? '' : ` at *${pname}*`;
+      return `Still open${at}: ${lines}`;
     }
     // 0/absent counts are unknown, never "sold out" — route exact counts to the team.
     return `${lead}${list} are the configurations on offer — our team confirms exact unit-level availability`;
@@ -972,20 +1008,38 @@ export function typeComparisonReply(types: readonly string[], investment: boolea
   return head + tail;
 }
 
+/** Phase 0b multi-intent — drop per-atom project-name headers under the shared lead. */
+function stripProjectNameLead(line: string): string {
+  return line
+    .replace(/^For \*[^*]+\*,\s*/i, '')
+    .replace(/^Regulatory snapshot for \*[^*]+\*:\s*/i, '')
+    .replace(
+      /^Legal and title details for \*[^*]+\* are on file with our team\.?$/i,
+      'legal details on file with our team',
+    )
+    .trim();
+}
+
 /** Buyer-safe media line — shared by single-topic and AB-8 multi-topic paths. */
 function mediaShareLine(
   media: NonNullable<EvidenceSet['media']>,
   focusProjectName?: string,
+  opts?: { omitProjectName?: boolean },
 ): string {
+  const asset = media.title ?? humanizeAsset(media.assetKind);
   if (media.allowed && media.cdnUrl) {
+    if (opts?.omitProjectName) return `here's the ${asset}: ${media.cdnUrl}`;
     const pname = media.projectName || focusProjectName || 'this project';
-    return `Here's the ${media.title ?? humanizeAsset(media.assetKind)} for *${pname}*: ${media.cdnUrl}`;
+    return `Here's the ${asset} for *${pname}*: ${media.cdnUrl}`;
   }
   const pname = media.projectName || focusProjectName || 'this project';
   // media.redirectHint / reason are INTERNAL composer instructions — Desk
   // authors them for the RM ("offer site visit; do not quote this number"),
   // never as buyer copy (see NayaDesk disclosure.ts). Translate the miss into
   // buyer-safe copy; never recite the hint.
+  if (opts?.omitProjectName) {
+    return `I don't have the ${humanizeAsset(media.assetKind)} on file yet — I can walk you through the details here or share it at your site visit`;
+  }
   return `I don't have the ${humanizeAsset(media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
 }
 
@@ -1071,11 +1125,14 @@ function locationCategoryFacts(
 }
 
 /** Exported for tests. */
-export function locationSnapshotLine(l: import('./types.js').LocationEvidence): string {
+export function locationSnapshotLine(
+  l: import('./types.js').LocationEvidence,
+  opts?: { omitProjectName?: boolean },
+): string {
   const pname = (l.projectName || 'This project').trim();
   const mm = (l.microMarket ?? '').trim();
   const bits: string[] = [];
-  if (mm) bits.push(`*${pname}* is in ${mm}`);
+  if (mm) bits.push(opts?.omitProjectName ? `located in ${mm}` : `*${pname}* is in ${mm}`);
   const asked = l.askedCategories ?? [];
   if (asked.length) {
     // The buyer asked about specific POI categories — answer those with named,
@@ -1085,7 +1142,10 @@ export function locationSnapshotLine(l: import('./types.js').LocationEvidence): 
       bits.push(`${f.label} nearby: ${f.pois.map(poiFactLine).join('; ')}`);
     }
     if (askedFacts.length) {
-      return bits.length ? bits.join('. ') : `*${pname}*: ${askedFacts[0]!.label} on file.`;
+      if (bits.length) return bits.join('. ');
+      return opts?.omitProjectName
+        ? `${askedFacts[0]!.label} on file`
+        : `*${pname}*: ${askedFacts[0]!.label} on file.`;
     }
   }
   if (l.microMarketOverview) bits.push(l.microMarketOverview);
@@ -1094,7 +1154,9 @@ export function locationSnapshotLine(l: import('./types.js').LocationEvidence): 
   if (l.driveTimes?.length) bits.push(l.driveTimes.slice(0, 2).join('; '));
   // Wave 3 — never emit "*X* is in ." when Desk left micro_market blank; honest miss.
   if (!bits.length) {
-    return `I don't have connectivity / location details on file for *${pname}* yet`;
+    return opts?.omitProjectName
+      ? `I don't have connectivity / location details on file yet`
+      : `I don't have connectivity / location details on file for *${pname}* yet`;
   }
   return bits.join('. ');
 }
@@ -1114,12 +1176,17 @@ function emiSnapshotLine(e: import('./types.js').EmiEvidence): string {
   return `Indicative EMI: *${e.emiFormatted}/month* on a ${ltv}% loan (${e.principalFormatted} principal${down}) against ${e.basisFormatted} project price, at ${e.ratePercent}% for ${e.tenureYears} years`;
 }
 
-function landedCostLine(lc: import('./types.js').LandedCostEvidence): string {
+function landedCostLine(
+  lc: import('./types.js').LandedCostEvidence,
+  opts?: { omitProjectName?: boolean },
+): string {
   const oneTime = lc.oneTime
     .slice(0, 3)
     .map((c) => `${c.label}: ${c.display}`)
     .join('; ');
-  const base = `*Cost breakdown — ${lc.projectName} (${lc.unitType}):* base ${lc.baseDisplay}`;
+  const base = opts?.omitProjectName
+    ? `cost breakdown (${lc.unitType}): base ${lc.baseDisplay}`
+    : `*Cost breakdown — ${lc.projectName} (${lc.unitType}):* base ${lc.baseDisplay}`;
   const charges = oneTime ? `; ${oneTime}` : '';
   const total = lc.totalDisplay ? `; all-in ~${lc.totalDisplay}` : '';
   return `${base}${charges}${total}`;
