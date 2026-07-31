@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { prepareCompareExtracted } from '../src/engine/turn-intent/compare-intent.js';
 import { resolveCompareProjectIds } from '../src/engine/compare_resolve.js';
 import { initState, recordDiscussed, commitTo } from '../src/engine/state.js';
+import { discussedList } from '../src/engine/entity-store.js';
 import {
   isAnaphoricProjectRef,
   shouldQueryProjectVectors,
@@ -203,12 +204,10 @@ describe('anaphoric project vector gate', () => {
 });
 
 describe('commitTo records discussed', () => {
-  it('accumulates focus switches into discussedProjects', () => {
+  it('accumulates focus switches into discussed store (not legacy mirror)', () => {
     let s = commitTo(initState('c1', 'lokations'), 'ayana', 'Ayana');
     s = commitTo(s, 'krishnaja', 'Krishnaja Greens');
-    expect(s.discover.discussedProjects).toEqual([
-      { projectId: 'ayana', name: 'Ayana' },
-      { projectId: 'krishnaja', name: 'Krishnaja Greens' },
-    ]);
+    expect(s.discover.discussedProjects ?? []).toEqual([]);
+    expect(discussedList(s).map((d) => d.projectId)).toEqual(['ayana', 'krishnaja']);
   });
 });

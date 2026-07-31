@@ -358,7 +358,8 @@ describe('ConverseEngine compose fallback', () => {
       { constraints: {}, alreadyShownSameSet: false, builderName: 'Lokations' },
     );
     const reply = fallbackReply(req);
-    expect(reply).toMatch(/Pricing/i);
+    // Multi-intent join: one subject lead, facet atoms (no "Pricing —" stamp).
+    expect(reply).toMatch(/On \*Ayana\*:/);
     expect(reply).toMatch(/499\/sqft/);
     expect(reply).toMatch(/RERA/);
   });
@@ -632,7 +633,7 @@ describe('Sakleshpur funnel (deterministic)', () => {
     const t6 = await say('pricing and legal');
     expect(t6.debug.goal).toMatchObject({ kind: 'answer', topic: 'price' });
     expect(t6.debug.goal.topics).toEqual(['price', 'legal']);
-    expect(t6.reply).toMatch(/Pricing/i);
+    expect(t6.reply).toMatch(/On \*Ayana\*:|Starting from|₹24\.95/);
     expect(t6.reply).toMatch(/RERA/);
 
     const t7 = await say('legal status');
