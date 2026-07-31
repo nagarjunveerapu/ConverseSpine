@@ -79,9 +79,8 @@ export interface DiscoverState {
   asked: ProbeKind[];
   rejectedProjectIds: string[];
   /**
-   * Phase 1c — write-through mirror of `shortlistIds` + entity card payload.
-   * Authority is `currentShortlist(state)` / `state.shortlistIds`. Kept so old
-   * KV sessions and any raw readers keep working; do not write independently.
+   * Phase 1c — revive-only legacy board. Authority is `shortlistIds` + entities.
+   * Hydrated once on load via `hydrateLegacyDiscourse`; never write-through.
    */
   lastOffered: OfferedProject[];
   oriented: boolean;
@@ -90,9 +89,7 @@ export interface DiscoverState {
   /** Recent turns for anaphora ("both", "these") — newest last. */
   recentMessages?: TranscriptMessage[];
   /**
-   * Phase 1c — write-through mirror of entities with role `discussed`.
-   * Authority is `discussedList(state)`. Uncapped in the store; this mirror
-   * may still be sliced for back-compat.
+   * Phase 1c — revive-only legacy discussed list. Authority is `discussedList`.
    */
   discussedProjects?: OfferedProject[];
 }
@@ -184,7 +181,7 @@ export interface ConversationState {
   /**
    * Phase 1 — discourse entity store (entity-store.ts). 1c authority for
    * shortlist card payload + discourse roles. Legacy lastOffered /
-   * discussedProjects are mirrors only. Not a NayaDesk field — Spine KV only.
+   * discussedProjects are revive-only (not mirrored). Spine KV only.
    *
    * JSON-safe by construction: a Record of plain records, never a Map, because
    * store-kv.ts persists this with JSON.stringify and a Map round-trips to {}.

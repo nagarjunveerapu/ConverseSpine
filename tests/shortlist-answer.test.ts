@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { decide } from '../src/engine/phases/discover.js';
 import { runEngineTurn } from '../src/engine/turn.js';
 import { stripBanned } from '../src/engine/grounding.js';
+import { currentShortlist } from '../src/engine/entity-store.js';
 import { fakeDeps } from './fakes.js';
 import type { ConversationState, Extracted } from '../src/engine/types.js';
 
@@ -92,11 +93,11 @@ describe('shortlist facet answers end-to-end', () => {
   it('s01 shape: "emi will be how much" over a shortlist names every project with an EMI figure', async () => {
     const { turn } = harness('sla-emi');
     const board = await turn('plantation under 50 lakhs');
-    expect(board.state.discover.lastOffered.length).toBeGreaterThanOrEqual(2);
+    expect(currentShortlist(board.state).length).toBeGreaterThanOrEqual(2);
 
     const r = await turn('ohh ok. emi will be how much');
     expect(r.reply).not.toMatch(/which one should i open/i);
-    for (const o of board.state.discover.lastOffered) {
+    for (const o of currentShortlist(board.state)) {
       expect(r.reply).toContain(o.name);
     }
     expect(r.reply).toMatch(/EMI/i);
@@ -108,7 +109,7 @@ describe('shortlist facet answers end-to-end', () => {
     const board = await turn('plantation under 50 lakhs');
     const r = await turn('which of these have proper khata and approvals?');
     expect(r.reply).not.toMatch(/which one should i open/i);
-    for (const o of board.state.discover.lastOffered) {
+    for (const o of currentShortlist(board.state)) {
       expect(r.reply).toContain(o.name);
     }
     expect(r.reply).toMatch(/RERA/);
@@ -119,7 +120,7 @@ describe('shortlist facet answers end-to-end', () => {
     const board = await turn('plantation under 50 lakhs');
     const r = await turn('what will be the approximate cost of these?');
     expect(r.reply).not.toMatch(/which one should i open/i);
-    for (const o of board.state.discover.lastOffered) {
+    for (const o of currentShortlist(board.state)) {
       expect(r.reply).toContain(o.name);
     }
     expect(r.reply).toMatch(/₹/);

@@ -10,6 +10,7 @@ import * as discover from '../src/engine/phases/discover.js';
 import { buildJourneySignalPost } from '../src/engine/journey-signals.js';
 import { describe, expect, it } from 'vitest';
 import { initState, commitTo, recordOffered, recordDiscussed, clearLastOffered, constraintsMateriallyChanged } from '../src/engine/state.js';
+import { currentShortlist } from '../src/engine/entity-store.js';
 import type { EvidenceSet, TurnGoal } from '../src/engine/types.js';
 import { hasExplicitProjectCue, facetNameResidue, detectFocusedSwitchIntent } from '../src/engine/project_switch.js';
 import { shouldQueryProjectVectors } from '../src/engine/adapters/semantic-nlu.js';
@@ -319,9 +320,10 @@ describe('W2 lastOffered invalidation (no catalog hardcode)', () => {
         matchReasons: [],
       },
     ]);
-    expect(s.discover.lastOffered).toHaveLength(1);
+    expect(currentShortlist(s)).toHaveLength(1);
     s = clearLastOffered(s);
-    expect(s.discover.lastOffered).toHaveLength(0);
+    expect(currentShortlist(s)).toHaveLength(0);
+    expect(s.shortlistIds ?? []).toEqual([]);
   });
 
   it('refine/correction detectors stay structural', () => {

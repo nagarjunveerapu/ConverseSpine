@@ -10,6 +10,7 @@ import { initState } from '../src/engine/state.js';
 import * as visit from '../src/engine/phases/visit.js';
 import { runEngineTurn } from '../src/engine/turn.js';
 import { fakeDeps } from './fakes.js';
+import { currentShortlist } from '../src/engine/entity-store.js';
 
 const shortlist = [
   { projectId: 'p1', name: 'Project Alpha', microMarket: 'North', startingPriceDisplay: '₹30 L' },
@@ -150,7 +151,7 @@ describe('RTI-F first shortlist deterministic copy', () => {
     );
     if (r.debug.goal.kind === 'recommend') {
       expect(r.reply).toMatch(/Here's what fits/i);
-      expect(r.state.discover.lastOffered.length).toBeGreaterThanOrEqual(1);
+      expect(currentShortlist(r.state).length).toBeGreaterThanOrEqual(1);
     }
   });
 });

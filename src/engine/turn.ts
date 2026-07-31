@@ -85,6 +85,7 @@ import {
   commitTo,
   constraintsMateriallyChanged,
   incObjection,
+  hydrateLegacyDiscourse,
   initState,
   isSameAsLast,
   markAsked,
@@ -182,7 +183,9 @@ export interface EngineTurnOutput {
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
-  let state = (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId);
+  let state = hydrateLegacyDiscourse(
+    (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId),
+  );
   const inputSource = resolveInputSource(input.action_id);
 
   const trimmedText = input.text.trim();
@@ -3734,7 +3737,7 @@ function locationHasAskedData(
 }
 
 function buildLocationEvidence(
-  detail: NonNullable<Awaited<ReturnType<EngineDeps['data']['projectDetail']>>>,
+  detail: import('./types.js').ProjectDetail,
   askedCategories?: readonly LocationCategoryKey[],
 ): LocationEvidence {
   const loc = detail.location;

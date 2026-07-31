@@ -1090,7 +1090,8 @@ export function summarizeUnitConfigs(
   const lead = projectName ? `For *${projectName}*: ` : '';
   if (!units.length) return `${lead}configurations aren't published yet`;
 
-  const byFamily = new Map<string, typeof units>();
+  type UnitRow = (typeof units)[number];
+  const byFamily = new Map<string, UnitRow[]>();
   for (const u of units) {
     const m = /(\d+)\s*bhk/i.exec(u.unitType);
     const family = m ? `${m[1]} BHK` : u.unitType.trim() || 'Unit';

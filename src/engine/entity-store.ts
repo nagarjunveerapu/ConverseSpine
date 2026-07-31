@@ -296,18 +296,28 @@ export function discourseOffered(state: ConversationState): OfferedProject[] {
 }
 
 /**
- * Mirror store → legacy arrays so remaining raw readers stay correct.
- * Call after every shortlist / discussed write.
+ * Phase 1c field-delete: stop write-through into legacy arrays.
+ * `lastOffered` / `discussedProjects` are revive-only (hydrated once on load).
+ * Call sites may remain until removed; this is intentionally a no-op.
  */
 export function mirrorLegacyPools(state: ConversationState): ConversationState {
-  const lastOffered = currentShortlist(state);
-  const discussedProjects = discussedList(state);
+  return state;
+}
+
+/** Clear legacy mirror arrays so they cannot diverge from store authority. */
+export function stripLegacyMirrors(state: ConversationState): ConversationState {
+  if (
+    (state.discover.lastOffered?.length ?? 0) === 0 &&
+    (state.discover.discussedProjects?.length ?? 0) === 0
+  ) {
+    return state;
+  }
   return {
     ...state,
     discover: {
       ...state.discover,
-      lastOffered,
-      discussedProjects,
+      lastOffered: [],
+      discussedProjects: [],
     },
   };
 }

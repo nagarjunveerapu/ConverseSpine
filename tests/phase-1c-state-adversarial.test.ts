@@ -525,7 +525,7 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
 });
 
 describe('1C-ADV — invariant sweep after recordOffered journeys', () => {
-  it('every write path keeps shortlistIds ↔ entities ↔ mirror aligned', () => {
+  it('every write path keeps shortlistIds ↔ entities aligned (mirrors empty)', () => {
     let s = initState('adv-align', 'lokations');
     const boards = [
       [AYANA, KRISHNAJA],
@@ -536,8 +536,8 @@ describe('1C-ADV — invariant sweep after recordOffered journeys', () => {
     for (const board of boards) {
       s = recordOffered(s, [...board]);
       assertShortlistAuthority(s, `board-${board.map((b) => b.projectId).join('+')}`);
-      // Mirror is a write-through — when not poisoned, it matches.
-      expect(s.discover.lastOffered.map((o) => o.projectId)).toEqual(s.shortlistIds);
+      expect(s.discover.lastOffered).toEqual([]);
+      expect(s.shortlistIds).toEqual(board.map((b) => b.projectId));
       for (const m of board) {
         expect(s.entities?.[m.projectId]?.startingPriceDisplay).toBe(m.startingPriceDisplay);
       }

@@ -33,6 +33,7 @@ import {
   discourseEntities,
   legacyConversationPoolIds,
   currentShortlist,
+  discussedList,
   type DiscourseEntityRecord,
 } from '../../src/engine/entity-store.js';
 import { initState, recordOffered, releaseToDiscover } from '../../src/engine/state.js';
@@ -162,18 +163,11 @@ describe('1a changes no behaviour — it only writes alongside', () => {
 });
 
 /**
- * THE DUAL-WRITE INVARIANT.
- *
- * LLD open question 6: what asserts `salience(state)` still matches the old
- * projection while both exist? This does. It runs real turns through
- * `runEngineTurn` and checks the store against the legacy fields it shadows.
- *
- * While 1a holds, a divergence here means the dual-write is wrong. Once 1b
- * starts migrating consumers, a divergence means a consumer changed behaviour —
- * which is exactly the signal that phase needs, so this test stays.
+ * Store-authority invariant (post mirror delete).
+ * Legacy lastOffered / discussedProjects are revive-only — empty after writes.
  */
-describe('dual-write invariant: the store agrees with the fields it shadows', () => {
-  it('holds across a real search → focus → switch journey', async () => {
+describe('store authority: shortlistIds + entities own the board', () => {
+  it('holds across a real search → focus journey', async () => {
     const { runEngineTurn } = await import('../../src/engine/turn.js');
     const { fakeDeps } = await import('../fakes.js');
     const deps = fakeDeps();
@@ -185,27 +179,15 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
     const focused = await say('give me details on the project');
     const s = focused.state;
 
-    // Everything the legacy fields know, the store knows.
-    for (const o of s.discover.lastOffered) {
-      expect(s.entities?.[o.projectId], `offered ${o.projectId} missing from store`).toBeDefined();
-      expect(s.entities![o.projectId]!.name).toBe(o.name);
-    }
-    for (const d of s.discover.discussedProjects ?? []) {
-      expect(s.entities?.[d.projectId], `discussed ${d.projectId} missing from store`).toBeDefined();
+    expect(s.discover.lastOffered).toEqual([]);
+    expect(s.shortlistIds?.length).toBeGreaterThan(0);
+    for (const id of s.shortlistIds ?? []) {
+      expect(s.entities?.[id], `shortlist ${id} missing from store`).toBeDefined();
     }
     if (s.focus) {
       expect(s.focusStack?.[0]).toBe(s.focus.projectId);
       expect(focusedEntity(s)?.name).toBe(s.focus.projectName);
     }
-    // And the store never invents an entity the conversation never saw.
-    const known = new Set([
-      ...s.discover.lastOffered.map((o) => o.projectId),
-      ...(s.discover.discussedProjects ?? []).map((d) => d.projectId),
-      ...(s.focus ? [s.focus.projectId] : []),
-    ]);
-    for (const id of Object.keys(s.entities ?? {})) expect(known.has(id)).toBe(true);
-
-    // 1b membership: every legacy pool id is in the store discourse view.
     const discourseIds = new Set(discourseEntities(s).map((e) => e.projectId));
     for (const id of legacyConversationPoolIds(s)) {
       expect(discourseIds.has(id), `legacy id ${id} missing from discourseEntities`).toBe(true);
@@ -236,8 +218,8 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
     expect(s.shortlistIds).toEqual(['eldorado', 'sanctuary']);
     expect(currentShortlist(s).map((o) => o.projectId)).toEqual(['eldorado', 'sanctuary']);
     expect(currentShortlist(s)[0]?.tradeoffNote).toBe('near airport');
-    // Mirror still populated for raw readers / old KV revive.
-    expect(s.discover.lastOffered.map((o) => o.projectId)).toEqual(['eldorado', 'sanctuary']);
+    // Mirrors are no longer write-through.
+    expect(s.discover.lastOffered).toEqual([]);
 
     // New shortlist replaces offered role — Sanctuary drops off the board but
     // can remain as discussed later without inventing a board card.
@@ -248,7 +230,7 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
   });
 
   it('keeps a project the legacy cap of 6 would have dropped', async () => {
-    // recordDiscussed slices to the last 6. The store does not, because a
+    // Legacy discussedProjects capped at 6; the store does not, because a
     // dropped entity is how a project the buyer engaged with becomes
     // unreachable to every later resolver.
     const { recordDiscussed } = await import('../../src/engine/state.js');
@@ -256,7 +238,8 @@ describe('dual-write invariant: the store agrees with the fields it shadows', ()
     for (let i = 0; i < 8; i++) {
       s = recordDiscussed(s, [{ projectId: `p${i}`, name: `Project ${i}` }]);
     }
-    expect(s.discover.discussedProjects).toHaveLength(6);
+    expect(s.discover.discussedProjects ?? []).toEqual([]);
+    expect(discussedList(s)).toHaveLength(8);
     expect(Object.keys(s.entities ?? {})).toHaveLength(8);
   });
 });

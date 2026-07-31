@@ -8,7 +8,13 @@ import type {
   Match,
   OfferedProject,
 } from './types.js';
-import { clearOfferedExcept, currentShortlist, mirrorLegacyPools, pushFocus, recordEntities } from './entity-store.js';
+import {
+  clearOfferedExcept,
+  currentShortlist,
+  pushFocus,
+  recordEntities,
+  stripLegacyMirrors,
+} from './entity-store.js';
 
 export function initState(convId: string, builderId: string): ConversationState {
   return {
@@ -201,7 +207,7 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
   if (matches.length === 0) return s;
   const keep = new Set(matches.map((m) => m.projectId));
   // Phase 1c — store is authority: clear stale offered roles, write card payload,
-  // set shortlistIds, then mirror into legacy lastOffered for raw readers.
+  // set shortlistIds. Legacy lastOffered is revive-only (not mirrored).
   const cleared = clearOfferedExcept(s, keep);
   const withEntities = recordEntities(
     cleared,
@@ -219,23 +225,45 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
     'offered',
     s.turnCount,
   );
-  const withIds = {
+  return stripLegacyMirrors({
     ...withEntities,
     shortlistIds: matches.map((m) => m.projectId),
     discover: { ...withEntities.discover, ignoredProbes: 0 },
-  };
-  return mirrorLegacyPools(withIds);
+  });
 }
 
 /** Drop stale shortlist — next successful recommend repopulates (W2). */
 export function clearLastOffered(s: ConversationState): ConversationState {
   if ((s.shortlistIds?.length ?? 0) === 0 && currentShortlist(s).length === 0) return s;
   const cleared = clearOfferedExcept(s, new Set());
-  return mirrorLegacyPools({
+  return stripLegacyMirrors({
     ...cleared,
     shortlistIds: [],
-    discover: { ...cleared.discover, lastOffered: [], ignoredProbes: cleared.discover.ignoredProbes },
+    discover: { ...cleared.discover, ignoredProbes: cleared.discover.ignoredProbes },
   });
+}
+
+/**
+ * One-shot revive: pre-1c KV with only `lastOffered` → shortlistIds + entities.
+ * When the store already has authority, strip stale mirrors so they cannot poison.
+ */
+export function hydrateLegacyDiscourse(s: ConversationState): ConversationState {
+  if ((s.shortlistIds?.length ?? 0) > 0) return stripLegacyMirrors(s);
+  const legacy = s.discover.lastOffered ?? [];
+  if (!legacy.length) return stripLegacyMirrors(s);
+  const matches: Match[] = legacy.map((o) => ({
+    projectId: o.projectId,
+    name: o.name,
+    microMarket: o.microMarket ?? '',
+    startingPriceInr: o.startingPriceInr ?? 0,
+    startingPriceDisplay: o.startingPriceDisplay ?? '',
+    matchReasons: [],
+    ...(o.tradeoffNote ? { tradeoffNote: o.tradeoffNote } : {}),
+  }));
+  return recordOffered(
+    { ...s, discover: { ...s.discover, lastOffered: [] } },
+    matches,
+  );
 }
 
 /** True when search-shaping constraints changed (not purpose/name). No locality hardcode. */
@@ -279,20 +307,15 @@ export function recordDiscussed(
   projects: ReadonlyArray<OfferedProject>,
 ): ConversationState {
   if (projects.length === 0) return s;
-  // Phase 1c — store is uncapped authority; mirror may still slice for back-compat.
-  const withEntities = recordEntities(
-    s,
-    projects.filter((p) => p.projectId && p.name).map((p) => ({ projectId: p.projectId, name: p.name })),
-    'discussed',
-    s.turnCount,
+  // Phase 1c — store is uncapped authority; no legacy mirror write-through.
+  return stripLegacyMirrors(
+    recordEntities(
+      s,
+      projects.filter((p) => p.projectId && p.name).map((p) => ({ projectId: p.projectId, name: p.name })),
+      'discussed',
+      s.turnCount,
+    ),
   );
-  const mirrored = mirrorLegacyPools(withEntities);
-  const discussed = mirrored.discover.discussedProjects ?? [];
-  if (discussed.length <= 6) return mirrored;
-  return {
-    ...mirrored,
-    discover: { ...mirrored.discover, discussedProjects: discussed.slice(-6) },
-  };
 }
 
 export function commitTo(s: ConversationState, projectId: string, projectName: string): ConversationState {
