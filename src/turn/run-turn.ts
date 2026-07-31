@@ -52,7 +52,20 @@ export async function runTurn(
       buyer_text,
       understood: { intents: [{ kind: result.debug.goal.kind }], slot_writes: [] },
       visitBooked: result.debug.goal.kind === 'visit_booked',
-      project_id: result.state.focus?.projectId,
+      // The goal's OWN project, not state.focus. Focus moves as the buyer keeps
+      // talking, so a booking attributed to focus lands on whichever project
+      // happened to be discussed last.
+      project_id: result.debug.goal.kind === 'visit_booked'
+        ? result.debug.goal.projectId
+        : result.state.focus?.projectId,
+      // The slot the engine already resolved. visit-slot.ts turns "next
+      // saturday 10 baje" into a real IST instant using the conversation's own
+      // clock — an anchor that is gone by the time anyone else reads the text.
+      // Dropping it here is why 240 leads are marked visit_booked on Desk and
+      // only 6 carry a date.
+      ...(result.debug.goal.kind === 'visit_booked'
+        ? { visit_iso: result.debug.goal.iso, visit_label: result.debug.goal.label }
+        : {}),
     });
   }
 
