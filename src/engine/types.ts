@@ -744,6 +744,8 @@ export interface Extracted {
   budgetPickQuestion?: boolean;
   /** Recovery chip applied — re-list matches even if same as last turn. */
   forceRecommendList?: boolean;
+  /** Open-ended first-home / help-me-start — discovery ladder, not clarify. */
+  firstHomeHelp?: boolean;
   /** SA-0: resolved speech act (chip path / free-text→chip). */
   speechAct?: import('./speech-act/types.js').SpeechActKind;
   /** SA-0: primary (+ optional secondary) chip path ids. */

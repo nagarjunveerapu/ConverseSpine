@@ -140,14 +140,17 @@ function extractHasCatalogFacet(input: TurnRoutingInput): boolean {
 }
 
 /**
- * Focused + catalog-facet ask: definition/discount policy must yield so the
- * walk can bind get_price / get_legal_info / get_amenities (state-condition
- * from tests/seams/definition-boost-margin.test.ts). Cold literacy and bare
- * discount asks stay on their policy doors.
+ * Catalog-facet ask that must beat definition/discount policy:
+ * - focused + pin (existing), or
+ * - cold discover with a resolved named project + facet (price/possession…).
+ * Cold literacy and bare discount asks stay on their policy doors.
  */
 export function shouldDeclinePolicyForFocusedFacet(input: TurnRoutingInput): boolean {
-  if (input.phase !== 'focused' || !input.focus) return false;
-  return extractHasCatalogFacet(input) || looksLikeCatalogFacetAsk(input.text);
+  const facet = extractHasCatalogFacet(input) || looksLikeCatalogFacetAsk(input.text);
+  if (!facet) return false;
+  if (input.phase === 'focused' && input.focus) return true;
+  if ((input.named_project_ids?.length ?? 0) >= 1) return true;
+  return false;
 }
 
 /**

@@ -265,7 +265,26 @@ export async function extractFacts(
     ...(options?.failureTools && askTopics.includes('emi') ? { emiContractV1: true } : {}),
     ...(mediaAssetKind ? { mediaAssetKind } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
+    ...(isFirstHomeHelpText(text) ? { firstHomeHelp: true } : {}),
   };
+}
+
+/** Deterministic first-home / "not sure where to start" help ask. */
+export function isFirstHomeHelpText(text: string): boolean {
+  const t = text.toLowerCase();
+  if (
+    /\b(?:first\s+home|first\s+time\s+buy(?:er|ing)?|first[- ]time\s+buyer)\b/i.test(t) &&
+    /\b(?:not\s+sure\s+where\s+to\s+start|where\s+to\s+start|can\s+you\s+help|please\s+help|guide\s+me|help\s+me)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return (
+    /\b(?:looking\s+to\s+buy|want\s+to\s+buy|want\s+to\s+purchase).{0,40}\b(?:home|house|property)\b/i.test(
+      t,
+    ) && /\b(?:not\s+sure\s+where\s+to\s+start|where\s+to\s+start|can\s+you\s+help|guide\s+me)\b/i.test(t)
+  );
 }
 
 /** Sync extraction for unit tests without LLM. */
@@ -334,6 +353,7 @@ export function extractFactsSync(
     ...(emiRate !== undefined ? { emiRatePercent: emiRate } : {}),
     ...(emiTenure !== undefined ? { emiTenureYears: emiTenure } : {}),
     ...(options?.failureTools && askTopics.includes('emi') ? { emiContractV1: true } : {}),
+    ...(isFirstHomeHelpText(text) ? { firstHomeHelp: true } : {}),
   };
 }
 
@@ -385,7 +405,13 @@ function detectPropertyType(text: string): string | undefined {
   const s = text.toLowerCase();
   // "farmland near Kanakapura" is a plantation-estate ask (D1.5) — without this it
   // carried no type at all and the location-only search listed apartments beside Vanam.
-  if (/\b(?:plantation|planted estate|managed.?plantation|coffee estate|farm\s*land|farm\s*plots?|agri(?:cultural)?\s+land)\b/.test(s)) return 'plantation';
+  if (
+    /\b(?:plantation|planted estate|managed.?plantation|managed\s+farm\s*land|coffee estate|farm\s*land|farmlands?|farm\s*plots?|agri(?:cultural)?\s+land)\b/.test(
+      s,
+    )
+  ) {
+    return 'plantation';
+  }
   if (/\b(?:apartments?|flats?)\b/.test(s)) return 'apartment';
   if (/\b(?:villas?)\b/.test(s)) return 'villa';
   if (/\b(?:plots?|plot\s*\/\s*land|land parcel|plotted)\b/.test(s)) return 'plot';
@@ -774,7 +800,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     // "is OC available" / "banks available" must not dump configs alone —
     // legal+loan owns when banks/loan cues present (P2 residual).
     topic: 'availability',
-    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready|availability|\binventory\b|(?:units?|configs?|configurations?|inventory|flats?|apartments?)\s+available|available\s+(?:units?|configs?|configurations?|inventory)|is\s+(?:it|this)\s+available|still\s+available|what'?s\s+available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b|ಲಭ್ಯತೆ|అందుబాటు/i,
+    re: /\b(?:is\s+(?:it|this)\s+ready(?:\s+to\s+move)?|when(?:'s| is)?(?:\s+it)?\s+ready\s+to\s+move|availability|\binventory\b|(?:units?|configs?|configurations?|inventory|flats?|apartments?)\s+available|available\s+(?:units?|configs?|configurations?|inventory)|is\s+(?:it|this)\s+available|still\s+available|what'?s\s+available|units?|configurations?|configs?|bhk options?|plot\s+sizes?|unit\s+sizes?|unit\s+configurations?|sizes?\s+offered|sq\.?\s*ft\s+(?:options?|sizes?)|what\s+(?:sizes?|configs?|configurations?)\b|(?:\d+(?:\.\d+)?\s*)?bhk\s+(?:configs?|configurations?|options?|sizes?)|(?:any|what)\s+(?:\d+(?:\.\d+)?\s*)?bhk\s+options?(?:\s+left)?|options?\s+left)\b|ಲಭ್ಯತೆ|అందుబాటు/i,
   },
   {
     topic: 'media',
@@ -795,7 +821,7 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
  * availability so price+possession+RERA forms a 3-topic compose set.
  */
 const POSSESSION_MULTI_FACET =
-  /\b(?:possession(?:\s+date)?|handover(?:\s+date)?|completion(?:\s+date)?|delivery\s+(?:date|timeline)|kab\s+milega|milega)\b|कब\s*मिलेगा|ಪೊಸೆಷನ್|పొసెషన్/i;
+  /\b(?:possession(?:\s+date)?|handover(?:\s+date)?|completion(?:\s+date)?|delivery\s+(?:date|timeline)|when(?:'s| is)?(?:\s+it)?\s+ready(?!\s+to\s+move)|when\s+ready|kab\s+milega|milega)\b|कब\s*मिलेगा|ಪೊಸೆಷನ್|పొసెషన్/i;
 
 /**
  * Soft hedges / fillers that must not create topics or localities.
@@ -1306,7 +1332,7 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   // ("schools") is describing WHAT, not WHERE — never a locality ("only plotted",
   // "schools near this project"). Bare place names never contain these.
   const GENERIC =
-    /\b(properties|property|projects|options|plantation|homes|flats|apartments|villas|plot|plots|plotted|land|schools?|hospitals?|clinics?|metro|colleges?)\b/i;
+    /\b(properties|property|projects|options|plantation|managed\s+farm\s*land|farm\s*land|farmlands?|homes|flats|apartments|villas|plot|plots|plotted|land|schools?|hospitals?|clinics?|metro|colleges?)\b/i;
   const hints = ctx?.projectNameHints;
 
   const acceptLocality = (raw: string | undefined): string | undefined => {
@@ -1398,6 +1424,14 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   const commaLead = /^([A-Za-z][A-Za-z\s]{2,24}?)\s*,/i.exec(scan);
   if (commaLead?.[1] && !/\b(lakhs|crore|bhk|budget)\b/i.test(commaLead[1])) {
     const loc = acceptLocality(commaLead[1]);
+    if (loc) return loc;
+  }
+  // "Coorg area preferred" / "Whitefield preferred" — locality before type/budget.
+  const areaPreferred =
+    /\b([A-Za-z][A-Za-z\s-]{2,28}?)\s+area\s+preferred\b/i.exec(scan) ||
+    /\b([A-Za-z][A-Za-z\s-]{2,28}?)\s+preferred\b/i.exec(scan);
+  if (areaPreferred?.[1] && !/\b(lakhs|crore|bhk|budget|farm|plantation|managed)\b/i.test(areaPreferred[1])) {
+    const loc = acceptLocality(areaPreferred[1]);
     if (loc) return loc;
   }
   const meinLoc = /\b([A-Za-z][A-Za-z\s]{2,20}?)\s+mein\b/i.exec(scan);

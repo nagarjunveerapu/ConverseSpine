@@ -752,12 +752,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  // Cold catalog name resolve BEFORE routing/unsupported — so "Brigade Eldorado
+  // what's the price?" stamps namedProjects and declines definition→education.
+  // Not gated on location (that wrongly skipped pure named+facet asks).
   let prevalidatedCatalogHit:
     | { projectId: string; name: string }
     | undefined;
   if (
     deps.failureSearch &&
-    ex.constraints.location &&
     !state.stopConfirmPending &&
     !(ex.namedProjects?.length)
   ) {
@@ -1115,11 +1117,24 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const withLegal = topics.includes('legal')
       ? topics
       : (['legal', ...topics] as NonNullable<Extracted['askTopics']>);
+    // Focused loan + BHK/config — stay on answer multi; do not search-pivot.
+    const keepFocusedInventory =
+      !!state.focus &&
+      /\b(?:\d+\s*bhk|configs?|configurations?|units?|inventory|what'?s\s+available)\b/i.test(
+        trimmedText,
+      );
+    const withAvail =
+      keepFocusedInventory && !withLegal.includes('availability')
+        ? ([...withLegal, 'availability'] as NonNullable<Extracted['askTopics']>)
+        : withLegal;
     const { mediaAssetKind: _dropMedia, ...rest } = ex;
     ex = {
       ...rest,
       askTopic: 'legal',
-      askTopics: withLegal,
+      askTopics: withAvail,
+      ...(keepFocusedInventory
+        ? { speechAct: 'answer' as const, forceRecommendList: false, wantsMore: false }
+        : {}),
     };
   }
   if (
@@ -1474,6 +1489,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (!freshSearchBrief) {
       state = { ...state, phase: 'visit' };
     }
+  }
+
+  // Keep / re-enter visit when awaiting a day-window reply (morning/afternoon).
+  // Otherwise "Morning around 11am" falls into discover → clarify_intent.
+  if (
+    state.phase !== 'visit' &&
+    state.visit &&
+    (state.visit.lastAsk === 'window' || Boolean(state.visit.pendingDayIso))
+  ) {
+    state = { ...state, phase: 'visit' };
   }
 
   const visitDayTurn = isVisitDayUtterance(trimmedText);
@@ -3735,6 +3760,23 @@ async function syncFacts(
   if (s.constraints.purpose) facts.purpose = s.constraints.purpose;
   if (goal.kind === 'visit_booked') facts.visit_date_pref = goal.label;
   if (Object.keys(facts).length) await deps.crm.updateFacts(nd, facts);
+
+  // CRM safety net: mirror visit window await / clear on book.
+  if (goal.kind === 'visit_ask' && goal.ask === 'window' && goal.state.pendingDayIso) {
+    await deps.crm
+      .setPendingAction(nd, {
+        kind: 'visit_window',
+        payload: {
+          project_id: goal.state.projectId ?? '',
+          project_name: goal.state.projectName ?? '',
+          day_iso: goal.state.pendingDayIso,
+          day_label: goal.state.pendingDayLabel ?? '',
+        },
+      })
+      .catch(() => {});
+  } else if (goal.kind === 'visit_booked') {
+    await deps.crm.setPendingAction(nd, null).catch(() => {});
+  }
 
   if ((goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') && ev.matches?.length) {
     await deps.crm.syncShortlist(nd, ev.matches.map((m) => m.projectId));

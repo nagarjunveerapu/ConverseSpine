@@ -208,6 +208,11 @@ export interface EngineCrm {
   ensureLead(builderId: string, buyerPhone: string, channel?: string): Promise<{ conversationId: string } | null>;
   appendMessage(conversationId: string, direction: 'inbound' | 'outbound', content: string, meta?: { replyKey?: string }): Promise<void>;
   updateFacts(conversationId: string, facts: Record<string, string | undefined>): Promise<void>;
+  /** Mirror Spine visit awaiting-window (or clear) into Desk pending_action. */
+  setPendingAction(
+    conversationId: string,
+    pending: { kind: string; payload: Record<string, unknown> } | null,
+  ): Promise<void>;
   commitProject(conversationId: string, projectId: string): Promise<void>;
   releaseProject(conversationId: string): Promise<void>;
   syncShortlist(conversationId: string, projectIds: string[]): Promise<void>;

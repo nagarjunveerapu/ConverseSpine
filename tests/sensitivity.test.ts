@@ -26,7 +26,7 @@ describe('matchFitClauses — Q1 + Q2 per match', () => {
       ],
       dimensionGap: { dimension: 'builder_trust', weight: 0.9, label: 'no builder record here yet' },
     }));
-    expect(line).toBe('✓ your 10,000 sqft ≈ ₹50 L — within budget · ⚠ 131 min to work hubs · ? no builder record here yet');
+    expect(line).toBe('✓ your 10,000 sqft ≈ ₹50 L — within budget · ⚠ 131 min to work hubs · no builder record here yet');
   });
 
   it('caps at three clauses — scannable on every channel', () => {

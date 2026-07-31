@@ -50,7 +50,11 @@ export function matchFitClauses(m: Match): string {
   const parts: string[] = [];
   if (goods[0]) parts.push(`✓ ${goods[0].evidence}`);
   if (bads[0]) parts.push(`⚠ ${bads[0].evidence}`);
-  if (m.dimensionGap) parts.push(`? ${m.dimensionGap.label}`);
+  if (m.dimensionGap) {
+    const gap = m.dimensionGap.label;
+    // Avoid "no no …" when the Desk label already starts with "no".
+    parts.push(/^no\b/i.test(gap) ? gap : `no ${gap}`);
+  }
   // Room left and nothing negative to say → a second earned gain may speak.
   if (parts.length < MAX_FIT_CLAUSES && goods[1] && !bads[0] && !m.dimensionGap) {
     parts.push(`✓ ${goods[1].evidence}`);

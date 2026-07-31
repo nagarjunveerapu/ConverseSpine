@@ -8,6 +8,11 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   { key: 'possession', pattern: /\b(?:possession|handover)(?:\s+(?:date|timeline|when))?\b/i },
   // Focused menu chip — bare "when" means possession on the open project.
   { key: 'possession', pattern: /^when\s*[?.!]?\s*$/i },
+  // B5.1 — "when ready?" is delivery timeline, not config inventory.
+  {
+    key: 'possession',
+    pattern: /\bwhen(?:'s| is)?(?:\s+it)?\s+ready(?!\s+to\s+move)\b|\bwhen\s+ready\b/i,
+  },
   { key: 'rera', pattern: /\brera(?:\s+(?:number|status|registration))?\b/i },
   { key: 'khata', pattern: /\bkhata\b/i },
   { key: 'ec_status', pattern: /\b(?:ec|encumbrance)\s+(?:status|certificate|clear)?\b/i },
@@ -112,18 +117,30 @@ export function withAnswerRequirements(
       ...(withLegal.length > 1 ? { topics: withLegal } : { topics: undefined }),
     };
   }
-  // P2 residual: appreciation/resale co-asked with price — keep overview in the
-  // multi set so advisory/honest-miss is not swallowed by the pricing template.
-  if (
-    (requires.includes('appreciation') || requires.includes('rental_yield')) &&
-    !requires.includes('loan_eligibility')
-  ) {
+  // P2 residual: appreciation/resale/returns co-asked with price or loan —
+  // keep overview so advisory/honest-miss is not swallowed by pricing/legal.
+  if (requires.includes('appreciation') || requires.includes('rental_yield')) {
     const topics = next.topics?.length ? [...next.topics] : [next.topic];
     if (!topics.includes('overview')) {
       const withOverview = [...topics, 'overview'] as AnswerTopic[];
       next = {
         ...next,
         ...(withOverview.length > 1 ? { topics: withOverview } : {}),
+      };
+    }
+  }
+  // Loan + BHK/config inventory on a focused project — keep availability in
+  // the multi set (do not let legal-only compose drop the unit ask).
+  if (
+    requires.includes('loan_eligibility') &&
+    /\b(?:\d+\s*bhk|configs?|configurations?|units?|inventory|what'?s\s+available)\b/i.test(text)
+  ) {
+    const topics = next.topics?.length ? [...next.topics] : [next.topic];
+    if (!topics.includes('availability')) {
+      const withAvail = [...topics, 'availability'] as AnswerTopic[];
+      next = {
+        ...next,
+        ...(withAvail.length > 1 ? { topics: withAvail } : {}),
       };
     }
   }

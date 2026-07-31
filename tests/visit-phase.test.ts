@@ -24,6 +24,28 @@ describe('visit phase', () => {
     }
   });
 
+  it('binds morning window even when extract stamps a deferrable facet', () => {
+    const s = {
+      ...initState('t', 'naya-advisor'),
+      phase: 'visit' as const,
+      focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' },
+      visit: {
+        projectId: 'eldorado',
+        projectName: 'Brigade Eldorado',
+        pendingDayIso: '2026-08-01',
+        pendingDayLabel: 'Saturday',
+        lastAsk: 'window' as const,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none', askTopic: 'availability', askTopics: ['availability'] },
+      { text: 'Morning around 11am', now },
+    );
+    expect(goal.kind).not.toBe('answer');
+    expect(['visit_propose', 'visit_booked', 'visit_ask']).toContain(goal.kind);
+  });
+
   it('confirms visit when awaitingConfirm and buyer says yes', () => {
     const s = {
       ...initState('t', 'naya-advisor'),
