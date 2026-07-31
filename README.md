@@ -41,6 +41,11 @@ curl -s localhost:8789/health       # → "nayadesk":"http://localhost:8787"
 If `BOT_SHARED_SECRET` differs between the two `.dev.vars` files, every call to
 Desk returns 401 and the bot looks like it has no catalog.
 
+If `/health` reports a `nayadesk` other than `http://localhost:8787`, it is
+`NAYADESK_URL` in your **`.dev.vars`** — that file overrides `wrangler.toml`,
+so a value left there beats `[env.local.vars]` silently and your "local" turns
+land on the shared dev database.
+
 ## Quality eval (primary QA — NOT golden regression)
 
 Generates **fresh buyer personas** each run, simulates multi-turn WhatsApp conversations, LLM-judges transcript quality:
