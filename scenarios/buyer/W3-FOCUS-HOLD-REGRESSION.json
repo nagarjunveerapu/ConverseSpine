@@ -1,0 +1,225 @@
+[
+  {
+    "id": "W3-FH-01",
+    "title": "Focused: loan + 2 BHK available holds (no shortlist)",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "apartment in North Bangalore under 80L" },
+      { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+      {
+        "text": "is loan eligibility available as well as whats the 2 BHK available if available",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_includes_any": ["loan", "ltv", "bank", "2 bhk", "bhk", "eligib"],
+          "reply_excludes": ["here's what fits", "want to adjust budget"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-02",
+    "title": "Focused: price + connectivity multi-atom",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "tell me about Brigade Eldorado" },
+      {
+        "text": "what is the price and connectivity?",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_includes_any": ["₹", "price", "sqft", "pricing"],
+          "reply_excludes": ["here's what fits"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-03",
+    "title": "Focused: loan + photos keeps media path",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "loan eligibility? also send photos",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_includes_any": ["loan", "bank", "ltv", "eligib", "photo", "image", "brochure", "don't have", "do not have", "not on file"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-04",
+    "title": "Focused: returns + cost here",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado pricing" },
+      {
+        "text": "tell me about returns, also whats the cost here",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_includes_any": ["return", "yield", "rent", "₹", "price", "cost", "don't quote", "don't have", "on file"],
+          "reply_excludes": ["here's what fits"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-05",
+    "title": "Focused: schools + when ready (possession, not config dump)",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression", "b5.1"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "nearby schools and when ready?",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_excludes": ["available configurations", "here's what fits", "want pricing on a specific size"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-06",
+    "title": "Focused: when is possession (0d cliff)",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression", "0d"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "when is possession",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_includes_any": ["possession", "handover", "ready", "don't have", "on file", "delivery"],
+          "reply_excludes": ["here's what fits", "apartments in"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-07",
+    "title": "Focused: has this area appreciated",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression", "0d"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "has this area appreciated",
+        "assert": {
+          "goal_kind_not": "recommend",
+          "reply_excludes": ["here's what fits", "want to adjust budget"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-08",
+    "title": "Pivot control: budget crash must leave focus",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression", "pivot-control"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "apartment under 80L in North Bangalore" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "actually my budget is only 50L",
+        "assert": {
+          "goal_kind_not": "greet",
+          "reply_includes_any": ["45", "50", "budget", "cornerstone", "fit", "options", "under", "₹"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-09",
+    "title": "Pivot control: 2 BHK in Jayanagar must not pin Eldorado",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression", "pivot-control"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "2 BHK in Jayanagar",
+        "assert": {
+          "reply_excludes": ["for *brigade eldorado*: available configurations"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-10",
+    "title": "Pivot control: show other projects",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression", "pivot-control"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "show me other projects in Whitefield",
+        "assert": {
+          "goal_kind_not": "answer",
+          "reply_includes_any": ["whitefield", "options", "here", "fit", "project"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-11",
+    "title": "Focused: RERA + loan multi legal",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "is it RERA approved and can I get a loan?",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_includes_any": ["rera", "loan", "bank", "ltv"],
+          "reply_excludes": ["here's what fits"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "W3-FH-12",
+    "title": "Focused chain: price → then loan+2BHK still holds",
+    "builder_id": "brigade-group",
+    "tags": ["wave3", "focus-hold", "major-fix-regression", "multi-turn"],
+    "turns": [
+      { "text": "hi" },
+      { "text": "Brigade Eldorado" },
+      {
+        "text": "what's the price?",
+        "assert": { "goal_kind": "answer", "reply_includes_any": ["₹", "price", "pricing"] }
+      },
+      {
+        "text": "whats the 2 BHK available and loan eligibility for this project?",
+        "assert": {
+          "goal_kind": "answer",
+          "goal_kind_not": "recommend",
+          "reply_includes_any": ["loan", "bank", "ltv", "bhk", "eligib"],
+          "reply_excludes": ["here's what fits"]
+        }
+      }
+    ]
+  }
+]

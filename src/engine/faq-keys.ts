@@ -46,6 +46,11 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /^when\s*[?.!]?\s*$/i,
   },
   {
+    // Wave 3 / B5.1 — "when ready?" chip (not config inventory).
+    key: 'possession',
+    re: /\bwhen(?:'s| is)?(?:\s+it)?\s+ready(?!\s+to\s+move)\b|\bwhen\s+ready\b|^(?:delivery|handover)\s*[?.!]?\s*$/i,
+  },
+  {
     // Discount/offer chip + free-text negotiate — land on payment_plan FAQ when
     // Desk has it; else FactKey `price` still drives the answer contract.
     key: 'payment_plan',

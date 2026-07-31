@@ -1072,7 +1072,10 @@ function locationCategoryFacts(
 
 /** Exported for tests. */
 export function locationSnapshotLine(l: import('./types.js').LocationEvidence): string {
-  const bits: string[] = [`*${l.projectName}* is in ${l.microMarket}`];
+  const pname = (l.projectName || 'This project').trim();
+  const mm = (l.microMarket ?? '').trim();
+  const bits: string[] = [];
+  if (mm) bits.push(`*${pname}* is in ${mm}`);
   const asked = l.askedCategories ?? [];
   if (asked.length) {
     // The buyer asked about specific POI categories — answer those with named,
@@ -1081,12 +1084,18 @@ export function locationSnapshotLine(l: import('./types.js').LocationEvidence): 
     for (const f of askedFacts.slice(0, 2)) {
       bits.push(`${f.label} nearby: ${f.pois.map(poiFactLine).join('; ')}`);
     }
-    if (askedFacts.length) return bits.join('. ');
+    if (askedFacts.length) {
+      return bits.length ? bits.join('. ') : `*${pname}*: ${askedFacts[0]!.label} on file.`;
+    }
   }
   if (l.microMarketOverview) bits.push(l.microMarketOverview);
   if (l.connectivitySummary) bits.push(l.connectivitySummary);
   if (l.nearbyPois?.length) bits.push(`Nearby: ${l.nearbyPois.slice(0, 3).join(', ')}`);
   if (l.driveTimes?.length) bits.push(l.driveTimes.slice(0, 2).join('; '));
+  // Wave 3 — never emit "*X* is in ." when Desk left micro_market blank; honest miss.
+  if (!bits.length) {
+    return `I don't have connectivity / location details on file for *${pname}* yet`;
+  }
   return bits.join('. ');
 }
 

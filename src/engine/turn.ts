@@ -1106,17 +1106,26 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
   // Loan FactKey/FAQ owns the turn — never let a brochure embedder leave
   // askTopic=media (that shared the PDF for "can I get the loan?").
+  // Wave 3 — keep media when the buyer also explicitly asked for photos/brochure.
   if (
     answerRequirements(trimmedText).includes('loan_eligibility') ||
     resolveFaqQuestionKeys(trimmedText).includes('loan_eligibility') ||
     resolveFaqQuestionKeys(trimmedText).includes('banks')
   ) {
+    const wantsExplicitMedia =
+      /\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(
+        trimmedText,
+      );
     const topics = (ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []).filter(
-      (t) => t !== 'media',
+      (t) => t !== 'media' || wantsExplicitMedia,
     );
     const withLegal = topics.includes('legal')
       ? topics
       : (['legal', ...topics] as NonNullable<Extracted['askTopics']>);
+    const withMedia =
+      wantsExplicitMedia && !withLegal.includes('media')
+        ? ([...withLegal, 'media'] as NonNullable<Extracted['askTopics']>)
+        : withLegal;
     // Focused loan + BHK/config — stay on answer multi; do not search-pivot.
     const keepFocusedInventory =
       !!state.focus &&
@@ -1124,10 +1133,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         trimmedText,
       );
     const withAvail =
-      keepFocusedInventory && !withLegal.includes('availability')
-        ? ([...withLegal, 'availability'] as NonNullable<Extracted['askTopics']>)
-        : withLegal;
-    const { mediaAssetKind: _dropMedia, ...rest } = ex;
+      keepFocusedInventory && !withMedia.includes('availability')
+        ? ([...withMedia, 'availability'] as NonNullable<Extracted['askTopics']>)
+        : withMedia;
+    const rest = wantsExplicitMedia
+      ? ex
+      : (() => {
+          const { mediaAssetKind: _dropMedia, ...stripped } = ex;
+          return stripped;
+        })();
     ex = {
       ...rest,
       askTopic: 'legal',
@@ -3146,12 +3160,16 @@ async function fetchAnswer(
   }
 
   if (topics.includes('media') || ex.mediaAssetKind) {
-    // Loan asks must never fetch/share a brochure — even if topic merge missed.
-    if (
-      answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
-      resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
-      resolveFaqQuestionKeys(buyerText ?? '').includes('banks')
-    ) {
+    // Loan asks must never fetch/share a brochure — unless the buyer also
+    // explicitly co-asked for photos/brochure (Wave 3 media+loan).
+    const loanOwnsMedia =
+      (answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
+        resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
+        resolveFaqQuestionKeys(buyerText ?? '').includes('banks')) &&
+      !/\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(
+        buyerText ?? '',
+      );
+    if (loanOwnsMedia) {
       // fall through — legal/detail path below answers LTV / honest miss
     } else {
     const rawKind = ex.mediaAssetKind ?? 'brochure';
@@ -3465,7 +3483,11 @@ async function fetchAnswer(
     if (detail && wantsLocation) {
       const leadCategories = [...new Set([...askedCategories, ...faqLocationCategories])];
       const location = buildLocationEvidence(detail, leadCategories);
-      if (locationHasAskedData(location, leadCategories)) {
+      // Wave 3 — when `location` is an explicit multi-topic atom ("price and
+      // connectivity"), attach even a sparse snapshot so compose is not price-only.
+      const attachLocation =
+        locationHasAskedData(location, leadCategories) || topics.includes('location');
+      if (attachLocation) {
         tools.push('location');
         evidence = { ...evidence, tools: [...new Set(tools)], location };
         // The asked POI category is answerable from LI — the FAQ miss is no
@@ -3498,9 +3520,12 @@ function locationHasAskedData(
   asked: readonly LocationCategoryKey[],
 ): boolean {
   if (asked.length > 0) return asked.some((k) => (loc[k]?.length ?? 0) > 0);
+  // Wave 3 — "price and connectivity": microMarket / summary alone is enough
+  // to attach location evidence so compose is not price-only.
   return Boolean(
     loc.connectivitySummary ||
       loc.microMarketOverview ||
+      loc.microMarket ||
       loc.nearbyPois?.length ||
       loc.driveTimes?.length ||
       loc.schools?.length ||

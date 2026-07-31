@@ -98,4 +98,53 @@ describe('Wave 3 — B5.1 when ready + ROI/loan compose', () => {
     expect(next.requires).toEqual(expect.arrayContaining(['rental_yield', 'loan_eligibility']));
     expect(next.topics).toEqual(expect.arrayContaining(['overview', 'legal']));
   });
+
+  it('maps cost-here with returns to price + rental_yield', async () => {
+    const { answerRequirements, withAnswerRequirements } = await import(
+      '../src/engine/answer-contract.js'
+    );
+    const text = 'tell me about returns, also whats the cost here';
+    expect(answerRequirements(text)).toEqual(
+      expect.arrayContaining(['rental_yield', 'price']),
+    );
+    const next = withAnswerRequirements(
+      { kind: 'answer', topic: 'overview', projectId: 'p1', topics: ['overview'] },
+      text,
+    );
+    expect(next.topics).toEqual(expect.arrayContaining(['overview', 'price']));
+  });
+
+  it('keeps media topic when photos co-asked with loan', async () => {
+    const { withAnswerRequirements } = await import('../src/engine/answer-contract.js');
+    const next = withAnswerRequirements(
+      { kind: 'answer', topic: 'media', projectId: 'p1', topics: ['media'] },
+      'loan eligibility? also send photos',
+    );
+    expect(next.requires).toContain('loan_eligibility');
+    expect(next.topics).toEqual(expect.arrayContaining(['legal', 'media']));
+  });
+
+  it('possession miss stays partial when location sibling evidence exists', async () => {
+    const { enforceAnswerContract } = await import('../src/engine/answer-contract.js');
+    const out = enforceAnswerContract(
+      {
+        kind: 'answer',
+        topic: 'location',
+        projectId: 'p1',
+        topics: ['location'],
+        requires: ['possession'],
+      },
+      {
+        tools: [],
+        location: {
+          projectName: 'Eldorado',
+          microMarket: 'Devanahalli',
+          schools: [{ name: 'ABC School', distanceKm: 2 }],
+        },
+      },
+    );
+    expect(out.failure).toBeUndefined();
+    expect(out.notices?.map((n) => n.subject)).toContain('possession');
+    expect(out.location?.schools?.length).toBe(1);
+  });
 });

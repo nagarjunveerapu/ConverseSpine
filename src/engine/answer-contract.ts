@@ -31,6 +31,12 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   },
   { key: 'project_type', pattern: /\b(?:property|project)\s+type\b/i },
   { key: 'price', pattern: /\b(?:price|pricing|starting\s+price|how\s+much)\b/i },
+  // Wave 3 — "whats the cost here" co-asked with returns (not "cost of living").
+  {
+    key: 'price',
+    pattern:
+      /\b(?:what(?:'s|\s+is)\s+the\s+)?cost(?:\s+(?:here|there|for\s+this|of\s+this))?\b|\bcost\s*[?.!]/i,
+  },
   // Focused chip + free-text negotiate ("any discount on this", "best price?").
   {
     key: 'price',
@@ -106,15 +112,24 @@ export function withAnswerRequirements(
   });
   if (!requires.length) return goal;
 
-  // Brochure/media embedder misbinds must not outrank a FactKey loan ask.
+  // Brochure/media embedder misbinds must not outrank a FactKey loan ask —
+  // unless the buyer also explicitly asked for photos/brochure.
+  const wantsExplicitMedia =
+    /\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(text);
   let next: Extract<TurnGoal, { kind: 'answer' }> = { ...goal, requires };
   if (requires.includes('loan_eligibility')) {
-    const topics = (goal.topics?.length ? goal.topics : [goal.topic]).filter((t) => t !== 'media');
+    const topics = (goal.topics?.length ? goal.topics : [goal.topic]).filter(
+      (t) => t !== 'media' || wantsExplicitMedia,
+    );
     const withLegal = topics.includes('legal') ? topics : (['legal', ...topics] as AnswerTopic[]);
+    const withMedia =
+      wantsExplicitMedia && !withLegal.includes('media')
+        ? ([...withLegal, 'media'] as AnswerTopic[])
+        : withLegal;
     next = {
       ...next,
       topic: 'legal',
-      ...(withLegal.length > 1 ? { topics: withLegal } : { topics: undefined }),
+      ...(withMedia.length > 1 ? { topics: withMedia } : { topics: undefined }),
     };
   }
   // P2 residual: appreciation/resale/returns co-asked with price or loan —
@@ -126,6 +141,17 @@ export function withAnswerRequirements(
       next = {
         ...next,
         ...(withOverview.length > 1 ? { topics: withOverview } : {}),
+      };
+    }
+  }
+  // Wave 3 — returns + cost: keep price topic so pricing evidence is not dropped.
+  if (requires.includes('price')) {
+    const topics = next.topics?.length ? [...next.topics] : [next.topic];
+    if (!topics.includes('price')) {
+      const withPrice = [...topics, 'price'] as AnswerTopic[];
+      next = {
+        ...next,
+        ...(withPrice.length > 1 ? { topics: withPrice } : {}),
       };
     }
   }
@@ -229,6 +255,21 @@ function missingFactFailure(subject: FactKey): Failure {
  * Verify delivery before compose. A partial answer keeps supported evidence and
  * carries notices; a turn with none of its required atoms becomes terminal.
  */
+/** Multi-topic sibling evidence that can still speak when a FactKey misses. */
+function hasSpeakableSiblingEvidence(
+  goal: Extract<TurnGoal, { kind: 'answer' }>,
+  evidence: EvidenceSet,
+): boolean {
+  const topics = goal.topics?.length ? goal.topics : [goal.topic];
+  if (topics.includes('location') && evidence.location) return true;
+  if (topics.includes('price') && (evidence.pricing || evidence.landedCost)) return true;
+  if (topics.includes('media') && evidence.media) return true;
+  if (topics.includes('availability') && (evidence.units?.length || evidence.detail)) return true;
+  if (topics.includes('legal') && evidence.detail) return true;
+  if (topics.includes('amenities') && evidence.detail?.amenities?.length) return true;
+  return false;
+}
+
 export function enforceAnswerContract(
   goal: Extract<TurnGoal, { kind: 'answer' }>,
   evidence: EvidenceSet,
@@ -241,7 +282,16 @@ export function enforceAnswerContract(
 
   const failures = missing.map(missingFactFailure);
   const deliveredRequired = goal.requires.filter((key) => delivered.has(key));
+  // Wave 3 — "schools + when ready": possession miss must not terminal-kill
+  // location LI that answers the co-asked atom.
   if (!deliveredRequired.length) {
+    if (hasSpeakableSiblingEvidence(goal, evidence)) {
+      return {
+        ...evidence,
+        deliveredFacts,
+        notices: failures,
+      };
+    }
     return {
       ...evidence,
       deliveredFacts,
