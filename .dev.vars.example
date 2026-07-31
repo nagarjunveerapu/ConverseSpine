@@ -1,12 +1,29 @@
-# ConverseSpine local secrets — copy to .dev.vars (gitignored)
-# wrangler dev --env dev reads this file.
+# ConverseSpine local secrets — copy to .dev.vars (gitignored).
+#
+# Every `wrangler dev` env reads this file, and .dev.vars OVERRIDES
+# wrangler.toml. That is the trap: a value left here wins silently over
+# [env.local.vars], so this file decides where your local turns actually go.
 
-BOT_SHARED_SECRET=copy-from-NayaDesk-.dev.vars
-# Advisor dev: cloud nayadesk-dev has naya-advisor catalog (~21 projects).
-# Local NayaDesk (localhost:8787) does NOT — only use if you seed that tenant.
-NAYADESK_URL=https://nayadesk-dev.nagarjun-arjun.workers.dev
+# Must be BYTE-IDENTICAL to BOT_SHARED_SECRET in NayaDesk/.dev.vars.
+# This default matches the one shipped in NayaDesk/.dev.vars.example, so the
+# two line up out of the box. If they differ, every Spine -> Desk call 401s
+# and the bot looks like it has an empty catalog.
+BOT_SHARED_SECRET=local-bot-secret-pick-anything
 
-DEEPSEEK_API_KEY=sk-...
+# Where the Spine finds NayaDesk. Defaults to the LOCAL Desk — which is the
+# whole point of `npm run dev:local`: your own database, no blast radius.
+NAYADESK_URL=http://localhost:8787
+#
+# To point at the deployed dev Desk instead (shared naya-db-dev — real leads,
+# real conversations, everyone else's data), swap the line above for:
+#   NAYADESK_URL=https://nayadesk-dev.nagarjun-arjun.workers.dev
+# Only cloud nayadesk-dev carries the naya-advisor catalog (~21 projects); a
+# local Desk has it only if you seed that tenant.
+
+# Optional. Unset = falls back to Workers AI. Leave this commented out unless
+# you have a real key: a placeholder value still makes /health report
+# deepseek:true and suppresses the Workers AI fallback.
+# DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 
