@@ -26,7 +26,8 @@
     "test:unbound-name:live": "tsx scripts/run-unbound-name-scenarios.ts --live",
     "test:name-06": "vitest run tests/name-06-sibling-switch.test.ts tests/name-evidence.test.ts",
     "test:other-one": "vitest run tests/other-one-deixis.test.ts tests/seams/entity-store.test.ts",
-    "test:phase-1c": "vitest run tests/phase-1c-state-adversarial.test.ts tests/seams/entity-store.test.ts tests/other-one-deixis.test.ts tests/name-06-sibling-switch.test.ts tests/unbound-name.test.ts",
+    "test:phase-1c": "vitest run tests/phase-1c-state-adversarial.test.ts tests/seams/entity-store.test.ts tests/other-one-deixis.test.ts tests/name-06-sibling-switch.test.ts tests/unbound-name.test.ts tests/nearby-offer.test.ts",
+    "test:nearby-offer": "vitest run tests/nearby-offer.test.ts",
     "test:phase-1c:report": "tsx scripts/run-phase-1c-adversarial.ts",
     "test:probe": "tsx scripts/probe-project-vectors.ts",
     "smoke:p7": "bash scripts/smoke-p7-focused-chips.sh"

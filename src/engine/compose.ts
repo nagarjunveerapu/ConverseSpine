@@ -274,6 +274,11 @@ function describeGoal(g: TurnGoal): string {
       return 'recommend matching projects from EVIDENCE';
     case 'clarify_project_pick':
       return 'ask which shortlisted project they want details on — do not invent a pick';
+    case 'clarify_discourse':
+      return (
+        'you cannot resolve their deixis/compare honestly from the board. Say so in one short line ' +
+        'and ask ONE clarifying question — do NOT recycle a project overview'
+      );
     case 'shortlist_answer':
       return `answer their ${g.topic} question for EVERY shortlisted project from EVIDENCE — never ask which one to open`;
     case 'advance':
@@ -491,13 +496,30 @@ export function fallbackReply(req: ComposeRequest): string {
           context.constraints.bhk,
         );
         const places = joinPlaceLabels(markets) || 'nearby areas I cover';
+        const exact = ev.localityWiden.exactFitName;
+        if (exact) {
+          // wantsMore after a singleton — list the nearby matches as a widen, not a Sakleshpur fit.
+          return `${pre}I've only got *${exact}* in *${ev.localityWiden.asked}* for ${noun}. Nearby: ${list}.${tail} Want details on any of these?`;
+        }
         return `${pre}I don't have ${noun} in *${ev.localityWiden.asked}* — I do have ${noun} in ${places}. Want me to show those?`;
       }
       // Some part of the ask had to be relaxed for this list to exist, so it is
       // NOT a fit — say which dimension gave. Dimensions only, never the buyer's
       // raw values: a location capture may be dialogue noise.
       const lead = relaxedLead(ev.relaxed);
-      return `${pre}${lead}: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
+      let body = `${pre}${lead}: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
+      // Singleton exact fit — soft nearby CTA (board stays exact until they opt in).
+      if (ev.nearbyOffer?.asked && ev.nearbyOffer.nearbyAreas.length && ms.length === 1) {
+        const noun = inventoryNoun(
+          context.constraints.propertyType,
+          context.constraints.bhk,
+        );
+        const places =
+          joinPlaceLabels(collapseCoverageMarkets(ev.nearbyOffer.nearbyAreas, 3)) ||
+          'nearby areas I cover';
+        body += ` *${ms[0]!.name}* is the only match I have in *${ev.nearbyOffer.asked}* for ${noun}. I also have ${noun} nearby in ${places} — want those too?`;
+      }
+      return body;
     }
     case 'clarify_project_pick': {
       const ms = (ev.matches ?? []).slice(0, 3);
@@ -506,6 +528,26 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const list = ms.map((m, i) => `${i + 1}) *${m.name}*`).join(', ');
       return `Which one should I open for details — ${list}?`;
+    }
+    case 'clarify_discourse': {
+      const name = goal.projectName;
+      switch (goal.reason) {
+        case 'need_pair_to_compare':
+          return `I've only opened *${name}* so far — name another project to compare, or I can pull a second option from search.`;
+        case 'no_prior_focus':
+          return `We're already on *${name}* — there's no earlier project to go back to. Want me to find another option?`;
+        case 'ambiguous_alternate': {
+          const alts = (goal.alternateNames ?? []).filter(Boolean);
+          if (alts.length >= 2) {
+            const list = alts.map((n, i) => `${i + 1}) *${n}*`).join(', ');
+            return `I've got a few in play besides *${name}* — which one did you mean: ${list}?`;
+          }
+          return `Which of the other projects on our list did you mean — or stay with *${name}*?`;
+        }
+        case 'no_alternate':
+        default:
+          return `I've only got *${name}* on our list so far — want me to find another to compare, or dig deeper into *${name}*?`;
+      }
     }
     case 'shortlist_answer': {
       const ms = (ev.matches ?? []).slice(0, 3);

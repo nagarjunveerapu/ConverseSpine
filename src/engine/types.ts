@@ -285,6 +285,20 @@ export type TurnGoal =
   | { kind: 'advance'; reason: 'same_set' }
   /** Shortlist has 2+ projects; buyer asked for details without naming which. */
   | { kind: 'clarify_project_pick' }
+  /**
+   * Discourse deixis / compare cannot resolve honestly — ask, don't recycle overview.
+   * - no_alternate: "the other one" with only the focused project in play
+   * - no_prior_focus: "go back" with stack depth 1
+   * - need_pair_to_compare: "compare both" with &lt;2 discourse projects
+   * - ambiguous_alternate: "the other one" with 2+ non-focus candidates
+   */
+  | {
+      kind: 'clarify_discourse';
+      reason: 'no_alternate' | 'no_prior_focus' | 'need_pair_to_compare' | 'ambiguous_alternate';
+      projectName: string;
+      /** For ambiguous_alternate — names the buyer can pick. */
+      alternateNames?: string[];
+    }
   | { kind: 'no_fit' }
   | { kind: 'ack_reject_recommend' }
   | { kind: 'objection'; topic: ObjectionTopic; projectId?: string }
@@ -668,7 +682,21 @@ export interface EvidenceSet {
    * Empty-locality widen: nothing in `asked`, but `matches` are nearby /
    * in-city alternatives. Compose must name the miss — never present as a fit.
    */
-  localityWiden?: { asked: string; nearbyAreas?: string[] };
+  localityWiden?: {
+    asked: string;
+    nearbyAreas?: string[];
+    /** When set, exact fit already shown — copy says "other/also", not "I don't have". */
+    exactFitName?: string;
+  };
+  /**
+   * Singleton (or thin) exact fit with same-type inventory outside `asked`.
+   * Board stays exact; compose/chips offer an opt-in nearby widen.
+   */
+  nearbyOffer?: {
+    asked: string;
+    nearbyAreas: string[];
+    previewNames?: string[];
+  };
   nextSlot?: ProbeKind;
   detail?: ProjectDetail;
   pricing?: PricingEvidence;
@@ -813,4 +841,6 @@ export interface TurnDebug {
   /** W2/W6: shortlist size after turn (stale-board asserts). */
   last_offered_count?: number;
   last_offered_ids?: string[];
+  /** Soft nearby-widen CTA attached this turn (chips / WA buttons). */
+  nearby_offer?: { asked: string; nearbyAreas: string[]; label: string };
 }

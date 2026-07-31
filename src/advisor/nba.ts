@@ -367,7 +367,20 @@ export function buildAdvisorNba(
     board_project_id = undefined;
   }
 
-  const { chips, actions } = chipsForGoal(state, goal, board, chipRankLive);
+  let { chips, actions } = chipsForGoal(state, goal, board, chipRankLive);
+
+  // Soft nearby-widen CTA from this turn (or pending location_broaden) — advisory
+  // chip without flipping the board into search_recovery UI.
+  const nearbyChip =
+    debug.nearby_offer?.label ??
+    state.rti?.lastSuggestedActions?.find((a) => a.id.startsWith('nearby_offer:'))?.label;
+  if (nearbyChip && !chips.some((c) => c.toLowerCase() === nearbyChip.toLowerCase())) {
+    chips = [nearbyChip, ...chips].slice(0, MAX_CHIPS);
+    const nearbyAction =
+      state.rti?.lastSuggestedActions?.find((a) => a.id.startsWith('nearby_offer:'))?.id ?? '';
+    actions = [nearbyAction, ...actions].slice(0, chips.length);
+    while (actions.length < chips.length) actions.push('');
+  }
 
   return {
     chips,

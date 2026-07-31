@@ -22,7 +22,7 @@ const REJECT =
   /\b(?:not (?:that|this|those|these)|don'?t want|nahi(?:n)?\s+chahiye|too (?:far|expensive|costly|pricey|much|high)|skip (?:that|this)|nah|no,? not|something (?:else|cheaper))\b/i;
 const NAME_RE = /\b(?:[Ii]\s*am|[Ii]'?m|[Mm]y name is|[Tt]his is|[Nn]ame'?s)\s+([A-Z][a-zA-Z]{1,30})\b/;
 const WANTS_MORE_RE =
-  /\b(?:other options?|show me (?:the )?(?:o?ptions?|otpions?|other projects?)|show options|more options?|more projects?|anything else|what else|see others?|alternatives?|options dikhao|list (?:the )?options?|some other)\b/i;
+  /\b(?:other options?|show me (?:the )?(?:o?ptions?|otpions?|other projects?|something else)|show options|more options?|more projects?|anything else|what else|see others?|alternatives?|options dikhao|list (?:the )?options?|some other|something else)\b/i;
 // Booking deixis only — bare "the visit" is visit_book (chip resolve), not recall (SA-2).
 const VISIT_RECALL_RE =
   /\b(?:my|all) (?:site )?(?:visits?|bookings?)\b|visits? (?:i have )?(?:planned|booked|scheduled)/i;

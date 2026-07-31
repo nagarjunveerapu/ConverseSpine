@@ -31,6 +31,12 @@ import { runEngineTurn } from '../src/engine/turn.js';
 import type { ConversationState, Match } from '../src/engine/types.js';
 import { buildAdvisorNba } from '../src/advisor/nba.js';
 import { fakeDeps } from './fakes.js';
+import {
+  gradeCompareBoth,
+  gradeOtherOne,
+  gradeReraGrounded,
+  gradeShowSomethingElse,
+} from './phase-1c-conversation-quality.js';
 
 const AYANA: Match = {
   projectId: 'ayana',
@@ -416,10 +422,32 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
     const deps = fakeDeps();
     const convId = 'adv-j6';
     const say = async (text: string) => {
+      const before = (await deps.store.load(convId)) ?? initState(convId, 'lokations');
       const r = await runEngineTurn(
         { convId, builderId: 'lokations', text, buyerPhone: '+919900001006', channel: 'advisor_web' },
         deps,
       );
+      // Reply quality — state invariants alone let overview-recycle pass.
+      if (/\b(?:the other one|go back)\b/i.test(text)) {
+        const q = gradeOtherOne({ buyer: text, reply: r.reply, before, after: r.state });
+        expect(q, q ? `${q.reason}\n${q.reply}` : '').toBeNull();
+      }
+      if (/\bcompare\b/i.test(text)) {
+        const q = gradeCompareBoth({ buyer: text, reply: r.reply, state: before });
+        expect(q, q ? `${q.reason}\n${q.reply}` : '').toBeNull();
+      }
+      if (/\bsomething else\b/i.test(text)) {
+        const q = gradeShowSomethingElse({ buyer: text, reply: r.reply, before, after: r.state });
+        expect(q, q ? `${q.reason}\n${q.reply}` : '').toBeNull();
+      }
+      if (/\brera\b/i.test(text)) {
+        const q = gradeReraGrounded({
+          buyer: text,
+          reply: r.reply,
+          reraFromDetail: 'PRM/KA/RERA/1251/446/2024',
+        });
+        expect(q, q ? `${q.reason}\n${q.reply}` : '').toBeNull();
+      }
       // After every buyer turn: lie in the mirror. Next turn must still use the store.
       const poisoned = poisonMirror(r.state, [
         { projectId: 'eldorado', name: 'Brigade Eldorado' },

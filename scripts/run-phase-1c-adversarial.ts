@@ -26,6 +26,11 @@ import {
 import { runEngineTurn } from '../src/engine/turn.js';
 import type { ConversationState, Match } from '../src/engine/types.js';
 import { fakeDeps } from '../tests/fakes.js';
+import {
+  gradeCompareBoth,
+  gradeOtherOne,
+  gradeShowSomethingElse,
+} from '../tests/phase-1c-conversation-quality.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -91,6 +96,7 @@ async function journeyPoisonThrash(): Promise<Row> {
   const turns: Row['turns'] = [];
 
   const say = async (buyer: string) => {
+    const before = (await deps.store.load(convId)) ?? initState(convId, 'lokations');
     const r = await runEngineTurn(
       { convId, builderId: 'lokations', text: buyer, buyerPhone: '+919900009901', channel: 'advisor_web' },
       deps,
@@ -112,6 +118,27 @@ async function journeyPoisonThrash(): Promise<Row> {
       if (st.focus?.projectId === 'eldorado' || st.focus?.projectId === 'sanctuary') {
         failures.push(`${buyer}: poison became focus`);
         notes.push('FAIL poison→focus');
+      }
+    }
+    if (/\b(?:the other one|go back)\b/i.test(buyer)) {
+      const q = gradeOtherOne({ buyer, reply: r.reply, before, after: r.state });
+      if (q) {
+        failures.push(`${buyer}: ${q.reason}`);
+        notes.push(`FAIL quality: ${q.reason}`);
+      }
+    }
+    if (/\bcompare\b/i.test(buyer)) {
+      const q = gradeCompareBoth({ buyer, reply: r.reply, state: before });
+      if (q) {
+        failures.push(`${buyer}: ${q.reason}`);
+        notes.push(`FAIL quality: ${q.reason}`);
+      }
+    }
+    if (/\bsomething else\b/i.test(buyer)) {
+      const q = gradeShowSomethingElse({ buyer, reply: r.reply, before, after: r.state });
+      if (q) {
+        failures.push(`${buyer}: ${q.reason}`);
+        notes.push(`FAIL quality: ${q.reason}`);
       }
     }
     if (JSON.stringify(st.mirror) !== JSON.stringify(st.board) && st.shortlistIds.length) {

@@ -26,12 +26,19 @@ export function buildPendingPrompt(
   turnCount: number,
   focus?: { projectId: string; projectName: string } | null,
 ): PendingPrompt | undefined {
-  // Empty-locality widen CTA ("Want me to show those?") — keep markets, not
-  // project chips. Affirm → apply_recovery_patch with these targets.
+  // Empty-locality / nearby-offer CTA ("Want me to show those?") — keep markets,
+  // not project chips. Affirm → apply_recovery_patch with these targets.
   if (evidence.localityWiden?.asked && (evidence.localityWiden.nearbyAreas?.length ?? 0) > 0) {
     return {
       kind: 'location_broaden',
       location_target: evidence.localityWiden.nearbyAreas!.join(','),
+      asked_at_turn: turnCount,
+    };
+  }
+  if (evidence.nearbyOffer?.asked && evidence.nearbyOffer.nearbyAreas.length > 0) {
+    return {
+      kind: 'location_broaden',
+      location_target: evidence.nearbyOffer.nearbyAreas.join(','),
       asked_at_turn: turnCount,
     };
   }
@@ -183,9 +190,24 @@ export function buildRtiStateUpdate(input: {
     pendingPrompt?.kind === 'offer_pricing' ||
     pendingPrompt?.kind === 'location_broaden' ||
     (!successTurn && Boolean(pendingPrompt));
+  const nearbyActions =
+    input.evidence.nearbyOffer?.nearbyAreas?.length &&
+    !input.searchRecovery?.suggested_actions.length
+      ? [
+          {
+            id: 'nearby_offer:widen',
+            label: 'Also nearby estates',
+            patch: { location: input.evidence.nearbyOffer.nearbyAreas.join(', ') },
+            user_line: 'Show me those nearby estates too',
+            expected_matches: input.evidence.nearbyOffer.previewNames?.length ?? 2,
+          },
+        ]
+      : undefined;
   const suggestedActions = input.searchRecovery?.suggested_actions.length
     ? input.searchRecovery.suggested_actions
-    : input.previousRti?.lastSuggestedActions;
+    : nearbyActions?.length
+      ? nearbyActions
+      : input.previousRti?.lastSuggestedActions;
   return {
     ...(keepPending && pendingPrompt ? { pendingPrompt } : {}),
     ...(suggestedActions?.length ? { lastSuggestedActions: suggestedActions } : {}),

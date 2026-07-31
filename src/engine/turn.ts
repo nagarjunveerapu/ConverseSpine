@@ -17,7 +17,7 @@ import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
 import { searchLocalityWiden } from './locality-widen.js';
-import { currentShortlist, discussedList } from './entity-store.js';
+import { currentShortlist, discussedList, discourseEntities } from './entity-store.js';
 import {
   collapseCoverageMarkets,
   coverageCityCoverBit,
@@ -73,7 +73,8 @@ import {
 } from './turn-intent/compare-intent.js';
 import { matchesFromLastOffered } from './matches-from-offered.js';
 import { advisorSearchPrefs, importanceFromConstraints } from './advisor-weights.js';
-import { resolveFocusedSwitchGoal } from './project_switch.js';
+import { findNearbyTypeOffer } from './nearby-offer.js';
+import { isAlternateDeixis, resolveFocusedSwitchGoal } from './project_switch.js';
 import { driveLeg, haversineDriveMinutes } from './trip-logistics.js';
 import { catalogFromProjectCoords, projectGeo } from './project-geo.js';
 import {
@@ -1863,6 +1864,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
     (evidence.matches?.length ?? 0) > 0;
   const clarifyPickDeterministic = goal.kind === 'clarify_project_pick';
+  const clarifyDiscourseDeterministic = goal.kind === 'clarify_discourse';
   // Shortlist-wide facet blocks are structured facts — template-locked like compare.
   const shortlistAnswerDeterministic = goal.kind === 'shortlist_answer';
   const compareDeterministic = goal.kind === 'answer' && goal.topic === 'compare';
@@ -1902,6 +1904,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     holdDeterministic ||
     firstShortlistTurn ||
     clarifyPickDeterministic ||
+    clarifyDiscourseDeterministic ||
     shortlistAnswerDeterministic ||
     compareDeterministic ||
     multiAnswerDeterministic ||
@@ -2219,6 +2222,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       ...(repeat_guard ? { repeat_guard } : {}),
       last_offered_count: currentShortlist(state).length,
       last_offered_ids: currentShortlist(state).map((o) => o.projectId),
+      ...(evidence.nearbyOffer?.nearbyAreas.length
+        ? {
+            nearby_offer: {
+              asked: evidence.nearbyOffer.asked,
+              nearbyAreas: evidence.nearbyOffer.nearbyAreas,
+              label: 'Also nearby estates',
+            },
+          }
+        : {}),
     },
     inputSource,
     extractProvenance,
@@ -2244,7 +2256,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ...(evidence.compare?.matrix ? { compareMatrix: evidence.compare.matrix } : {}),
     ...(cappedRecovery ? { searchRecovery: cappedRecovery } : {}),
     uiMode,
-    whatsappActions: whatsAppButtons(searchRecovery, channel),
+    whatsappActions:
+      whatsAppButtons(searchRecovery, channel) ??
+      (channel === 'whatsapp' && evidence.nearbyOffer
+        ? nearbyOfferSuggestedActions(evidence.nearbyOffer).slice(0, 2)
+        : undefined),
   };
 }
 
@@ -2331,6 +2347,25 @@ async function decideGoalAsync(
   if (s.phase === 'focused') {
     const switchGoal = await resolveFocusedSwitchGoal(text, ex, s, deps);
     if (switchGoal) return switchGoal;
+    // Alternate deixis with no unique target — clarify instead of recycling overview.
+    if (s.focus && isAlternateDeixis(text)) {
+      const focusId = s.focus.projectId;
+      const others = discourseEntities(s).filter((e) => e.projectId !== focusId);
+      if (others.length >= 2) {
+        return {
+          kind: 'clarify_discourse',
+          reason: 'ambiguous_alternate',
+          projectName: s.focus.projectName,
+          alternateNames: others.map((e) => e.name).slice(0, 3),
+        };
+      }
+      const reason = /\bgo\s+back\b/i.test(text) ? 'no_prior_focus' : 'no_alternate';
+      return {
+        kind: 'clarify_discourse',
+        reason,
+        projectName: s.focus.projectName,
+      };
+    }
   }
   return decideGoal(s, ex, visitCtx, text);
 }
@@ -2693,6 +2728,56 @@ async function fetchRecommend(
     }
   }
 
+  // "Show me others" with nothing new in the asked place — offer same-type nearby
+  // before propertyType/budget no_fit loops the same singleton.
+  if (
+    scopedMatches.length === 0 &&
+    (ex.wantsMore || ex.rejected || base.kind === 'ack_reject_recommend') &&
+    s.constraints.location?.trim() &&
+    (s.constraints.propertyType || filters.projectTypes)
+  ) {
+    const asked = s.constraints.location.trim();
+    const excludeIds = new Set([
+      ...currentShortlist(s).map((o) => o.projectId),
+      ...s.discover.rejectedProjectIds,
+      ...(s.focus?.projectId ? [s.focus.projectId] : []),
+    ]);
+    const offer = await findNearbyTypeOffer({
+      asked,
+      builderId: s.builderId,
+      filters,
+      constraints: s.constraints,
+      excludeIds,
+      search: async (builderId, candidateFilters) => {
+        const result = await searchWithFilters(deps, builderId, candidateFilters);
+        const { location: _loc, ...sansArea } = s.constraints;
+        return {
+          matches: discover.filterSearchMatches(
+            rawToMatches(result.matches ?? []),
+            sansArea,
+            s.discover.rejectedProjectIds,
+          ),
+        };
+      },
+    });
+    if (offer?.previewMatches.length) {
+      const exactFitName = currentShortlist(s)[0]?.name ?? s.focus?.projectName;
+      return {
+        goal: { kind: 'recommend' },
+        evidence: {
+          tools: ['search'],
+          matches: offer.previewMatches,
+          relaxed: ['area'],
+          localityWiden: {
+            asked,
+            nearbyAreas: offer.nearbyAreas,
+            ...(exactFitName ? { exactFitName } : {}),
+          },
+        },
+      };
+    }
+  }
+
   if (scopedMatches.length === 0 && s.constraints.propertyType) {
     const { projectTypes: _pt, ...noTypeFilters } = filters;
     const broadType = await searchWithFilters(deps, s.builderId, noTypeFilters);
@@ -2738,6 +2823,18 @@ async function fetchRecommend(
       listed = padded.matches;
       padRelaxed = padded.relaxed;
     }
+    // Thin exact board + location on brief → soft nearby offer (opt-in; not padded in).
+    const nearbyOfferEv = await maybeNearbyOfferEvidence({
+      listed,
+      s,
+      filters,
+      deps,
+      excludeIds: new Set([
+        ...listed.map((m) => m.projectId),
+        ...currentShortlist(s).map((o) => o.projectId),
+        ...s.discover.rejectedProjectIds,
+      ]),
+    });
     if (
       base.kind === 'recommend' &&
       !ex.wantsMore &&
@@ -2752,12 +2849,18 @@ async function fetchRecommend(
           matches: listed,
           ...(miss ? { nextSlot: miss } : {}),
           ...(padRelaxed.length ? { relaxed: padRelaxed } : {}),
+          ...(nearbyOfferEv ?? {}),
         },
       };
     }
     return {
       goal: base,
-      evidence: { tools: ['search'], matches: listed, ...(padRelaxed.length ? { relaxed: padRelaxed } : {}) },
+      evidence: {
+        tools: ['search'],
+        matches: listed,
+        ...(padRelaxed.length ? { relaxed: padRelaxed } : {}),
+        ...(nearbyOfferEv ?? {}),
+      },
     };
   }
 
@@ -2839,6 +2942,68 @@ function rawToMatches(
     ...(m.dimension_fit ? { dimensionFit: m.dimension_fit } : {}),
     ...(m.dimension_gap ? { dimensionGap: m.dimension_gap } : {}),
   }));
+}
+
+/** Soft nearby CTA when the exact board is thin (1 card) and type+area are set. */
+async function maybeNearbyOfferEvidence(input: {
+  listed: Match[];
+  s: ConversationState;
+  filters: import('./types.js').SearchFilters;
+  deps: EngineDeps;
+  excludeIds: Set<string>;
+}): Promise<{ nearbyOffer: NonNullable<EvidenceSet['nearbyOffer']> } | undefined> {
+  const { listed, s, filters, deps, excludeIds } = input;
+  const asked = s.constraints.location?.trim();
+  if (!asked || listed.length !== 1) return undefined;
+  if (!filters.projectTypes && !s.constraints.propertyType) return undefined;
+  const offer = await findNearbyTypeOffer({
+    asked,
+    builderId: s.builderId,
+    filters,
+    constraints: s.constraints,
+    excludeIds,
+    search: async (builderId, candidateFilters) => {
+      const result = await searchWithFilters(deps, builderId, candidateFilters);
+      const { location: _loc, ...sansArea } = s.constraints;
+      return {
+        matches: discover.filterSearchMatches(
+          rawToMatches(result.matches ?? []),
+          sansArea,
+          s.discover.rejectedProjectIds,
+        ),
+      };
+    },
+  });
+  if (!offer) return undefined;
+  return {
+    nearbyOffer: {
+      asked: offer.asked,
+      nearbyAreas: offer.nearbyAreas,
+      previewNames: offer.previewNames,
+    },
+  };
+}
+
+function nearbyOfferSuggestedActions(
+  nearbyOffer: NonNullable<EvidenceSet['nearbyOffer']>,
+): SuggestedAction[] {
+  const places = nearbyOffer.nearbyAreas.slice(0, 2).join(' / ') || 'nearby areas';
+  return [
+    {
+      id: 'nearby_offer:widen',
+      label: 'Also nearby estates',
+      patch: { location: nearbyOffer.nearbyAreas.join(', ') },
+      user_line: 'Show me those nearby estates too',
+      expected_matches: nearbyOffer.previewNames?.length ?? 2,
+    },
+    {
+      id: 'nearby_offer:open',
+      label: `Try ${places.split(' / ')[0] ?? 'nearby'}`,
+      patch: { location: nearbyOffer.nearbyAreas[0] },
+      user_line: `Show me projects in ${nearbyOffer.nearbyAreas[0]}`,
+      expected_matches: 1,
+    },
+  ];
 }
 
 /** First shortlist after brief — relax BHK/type filters to surface up to 3 options. */

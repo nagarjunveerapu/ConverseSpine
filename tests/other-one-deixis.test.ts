@@ -92,4 +92,28 @@ describe('OTHER-01 engine turn', () => {
     expect(t.state.focus?.projectId).toBe('krishnaja');
     expect(t.reply).toMatch(/krishnaja/i);
   });
+
+  it('the other one with a 1-project board clarifies — does not recycle overview', async () => {
+    const deps = fakeDeps();
+    let s = initState('other01solo', 'lokations');
+    s = recordOffered(s, [AYANA]);
+    s = commitTo(s, 'ayana', 'Ayana');
+    await deps.store.save(s);
+
+    const t = await runEngineTurn(
+      {
+        convId: 'other01solo',
+        builderId: 'lokations',
+        text: 'what about the other one',
+        buyerPhone: '+919900000062',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+
+    expect(t.state.focus?.projectId).toBe('ayana');
+    expect(t.debug?.goal).toMatchObject({ kind: 'clarify_discourse', reason: 'no_alternate' });
+    expect(t.reply).toMatch(/only got \*Ayana\*/i);
+    expect(t.reply).not.toMatch(/quarter acre/i);
+  });
 });
