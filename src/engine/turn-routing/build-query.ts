@@ -1,6 +1,10 @@
 import type { Env } from '../../env.js';
 import type { TurnRoutingInput } from './types.js';
-import { discourseStateTokenFromRouting, withDiscourseStatePrefix } from './state-tokens.js';
+import {
+  discourseStateTokenFromRouting,
+  looksStateDependentForEmbed,
+  withDiscourseStatePrefix,
+} from './state-tokens.js';
 
 /**
  * Query text for the intent-embedding lookup.
@@ -11,9 +15,9 @@ import { discourseStateTokenFromRouting, withDiscourseStatePrefix } from './stat
  * The canonical cutover (SIL_CANONICAL_EMBED) flips corpus and query together.
  *
  * Phase 2 — SIL_STATE_TOKENS: prepend a discourse state token
- * (`<focused>`, `<board:N>`, `<visit_pending>`, `<cold>`). Corpus rows for
- * state-dependent intents must be rebuilt with the same prefix — otherwise
- * leave the flag off.
+ * (`<focused>`, `<board:N>`, `<visit_pending>`, `<cold>`) only when the
+ * phrasing is state-dependent (ask_next_step / bare confirm / closed deixis).
+ * Fact intents stay raw↔raw so a partial corpus expand cannot skew get_price.
  *
  * This used to prepend a feature bundle (`phase=… | focus=… | buyer: …`,
  * the SCRUM-9 Path A classifier recipe). Against a raw-phrase corpus the
@@ -26,6 +30,7 @@ export function buildRoutingQuery(
 ): string {
   const body = input.text.trim();
   if (env?.SIL_STATE_TOKENS !== 'true') return body;
+  if (!looksStateDependentForEmbed(body)) return body;
   const token = discourseStateTokenFromRouting(input);
   return withDiscourseStatePrefix(body, token);
 }

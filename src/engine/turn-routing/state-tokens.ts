@@ -92,3 +92,31 @@ export function expandRowForStateTokens<
     discourse_state,
   }));
 }
+
+/**
+ * Query-side gate: only prefix phrasings that match the state-dependent corpus
+ * expand. Prefixing every query while only ask_next_step/confirm_action rows
+ * carry tokens would skew get_price / find_projects retrieval.
+ */
+export function looksStateDependentForEmbed(text: string): boolean {
+  const t = text.trim();
+  if (!t || t.length > 140) return false;
+  // ask_next_step family (keep aligned with ask-next-step.ts; duplicated here
+  // so build-query does not import the consumer module).
+  if (
+    /\b(?:what(?:'s| is)?\s+(?:the\s+)?next(?:\s+step)?|what\s+should\s+(?:i|we)\s+do(?:\s+next)?|what\s+do\s+(?:i|we)\s+do(?:\s+(?:now|next))?|where\s+do\s+we\s+go\s+from\s+here|how\s+do\s+(?:i|we)\s+proceed(?:\s+from\s+here)?|how\s+do\s+we\s+move\s+forward|ok(?:ay)?\s+what\s+now|what\s+happens\s+next|what'?s\s+my\s+next\s+move|aage\s+kya|ab\s+kya\s+karu|next\s+step\s+kya)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  // Bare confirm / proceed — confirm_action meaning is visit-state-dependent.
+  if (/^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|please proceed|sounds good)\.?!?\s*$/i.test(t)) {
+    return true;
+  }
+  // Closed deixis set (Phase 2 corpus target).
+  if (/^(?:this one|that one|the other one|both|the second|the first)\.?$/i.test(t)) {
+    return true;
+  }
+  return false;
+}

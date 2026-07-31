@@ -105,11 +105,15 @@ LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 # Model is a config: the bake-off decides it; default = current, so no change
 # until a model is chosen. Registry URL is the raw JSONL (raster to R2 later).
 SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
-SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
+# Branch URL until #174 merges — main lacks ask_next_step rows. Revert to main after merge.
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/feat/phase-2-state-conditioned-embed/corpus/intent-registry.jsonl"
 # Master switch for the canonical intent-embed schema (entity-masked corpus +
 # query in lockstep, ships the v2 + mined corpus). "false" = legacy raw (rebuild
 # stays a no-op today). Flip to "true" only WITH a manifest-reset full rebuild.
 SIL_CANONICAL_EMBED = "false"
+# Phase 2 — discourse state tokens on state-dependent embed queries + rebuild expand.
+# Query gated to ask_next_step/confirm/deixis so fact intents stay raw↔raw.
+SIL_STATE_TOKENS = "true"
 # Understanding Flywheel Wave A — every turn feeds Desk's review queue so the
 # /operations/understanding board sees real traffic. Dev-only until the board
 # has soaked; prod omits the var (= off, zero behaviour change).

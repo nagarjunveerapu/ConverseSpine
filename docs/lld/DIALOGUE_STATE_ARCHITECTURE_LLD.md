@@ -432,7 +432,7 @@ Requires Phase 1. You cannot condition on a state with no canonical form.
 | Slice | What | Status |
 |---|---|---|
 | **2a tokens** | `discourseStateToken` + `buildRoutingQuery` prefix behind `SIL_STATE_TOKENS` (default off). Gate: `npm run test:phase-2`. | **landed** |
-| **2b corpus** | Rebuild expands `ask_next_step` / `confirm_action` into prefixed siblings when `SIL_STATE_TOKENS`; 35 `ask_next_step` rows in registry. **Flag stays off until a rebuild runs with the flag on.** | **landed (code + rows; flag off)** |
+| **2b corpus** | Rebuild expands `ask_next_step` / `confirm_action` into prefixed siblings when `SIL_STATE_TOKENS`; 35 `ask_next_step` rows in registry. Query prefix gated to state-dependent phrasings (fact intents stay raw). **dev: flag on + `/internal/intent-rebuild`.** | **landed (dev on)** |
 | **2c consumer** | `ask-next-step.ts` + `mapIntentToRouting` → `ask_next_step`; cold→orient/probe, board→clarify/commit, focused→advance, visit→propose. Gate: `npm run test:phase-2`. | **landed** |
 
 ---

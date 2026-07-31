@@ -126,6 +126,20 @@ describe('buildRoutingQuery + SIL_STATE_TOKENS', () => {
     }
   });
 
+  it('does NOT prefix fact intents (partial corpus expand must not skew)', () => {
+    const env = { SIL_STATE_TOKENS: 'true' } as const;
+    expect(
+      buildRoutingQuery(
+        base({
+          text: 'what is the price?',
+          phase: 'focused',
+          focus: { project_id: 'ayana', project_name: 'Ayana' },
+        }),
+        env,
+      ),
+    ).toBe('what is the price?');
+  });
+
   it('withDiscourseStatePrefix is the shared corpus/query join', () => {
     expect(withDiscourseStatePrefix('show me both', '<board:2>')).toBe('<board:2> show me both');
   });
