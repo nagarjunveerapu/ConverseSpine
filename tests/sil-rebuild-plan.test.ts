@@ -114,5 +114,6 @@ describe('SIL rebuild planner', () => {
     expect(contentHash(r)).toBe(contentHash({ ...r }));
     expect(contentHash(r)).not.toBe(contentHash({ ...r, intent_kind: 'get_legal_info' }));
     expect(contentHash(r)).not.toBe(contentHash({ ...r, is_negative: true }));
+    expect(contentHash(r)).not.toBe(contentHash({ ...r, discourse_state: '<focused>' }));
   });
 });

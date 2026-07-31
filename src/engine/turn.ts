@@ -74,6 +74,8 @@ import {
 import { matchesFromLastOffered } from './matches-from-offered.js';
 import { advisorSearchPrefs, importanceFromConstraints } from './advisor-weights.js';
 import { findNearbyTypeOffer } from './nearby-offer.js';
+import { isAskNextStepText } from './ask-next-step-detect.js';
+import { resolveAskNextStepGoal, shouldConsumeAskNextStep } from './ask-next-step.js';
 import { isAlternateDeixis, resolveFocusedSwitchGoal } from './project_switch.js';
 import { driveLeg, haversineDriveMinutes } from './trip-logistics.js';
 import { catalogFromProjectCoords, projectGeo } from './project-geo.js';
@@ -485,7 +487,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       (intent.confidence === 'abstain' ||
         excerptReply(applied.probeReply ?? '') === state.rti?.lastReplyExcerpt);
 
-    if (applied.probeReply && !probeFallsThrough) {
+    // Phase 2 — ask_next_step must reach decideGoalAsync (state-conditioned
+    // consumer). A pending recovery/nearby chip menu must not swallow it into
+    // the canned RTI probe (which debug-labels as no_fit).
+    if (
+      applied.probeReply &&
+      !probeFallsThrough &&
+      !isAskNextStepText(trimmedText)
+    ) {
       let searchRecovery = storedSearchRecovery(state);
       if (!searchRecovery?.suggested_actions.length) {
         searchRecovery = await freshSearchRecovery(deps, state, channel);
@@ -2347,6 +2356,11 @@ async function decideGoalAsync(
   deps: EngineDeps,
   text: string,
 ): Promise<TurnGoal> {
+  // Phase 2c — ask_next_step is state-conditioned; consume before phase decide
+  // so cold/board/focused/visit don't fall through to search/overview.
+  if (shouldConsumeAskNextStep(s, ex, text)) {
+    return resolveAskNextStepGoal(s);
+  }
   if (s.phase === 'focused') {
     const switchGoal = await resolveFocusedSwitchGoal(text, ex, s, deps);
     if (switchGoal) return switchGoal;

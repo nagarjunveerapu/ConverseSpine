@@ -259,6 +259,11 @@ export function mapIntentToRouting(
     return { routing: 'compare_offered', ...base };
   }
 
+  // Phase 2c — bind so the kind is not unmapped_kind; goal resolve is state-conditioned.
+  if (kind === 'ask_next_step') {
+    return { routing: 'ask_next_step', ...base };
+  }
+
   if (kind === 'find_projects' || kind === 'recommend') {
     return { routing: 'search_pivot', ...base };
   }

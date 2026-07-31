@@ -27,6 +27,7 @@
  * silent for that kind automatically — ownership can never be held twice.
  */
 import { answerRequirements } from '../answer-contract.js';
+import { isAskNextStepText } from '../ask-next-step-detect.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import type { Extracted } from '../types.js';
 import type { TurnRoutingResult } from './types.js';
@@ -170,5 +171,8 @@ export function shouldSurfaceUnknownIntent(
   // focused evidence fetch. Without this, embedder below_tau → "rephrase"
   // even when resolveFaqQuestionKeys already owned the turn.
   if (text.trim() && resolveFaqQuestionKeys(text).length > 0) return false;
+  // Phase 2 — ask_next_step has a state-conditioned consumer; below_tau must
+  // not become unknown_request "rephrase" before decideGoalAsync runs.
+  if (text.trim() && isAskNextStepText(text)) return false;
   return true;
 }

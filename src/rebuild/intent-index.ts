@@ -3,6 +3,11 @@ import { canonicalize, makeCanonicalizer } from '../nlu/canonicalize.js';
 import { getRebuildVocab } from '../nlu/vocab.js';
 import { NayaDeskClient } from '../crm/nayadesk-client.js';
 import { intentSpaceId, projectIntentVector } from '../nlu/intent-projection.js';
+import {
+  expandRowForStateTokens,
+  withDiscourseStatePrefix,
+  type DiscourseStateToken,
+} from '../engine/turn-routing/state-tokens.js';
 
 /**
  * SIL data pipeline — the weekly incremental rebuild that keeps the Vectorize
@@ -45,6 +50,12 @@ export interface RegistryRow {
   /** Frozen eval split. 'holdout' rows are NEVER embedded, so generalization
    *  stays honestly measurable forever; their 'train' siblings still serve. */
   eval_split?: string;
+  /**
+   * Phase 2 — when set (or expanded under SIL_STATE_TOKENS), the embed text is
+   * `withDiscourseStatePrefix(phrasing, discourse_state)`. Query uses the same
+   * prefix via buildRoutingQuery.
+   */
+  discourse_state?: DiscourseStateToken;
 }
 
 /**
@@ -73,6 +84,11 @@ export interface RebuildOptions {
    * the PR) so every vector is re-embedded in the new form.
    */
   canonicalMode?: boolean;
+  /**
+   * Phase 2 — expand state-dependent kinds (`ask_next_step`, `confirm_action`)
+   * into prefixed vectors. Must match live SIL_STATE_TOKENS or retrieval skews.
+   */
+  stateTokens?: boolean;
 }
 
 export interface RebuildReport {
@@ -97,13 +113,24 @@ export interface RebuildReport {
  * invalidates every manifest entry and forces a clean re-embed on next rebuild.
  */
 export function contentHash(r: RegistryRow): string {
-  const s = `${canonicalize(r.phrasing)}${r.intent_kind}${r.is_negative ? 1 : 0}`;
+  const s = `${canonicalize(r.phrasing)}${r.intent_kind}${r.is_negative ? 1 : 0}${r.discourse_state ?? ''}`;
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0).toString(36);
+}
+
+/** Embed text for a registry row — state prefix applied after canonicalize. */
+export function embedTextForRow(
+  r: RegistryRow,
+  canon: (text: string) => string,
+  canonicalMode: boolean,
+): string {
+  const body = (canonicalMode ? canon(r.phrasing) : r.phrasing).trim();
+  if (!r.discourse_state) return body;
+  return withDiscourseStatePrefix(body, r.discourse_state);
 }
 
 export function parseJsonl(text: string): RegistryRow[] {
@@ -172,7 +199,7 @@ export function planRebuild(
     opts.canonicalMode
       ? ELIGIBLE_AUDIT.has(r.audit_status ?? '') && !r.quarantine
       : r.audit_status === 'clean' && !r.quarantine;
-  const eligible = rows.filter(
+  const baseEligible = rows.filter(
     (r) =>
       r.id &&
       r.phrasing &&
@@ -180,6 +207,14 @@ export function planRebuild(
       r.eval_split !== 'holdout' &&
       (opts.pushUnaudited || auditOk(r)),
   );
+  // Phase 2 — replace state-dependent rows with prefixed siblings so the index
+  // matches buildRoutingQuery. Non-dependent rows pass through unchanged.
+  const eligible = opts.stateTokens
+    ? baseEligible.flatMap((r) => {
+        const expanded = expandRowForStateTokens(r);
+        return expanded.length > 0 ? expanded : [r];
+      })
+    : baseEligible;
   const eligibleIds = new Set(eligible.map((r) => r.id));
   const changed = eligible.filter((r) => manifest[r.id] !== contentHash(r));
   const toRemove = Object.keys(manifest).filter((id) => !eligibleIds.has(id));
@@ -191,6 +226,7 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
   // Master switch for the canonical schema evolution. Explicit opts win (tests);
   // otherwise the SIL_CANONICAL_EMBED env flag decides. Default false = legacy.
   const canonicalMode = opts.canonicalMode ?? env.SIL_CANONICAL_EMBED === 'true';
+  const stateTokens = opts.stateTokens ?? env.SIL_STATE_TOKENS === 'true';
   const base: RebuildReport = {
     ok: false,
     model,
@@ -253,7 +289,11 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
     const prevVocab = await env.TURN_CACHE.get(VOCAB_VERSION_KEY);
     if (prevVocab !== vocabVersion) manifest = {};
   }
-  const { eligible, changed, toRemove } = planRebuild(rows, manifest, { ...opts, canonicalMode });
+  const { eligible, changed, toRemove } = planRebuild(rows, manifest, {
+    ...opts,
+    canonicalMode,
+    stateTokens,
+  });
   base.eligible = eligible.length;
 
   if (opts.dryRun) {
@@ -273,8 +313,9 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
       // canonicalMode: embed the CANONICAL (entity-masked) form — the schema
       // evolution that kills train/serve skew, using the same canonicalize() the
       // live query uses. Legacy mode embeds raw phrasing (matches a raw query).
+      // Phase 2 stateTokens: prefix after canonicalize (tokens are not entities).
       const out = (await env.AI.run(model as never, {
-        text: batch.map((r) => (canonicalMode ? canon(r.phrasing) : r.phrasing)),
+        text: batch.map((r) => embedTextForRow(r, canon, canonicalMode)),
       })) as {
         data?: number[][];
       };

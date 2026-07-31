@@ -122,6 +122,25 @@ export default {
         return json({ status: 'ok', ...out });
       }
 
+      // SIL intent-index rebuild (git registry → Vectorize). Secret-gated so we
+      // can cut over SIL_STATE_TOKENS / SIL_CANONICAL_EMBED without waiting for
+      // the Monday cron. Optional body: { dry_run?: boolean }.
+      if (path === '/internal/intent-rebuild' && method === 'POST') {
+        const secret = request.headers.get('x-bot-secret');
+        if (!env.BOT_SHARED_SECRET || secret !== env.BOT_SHARED_SECRET) {
+          return json({ error: 'forbidden' }, 403);
+        }
+        let dryRun = false;
+        try {
+          const body = (await request.json()) as { dry_run?: boolean };
+          dryRun = !!body?.dry_run;
+        } catch {
+          /* empty body ok */
+        }
+        const report = await rebuildIntentIndex(env, { dryRun });
+        return json({ status: report.ok ? 'ok' : 'error', report }, report.ok ? 200 : 500);
+      }
+
       // Buyer-education Vectorize rebuild (dedicated index — not INTENT_VECTORS).
       // Secret-gated; approve/retire in Desk should call this (or wait for cron).
       if (path === '/internal/education-rebuild' && method === 'POST') {
