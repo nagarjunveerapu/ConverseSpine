@@ -3806,12 +3806,19 @@ async function syncFacts(
   if ((goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') && ev.matches?.length) {
     await deps.crm.syncShortlist(nd, ev.matches.map((m) => m.projectId));
     await deps.crm.syncMatching(nd, ev.matches.map((m) => m.projectId));
+    // Phase 0a — choice events carry observed status, not hardcoded ok.
+    const choiceStatus = ev.failure
+      ? 'error'
+      : ev.notices?.length || ev.faqMiss?.keys.length || ev.noMatch
+        ? 'partial'
+        : 'ok';
     await deps.crm.postChoiceEvent(
       s.builderId,
       s.ndBuyerPhone ?? '',
       nd,
       ev.matches.map((m) => ({ projectId: m.projectId, name: m.name })),
       s.constraints as Record<string, unknown>,
+      choiceStatus,
     );
   }
   if (ex.rejected) {

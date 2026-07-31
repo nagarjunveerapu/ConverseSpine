@@ -63,6 +63,30 @@ describe('tool runs record what was observed, not an assumption', () => {
   });
 });
 
+describe('Phase 0a — ledger promotes understanding fields', () => {
+  it('records named_projects as id:name and full extract_provenance', () => {
+    const p = buildLedgerWritePayload({
+      state: initState('c1', 'naya-advisor'),
+      ex: {
+        constraints: {},
+        namedProjects: [{ projectId: 'brigade-eldorado', name: 'Brigade Eldorado' }],
+      },
+      goal: { kind: 'answer', topic: 'price', projectId: 'brigade-eldorado' },
+      evidence: { tools: [] },
+      extractProvenance: {
+        path: 'free_text_funnel',
+        fields: { askTopics: 'regex' },
+        routing_bind: { bind_source: 'embed_intent', embed_fired: true, top_kind: 'get_price', top_score: 0.9 },
+      },
+    });
+    expect(p.resolved_intent.named_projects).toEqual(['brigade-eldorado:Brigade Eldorado']);
+    expect(p.resolved_intent.extract_provenance).toMatchObject({
+      path: 'free_text_funnel',
+      routing_bind: { top_kind: 'get_price' },
+    });
+  });
+});
+
 describe('journey signals do not invent a comparison', () => {
   it('reports the real count, with no floor of two', () => {
     const s = initState('c1', 'naya-advisor');

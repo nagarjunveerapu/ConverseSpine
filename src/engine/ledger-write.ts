@@ -7,6 +7,7 @@ import { buildChipShadow } from '../chips/shadow.js';
 import { extractDisclosedFacts, type DisclosedFact } from './disclosed-facts.js';
 import { summarizeFailure, type Failure } from './outcome.js';
 import { answerRequirements, deliveredFactKeys } from './answer-contract.js';
+import { detectFocusedSwitchIntent } from './project_switch.js';
 import type {
   ConversationState,
   EvidenceSet,
@@ -90,6 +91,13 @@ export function buildLedgerWritePayload(input: {
     ...(inputSource ? { input_source: inputSource } : {}),
   };
 
+  // Phase 0a — promote turn-log-snapshot fields into the deployed ledger row
+  // (named_projects as id:name, switch_intent, full extract_provenance).
+  const switchIntent =
+    buyerText && state.phase === 'focused'
+      ? detectFocusedSwitchIntent(buyerText, ex, state)
+      : null;
+
   const resolved_intent: Record<string, unknown> = {
     ...(ex.speechAct ? { speech_act: ex.speechAct } : {}),
     ...(ex.chipPathIds?.length ? { chip_path_ids: ex.chipPathIds } : {}),
@@ -100,6 +108,14 @@ export function buildLedgerWritePayload(input: {
         : {}),
     ...(ex.transition && ex.transition !== 'none' ? { transition: ex.transition } : {}),
     ...(Object.keys(ex.constraints).length ? { constraints: { ...ex.constraints } } : {}),
+    ...(ex.namedProjects?.length
+      ? {
+          named_projects: ex.namedProjects.map((p) => `${p.projectId}:${p.name}`),
+        }
+      : {}),
+    ...(switchIntent ? { switch_intent: switchIntent } : {}),
+    // Full provenance object (deployed ledger), not wrangler-dev-only snapshot.
+    ...(extractProvenance ? { extract_provenance: extractProvenance } : {}),
     ...(extractProvenance
       ? {
           provenance: {

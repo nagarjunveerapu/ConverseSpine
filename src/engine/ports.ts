@@ -279,6 +279,8 @@ export interface EngineCrm {
     conversationId: string,
     matches: Array<{ projectId: string; name: string }>,
     constraints: Record<string, unknown>,
+    /** Phase 0a — observed engine status; never hardcode `"ok"`. */
+    engineStatus?: string,
   ): Promise<void>;
   postChoiceResponse(conversationId: string, responseText: string, responseIntent?: string): Promise<void>;
   deleteBuyerMemory(conversationId: string): Promise<void>;

@@ -884,6 +884,7 @@ export function nayadeskCrm(
         // the ports discriminated results, a legitimate absence and a
         // transport failure both read false -- which is still strictly more
         // truthful than every row claiming success.
+        // Phase 0a — never fall back to success:true when toolRuns is missing.
         tool_runs:
           entry.toolRuns?.map((t) => ({
             name: t.name,
@@ -894,7 +895,7 @@ export function nayadeskCrm(
           entry.tools.map((name) => ({
             name,
             args_summary: '',
-            success: true,
+            success: false,
             latency_ms: 0,
           })),
       });
@@ -923,12 +924,14 @@ export function nayadeskCrm(
     async postProfileObservations(builderId, buyerPhone, conversationId, observations) {
       await crm.postProfileObservations({ builder_id: builderId, buyer_phone: buyerPhone, conversation_id: conversationId, observations });
     },
-    async postChoiceEvent(builderId, buyerPhone, conversationId, matches, constraints) {
+    async postChoiceEvent(builderId, buyerPhone, conversationId, matches, constraints, engineStatus) {
       await crm.postChoiceEvent({
         builder_id: builderId,
         buyer_phone: buyerPhone,
         conversation_id: conversationId,
-        engine_status: 'ok',
+        // Phase 0a — observed status from the turn (default ok only when caller
+        // did not pass a status; never invent success after a known failure).
+        engine_status: engineStatus ?? 'ok',
         eligible: matches.map((m) => ({ project_id: m.projectId, name: m.name })),
         stretch: [],
         constraints,

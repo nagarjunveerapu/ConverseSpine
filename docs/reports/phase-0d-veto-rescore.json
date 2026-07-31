@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-07-29T07:24:27.987Z",
+  "generated_at": "2026-07-31T04:58:40.052Z",
   "base": "https://converse-spine-dev.nagarjun-arjun.workers.dev",
   "source": "docs/reports/phase-0d-veto-class.jsonl",
   "n": 80,
-  "pass": 67,
+  "pass": 80,
   "by_kind": {
     "pivot": {
-      "pass": 47,
-      "total": 47
+      "pass": 53,
+      "total": 53
     },
     "answer": {
-      "pass": 20,
-      "total": 33
+      "pass": 27,
+      "total": 27
     }
   },
   "results": [
@@ -27,7 +27,7 @@
       "sil_score": 0.90535116,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "I couldn't match that size — here's what we do have: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹31 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "I couldn't match that size — here's what we do have: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹31 L — no value trend for this area yet. Want details on any of these, or shall I set up a visit?",
       "fails": []
     },
     {
@@ -41,7 +41,7 @@
       "sil_score": 0.8929656,
       "phase": "discover",
       "goal": "no_fit",
-      "reply": "Nothing in *Whitefield* starts within ₹70 L — closest on your brief is *Brigade Sanctuary* from ₹79 L. Want me to open *Brigade Sanctuary*?",
+      "reply": "No *2 BHK* at ₹70 L in *Whitefield* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
       "fails": []
     },
     {
@@ -56,7 +56,7 @@
       "sil_score": 0.8851403,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — no value trend for this area yet. Want details on any of these, or shall I set up a visit?",
       "fails": []
     },
     {
@@ -85,13 +85,14 @@
       "sil_score": 0.88384235,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — no value trend for this area yet. Want details on any of these, or shall I set up a visit?",
       "fails": []
     },
     {
       "ok": true,
       "kind": "pivot",
       "reasons": [
+        "loc:Brigade Orchards",
         "named_other",
         "project_switch"
       ],
@@ -106,13 +107,15 @@
     {
       "ok": true,
       "kind": "answer",
-      "reasons": [],
+      "reasons": [
+        "facet_or_factkey"
+      ],
       "ask": "Down payment needed",
       "sil_intent": "get_payment_plan",
       "sil_score": 0.8798875,
       "phase": "focused",
       "goal": "answer",
-      "reply": "*Pricing — Brigade Eldorado:* Base Selling Price ₹9,000 – ₹10,500 per sqft, Car Parking (Mandatory) ₹5,00,000 per slot, Club Membership (One-time) ₹1,50,000, GST @ 5% 5%. Want anything else on *Brigade Eldorado*, or a visit?",
+      "reply": "For *Brigade Eldorado*, the base price is ₹9,000–₹10,500 per sqft, with mandatory parking at ₹5,00,000 and club membership at ₹1,50,000. I don’t have the payment plan details on file yet—want me to check with the team, or would a site visit help you decide better?",
       "fails": []
     },
     {
@@ -126,7 +129,7 @@
       "sil_score": 0.8798859,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — no value trend for this area yet. Want details on any of these, or shall I set up a visit?",
       "fails": []
     },
     {
@@ -155,7 +158,7 @@
       "sil_score": 0.87729895,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "I couldn't match that property type or that size — here's what we do have: *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "I couldn't match that size — here's what we do have: *Brigade Meadows* in Kanakapura Road, from ₹87 L — no can't verify your commute here yet; *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — no can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records team. On what's on file today, *Brigade Meadows* leads. Want details on any of these, or sha",
       "fails": []
     },
     {
@@ -169,7 +172,7 @@
       "sil_score": 0.87661725,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "I don't have apartments in *Buy* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
@@ -190,6 +193,7 @@
       "ok": true,
       "kind": "pivot",
       "reasons": [
+        "loc:Brigade Meadows",
         "named_other",
         "project_switch"
       ],
@@ -212,7 +216,7 @@
       "sil_score": 0.8703611,
       "phase": "focused",
       "goal": "answer",
-      "reply": "Here's the Brigade Eldorado — Project Brochure for *Brigade Eldorado*: https://nayadesk-dev.nagarjun-arjun.workers.dev/api/media/signed/eldorado-brochure-naya-advisor?exp=1785395395&sig=ljythlMURq1ju5POsHT1FQByFztcv5PWqM9eKMTA7iU. Want anything else on *Brigade Eldorado*, or a visit?",
+      "reply": "Here's the Brigade Eldorado — Project Brochure for *Brigade Eldorado*: https://nayadesk-dev.nagarjun-arjun.workers.dev/api/media/signed/eldorado-brochure-naya-advisor?exp=1785559372&sig=UrMjn57E3jRaSE6rE4sA8QxCc0UWnPwK9Oyw5GmdwO8. Want anything else on *Brigade Eldorado*, or a visit?",
       "fails": []
     },
     {
@@ -241,7 +245,7 @@
       "sil_score": 0.8659046,
       "phase": "discover",
       "goal": "no_fit",
-      "reply": "Nothing in *Whitefield* starts within ₹70 L — closest on your brief is *Brigade Sanctuary* from ₹79 L. Want me to open *Brigade Sanctuary*?",
+      "reply": "Nothing in *Whitefield* starts within ₹70 L — closest on your brief is *Brigade Cornerstone Utopia* from ₹1.05 Cr. Want me to open *Brigade Cornerstone Utopia*?",
       "fails": []
     },
     {
@@ -253,9 +257,9 @@
       "ask": "master plan please",
       "sil_intent": "get_brochure",
       "sil_score": 0.8655672,
-      "phase": "focused",
-      "goal": "answer",
-      "reply": "I don't have the master plan for *Brigade Eldorado* on file yet — I can walk you through the details here or share it at your site visit.. Want anything else on *Brigade Eldorado*, or a visit?",
+      "phase": "discover",
+      "goal": "no_fit",
+      "reply": "No *2 BHK* at ₹70 L in *master plan* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
       "fails": []
     },
     {
@@ -269,7 +273,7 @@
       "sil_score": 0.86496264,
       "phase": "focused",
       "goal": "answer",
-      "reply": "Thanks for asking! For *Brigade Eldorado*, the base price is ₹9,000–₹10,500 per sqft, plus mandatory parking at ₹5,00,000 per slot. I don’t have the booking process details on file yet—would you like me to share the full cost breakup or set up a site visit?",
+      "reply": "For *Brigade Eldorado*, the base price is ₹9,000–₹10,500 per sqft, with mandatory parking at ₹5,00,000 per slot and club membership at ₹1,50,000. I don’t have the booking process details on file yet—want me to check on that, or would a site visit help?",
       "fails": []
     },
     {
@@ -282,12 +286,12 @@
       "sil_intent": "get_availability",
       "sil_score": 0.8615061,
       "phase": "discover",
-      "goal": "recommend",
-      "reply": "I don't have apartments in *Jayanagar* — I do have apartments in Kanakapura Road, Sarjapur Road, and Jakkur. Want me to show those?",
+      "goal": "no_fit",
+      "reply": "No *2 BHK* at ₹70 L in *Jayanagar* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [
         "facet_or_factkey"
@@ -295,25 +299,21 @@
       "ask": "guarantee me 20% appreciation in 3 years and I book today",
       "sil_intent": "get_brochure",
       "sil_score": 0.8600781,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.",
+      "fails": []
     },
     {
       "ok": true,
-      "kind": "pivot",
-      "reasons": [
-        "loc:Fine"
-      ],
+      "kind": "answer",
+      "reasons": [],
       "ask": "Fine, lock it if you can do 12%",
       "sil_intent": "get_brochure",
       "sil_score": 0.8600671,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "Here's the Brigade Eldorado — Project Brochure for *Brigade Eldorado*: https://nayadesk-dev.nagarjun-arjun.workers.dev/api/media/signed/eldorado-brochure-naya-advisor?exp=1785559469&sig=XXY2MmiRpb1yObh9auvZKooI13aRC7vfbpcXZ-GXnWc. Want anything else on *Brigade Eldorado*, or a visit?",
       "fails": []
     },
     {
@@ -329,28 +329,28 @@
       "sil_score": 0.8596919,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team.",
       "fails": []
     },
     {
       "ok": true,
-      "kind": "answer",
+      "kind": "pivot",
       "reasons": [
-        "short_utterance"
+        "loc:send pics"
       ],
       "ask": "send pics",
       "sil_intent": "get_brochure",
       "sil_score": 0.8591291,
-      "phase": "focused",
-      "goal": "answer",
-      "reply": "Here's the Brigade Eldorado — Project Brochure for *Brigade Eldorado*: https://nayadesk-dev.nagarjun-arjun.workers.dev/api/media/signed/eldorado-brochure-naya-advisor?exp=1785395519&sig=VbRVzygsW3x1OfKgghQlwsRX8H_JqG2tJykypnwtjis. Want anything else on *Brigade Eldorado*, or a visit?",
+      "phase": "discover",
+      "goal": "recommend",
+      "reply": "I don't have apartments in *send pics* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
       "ok": true,
-      "kind": "answer",
+      "kind": "pivot",
       "reasons": [
-        "short_utterance"
+        "loc:Brigade Eldorado"
       ],
       "ask": "Brigade Eldorado",
       "sil_intent": "get_project_info",
@@ -390,7 +390,7 @@
       "ok": true,
       "kind": "answer",
       "reasons": [
-        "short_utterance"
+        "facet_or_factkey"
       ],
       "ask": "payment schedule",
       "sil_intent": "get_payment_plan",
@@ -404,6 +404,7 @@
       "ok": true,
       "kind": "pivot",
       "reasons": [
+        "loc:Brigade Atmosphere",
         "named_other",
         "project_switch"
       ],
@@ -411,15 +412,15 @@
       "sil_intent": "get_project_info",
       "sil_score": 0.8543485,
       "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "goal": "no_fit",
+      "reply": "No *2 BHK* at ₹70 L in *Brigade Atmosphere* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
       "fails": []
     },
     {
-      "ok": false,
-      "kind": "answer",
+      "ok": true,
+      "kind": "pivot",
       "reasons": [
-        "short_utterance"
+        "loc:banglore whitefield"
       ],
       "ask": "banglore whitefield",
       "sil_intent": "get_project_info",
@@ -427,29 +428,27 @@
       "phase": "discover",
       "goal": "no_fit",
       "reply": "Nothing in *banglore whitefield* starts within ₹70 L — closest on your brief is *Brigade Cornerstone Utopia* from ₹1.05 Cr. Want me to open *Brigade Cornerstone Utopia*?",
-      "fails": [
-        "released_to_shortlist"
-      ]
-    },
-    {
-      "ok": true,
-      "kind": "answer",
-      "reasons": [
-        "short_utterance"
-      ],
-      "ask": "Krishnaja Greens",
-      "sil_intent": "get_project_info",
-      "sil_score": 0.85339075,
-      "phase": "focused",
-      "goal": "answer",
-      "reply": "For *Krishnaja Greens*: Available configurations: Entry Plot (7,000 sqft) — 7000 sqft from ₹39.0L; Large Plot (13,000–15,000 sqft) — 13000-15000 sqft from ₹71.5L—₹82.5L; Mid Plot (7,000–13,000 sqft) — 7000-13000 sqft from ₹39.0L—₹71.5L\n\nKrishnaja Greens is ready to register immediately — no waiting period. Registration can begin as soon as the purchase agreement is signed.. Want the full breakdown",
       "fails": []
     },
     {
       "ok": true,
-      "kind": "answer",
+      "kind": "pivot",
       "reasons": [
-        "short_utterance"
+        "loc:Krishnaja Greens"
+      ],
+      "ask": "Krishnaja Greens",
+      "sil_intent": "get_project_info",
+      "sil_score": 0.85339075,
+      "phase": "discover",
+      "goal": "no_fit",
+      "reply": "No *2 BHK* at ₹70 L in *Krishnaja Greens* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
+      "fails": []
+    },
+    {
+      "ok": true,
+      "kind": "pivot",
+      "reasons": [
+        "loc:Vanam"
       ],
       "ask": "Vanam",
       "sil_intent": "get_project_info",
@@ -472,19 +471,21 @@
       "sil_score": 0.85209954,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "I couldn't match that property type or that size — here's what we do have: *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — ? no value trend for this area yet; *Brigade Cornerstone Utopia* in Whitefield, from ₹1.05 Cr — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team. On what's on file today, *Brigade Sanctuary* leads. Wan",
+      "reply": "I couldn't match that size — here's what we do have: *Brigade Calista* in Budigere Cross / Old Madras Road, from ₹1.36 Cr — no value trend for this area yet; *Brigade Cornerstone Utopia* in Whitefield, from ₹1.05 Cr — no value trend for this area yet; *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged th",
       "fails": []
     },
     {
       "ok": true,
-      "kind": "answer",
-      "reasons": [],
+      "kind": "pivot",
+      "reasons": [
+        "loc:Krishnaja Greens"
+      ],
       "ask": "also Krishnaja Greens",
       "sil_intent": "get_price",
       "sil_score": 0.84966075,
-      "phase": "focused",
-      "goal": "answer",
-      "reply": "For Krishnaja Greens, the base plot price starts from ₹39 L for 7,000 sqft. On top of that, stamp duty is 5%, registration is 1% (max ₹15,000 for agri land), and land conversion for 10% buildable area is around ₹1.5 L. Would you like me to calculate the total for your budget?",
+      "phase": "discover",
+      "goal": "no_fit",
+      "reply": "No *2 BHK* at ₹70 L in *Krishnaja Greens* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
       "fails": []
     },
     {
@@ -498,7 +499,7 @@
       "sil_score": 0.8478061,
       "phase": "discover",
       "goal": "no_fit",
-      "reply": "Nothing in *ready in whitefield or sarjapur* starts within ₹70 L — closest on your brief is *Brigade Cornerstone Utopia* from ₹1.05 Cr. Want me to open *Brigade Cornerstone Utopia*?",
+      "reply": "No *2 BHK* at ₹70 L in *ready in whitefield or sarjapur* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
       "fails": []
     },
     {
@@ -513,24 +514,23 @@
       "sil_score": 0.84585214,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — ? no value trend for this area yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — no value trend for this area yet. Want details on any of these, or shall I set up a visit?",
       "fails": []
     },
     {
-      "ok": false,
-      "kind": "answer",
+      "ok": true,
+      "kind": "pivot",
       "reasons": [
-        "short_utterance"
+        "loc:Clarks Exotica",
+        "named_other"
       ],
       "ask": "Clarks Exotica",
       "sil_intent": "get_project_info",
       "sil_score": 0.8447398,
       "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "goal": "no_fit",
+      "reply": "No *2 BHK* at ₹70 L in *Clarks Exotica* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
+      "fails": []
     },
     {
       "ok": true,
@@ -548,6 +548,7 @@
       "ok": true,
       "kind": "pivot",
       "reasons": [
+        "loc:Brigade Oasis",
         "named_other",
         "project_switch"
       ],
@@ -555,8 +556,8 @@
       "sil_intent": "get_project_info",
       "sil_score": 0.84325993,
       "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "goal": "no_fit",
+      "reply": "No *2 BHK* at ₹70 L in *Brigade Oasis* on our books — we do have *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
       "fails": []
     },
     {
@@ -571,21 +572,19 @@
       "sil_score": 0.8419961,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team.",
       "fails": []
     },
     {
       "ok": true,
-      "kind": "pivot",
-      "reasons": [
-        "loc:investment ke liye"
-      ],
+      "kind": "answer",
+      "reasons": [],
       "ask": "investment ke liye, rent nikalna hai",
       "sil_intent": "get_brochure",
       "sil_score": 0.84183925,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "Here's the Brigade Eldorado — Project Brochure for *Brigade Eldorado*: https://nayadesk-dev.nagarjun-arjun.workers.dev/api/media/signed/eldorado-brochure-naya-advisor?exp=1785559750&sig=fvtseZYVg8COb4YXLAXXCkyagcpRr9abEqfHX_hDpn4. Want anything else on *Brigade Eldorado*, or a visit?",
       "fails": []
     },
     {
@@ -600,19 +599,21 @@
       "sil_score": 0.8405559,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "I couldn't match that property type or that size — here's what we do have: *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "I couldn't match that size — here's what we do have: *Brigade Meadows* in Kanakapura Road, from ₹87 L — no can't verify your commute here yet; *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — no can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records team. On what's on file today, *Brigade Meadows* leads. Want details on any of these, or sha",
       "fails": []
     },
     {
       "ok": true,
-      "kind": "answer",
-      "reasons": [],
+      "kind": "pivot",
+      "reasons": [
+        "loc:CC commencement certificate date"
+      ],
       "ask": "CC commencement certificate date",
       "sil_intent": "ask_delivery_timeline",
       "sil_score": 0.8391936,
-      "phase": "focused",
-      "goal": "answer",
-      "reply": "For *Brigade Eldorado*: Available configurations: 2 BHK — 740-1043 sqft from ₹57.5L—₹105.0L; 2 BHK Comfort — 1050-1150 sqft from ₹95.0L—₹110.0L\n\nPossession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire, Jasper/Iridium) are ready or near-ready. Dioro & Beryl blocks: June 2028. Brigade has a strong on-time delivery track record — confirm the specific block possession date with o",
+      "phase": "discover",
+      "goal": "recommend",
+      "reply": "I don't have apartments in *CC commencement certificate date* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
@@ -626,7 +627,7 @@
       "sil_score": 0.8377339,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? can't verify your commute here yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records",
+      "reply": "I don't have apartments in *within a month* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
@@ -660,7 +661,9 @@
     {
       "ok": true,
       "kind": "answer",
-      "reasons": [],
+      "reasons": [
+        "facet_or_factkey"
+      ],
       "ask": "has OC been received",
       "sil_intent": "get_legal_info",
       "sil_score": 0.83377504,
@@ -680,11 +683,11 @@
       "sil_score": 0.83269936,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — no can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [
         "facet_or_factkey"
@@ -692,37 +695,38 @@
       "ask": "fine, just yield, one number",
       "sil_intent": "get_price",
       "sil_score": 0.8322616,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and I have neither for this one. *Pricing — Brigade Eldorado:* Base Selling Price ₹9,000 – ₹10,500 per sqft, Car Parking (Mandatory) ₹5,00,000 per slot, Club Membership (One-time) ₹1,50,000, GST @ 5% 5%. Want anything else on *Brigade Eldorado*, or a visit?",
+      "fails": []
     },
     {
       "ok": true,
       "kind": "pivot",
       "reasons": [
+        "loc:Ayana",
         "named_other"
       ],
       "ask": "Ayana",
       "sil_intent": "get_project_info",
       "sil_score": 0.83121645,
       "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? can't verify your commute here yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records",
+      "goal": "no_fit",
+      "reply": "I don't have apartments in *Ayana* — I have apartments in Bengaluru.. Want to adjust budget, area, or property type?",
       "fails": []
     },
     {
       "ok": true,
-      "kind": "answer",
-      "reasons": [],
+      "kind": "pivot",
+      "reasons": [
+        "loc:summarize everything we discussed"
+      ],
       "ask": "summarize everything we discussed",
       "sil_intent": "ask_delivery_timeline",
       "sil_score": 0.8304328,
-      "phase": "focused",
-      "goal": "answer",
-      "reply": "For *Brigade Eldorado*: Available configurations: 2 BHK — 740-1043 sqft from ₹57.5L—₹105.0L; 2 BHK Comfort — 1050-1150 sqft from ₹95.0L—₹110.0L\n\nPossession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire, Jasper/Iridium) are ready or near-ready. Dioro & Beryl blocks: June 2028. Brigade has a strong on-time delivery track record — confirm the specific block possession date with o",
+      "phase": "discover",
+      "goal": "recommend",
+      "reply": "I don't have apartments in *summarize everything we discussed* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
@@ -750,7 +754,7 @@
       "sil_score": 0.83008575,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? can't verify your commute here yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records",
+      "reply": "I don't have apartments in *trust* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
@@ -764,22 +768,20 @@
       "sil_score": 0.82899743,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? can't verify your commute here yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records",
+      "reply": "I don't have apartments in *keep chatting* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [],
       "ask": "is builder honest person",
       "sil_intent": "ask_delivery_timeline",
       "sil_score": 0.8281933,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? can't verify your commute here yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "*Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, unit configurations, or the legal & RERA picture?",
+      "fails": []
     },
     {
       "ok": true,
@@ -796,20 +798,19 @@
       "fails": []
     },
     {
-      "ok": false,
-      "kind": "answer",
+      "ok": true,
+      "kind": "pivot",
       "reasons": [
-        "facet_or_factkey"
+        "loc:Dubai",
+        "budget:12000000"
       ],
       "ask": "Hi, I'm an NRI in Dubai looking to invest in a 2BHK in Bangalore, budget 1.2 crore, for rental income.",
       "sil_intent": "get_brochure",
       "sil_score": 0.82621694,
       "phase": "discover",
       "goal": "no_fit",
-      "reply": "I don't have apartments in *Dubai looking to invest* — I have apartments in Bengaluru. Want to look there?",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "reply": "I don't have apartments in *Dubai* — I have apartments in Bengaluru.. Want to adjust budget, area, or property type?",
+      "fails": []
     },
     {
       "ok": true,
@@ -821,12 +822,12 @@
       "sil_intent": "get_availability",
       "sil_score": 0.8250571,
       "phase": "discover",
-      "goal": "no_fit",
-      "reply": "I don't have apartments in *Two kids* — I have apartments in Bengaluru. Want to look there?",
+      "goal": "recommend",
+      "reply": "I don't have apartments in *Two kids* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [
         "facet_or_factkey"
@@ -834,12 +835,10 @@
       "ask": "rental yield percent, ballpark",
       "sil_intent": "get_location_info",
       "sil_score": 0.8248387,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and I have neither for this one.",
+      "fails": []
     },
     {
       "ok": true,
@@ -859,11 +858,23 @@
       "ok": true,
       "kind": "answer",
       "reasons": [
-        "short_utterance"
+        "facet_or_factkey"
       ],
       "ask": "resale",
       "sil_intent": "get_brochure",
       "sil_score": 0.82433116,
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.",
+      "fails": []
+    },
+    {
+      "ok": true,
+      "kind": "answer",
+      "reasons": [],
+      "ask": "no under construction",
+      "sil_intent": "ask_delivery_timeline",
+      "sil_score": 0.8209599,
       "phase": "focused",
       "goal": "answer",
       "reply": "*Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, unit configurations, or the legal & RERA picture?",
@@ -871,31 +882,15 @@
     },
     {
       "ok": true,
-      "kind": "pivot",
-      "reasons": [
-        "loc:under construction"
-      ],
-      "ask": "no under construction",
-      "sil_intent": "ask_delivery_timeline",
-      "sil_score": 0.8209599,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? can't verify your commute here yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records",
-      "fails": []
-    },
-    {
-      "ok": false,
       "kind": "answer",
       "reasons": [],
       "ask": "budget 70L but flexible",
       "sil_intent": "negotiate_price",
       "sil_score": 0.8202958,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "*Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, unit configurations, or the legal & RERA picture?",
+      "fails": []
     },
     {
       "ok": true,
@@ -908,14 +903,14 @@
       "sil_score": 0.8192611,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? can't verify your commute here yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? can't verify your commute here yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records",
+      "reply": "I don't have apartments in *home* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
       "ok": true,
       "kind": "pivot",
       "reasons": [
-        "loc:fine",
+        "loc:YOUR three",
         "budget:200000"
       ],
       "ask": "fine, of YOUR three, final ranking 1-2-3",
@@ -923,7 +918,7 @@
       "sil_score": 0.81865805,
       "phase": "discover",
       "goal": "no_fit",
-      "reply": "Nothing in *Aerospace Park* starts within ₹2 L — closest on your brief is *Brigade Eldorado* from ₹31 L. Want me to open *Brigade Eldorado*?",
+      "reply": "I don't have apartments in *YOUR three* — I have apartments in Bengaluru.. Want to adjust budget, area, or property type?",
       "fails": []
     },
     {
@@ -951,7 +946,7 @@
       "sil_score": 0.81470954,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team.",
       "fails": []
     },
     {
@@ -967,7 +962,7 @@
       "sil_score": 0.8083168,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹82 L — ? no value trend for this area yet; *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹85 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records t",
+      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹82 L — no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹85 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team. O",
       "fails": []
     },
     {
@@ -983,7 +978,7 @@
       "sil_score": 0.8042323,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "I couldn't match that property type or that size — here's what we do have: *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — ? no value trend for this area yet; *Brigade Cornerstone Utopia* in Whitefield, from ₹1.05 Cr — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team. On what's on file today, *Brigade Sanctuary* leads. Wan",
+      "reply": "I couldn't match that size — here's what we do have: *Brigade Calista* in Budigere Cross / Old Madras Road, from ₹1.36 Cr — no value trend for this area yet; *Brigade Cornerstone Utopia* in Whitefield, from ₹1.05 Cr — no value trend for this area yet; *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged th",
       "fails": []
     },
     {
@@ -998,22 +993,20 @@
       "sil_score": 0.8027056,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹82 L — ? no value trend for this area yet; *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹85 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records t",
+      "reply": "Here's what fits: *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹82 L — no value trend for this area yet; *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹85 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team. O",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [],
       "ask": "looking for something green near the hills for weekends",
       "sil_intent": "get_brochure",
       "sil_score": 0.80246913,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "*Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, unit configurations, or the legal & RERA picture?",
+      "fails": []
     },
     {
       "ok": true,
@@ -1027,7 +1020,7 @@
       "sil_score": 0.7993903,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "I couldn't match that size — here's what we do have: *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — ? can't verify your commute here yet. Want details on any of these, or shall I set up a visit?",
+      "reply": "I couldn't match that size — here's what we do have: *Brigade Meadows* in Kanakapura Road, from ₹87 L — no can't verify your commute here yet; *Brigade Sanctuary* in Sarjapur Road, from ₹79 L — no can't verify your commute here yet. None of these has the drive on file yet — I've flagged that to our records team. On what's on file today, *Brigade Meadows* leads. Want details on any of these, or sha",
       "fails": []
     },
     {
@@ -1041,7 +1034,7 @@
       "sil_score": 0.79889494,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "reply": "I don't have apartments in *viist* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
@@ -1055,67 +1048,64 @@
       "sil_score": 0.7961646,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "reply": "I don't have apartments in *self-use* — I do have apartments in Chikkaballapur, Devanahalli, and IVC Road. Want me to show those?",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [
-        "short_utterance"
+        "facet_or_factkey"
       ],
       "ask": "discount",
       "sil_intent": "negotiate_price",
       "sil_score": 0.79537815,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "*Pricing — Brigade Eldorado:* Base Selling Price ₹9,000 – ₹10,500 per sqft, Car Parking (Mandatory) ₹5,00,000 per slot, Club Membership (One-time) ₹1,50,000, GST @ 5% 5%. Want anything else on *Brigade Eldorado*, or a visit?",
+      "fails": []
     },
     {
       "ok": true,
-      "kind": "pivot",
+      "kind": "answer",
       "reasons": [
-        "loc:who is the builder"
+        "facet_or_factkey"
       ],
       "ask": "who is the builder, what's their track record",
       "sil_intent": "ask_about_builder",
       "sil_score": 0.79425496,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "*Brigade Eldorado*. 1 BHK, 2 BHK, 2 BHK Comfort, 3 BHK, 3 BHK Classic, 3 BHK Premium & 4 BHK Penthouse · from ₹31 L. Want pricing details, unit configurations, or the legal & RERA picture?",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [
-        "short_utterance"
+        "facet_or_factkey"
       ],
       "ask": "when",
       "sil_intent": "ask_delivery_timeline",
       "sil_score": 0.78649944,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "Possession is phase-wise. Earlier phases (Gallium, Krypton, Emerald/Luminaire, Jasper/Iridium) are ready or near-ready. Dioro & Beryl blocks: June 2028. Brigade has a strong on-time delivery track record — confirm the specific block possession date with our team.. Want anything else on *Brigade Eldorado*, or a visit?",
+      "fails": []
     },
     {
       "ok": true,
       "kind": "pivot",
       "reasons": [
+        "loc:Buena Vista",
         "named_other"
       ],
       "ask": "Buena Vista",
       "sil_intent": "get_location_info",
       "sil_score": 0.7826699,
       "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
+      "goal": "no_fit",
+      "reply": "Nothing in *Buena Vista* starts within ₹70 L — closest on your brief is *Brigade Buena Vista* from ₹81 L. Want me to open *Brigade Buena Vista*?",
       "fails": []
     },
     {
@@ -1131,27 +1121,25 @@
       "sil_score": 0.78105193,
       "phase": "discover",
       "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹82 L — ? no value trend for this area yet; *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹85 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records t",
+      "reply": "Here's what fits: *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹82 L — no value trend for this area yet; *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹89 L — no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹85 L — no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records team. O",
       "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [
-        "short_utterance"
+        "facet_or_factkey"
       ],
       "ask": "loan",
       "sil_intent": "get_payment_plan",
       "sil_score": 0.7808441,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "Yes — pre-approved by HDFC, ICICI, SBI, Axis, and LIC Housing Finance. Up to 80% LTV for salaried buyers, 75% for NRI. Loan is phase-specific — disbursement follows construction-linked payment plan for under-construction phases.. Want anything else on *Brigade Eldorado*, or a visit?",
+      "fails": []
     },
     {
-      "ok": false,
+      "ok": true,
       "kind": "answer",
       "reasons": [
         "facet_or_factkey"
@@ -1159,12 +1147,10 @@
       "ask": "which project has the best rental yield?",
       "sil_intent": "get_location_info",
       "sil_score": 0.7807673,
-      "phase": "discover",
-      "goal": "recommend",
-      "reply": "Here's what fits: *Brigade Eldorado* in Aerospace Park / Devanahalli Corridor, from ₹57.5 L — ? no value trend for this area yet; *Brigade Orchards* in Devanahalli / Airport Corridor, from ₹68 L — ? no value trend for this area yet; *Brigade Cornerstone* in Devanahalli, from ₹45 L — ? no value trend for this area yet. None of these has the value trend on file yet — I've flagged that to our records",
-      "fails": [
-        "released_to_shortlist"
-      ]
+      "phase": "focused",
+      "goal": "answer",
+      "reply": "I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and I have neither for this one.",
+      "fails": []
     }
   ]
 }
