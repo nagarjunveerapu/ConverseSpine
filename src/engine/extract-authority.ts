@@ -29,6 +29,7 @@ import {
 } from './facts.js';
 import { holdIntent } from './hold-intent.js';
 import { hasNarrowingConstraint } from './phases/discover.js';
+import { stampNamedAndUnbound } from './named_bind.js';
 import {
   buyerCuedOtherProject,
   filterNamedProjectsByEvidence,
@@ -182,6 +183,21 @@ export async function extractTurnAuthority(
     ...(state.discover.discussedProjects ?? []),
     ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
   ], deps.catalogNames ?? []);
+  // PR-2-lite: bind compare name spans against session ∪ catalog; stamp unbound.
+  const sessionForBind = [
+    ...state.discover.lastOffered,
+    ...(state.discover.discussedProjects ?? []),
+    ...(state.focus
+      ? [{ projectId: state.focus.projectId, name: state.focus.projectName }]
+      : []),
+  ];
+  const catalogForBind = (deps.catalogNames ?? [])
+    .filter((p): p is { projectId: string; name: string } => Boolean(p.projectId && p.name))
+    .map((p) => ({ projectId: p.projectId!, name: p.name }));
+  merged = stampNamedAndUnbound(text, merged, {
+    session: sessionForBind,
+    catalog: catalogForBind,
+  });
   // PIV-03: "change to 2BHK under 70L" must recommend, not clarify_project_pick.
   if (isConstraintRefinementTurn(text) && !merged.namedProjects?.length && !merged.pickName) {
     merged = { ...merged, speechAct: 'search' };

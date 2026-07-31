@@ -43,6 +43,14 @@ const LOKATIONS: readonly P[] = [
     display: '₹48 L',
   },
   { id: 'eldorado', name: 'Brigade Eldorado', market: 'North Bangalore', type: 'apartment', priceInr: 6_500_000, display: '₹65 L' },
+  {
+    id: 'sanctuary',
+    name: 'Brigade Sanctuary',
+    market: 'Sarjapur Road',
+    type: 'apartment',
+    priceInr: 7_900_000,
+    display: '₹79 L',
+  },
   { id: 'cornerstone', name: 'Brigade Cornerstone', market: 'Devanahalli', type: 'apartment', priceInr: 5_200_000, display: '₹52 L' },
   {
     id: 'cornerstone-utopia',

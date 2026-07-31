@@ -21,6 +21,7 @@
     "test:focus-hold:live": "tsx scripts/run-focus-hold-regression.ts",
     "test:phase-0b": "vitest run tests/phase-0b-scenario-gate.test.ts tests/seams/ledger-truth.test.ts",
     "test:phase-0b:live": "tsx scripts/run-phase-0b-scenarios.ts",
+    "test:unbound-name": "vitest run tests/unbound-name.test.ts",
     "test:probe": "tsx scripts/probe-project-vectors.ts",
     "smoke:p7": "bash scripts/smoke-p7-focused-chips.sh"
   },

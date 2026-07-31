@@ -615,7 +615,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     compareProjectIds:
       ex.compareProjectIds && ex.compareProjectIds.length >= 2
         ? ex.compareProjectIds
-        : resolveCompareProjectIds(trimmedText, ex, state),
+        : resolveCompareProjectIds(
+            trimmedText,
+            ex,
+            state,
+            catalogForNlu?.projectNames ?? [],
+          ),
   };
   if (recoveryChipTurn || focusPivotTurn) {
     ex = {

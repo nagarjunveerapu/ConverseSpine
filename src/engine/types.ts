@@ -729,6 +729,12 @@ export interface Extracted {
   emiContractV1?: boolean;
   mediaAssetKind?: string;
   namedProjects?: OfferedProject[];
+  /**
+   * Name-shaped tokens the buyer used that did not bind to any session/catalog
+   * project. Distinguishes "named nothing" from "named something unbound" so
+   * compare fall-through does not pool-guess the shortlist (SUBJECT PR-2).
+   */
+  unboundProjectNames?: string[];
   compareAdvice?: boolean;
   compareProjectIds?: string[];
   smalltalk?: boolean;

@@ -98,10 +98,10 @@ But ~15 methods use nullable contracts today (`projectDetail`, `pricing`, `compa
 | tier | scope | size |
 |---|---|---|
 | **0a** | `tool_runs[].success` + real `latency_ms`; `postChoiceEvent` `engine_status`; drop the `Math.max(…, 2)` floor on `projects_compared`; promote the fields `observability/turn-log-snapshot.ts` already computes (`named_projects` as `id:name` pairs, `switch_intent`, full `extract_provenance`) from the wrangler-dev-only path into the deployed ledger row | **S — the "one day"** (landed) |
-| **0b** | result wrappers for the methods 0a measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` | M — **in progress** |
+| **0b** | result wrappers for the methods 0a measures: `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy | M — **landed** |
 | 0c | remainder of `EngineData` | separate PR |
 
-### Phase 0b contract (in progress)
+### Phase 0b contract (landed)
 
 ```ts
 type DataResult<T> =
@@ -553,7 +553,7 @@ Prod infra cutover (Desk D1, service bindings, Advisor URL matrix, SQL seed hygi
 | **0e verdict precision** | — | no | S — offline, no deploy |
 | **0d understanding before mutation** | 0e | **yes** (the phrasing cliff) | **L — reorders every turn** |
 | 0b/0c port results | 0a | no | M |
-| unbound-name typing | — | **yes** (J7 honest) | S |
+| unbound-name typing | — | **yes** (J7 honest + correct named compare) | S — **landed** (`UN-01`…`UN-05`) |
 | 1 entity store (a/b/c) | 0a to measure | **yes** (J7 correct, NAME-06) | L |
 | 2 state → understanding | 1 | **yes** | M |
 | 3 multi-label | — (gate may need 1) | **yes** | M |
@@ -717,7 +717,8 @@ direction; “small, one day” only holds if scoped.
 | Tier | Scope | Size |
 |---|---|---|
 | **0a** | Ledger `tool_runs[].success`, `postChoiceEvent` `engine_status`, drop `projects_compared` floor, promote `turn-log-snapshot` fields into deployed ledger | S — landed |
-| **0b** | `DataResult<T>` wrappers for `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy + `test:phase-0b` gate (`0B-01`…`0B-14`) | M — in progress |
+| **0b** | `DataResult<T>` wrappers for `pricing`, `landedCost`, `priceBasis`, `faqLookup`, `projectDetail` + multi-intent compose join policy + `test:phase-0b` gate (`0B-01`…`0B-14`) | M — **landed** |
+| **unbound-name** | `Extracted.unboundProjectNames` + catalog in compare matching + block pool-guess; gate `test:unbound-name` (`UN-01`…`UN-05`) | S — **landed** (PR-2-lite; NAME-06 stays known-fail until 1b) |
 | **0c** | Remainder of `EngineData` | separate PR |
 
 Gate for closing Phase 0 remains: forced adapter failure → `success: false` with

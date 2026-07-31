@@ -24,6 +24,26 @@ function projectPool(s: ConversationState): ProjectRef[] {
   return pool;
 }
 
+/** Conversation pool ∪ catalog — catalog joins MATCHING only, never fallback. */
+function matchingPool(
+  conversation: ReadonlyArray<ProjectRef>,
+  catalog: ReadonlyArray<{ projectId: string; name: string }>,
+): ProjectRef[] {
+  const out: ProjectRef[] = [];
+  const seen = new Set<string>();
+  for (const p of conversation) {
+    if (!p.project_id || seen.has(p.project_id)) continue;
+    seen.add(p.project_id);
+    out.push(p);
+  }
+  for (const p of catalog) {
+    if (!p.projectId || seen.has(p.projectId)) continue;
+    seen.add(p.projectId);
+    out.push({ project_id: p.projectId, name: p.name });
+  }
+  return out;
+}
+
 function uniqueIds(refs: readonly ProjectRef[], max = 3): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -36,15 +56,21 @@ function uniqueIds(refs: readonly ProjectRef[], max = 3): string[] {
   return out;
 }
 
+function hasUnboundNames(ex: Extracted): boolean {
+  return (ex.unboundProjectNames?.length ?? 0) > 0;
+}
+
 /** Resolve which project IDs to compare for this turn. */
 export function resolveCompareProjectIds(
   buyerText: string,
   ex: Extracted,
   s: ConversationState,
+  catalogNames: ReadonlyArray<{ projectId: string; name: string }> = [],
 ): string[] {
   if (ex.transition === 'want_visit') return [];
 
   const pool = projectPool(s);
+  const matchPool = matchingPool(pool, catalogNames);
   const recent: ContextMessage[] = (s.discover.recentMessages ?? []).map((m) => ({
     text: m.text,
     created_at_ms: m.atMs,
@@ -56,8 +82,14 @@ export function resolveCompareProjectIds(
     );
   }
 
-  const fromRefs = resolveProjectReferences(buyerText, recent, pool);
+  const fromRefs = resolveProjectReferences(buyerText, recent, matchPool);
   if (fromRefs.length >= 2) return uniqueIds(fromRefs);
+
+  // Name-shaped tokens were attempted and none (or not enough) bound — clarify.
+  // Never fall through to the conversation shortlist (J7 honesty).
+  if (hasUnboundNames(ex) && (ex.namedProjects?.length ?? 0) < 2) {
+    return [];
+  }
 
   const discussed = s.discover.discussedProjects ?? [];
   const anaphora = /\b(?:both|these|those|them|the\s+two|dono)\b/i.test(buyerText);
@@ -68,7 +100,8 @@ export function resolveCompareProjectIds(
   if (
     pool.length >= 2 &&
     (ex.askTopic === 'compare' || GENERIC_COMPARE_RE.test(buyerText)) &&
-    fromRefs.length === 0
+    fromRefs.length === 0 &&
+    !hasUnboundNames(ex)
   ) {
     // Prefer discussed pair over search shortlist when buyer has engaged 2+ projects.
     if (discussed.length >= 2) {
@@ -77,7 +110,7 @@ export function resolveCompareProjectIds(
     return uniqueIds(pool);
   }
 
-  if (fromRefs.length === 1 && pool.length >= 2) {
+  if (fromRefs.length === 1 && pool.length >= 2 && !hasUnboundNames(ex)) {
     const hasSubstantiveTopic =
       (ex.askTopics ?? []).some((t) => t !== 'compare') ||
       (ex.askTopic != null && ex.askTopic !== 'compare');
