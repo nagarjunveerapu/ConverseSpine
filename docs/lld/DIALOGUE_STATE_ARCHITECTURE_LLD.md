@@ -724,6 +724,7 @@ direction; “small, one day” only holds if scoped.
 | **1b (salience consumers)** | `discourseEntities` / `discourseOffered` feed compare pool, visit candidates, switch `poolOf`, `resolveNamed`; legacy ⊆ store membership assert in dual-write test. | M — **landed** |
 | **1c (store authority)** | `shortlistIds` + card payload on entities; `currentShortlist` / `discussedList` / `mirrorLegacyPools`. Legacy arrays are write-through mirrors only. **Not a NayaDesk field** — Spine KV only; Desk catalog stays. | M — **landed (authority)** |
 | **1c (raw-reader migration)** | All `src/` identity reads use helpers (`turn.ts`, `discover.ts`, extract, compare, visit, …). Mirrors remain for old KV revive + test fixtures. `focusedRef()` / stack-first `focusedEntity`; `state.focus` still dual-writes for phase gates. Field delete of mirrors = follow-up once tests stop constructing `lastOffered` directly. | M — **landed** |
+| **1c adversarial gate** | `npm run test:phase-1c` — poison mirror, diverge focus/stack, thrash shortlist, confuse journeys (other-one / compare / NAME-06 / unbound). Report: `npm run test:phase-1c:report` → `scenarios/runs/phase-1c-adv-*`. | S — **landed** |
 | **0c** | Remainder of `EngineData` | separate PR |
 
 Gate for closing Phase 0 remains: forced adapter failure → `success: false` with
