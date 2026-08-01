@@ -1547,7 +1547,23 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = { ...state, phase: 'visit' };
   }
 
-  if (state.phase === 'visit' && shouldExitVisitForIntent(ex, trimmedText)) {
+  // Outstanding visit scheduling asks own the next short turn ("both", "1 and 2",
+  // "Whitefield", "morning"). Do not exit to compare/discover clarify mid-chooser.
+  const visitAskOwnsTurn =
+    state.phase === 'visit' &&
+    !!state.visit?.lastAsk &&
+    [
+      'which_projects',
+      'origin',
+      'window',
+      'day',
+      'time',
+      'split_day',
+      'team_request',
+      'same_day_choice',
+      'stagger_propose',
+    ].includes(state.visit.lastAsk);
+  if (state.phase === 'visit' && !visitAskOwnsTurn && shouldExitVisitForIntent(ex, trimmedText)) {
     state = exitVisitPhase(state);
   }
 

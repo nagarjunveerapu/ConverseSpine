@@ -98,6 +98,36 @@ describe('visit phase', () => {
     }
   });
 
+  it('which-projects: "both" maps to full candidate set then asks origin', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        lastAsk: 'which_projects' as const,
+        candidateIds: [
+          { projectId: 'ayana', projectName: 'Ayana' },
+          { projectId: 'krishnaja', projectName: 'Krishnaja Greens' },
+        ],
+      },
+    };
+    const goal = decide(
+      s,
+      {
+        constraints: {},
+        transition: 'none',
+        // Live dig: "both" can stamp compare — visit chooser must still win.
+        askTopic: 'compare',
+        compareProjectIds: ['ayana', 'krishnaja'],
+      },
+      { text: 'both', now },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).toBe('origin');
+      expect((goal.state.queued?.length ?? 0) + 1).toBe(2);
+    }
+  });
+
   it('which-projects: "all" maps to full candidate set then asks origin', () => {
     const s = {
       ...initState('t', 'lokations'),
