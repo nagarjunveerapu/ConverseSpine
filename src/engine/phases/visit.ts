@@ -180,14 +180,31 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
     }
   }
 
+  // A visit is a fact only with a slot AND a named project (Desk
+  // docs/designs/visit-fact-measurement.html, F1+F2). proposedFuture already
+  // guarantees the slot; a confirm state that somehow lost its project must
+  // ask rather than book — an unattributed booking is exactly the row Desk
+  // can never prove happened.
+  if (
+    prior.awaitingConfirm && ex.affirm && !ex.decline && !slot && proposedFuture
+    && !prior.projectId
+  ) {
+    return {
+      kind: 'visit_ask',
+      ask: 'project',
+      copy: 'Which project should I set up the visit for?',
+      state: { ...prior, awaitingConfirm: false, lastAsk: 'project' },
+    };
+  }
+
   if (prior.awaitingConfirm && ex.affirm && !ex.decline && !slot && proposedFuture) {
     const nextQueuedStop = prior.queued?.[0];
     return {
       kind: 'visit_booked',
       label: prior.proposedLabel ?? '',
       projectName: prior.projectName ?? '',
-      projectId: prior.projectId ?? '',
-      iso: prior.proposedIso ?? '',
+      projectId: prior.projectId!,
+      iso: prior.proposedIso!,
       ...(nextQueuedStop
         ? {
             nextQueuedStop: {

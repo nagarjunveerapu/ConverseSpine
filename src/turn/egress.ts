@@ -28,14 +28,28 @@ export function postTurnEgress(
       confidence: 0.9,
     }));
 
-  if (input.visitBooked && input.project_id) {
+  // A visit is a fact only when the project AND the resolved instant travel
+  // with it (Desk visit-fact-measurement.html, F1+F2). Anything less is a
+  // plan, and a plan is not reported as a booking — the old shape sent the
+  // journey signal while silently dropping the incomplete fact, which is how
+  // Desk accumulated 296 "booked" visits it could never prove.
+  const visitFactComplete = input.visitBooked && !!input.project_id && !!input.visit_iso;
+  if (input.visitBooked && !visitFactComplete) {
+    console.error('visit_booked dropped: incomplete fact', {
+      conversation_id: input.conversation_id,
+      has_project: !!input.project_id,
+      has_iso: !!input.visit_iso,
+    });
+  }
+
+  if (visitFactComplete) {
     observations.push({
       fact_key: 'visit_booked',
       value: {
         project_id: input.project_id,
         // WHEN THE VISIT IS. `at` below is when it was booked — the previous
         // shape carried only that, so Desk had a booking with no appointment.
-        ...(input.visit_iso ? { visit_iso: input.visit_iso } : {}),
+        visit_iso: input.visit_iso,
         ...(input.visit_label ? { said: input.visit_label } : {}),
         at: new Date().toISOString(),
       },
@@ -63,7 +77,9 @@ export function postTurnEgress(
       conversation_id: input.conversation_id,
       signals: {
         intents: kinds,
-        visit_booked: input.visitBooked,
+        // Same gate as the fact. The signal is what flips Desk's status to
+        // visit_booked — sending it without the fact is the split brain.
+        visit_booked: visitFactComplete,
         slots_filled: input.understood.slot_writes.map((s) => s.slot),
       },
     })
