@@ -1171,9 +1171,29 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         : {}),
     };
   }
+  // Visit chooser / origin / day-time answers ("both", "1 and 2", "Whitefield")
+  // often embedder-miss below_tau — never convert those into unknown_request
+  // before visit.decide owns the turn.
+  const visitSchedulingPending =
+    state.phase === 'visit' &&
+    !!state.visit?.lastAsk &&
+    [
+      'which_projects',
+      'origin',
+      'window',
+      'day',
+      'time',
+      'split_day',
+      'team_request',
+      'same_day_choice',
+      'stagger_propose',
+      'project',
+    ].includes(state.visit.lastAsk);
+
   if (
     deps.failureRouting &&
     !state.stopConfirmPending &&
+    !visitSchedulingPending &&
     shouldSurfaceUnknownIntent(ex, routing, authorityClaimed, trimmedText)
   ) {
     routing = {
@@ -1211,7 +1231,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           detail: { policy: 'prohibited', floor: 'keyword' },
         } satisfies Failure)
       : undefined);
-  if (unsupportedFailure) {
+  // unknown_request must not eclipse an outstanding visit scheduling ask
+  if (
+    unsupportedFailure &&
+    visitSchedulingPending &&
+    unsupportedFailure.subject === 'unknown_request'
+  ) {
+    // fall through to visit.decide
+  } else if (unsupportedFailure) {
     // Education resolver lives ONLY inside Phase-2 definition ownership —
     // not a second early owner before geo/search.
     const definitionPolicy =
