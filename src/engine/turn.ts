@@ -1574,24 +1574,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = { ...state, phase: 'visit' };
   }
 
-  // Outstanding visit scheduling asks own the next short turn ("both", "1 and 2",
-  // "Whitefield", "morning"). Do not exit to compare/discover clarify mid-chooser.
-  const visitAskOwnsTurn =
-    state.phase === 'visit' &&
-    !!state.visit?.lastAsk &&
-    [
-      'which_projects',
-      'origin',
-      'window',
-      'day',
-      'time',
-      'split_day',
-      'team_request',
-      'same_day_choice',
-      'stagger_propose',
-    ].includes(state.visit.lastAsk);
-  if (state.phase === 'visit' && !visitAskOwnsTurn && shouldExitVisitForIntent(ex, trimmedText)) {
-    state = exitVisitPhase(state);
+  // Which-projects chooser: short deixis ("both", "1 and 2") can false-stamp
+  // compare and eject visit. Hold only that ask — not day/same_day (buyer may
+  // pivot with "Compare all 3" mid-queue; rti-visit-gate).
+  if (state.phase === 'visit' && shouldExitVisitForIntent(ex, trimmedText)) {
+    const holdChooserDeixis =
+      state.visit?.lastAsk === 'which_projects' &&
+      !/\bcompare\b/i.test(trimmedText) &&
+      trimmedText.trim().split(/\s+/).length <= 6;
+    if (!holdChooserDeixis) {
+      state = exitVisitPhase(state);
+    }
   }
 
   if (
