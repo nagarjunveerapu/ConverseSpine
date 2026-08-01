@@ -105,8 +105,7 @@ LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 # Model is a config: the bake-off decides it; default = current, so no change
 # until a model is chosen. Registry URL is the raw JSONL (raster to R2 later).
 SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
-# Branch URL until #174 merges — main lacks ask_next_step rows. Revert to main after merge.
-SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/feat/phase-2-state-conditioned-embed/corpus/intent-registry.jsonl"
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
 # Master switch for the canonical intent-embed schema (entity-masked corpus +
 # query in lockstep, ships the v2 + mined corpus). "false" = legacy raw (rebuild
 # stays a no-op today). Flip to "true" only WITH a manifest-reset full rebuild.
@@ -406,7 +405,7 @@ DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"
 LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
-SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/feat/phase-2-state-conditioned-embed/corpus/intent-registry.jsonl"
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
 SIL_CANONICAL_EMBED = "false"
 SIL_STATE_TOKENS = "true"
 UNDERSTANDING_CAPTURE = "true"

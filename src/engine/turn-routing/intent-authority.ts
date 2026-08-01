@@ -29,6 +29,7 @@
 import { answerRequirements } from '../answer-contract.js';
 import { isAskNextStepText } from '../ask-next-step-detect.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
+import { DECLINE } from '../turn-intent/dialogue-acts.js';
 import type { Extracted } from '../types.js';
 import type { TurnRoutingResult } from './types.js';
 
@@ -109,8 +110,15 @@ export function applyIntentAuthority(
   let next = ex;
   const wrote: Array<'stop' | 'wantsHuman'> = [];
   if (effect.stop && !next.stop) {
-    next = { ...next, stop: true };
-    wrote.push('stop');
+    // Soft CTA decline ("no thanks", "nahi chahiye") nearest-neighbors opt_out.
+    // That must NOT open the delete/contact-scope confirm — stay focused.
+    // Hard contact/data opt-out still reaches ex.stop via STOP_RE / chip.stop;
+    // this path only fills when the embedder alone owned the meaning.
+    const softDecline = !!next.decline || DECLINE.test(text.trim());
+    if (!softDecline) {
+      next = { ...next, stop: true };
+      wrote.push('stop');
+    }
   }
   if (effect.wantsHuman && !next.wantsHuman) {
     // Facet/FAQ/media already owns — "can I get the PDF" must not become
