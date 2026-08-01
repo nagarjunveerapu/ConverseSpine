@@ -24,6 +24,12 @@
           "my visits",
           "Which project should I set up the visit for"
         ],
+        "reply_includes_any": ["which should we visit", "1.", "ayana", "krishnaja"]
+      }
+    },
+    {
+      "text": "both",
+      "assert": {
         "reply_includes": ["coming from"]
       }
     }

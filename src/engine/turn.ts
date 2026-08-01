@@ -2071,7 +2071,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (goal.kind === 'visit_booked') {
     const next = goal.nextQueuedStop ?? state.visit?.queued?.[0];
     if (next) {
-      reply = `${reply.trim()}\n\nNext up — same day for *${next.projectName}*, or a different day?`;
+      const hint = state.visit?.preferredDayHint;
+      const nextLine =
+        hint === 'next' || hint === 'other'
+          ? `Next up — which day and time for *${next.projectName}*?`
+          : `Next up — same day for *${next.projectName}*, or a different day?`;
+      reply = `${reply.trim()}\n\n${nextLine}`;
+    } else if ((state.visit?.pendingTeamRequests?.length ?? 0) > 0) {
+      const pending = state.visit!.pendingTeamRequests!.map((t) => t.projectName).join(', ');
+      reply = `${reply.trim()}\n\n*${pending}*: requested with the team (pending) — we'll confirm on WhatsApp, or say a different day for a firm slot.`;
     }
   }
 

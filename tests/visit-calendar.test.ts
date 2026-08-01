@@ -27,8 +27,8 @@ describe('visit-calendar', () => {
     expect(free).toBe('2026-07-13T10:30:00+05:30');
   });
 
-  it('staggers after prior visit with drive', () => {
-    const next = staggerAfter('2026-07-13T10:30:00+05:30', 25, 90);
-    expect(next).toBe('2026-07-13T12:25:00+05:30');
+  it('staggers after prior visit with drive (2h on-site)', () => {
+    const next = staggerAfter('2026-07-13T10:30:00+05:30', 25, VISIT_ON_SITE_MIN);
+    expect(next).toBe('2026-07-13T12:55:00+05:30');
   });
 });

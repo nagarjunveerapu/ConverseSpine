@@ -25,6 +25,25 @@ import { orderStopsByTravel, type TripStop } from '../trip-logistics.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { DEFERRABLE_ANSWER_TOPICS } from '../turn-routing/from-speech-act.js';
 import { discourseEntities, discourseOffered, currentShortlist, discussedList } from '../entity-store.js';
+import {
+  applyPickToQueue,
+  formatWhichChooserCopy,
+  isAllDeixis,
+  resolveWhichPick,
+} from '../visit-which.js';
+import {
+  checkSlotAgainstHours,
+  formatMinutesAsClock,
+  nearestInWindowStartIso,
+  parseSiteVisitHours,
+} from '../visit-hours.js';
+import {
+  ACCEPT_SPLIT_RE,
+  FORCE_SAME_DAY_RE,
+  forceSameDayPartialCopy,
+  packSameDay,
+  splitDayCopy,
+} from '../visit-feasibility.js';
 
 const DECLINE = /\b(no|nope|nah|not (?:that|this|now)|can'?t|cannot|won'?t work|another (?:day|time)|reschedule)\b/i;
 const BARE_AFFIRM = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|sounds good)\.?!?\s*$/i;
@@ -226,10 +245,7 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
     affirm: ex.affirm,
     booked,
     ctx,
-    // SA-2: after compare, discussed set ≥2 — "come for the visit" seeds the queue
-    // without requiring "them/both" deixis.
-    seedDiscussedMulti:
-      ex.transition === 'want_visit' && discussedList(s).length >= 2,
+    wantVisit: ex.transition === 'want_visit',
   });
 }
 
@@ -331,7 +347,7 @@ function effectiveDriveMin(ctx: VisitCtx): number | null {
 function formatOnSiteEndLabel(startIso: string): string {
   const endIso = addMinutesToIso(startIso, VISIT_ON_SITE_MIN);
   const m = /T(\d{2}):(\d{2})/.exec(endIso);
-  if (!m) return 'about 90 min on site';
+  if (!m) return 'about 2 hours on site';
   const h = parseInt(m[1]!, 10);
   const min = parseInt(m[2]!, 10);
   return formatVisitTimeLabel(h, min);
@@ -361,8 +377,7 @@ function step(input: {
   affirm?: boolean;
   booked: readonly StoredVisit[];
   ctx: VisitCtx;
-  /** SA-2 — seed multi-stop from discussedProjects on visit_book without deixis. */
-  seedDiscussedMulti?: boolean;
+  wantVisit?: boolean;
 }): TurnGoal {
   const lastBooked = lastBookedVisit(input.booked);
   const isStop2Plus = !!lastBooked;
@@ -386,6 +401,77 @@ function step(input: {
   let projectName = prior.projectName;
   let queued = prior.queued ?? [];
 
+  // Team-request confirm (force same-day overflow)
+  if (prior.awaitingTeamRequestConfirm && input.affirm && !DECLINE.test(input.text)) {
+    const nextQueuedStop = prior.queued?.[0];
+    if (prior.proposedIso && prior.projectId && prior.projectName) {
+      return {
+        kind: 'visit_booked',
+        label: prior.proposedLabel ?? '',
+        projectName: prior.projectName,
+        projectId: prior.projectId,
+        iso: prior.proposedIso,
+        ...(nextQueuedStop
+          ? {
+              nextQueuedStop: {
+                projectId: nextQueuedStop.projectId,
+                projectName: nextQueuedStop.projectName,
+              },
+            }
+          : {}),
+      };
+    }
+  }
+
+  // Resolve which-projects chooser reply
+  const chooserPool: OfferedProject[] = (prior.candidateIds ?? []).map((c) => ({
+    projectId: c.projectId,
+    name: c.projectName,
+  }));
+  if (prior.lastAsk === 'which_projects' && chooserPool.length > 0 && !projectId) {
+    const pick = resolveWhichPick(input.text, chooserPool);
+    if (pick.kind === 'all') {
+      const applied = applyPickToQueue(chooserPool, MAX_VISIT_STOPS);
+      if (applied) {
+        projectId = applied.projectId;
+        projectName = applied.projectName;
+        queued = applied.queued;
+        prefix = `${prefix}Happy to plan ${chooserPool.length === 2 ? 'both' : 'all'} — `;
+      }
+    } else if (pick.kind === 'subset') {
+      const applied = applyPickToQueue(pick.projects, MAX_VISIT_STOPS);
+      if (applied) {
+        projectId = applied.projectId;
+        projectName = applied.projectName;
+        queued = applied.queued;
+      }
+    } else {
+      return {
+        kind: 'visit_ask',
+        ask: 'which_projects',
+        copy: formatWhichChooserCopy(chooserPool),
+        state: {
+          ...prior,
+          candidateIds: chooserPool.map((c) => ({ projectId: c.projectId, projectName: c.name })),
+          askCount: askN,
+          lastAsk: 'which_projects',
+        },
+      };
+    }
+  }
+
+  // Split-day accept / force
+  if (prior.lastAsk === 'split_day' && prior.splitOffered) {
+    if (FORCE_SAME_DAY_RE.test(input.text) || /\ball\s+same\s+day\b/i.test(input.text)) {
+      prior = { ...prior, preferredDayHint: 'same_forced', splitOffered: false };
+    } else if (ACCEPT_SPLIT_RE.test(input.text) || BARE_AFFIRM.test(input.text.trim())) {
+      prior = { ...prior, preferredDayHint: 'next', splitOffered: false };
+      // Keep first stop(s) that fit — leave queue; day ask for active
+    } else if (DECLINE.test(input.text)) {
+      prior = { ...prior, preferredDayHint: 'other', splitOffered: false };
+    }
+  }
+
   if (input.named.length > 1) {
     const capped = input.named.slice(0, MAX_VISIT_STOPS);
     const overflow = input.named.length - capped.length;
@@ -400,11 +486,9 @@ function step(input: {
     !projectId &&
     input.named.length === 0 &&
     input.candidates.length > 1 &&
-    (/\b(?:both|these|those|them|the\s+two)\b/i.test(input.text) ||
-      // SA-2: "come for the visit" after compare — discussed set is the candidate pool.
-      Boolean(input.seedDiscussedMulti))
+    isAllDeixis(input.text)
   ) {
-    // Multi-stop from discussed/focus set — not catalog embed noise.
+    // Explicit all/both/these only — never silent seed of whole discussed set
     const capped = input.candidates.slice(0, MAX_VISIT_STOPS);
     const [first, ...rest] = capped;
     projectId = first!.projectId;
@@ -440,6 +524,28 @@ function step(input: {
     projectName = input.candidates[0]!.name;
   }
 
+  // Which-projects chooser: ≥2 discussed, no selection yet (never auto-queue all)
+  const needsChooser =
+    !projectId &&
+    input.named.length === 0 &&
+    input.candidates.length >= 2 &&
+    (input.wantVisit || prior.lastAsk === 'which_projects' || !prior.projectId);
+
+  if (needsChooser && prior.lastAsk !== 'which_projects') {
+    const pool = input.candidates.slice(0, MAX_VISIT_STOPS);
+    return {
+      kind: 'visit_ask',
+      ask: 'which_projects',
+      copy: formatWhichChooserCopy(pool),
+      state: {
+        ...prior,
+        candidateIds: pool.map((c) => ({ projectId: c.projectId, projectName: c.name })),
+        askCount: askN,
+        lastAsk: 'which_projects',
+      },
+    };
+  }
+
   const originFromText = extractOriginFromText(input.text);
   if (originFromText && !prior.originText && !isVisitProjectSwitchUtterance(input.text, input.named.length)) {
     prior = { ...prior, originText: originFromText, originAsked: true };
@@ -450,6 +556,20 @@ function step(input: {
   const baseState: VisitState = { ...prior, projectId, projectName, queued };
 
   if (!projectId || !projectName) {
+    if (input.candidates.length >= 2) {
+      const pool = input.candidates.slice(0, MAX_VISIT_STOPS);
+      return {
+        kind: 'visit_ask',
+        ask: 'which_projects',
+        copy: formatWhichChooserCopy(pool),
+        state: {
+          ...baseState,
+          candidateIds: pool.map((c) => ({ projectId: c.projectId, projectName: c.name })),
+          askCount: askN,
+          lastAsk: 'which_projects',
+        },
+      };
+    }
     const copy = declined
       ? 'No problem — which project would you like to visit?'
       : 'Which project should I set up the visit for?';
@@ -458,7 +578,8 @@ function step(input: {
 
   const stopCount = (projectId ? 1 : 0) + queued.length;
 
-  if (stopCount >= 2 && !prior.originText && !prior.originAsked && !lastBookedVisit(input.booked)) {
+  // Origin mandatory for multi-stop until banked (including after first book)
+  if (stopCount >= 2 && !prior.originText && !prior.originAsked) {
     return {
       kind: 'visit_ask',
       ask: 'origin',
@@ -503,6 +624,79 @@ function step(input: {
         }));
       }
       prior = { ...prior, tripOrdered: true };
+    }
+  }
+
+  // Same-day feasibility → split warn (once) before scheduling
+  if (
+    stopCount >= 2 &&
+    prior.tripOrdered &&
+    !prior.splitOffered &&
+    prior.preferredDayHint !== 'same_forced' &&
+    prior.preferredDayHint !== 'next' &&
+    prior.preferredDayHint !== 'other' &&
+    !lastBooked
+  ) {
+    const hours = parseSiteVisitHours(input.ctx.siteVisitHours);
+    const dayIso = dayAnchor?.dayIso ?? prior.pendingDayIso ?? isoTodayIst(input.now);
+    const firstStart = `${dayIso}T10:30:00+05:30`;
+    const packStops = [
+      { projectId, projectName, driveInMin: 0 as number | null },
+      ...queued.map((q, i) => ({
+        projectId: q.projectId,
+        projectName: q.projectName,
+        driveInMin: i === 0 ? (input.ctx.driveFromPriorMin ?? null) : null,
+      })),
+    ];
+    // Estimate unknown drives via haversine catalog when available
+    const pack = packSameDay({
+      dayIso,
+      firstStartIso: firstStart,
+      stops: packStops.map((s, i) => {
+        if (i === 0) return s;
+        if (s.driveInMin != null) return s;
+        const prev = packStops[i - 1]!;
+        const a = projectGeo(prev.projectId, input.ctx.projectGeoCatalog);
+        const b = projectGeo(s.projectId, input.ctx.projectGeoCatalog);
+        if (a && b) {
+          const km = haversineKm(a.lat, a.lng, b.lat, b.lng);
+          return { ...s, driveInMin: Math.max(15, Math.round((km / 25) * 60)) };
+        }
+        return s;
+      }),
+      siteVisitHours: input.ctx.siteVisitHours,
+    });
+    if (pack.preferSplit && (pack.overflow.length > 0 || stopCount >= 3 || pack.preferSplitReason === 'long_drive')) {
+      const fittingNames = pack.fitting.map((p) => p.projectName);
+      const overflowNames =
+        pack.overflow.length > 0
+          ? pack.overflow.map((p) => p.projectName)
+          : queued.slice(-1).map((q) => q.projectName);
+      const day1Names =
+        fittingNames.length > 0 ? fittingNames : [projectName, ...(queued[0] ? [queued[0].projectName] : [])];
+      return {
+        kind: 'visit_ask',
+        ask: 'split_day',
+        copy: say(
+          prefix,
+          splitDayCopy({
+            fittingNames: day1Names.slice(0, Math.max(1, stopCount - 1)),
+            overflowNames: overflowNames.length ? overflowNames : [queued[queued.length - 1]!.projectName],
+            hoursLabel: hours.label,
+            reason: pack.preferSplitReason,
+          }).replace(/^\w/, (c) => c.toLowerCase()),
+        ),
+        state: {
+          ...baseState,
+          ...prior,
+          projectId,
+          projectName,
+          queued,
+          splitOffered: true,
+          lastAsk: 'split_day',
+          askCount: askN,
+        },
+      };
     }
   }
 
@@ -619,11 +813,12 @@ function step(input: {
         state: { ...baseState, askCount: askN, lastAsk: 'day' },
       };
     }
+    const hoursLabel = parseSiteVisitHours(input.ctx.siteVisitHours).label;
     const copy = declined
-      ? `No problem — which day works for *${projectName}*${stopPreview}?`
+      ? `No problem — which day and time work for *${projectName}*${stopPreview}? (Site visits usually ${hoursLabel}.)`
       : say(
           prefix,
-          `which day works for your visit to *${projectName}*${stopPreview}? (e.g. Saturday, tomorrow)`,
+          `which day and time work for your visit to *${projectName}*${stopPreview}? (e.g. Saturday morning, or Monday 11am — site visits usually ${hoursLabel})`,
         );
     return { kind: 'visit_ask', ask: 'day', copy, state: { ...baseState, askCount: askN, lastAsk: 'day' } };
   }
@@ -652,6 +847,125 @@ function step(input: {
     };
   }
 
+  // Hours: start AND end (start+120) must be in window
+  let proposeIso = parsed.proposedIso;
+  let proposeLabel = parsed.humanLabel;
+  const hoursCheck = checkSlotAgainstHours(proposeIso, VISIT_ON_SITE_MIN, input.ctx.siteVisitHours);
+  if (!hoursCheck.ok) {
+    const dayIso = proposeIso.slice(0, 10);
+    const nearest = nearestInWindowStartIso(
+      dayIso,
+      hoursCheck.startMin ?? hoursCheck.openMin,
+      VISIT_ON_SITE_MIN,
+      input.ctx.siteVisitHours,
+    );
+    if (nearest && (input.affirm || !hasExplicitTime(input.text))) {
+      // window defaults: snap to nearest silently into propose
+      const h = parseInt(/T(\d{2}):(\d{2})/.exec(nearest)?.[1] ?? '10', 10);
+      const m = parseInt(/T(\d{2}):(\d{2})/.exec(nearest)?.[2] ?? '30', 10);
+      const fixed = slotFromDayAndTime(
+        { dayIso, dayLabel: prior.pendingDayLabel ?? extractDayWord(proposeLabel) ?? 'Visit' },
+        h,
+        m,
+      );
+      if (fixed) {
+        proposeIso = fixed.proposedIso;
+        proposeLabel = fixed.humanLabel;
+      }
+    } else if (hasExplicitTime(input.text)) {
+      const nearestLabel = nearest
+        ? formatMinutesAsClock(minutesFromNearest(nearest))
+        : formatMinutesAsClock(hoursCheck.latestStartMin);
+      const startClock = formatMinutesAsClock(hoursCheck.startMin ?? 0);
+      const endClock = formatMinutesAsClock(hoursCheck.endMin ?? 0);
+      return {
+        kind: 'visit_ask',
+        ask: 'time',
+        copy: say(
+          prefix,
+          `${startClock} would run until ${endClock} — past site hours (${hoursCheck.hoursLabel}). ` +
+            `Closest I can do is ${nearestLabel} — OK, or another time? I can also ask the team if you need later.`,
+        ),
+        state: {
+          ...baseState,
+          ...prior,
+          lastAsk: 'time',
+          pendingDayIso: dayIso,
+          pendingDayLabel: prior.pendingDayLabel ?? extractDayWord(proposeLabel) ?? undefined,
+        },
+      };
+    }
+  }
+
+  // Same-day stagger that would end after close → team request path (don't propose illegal)
+  if (fromStagger && lastBooked) {
+    const staggerCheck = checkSlotAgainstHours(proposeIso, VISIT_ON_SITE_MIN, input.ctx.siteVisitHours);
+    if (!staggerCheck.ok) {
+      return {
+        kind: 'visit_ask',
+        ask: 'team_request',
+        copy: say(
+          prefix,
+          `same day after *${lastBooked.projectName}* would land outside site hours (${staggerCheck.hoursLabel}). ` +
+            `I can ask the team for a same-day exception for *${projectName}*, or we pick a different day — which do you prefer?`,
+        ),
+        state: {
+          ...baseState,
+          ...prior,
+          projectId,
+          projectName,
+          queued,
+          lastAsk: 'team_request',
+          pendingTeamRequests: [
+            ...(prior.pendingTeamRequests ?? []),
+            {
+              projectId,
+              projectName,
+              preferredDateIso: lastBooked.iso.slice(0, 10),
+              reason: 'overpacked',
+            },
+          ],
+        },
+      };
+    }
+  }
+
+  // Force same-day with overflow remaining: file team requests for queue tail
+  let pendingTeam = prior.pendingTeamRequests;
+  let awaitingTeam = prior.awaitingTeamRequestConfirm;
+  if (prior.preferredDayHint === 'same_forced' && queued.length > 0 && !fromStagger) {
+    const hours = parseSiteVisitHours(input.ctx.siteVisitHours);
+    const pack = packSameDay({
+      dayIso: proposeIso.slice(0, 10),
+      firstStartIso: proposeIso,
+      stops: [
+        { projectId, projectName, driveInMin: 0 },
+        ...queued.map((q) => ({
+          projectId: q.projectId,
+          projectName: q.projectName,
+          driveInMin: input.ctx.driveFromPriorMin ?? 45,
+        })),
+      ],
+      siteVisitHours: input.ctx.siteVisitHours,
+    });
+    if (pack.overflow.length > 0) {
+      const overflowIds = new Set(pack.overflow.map((o) => o.projectId));
+      queued = queued.filter((q) => !overflowIds.has(q.projectId));
+      pendingTeam = pack.overflow.map((o) => ({
+        projectId: o.projectId,
+        projectName: o.projectName,
+        preferredDateIso: proposeIso.slice(0, 10),
+        reason: 'overpacked' as const,
+      }));
+      awaitingTeam = true;
+      prefix = `${prefix}${forceSameDayPartialCopy({
+        fittingNames: pack.fitting.map((f) => f.projectName),
+        overflowNames: pack.overflow.map((o) => o.projectName),
+        hoursLabel: hours.label,
+      })} `;
+    }
+  }
+
   const driveMin = effectiveDriveMin(input.ctx);
   const driveNote =
     driveMin != null && lastBooked
@@ -660,20 +974,24 @@ function step(input: {
   const queuedNote =
     queued.length > 0
       ? ` After this we'll plan *${queued[0]!.projectName}*${queued.length > 1 ? ` and ${queued.length - 1} more` : ''}.`
-      : '';
+      : pendingTeam?.length
+        ? ` *${pendingTeam.map((t) => t.projectName).join('*, *')}* will be a team request (pending).`
+        : '';
 
   const copy =
     fromStagger && lastBooked && driveMin != null
-      ? buildStaggerProposeCopy(lastBooked, projectName, parsed.humanLabel, driveMin, prefix)
-      : say(
-          prefix,
-          `shall I block *${parsed.humanLabel}* for your visit to *${projectName}*?${driveNote}${queuedNote} Reply yes to confirm.`,
-        );
+      ? buildStaggerProposeCopy(lastBooked, projectName, proposeLabel, driveMin, prefix)
+      : awaitingTeam
+        ? `${prefix.trim()} Reply yes to confirm the firm stop(s).`.replace(/^\s+/, '')
+        : say(
+            prefix,
+            `shall I block *${proposeLabel}* for your visit to *${projectName}*?${driveNote}${queuedNote} Reply yes to confirm.`,
+          );
 
   return {
     kind: 'visit_propose',
-    iso: parsed.proposedIso,
-    label: parsed.humanLabel,
+    iso: proposeIso,
+    label: proposeLabel,
     projectName,
     projectId,
     copy,
@@ -684,14 +1002,43 @@ function step(input: {
       projectName,
       queued,
       awaitingConfirm: true,
-      proposedIso: parsed.proposedIso,
-      proposedLabel: parsed.humanLabel,
+      awaitingTeamRequestConfirm: awaitingTeam,
+      pendingTeamRequests: pendingTeam,
+      proposedIso: proposeIso,
+      proposedLabel: proposeLabel,
       slotText: input.text,
-      lastAsk: fromStagger ? 'stagger_propose' : 'time',
+      lastAsk: fromStagger ? 'stagger_propose' : awaitingTeam ? 'team_request' : 'time',
       pendingDayIso: undefined,
       pendingDayLabel: undefined,
     },
   };
+}
+
+function isoTodayIst(now: Date): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return fmt.format(now);
+}
+
+function minutesFromNearest(iso: string): number {
+  const m = /T(\d{2}):(\d{2})/.exec(iso);
+  if (!m) return 10 * 60 + 30;
+  return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
 
 function proposeStaggered(

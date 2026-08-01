@@ -47,7 +47,7 @@ describe('visit route scheduling', () => {
     );
     expect(goal.kind).toBe('visit_propose');
     if (goal.kind === 'visit_propose') {
-      expect(goal.iso).toBe('2026-07-13T12:55:00+05:30');
+      expect(goal.iso).toBe('2026-07-13T13:25:00+05:30'); // 11:00 + 2h on-site + 25 drive
       expect(goal.copy).toContain('25 min drive');
     }
   });
