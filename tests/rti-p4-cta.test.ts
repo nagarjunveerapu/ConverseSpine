@@ -173,6 +173,64 @@ describe('P4-CTA — engine golden RTI-G02 (fake deps)', () => {
   });
 });
 
+describe('P4-CTA — soft decline of pending CTA → advance, not overview', () => {
+  it('no thanks after offer_pricing → advance/cta_decline', async () => {
+    const { decide: focusedDecide } = await import('../src/engine/phases/focused.js');
+    const { commitTo, initState } = await import('../src/engine/state.js');
+    let state = commitTo(initState('c1', 'brigade-group'), 'eldorado', 'Brigade Eldorado');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_pricing',
+          project_id: 'eldorado',
+          topic: 'price',
+          asked_at_turn: 3,
+        },
+        lastReplyExcerpt: 'Want pricing on a specific size, or shall I check live unit availability?',
+        lastGoalKind: 'answer',
+      },
+    };
+    const goal = focusedDecide(state, { constraints: {}, decline: true }, 'no thanks');
+    expect(goal).toMatchObject({ kind: 'advance', reason: 'cta_decline' });
+  });
+
+  it('nahi chahiye after pricing CTA excerpt → advance/cta_decline', async () => {
+    const { decide: focusedDecide } = await import('../src/engine/phases/focused.js');
+    const { commitTo, initState } = await import('../src/engine/state.js');
+    let state = commitTo(initState('c1', 'lokations'), 'ayana-lokations', 'Ayana');
+    state = {
+      ...state,
+      rti: {
+        lastReplyExcerpt: 'Want me to break down the total cost for a specific plot size?',
+        lastGoalKind: 'answer',
+      },
+    };
+    const goal = focusedDecide(state, { constraints: {}, decline: true }, 'nahi chahiye');
+    expect(goal).toMatchObject({ kind: 'advance', reason: 'cta_decline' });
+  });
+
+  it('nahi chahiye wins even when embedder inventively stamped legal askTopics', async () => {
+    const { decide: focusedDecide } = await import('../src/engine/phases/focused.js');
+    const { commitTo, initState } = await import('../src/engine/state.js');
+    let state = commitTo(initState('c1', 'lokations'), 'ayana-lokations', 'Ayana');
+    state = {
+      ...state,
+      rti: {
+        lastReplyExcerpt:
+          'plantation management is free for life. Want me to work out the total for a specific plot size?',
+        lastGoalKind: 'answer',
+      },
+    };
+    const goal = focusedDecide(
+      state,
+      { constraints: {}, decline: true, askTopic: 'legal', askTopics: ['legal'] },
+      'nahi chahiye',
+    );
+    expect(goal).toMatchObject({ kind: 'advance', reason: 'cta_decline' });
+  });
+});
+
 describe('P4-CTA — focused.decide consumes offer_pricing affirm', () => {
   it('pending offer_pricing + bare affirm → answer/price (not overview)', async () => {
     const { decide: focusedDecide } = await import('../src/engine/phases/focused.js');

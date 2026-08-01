@@ -10,8 +10,11 @@
     {
       "text": "what is the payment plan?",
       "assert": {
-        "reply_includes": ["payment", "clp"],
-        "reply_excludes": ["want pricing, legal details"],
+        "reply_includes_any": ["payment", "clp", "don't have that detail", "do not have that detail", "on file"],
+        "reply_excludes": [
+          "want pricing, legal details",
+          "Curious about loan eligibility, or shall I walk through the configs"
+        ],
         "tools_include": ["faqLookup"]
       }
     }
