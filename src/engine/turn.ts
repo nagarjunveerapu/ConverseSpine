@@ -1890,12 +1890,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const legalDeterministic = goal.kind === 'answer' && goal.topic === 'legal';
   const visitRecallDeterministic = goal.kind === 'visit_recall' && !!evidence.visits;
   const warmAckDeterministic = goal.kind === 'warm_ack';
+  const ctaDeclineDeterministic = goal.kind === 'advance' && goal.reason === 'cta_decline';
+  // FAQ miss must stay on the honest-miss template — never LLM paraphrase into overview.
+  const faqMissDeterministic =
+    goal.kind === 'answer' && Boolean(evidence.faqMiss?.keys.length);
   const propertyTypeDeterministic =
     goal.kind === 'answer' && goal.topic === 'property_type' && !!evidence.detail?.projectType;
   // Named commit / overview after switch — always say the project name (SW-01/02).
   const commitDeterministic = goal.kind === 'commit';
   const overviewDeterministic =
-    goal.kind === 'answer' && goal.topic === 'overview' && !!evidence.detail;
+    goal.kind === 'answer' &&
+    goal.topic === 'overview' &&
+    !!evidence.detail &&
+    !evidence.faqMiss?.keys.length;
   const emiCalculateDeterministic = goal.kind === 'emi_calculate';
 
   // no_fit is a hard honesty statement with a well-built template (constraint
@@ -1926,6 +1933,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     legalDeterministic ||
     visitRecallDeterministic ||
     warmAckDeterministic ||
+    ctaDeclineDeterministic ||
+    faqMissDeterministic ||
     propertyTypeDeterministic ||
     commitDeterministic ||
     overviewDeterministic ||
@@ -3492,8 +3501,16 @@ async function fetchAnswer(
   // lastRouting is re-stamped every turn before goal selection, so this is
   // always THIS turn's bind; text-bound keys win inside taughtFaqKey.
   const taughtKey = buyerText ? taughtFaqKey(s.rti?.lastRouting, buyerText) : undefined;
+  // P1 — availability/price already have structured atoms (units / cost sheet).
+  // Topic-hint FAQ fan-out (availability→possession) piggybacked essays onto
+  // config asks. Only fetch FAQ when text/taught binds a key for this turn.
+  const primaryTopic = topics[0] ?? goal.topic;
+  const structuredPrimary =
+    primaryTopic === 'availability' || primaryTopic === 'price';
+  const textBoundFaq = Boolean(buyerText && isFaqShapedAsk(buyerText));
+  const faqTopicHints = structuredPrimary && !taughtKey && !textBoundFaq ? [] : topics;
   const resolvedKeys = excludeParkedFaqKeys(
-    resolveFaqQuestionKeys(buyerText ?? '', topics),
+    resolveFaqQuestionKeys(buyerText ?? '', faqTopicHints),
     goal.parkedTopics,
   );
   const faqKeys = taughtKey

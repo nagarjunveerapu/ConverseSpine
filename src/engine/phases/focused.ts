@@ -3,6 +3,7 @@ import { currentShortlist, discourseEntities, focusedRef } from '../entity-store
 import { splitComposeTopics } from '../facts.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { holdUnitType } from '../hold-intent.js';
+import { DECLINE } from '../turn-intent/dialogue-acts.js';
 
 /** Unique projects the buyer can honestly compare / deictically address. */
 function discourseProjectCount(s: ConversationState): number {
@@ -89,6 +90,27 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   // a visit — fall through to answer availability instead.
   if (ex.transition === 'want_visit' && !ex.holdAsk) return { kind: 'propose_visit', projectId: focus.projectId };
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom', projectId: focus.projectId };
+
+  // Soft decline of a pending CTA / last offer — short ack + NBA, never overview
+  // or legal dump (ADV-H03 / HIN-06). RTI often clears pendingPrompt on decline,
+  // so also read lastReplyExcerpt for the offered fork.
+  // Closed DECLINE text wins even when the embedder inventively stamped askTopics
+  // (HIN-06: "nahi chahiye" → get_legal_info → legal dump).
+  const lastExcerpt = s.rti?.lastReplyExcerpt ?? '';
+  const closedDecline = DECLINE.test(text.trim()) || !!ex.decline;
+  const declinedPendingCta =
+    closedDecline &&
+    !ex.isQuestion &&
+    !ex.objection &&
+    !ex.recall &&
+    !(ex.namedProjects?.length) &&
+    (s.rti?.pendingPrompt?.kind === 'offer_pricing' ||
+      /\bwant (?:pricing|me to|details|loan|a (?:site )?visit|work out)\b/i.test(lastExcerpt) ||
+      /\bor shall i\b/i.test(lastExcerpt) ||
+      /\bwant (?:the|a) (?:configurations?|cost breakdown|payment)\b/i.test(lastExcerpt));
+  if (declinedPendingCta) {
+    return { kind: 'advance', reason: 'cta_decline' };
+  }
 
   // W2 — bare affirm handling. Precedence (review note 3): RTI/chip prompts
   // outrank everything here (an advisor chip's yes belongs to RTI — guarded

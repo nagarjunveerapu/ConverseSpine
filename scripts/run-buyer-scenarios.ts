@@ -7,7 +7,7 @@
  *   npx tsx scripts/run-buyer-scenarios.ts
  *   npx tsx scripts/run-buyer-scenarios.ts --only SA-G01,BUYER-LOK-01
  */
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +15,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const SCENARIO_DIR = join(ROOT, process.env.SCENARIO_DIR ?? join('scenarios', 'buyer'));
 const SPINE = (process.env.CONVERSE_SPINE_URL ?? 'http://127.0.0.1:8789').replace(/\/+$/, '');
+
+function loadBotSecret(): string {
+  if (process.env.BOT_SHARED_SECRET) return process.env.BOT_SHARED_SECRET.trim();
+  const p = join(ROOT, '.dev.vars');
+  if (!existsSync(p)) return '';
+  const line = readFileSync(p, 'utf8')
+    .split('\n')
+    .find((l) => l.startsWith('BOT_SHARED_SECRET='));
+  return line ? line.slice('BOT_SHARED_SECRET='.length).trim().replace(/^["']|["']$/g, '') : '';
+}
+const BOT_SECRET = loadBotSecret();
 
 interface AssertSpec {
   /** Reply must match (case-insensitive). */
@@ -104,7 +115,11 @@ async function chat(
 }> {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'user-agent': 'converse-spine-buyer-scenarios/1.0',
+      ...(BOT_SECRET ? { 'x-bot-secret': BOT_SECRET } : {}),
+    },
     body: JSON.stringify({
       builder_id: builderId,
       buyer_phone: phone,
@@ -343,11 +358,83 @@ async function main(): Promise<void> {
   ].join('\n');
   writeFileSync(join(runDir, 'README.md'), mdIndex);
 
+  const passed = summary.filter((s) => s.ok).length;
+  const failed = summary.filter((s) => !s.ok).length;
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Buyer soak ${esc(stamp)}</title>
+<style>
+:root { --bg:#0f1419; --panel:#1a222c; --text:#e7ecf1; --muted:#8b9aab; --ok:#3dd68c; --bad:#ff6b6b; --line:#2a3542; }
+* { box-sizing:border-box; }
+body { margin:0; font:14px/1.45 ui-sans-serif, system-ui, sans-serif; background:var(--bg); color:var(--text); }
+header.top { padding:20px 24px; border-bottom:1px solid var(--line); background:#121820; position:sticky; top:0; }
+h1 { margin:0 0 6px; font-size:18px; }
+.meta { color:var(--muted); font-size:12px; }
+nav { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+nav a { color:var(--text); text-decoration:none; background:var(--panel); border:1px solid var(--line); padding:4px 10px; border-radius:6px; font-size:12px; }
+main { max-width:980px; margin:0 auto; padding:20px 24px 80px; }
+.scen { background:var(--panel); border:1px solid var(--line); border-radius:10px; margin:0 0 14px; overflow:hidden; }
+.scen.fail { border-color:#6b3030; }
+.scen > header { padding:10px 14px; background:#151c24; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+.status { font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 6px; border-radius:4px; }
+.pass .status { background:#143528; color:var(--ok); }
+.fail .status { background:#3a1515; color:var(--bad); }
+.turn { padding:12px 14px; border-bottom:1px solid var(--line); }
+.turn:last-child { border-bottom:0; }
+.turn.t-bad { background:#1c1416; }
+.lbl { display:inline-block; min-width:60px; color:var(--muted); font-size:11px; text-transform:uppercase; }
+.fail-msg { color:var(--bad); font-size:12px; margin-top:6px; }
+.dbg { color:var(--muted); font-size:11px; margin-top:4px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Buyer soak — ${passed} pass / ${failed} fail</h1>
+  <p class="meta">${esc(SPINE)} · ${esc(new Date().toISOString())}</p>
+  <nav>${summary.map((s) => `<a href="#${esc(s.id)}">${s.ok ? '✅' : '❌'} ${esc(s.id)}</a>`).join('')}</nav>
+</header>
+<main>
+${summary
+  .map((s) => {
+    const turns = s.turns
+      .map((t) => {
+        const goal = t.debug?.goal as { kind?: string; topic?: string } | undefined;
+        const tools = (t.debug?.tools as string[] | undefined)?.join(', ') ?? '';
+        return `<div class="turn ${t.pass ? '' : 't-bad'}">
+  <div><span class="lbl">Buyer</span> ${esc(t.buyer)}</div>
+  <div style="margin-top:6px"><span class="lbl">Bot</span> ${esc(t.reply || '(empty)')}</div>
+  <div class="dbg">${esc(
+          [goal?.kind, goal?.topic].filter(Boolean).join(' / ') + (tools ? ` · tools: ${tools}` : ''),
+        )}</div>
+  ${t.failures.length ? `<div class="fail-msg">${esc(t.failures.join('; '))}</div>` : ''}
+</div>`;
+      })
+      .join('\n');
+    return `<section class="scen ${s.ok ? 'pass' : 'fail'}" id="${esc(s.id)}">
+  <header><span class="status">${s.ok ? 'PASS' : 'FAIL'}</span> <strong>${esc(s.id)}</strong> <span class="meta">${esc(s.title)}</span></header>
+  ${turns}
+</section>`;
+  })
+  .join('\n')}
+</main>
+</body>
+</html>`;
+  const htmlPath = join(runDir, 'report.html');
+  writeFileSync(htmlPath, html);
+  // Convenience alias for the latest quality gate run.
+  writeFileSync(join(ROOT, 'scenarios', 'runs', 'quality-gate-latest.html'), html);
+
   console.log('\n── Summary ──');
   for (const s of summary) {
     console.log(`${s.ok ? '✅' : '❌'} ${s.id}`);
   }
   console.log(`\nRecorded: ${runDir}`);
+  console.log(`HTML: ${htmlPath}`);
   process.exit(summary.every((s) => s.ok) ? 0 : 1);
 }
 

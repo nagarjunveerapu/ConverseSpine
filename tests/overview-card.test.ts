@@ -64,6 +64,38 @@ describe('overviewCard', () => {
     expect(reply).not.toMatch(/airport|Kempegowda|clubhouse/i);
   });
 
+  it('text-bound FAQ miss never recycles the overview card (FAQ-03)', () => {
+    const req = buildComposeRequest(
+      { kind: 'answer', topic: 'overview', projectId: 'brigade-eldorado' },
+      {
+        tools: ['faqLookup', 'faqMiss'],
+        detail: DETAIL,
+        faqMiss: { keys: ['payment_plan'] },
+      } as EvidenceSet,
+      { constraints: {}, focusProjectName: 'Brigade Eldorado', buyerText: 'what is the payment plan?' },
+    );
+    const reply = fallbackReply(req);
+    expect(reply).toMatch(/don'?t have that detail on file/i);
+    expect(reply).not.toBe(overviewCard(DETAIL));
+    expect(reply).not.toContain('₹31 L – ₹1.66 Cr');
+  });
+
+  it('faqMiss possession rescues structured possession before honest miss', () => {
+    const req = buildComposeRequest(
+      { kind: 'answer', topic: 'overview', projectId: 'brigade-eldorado' },
+      {
+        tools: ['faqMiss'],
+        detail: DETAIL,
+        faqMiss: { keys: ['possession'] },
+      } as EvidenceSet,
+      { constraints: {}, focusProjectName: 'Brigade Eldorado', buyerText: 'when is possession?' },
+    );
+    const reply = fallbackReply(req);
+    expect(reply).toMatch(/possession/i);
+    expect(reply).toContain('June 2028');
+    expect(reply).not.toBe(overviewCard(DETAIL));
+  });
+
   it('a facet ask with a matched FAQ hit still answers that FAQ (single-owner invariant)', () => {
     const req = buildComposeRequest(
       { kind: 'answer', topic: 'legal', projectId: 'brigade-eldorado' },

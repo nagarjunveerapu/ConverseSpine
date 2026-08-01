@@ -279,7 +279,7 @@ export type TurnGoal =
   | { kind: 'clarify_intent' }
   | { kind: 'probe'; slot: ProbeKind }
   | { kind: 'recommend' }
-  | { kind: 'advance'; reason: 'same_set' }
+  | { kind: 'advance'; reason: 'same_set' | 'cta_decline' }
   /** Shortlist has 2+ projects; buyer asked for details without naming which. */
   | { kind: 'clarify_project_pick' }
   /**

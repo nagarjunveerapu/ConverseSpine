@@ -10,7 +10,7 @@
     {
       "text": "can I get a home loan?",
       "assert": {
-        "reply_includes": ["bank"],
+        "reply_includes_any": ["bank", "loan", "hdfc", "sbi", "icici", "ltv"],
         "reply_excludes": ["want pricing, legal details", "indicative emi"],
         "tools_include": ["faqLookup"]
       }

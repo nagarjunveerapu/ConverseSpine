@@ -570,9 +570,12 @@ export function fallbackReply(req: ComposeRequest): string {
     }
     case 'advance': {
       // W2 — a focused bare-affirm ("ok"/"yes" with nothing pending) lands
-      // here: nudge the DEAL forward, not the search. The search-flavored
-      // copy below stays for the discover flow it was written for.
+      // here: nudge the DEAL forward, not the search. Soft CTA decline
+      // (cta_decline) is a short ack + one NBA — never an overview recycle.
       if (context.focusProjectName) {
+        if (goal.reason === 'cta_decline') {
+          return `No problem — want a site visit to *${context.focusProjectName}*, loan details, or something else on this project?`;
+        }
         return `Shall I set up a visit to *${context.focusProjectName}*, or hold a unit for you while you decide?`;
       }
       const lead = ev.matches?.[0]?.name;
@@ -640,9 +643,8 @@ export function fallbackReply(req: ComposeRequest): string {
       // Over-answer fix — a primary "tell me about X" gets the compact card,
       // never the chunk assembly (and never FAQ text): sizes, one price band,
       // location, possession, one probing question. Facet asks fall through.
-      // A TAUGHT facet miss also falls through (to the honest-miss line): the
-      // bind read the ask's meaning, so the card would answer a question the
-      // buyer didn't ask. Text-bound misses keep today's card behaviour.
+      // ANY faqMiss (taught or text-bound) skips the card — miss is a value,
+      // never a license to reset to overview (FAQ-03 payment-plan phone-tree).
       // Advisory atoms (yield / appreciation) must not be swallowed by the card.
       const advisoryRequired =
         goal.requires?.some(
@@ -663,11 +665,38 @@ export function fallbackReply(req: ComposeRequest): string {
           projectName: pname,
         })}`;
       }
+      // FAQ miss with structured rescue — before overview card or chunk assembly.
+      if (ev.faqMiss?.keys.length && !ev.detail?.faqs?.length) {
+        const pname =
+          ev.detail?.name || context.focusProjectName || 'this project';
+        if (ev.faqMiss.keys.includes('possession') && ev.detail?.possession) {
+          return `Possession at *${pname}* is ${formatPossession(ev.detail.possession)}.${closingCta({
+            buyerText: context.buyerText,
+            topics: ['availability'],
+            projectName: pname,
+          })}`;
+        }
+        if (
+          ev.faqMiss.keys.some((k) => /^(?:banks|loan_eligibility|loan)$/i.test(k)) &&
+          ev.detail?.loanEligibility
+        ) {
+          return `For *${pname}*, home loan: ${ev.detail.loanEligibility}.${closingCta({
+            buyerText: context.buyerText,
+            topics: ['legal'],
+            projectName: pname,
+          })}`;
+        }
+        return `I don't have that detail on file for *${pname}* yet.${closingCta({
+          buyerText: context.buyerText,
+          topics,
+          projectName: pname,
+        })}`;
+      }
       if (
         topics[0] === 'overview' &&
         ev.detail &&
         !ev.detail.faqs?.length &&
-        !ev.faqMiss?.taught &&
+        !ev.faqMiss?.keys.length &&
         !advisoryRequired &&
         !isPossessionAsk(context.buyerText) &&
         !isLoanEligibilityAsk(context.buyerText)
