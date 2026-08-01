@@ -72,6 +72,55 @@ If `/health` reports a `nayadesk` other than `http://localhost:8787`, it is
 so a value left there beats `[env.local.vars]` silently and your "local" turns
 land on the shared dev database.
 
+## Deploying
+
+`main` auto-deploys **converse-spine-dev** after CI. Prod is manual:
+
+```bash
+npm run deploy:prod          # converse-spine
+```
+
+**Deploy NayaDesk first.** `[env.prod]` binds `NAYADESK` as a *service*, and a
+service binding can only resolve to a Worker that already exists — so a Spine
+deploy ahead of `nayadesk-prod` fails. Suite order is Desk → Spine → Advisor.
+
+### Secrets on a new environment
+
+Two, and only one of them is a value you invent:
+
+```bash
+npx wrangler secret put BOT_SHARED_SECRET --env prod   # MUST match NayaDesk's
+npx wrangler secret put DEEPSEEK_API_KEY --env prod    # from platform.deepseek.com
+```
+
+`BOT_SHARED_SECRET` must be **byte-identical** to the one on NayaDesk. Generate
+it once — `openssl rand -hex 32` — and paste the same value in both repos.
+Generating separately in each gives you two different secrets and every call to
+Desk 401s, which presents as a bot with an empty catalog rather than as an auth
+error.
+
+Optional, off when unset: `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`,
+`GOOGLE_PLACES_API_KEY`. Leave `DEEPSEEK_API_KEY` unset and the engine falls
+back to Workers AI — but do not set it to a placeholder, which makes `/health`
+report `deepseek: true` and suppresses that fallback.
+
+Confirm what is set without revealing it:
+
+```bash
+npx wrangler secret list --env prod
+```
+
+Then check the deployed pair agree, using the same `/health` contract as local:
+
+```bash
+curl -s https://nayadesk-prod.nagarjun-arjun.workers.dev/api/health
+curl -s https://converse-spine.nagarjun-arjun.workers.dev/health   # → "nayadesk":"binding"
+```
+
+`"nayadesk":"binding"` is the healthy answer in prod — it means the service
+binding resolved, not a URL fallback. Full matrix and the per-Worker checklist:
+[`NayaDesk/docs/SUITE_SETUP.md`](../NayaDesk/docs/SUITE_SETUP.md#secrets).
+
 ## Quality eval (primary QA — NOT golden regression)
 
 Generates **fresh buyer personas** each run, simulates multi-turn WhatsApp conversations, LLM-judges transcript quality:
