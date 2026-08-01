@@ -771,7 +771,8 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
     // Bare "kitna" excluded when paired with distance ("airport kitna door").
     topic: 'price',
     re: new RegExp(
-      `\\b(?:prices?|pricing|cost|how much|pricing batao|(?:kitna(?!\\s+door))|padega|bsp|basic\\s+sale\\s+price|carpet(?:\\s+area)?|sba|super\\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\\s+prices?|best\\s+price|any\\s+discount|discounts?|offers?|payment\\s+plan|payment\\s+schedule|construction[- ]linked|clp|down\\s*payments?|${COST_COMPONENT_SRC})\\b|दर\\s*बताओ|ಎಷ್ಟಾಗುತ್ತೆ|எவ்வளவு\\s*ஆகும்`,
+      // payment plan / CLP / schedule → FAQ key payment_plan (not price sheet).
+      `\\b(?:prices?|pricing|cost|how much|pricing batao|(?:kitna(?!\\s+door))|padega|bsp|basic\\s+sale\\s+price|carpet(?:\\s+area)?|sba|super\\s+built[- ]?up|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|starting\\s+prices?|best\\s+price|any\\s+discount|discounts?|offers?|${COST_COMPONENT_SRC})\\b|दर\\s*बताओ|ಎಷ್ಟಾಗುತ್ತೆ|எவ்வளவு\\s*ஆகும்`,
       'i',
     ),
   },

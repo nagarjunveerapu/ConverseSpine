@@ -50,12 +50,24 @@ describe('applyIntentAuthority', () => {
   });
 
   it('routes an opt-out into the EXISTING stop path rather than a new one', () => {
-    const r = applyIntentAuthority(EX, unclaimed('opt_out'));
+    const r = applyIntentAuthority(EX, unclaimed('opt_out'), 'stop messaging me');
     expect(r.ex.stop).toBe(true);
     expect(r.wrote).toEqual(['stop']);
     // Critically NOT a delete: ex.stop only reaches the destructive branch via
     // the standalone-keyword regex or an explicit "yes". The embedding can ask
     // for confirmation; it can never trigger the deletion itself.
+  });
+
+  it('does not treat soft CTA decline as opt-out (ADV-H03)', () => {
+    for (const text of ['no thanks', 'nahi chahiye', 'not now', 'nope']) {
+      const r = applyIntentAuthority(EX, unclaimed('opt_out'), text);
+      expect(r.ex.stop, text).toBeUndefined();
+      expect(r.wrote, text).toEqual([]);
+    }
+    const declined: Extracted = { constraints: {}, decline: true };
+    const r = applyIntentAuthority(declined, unclaimed('opt_out'), 'something else entirely');
+    expect(r.ex.stop).toBeUndefined();
+    expect(r.wrote).toEqual([]);
   });
 
   it('marks escalation, callbacks and complaints as wanting a person', () => {

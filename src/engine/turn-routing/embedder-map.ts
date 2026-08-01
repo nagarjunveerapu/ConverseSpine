@@ -14,11 +14,13 @@ const INTENT_TO_TOPIC: Record<string, AnswerTopic> = {
   get_media: 'media',
   get_amenities: 'amenities',
   get_location_info: 'location',
-  ask_delivery_timeline: 'availability',
+  // overview — FAQ/FactKey own possession; availability dumps unit configs (B5.1).
+  ask_delivery_timeline: 'overview',
   get_project_info: 'overview',
   ask_about_builder: 'overview',
   compute_emi: 'emi',
-  get_payment_plan: 'price',
+  // overview — Desk payment_plan FAQ / media; price sheet is the wrong atom.
+  get_payment_plan: 'overview',
   negotiate_price: 'price',
   ask_investment_return: 'overview',
 };

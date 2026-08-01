@@ -173,6 +173,44 @@ describe('P4-CTA — engine golden RTI-G02 (fake deps)', () => {
   });
 });
 
+describe('P4-CTA — focused.decide consumes offer_pricing affirm', () => {
+  it('pending offer_pricing + bare affirm → answer/price (not overview)', async () => {
+    const { decide: focusedDecide } = await import('../src/engine/phases/focused.js');
+    const { commitTo, initState } = await import('../src/engine/state.js');
+    let state = commitTo(initState('c1', 'brigade-group'), 'eldorado', 'Brigade Eldorado');
+    state = {
+      ...state,
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_pricing',
+          project_id: 'eldorado',
+          topic: 'price',
+          asked_at_turn: 3,
+        },
+        lastReplyExcerpt: 'Want pricing on a specific size?',
+        lastGoalKind: 'answer',
+      },
+    };
+    const goal = focusedDecide(state, { constraints: {}, affirm: true }, 'haan');
+    expect(goal).toMatchObject({ kind: 'answer', topic: 'price', projectId: 'eldorado' });
+  });
+
+  it('want-pricing excerpt + bare affirm → answer/price when pending dropped', async () => {
+    const { decide: focusedDecide } = await import('../src/engine/phases/focused.js');
+    const { commitTo, initState } = await import('../src/engine/state.js');
+    let state = commitTo(initState('c1', 'brigade-group'), 'eldorado', 'Brigade Eldorado');
+    state = {
+      ...state,
+      rti: {
+        lastReplyExcerpt: 'Available configs. Want pricing on a specific size?',
+        lastGoalKind: 'answer',
+      },
+    };
+    const goal = focusedDecide(state, { constraints: {}, affirm: true }, 'yeah sure');
+    expect(goal).toMatchObject({ kind: 'answer', topic: 'price', projectId: 'eldorado' });
+  });
+});
+
 describe('P4-CTA — vector + switch gates', () => {
   it('shouldQueryProjectVectors false for bare yes affirm', () => {
     expect(

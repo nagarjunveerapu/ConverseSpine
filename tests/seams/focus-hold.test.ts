@@ -32,7 +32,7 @@ describe('the subject survives an ask about it', () => {
   it('a high-confidence answer intent contradicts the release', () => {
     const d = holdsFocusAgainstRelease(bind('ask_delivery_timeline', 0.874), true);
     expect(d.hold).toBe(true);
-    expect(d.reason).toEqual({ intent: 'ask_delivery_timeline', score: 0.874, topic: 'availability' });
+    expect(d.reason).toEqual({ intent: 'ask_delivery_timeline', score: 0.874, topic: 'overview' });
   });
 
   it('prefers the topic routing already resolved', () => {

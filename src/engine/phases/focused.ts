@@ -94,9 +94,35 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
   // outrank everything here (an advisor chip's yes belongs to RTI — guarded
   // inside bareAffirm); the just-asked hold window ranked above (hold_booked);
   // warm_ack/recall/visit/objection keep their existing priority above this.
-  const bareAffirm =
-    !!ex.affirm && !ex.decline && !ex.isQuestion && !ex.askTopic && !ex.askTopics?.length &&
-    !ex.objection && !ex.recall && !(ex.namedProjects?.length) && !s.rti?.pendingPrompt;
+  const bareAffirmBase =
+    !!ex.affirm &&
+    !ex.decline &&
+    !ex.isQuestion &&
+    !ex.askTopic &&
+    !ex.askTopics?.length &&
+    !ex.objection &&
+    !ex.recall &&
+    !(ex.namedProjects?.length);
+
+  // P4-CTA defense: pending offer_pricing blocks bareAffirm below, so a missed
+  // RTI seedAskTopic used to fall through to overview. Consume the CTA here.
+  if (bareAffirmBase && s.rti?.pendingPrompt?.kind === 'offer_pricing') {
+    return {
+      kind: 'answer',
+      topic: s.rti.pendingPrompt.topic ?? 'price',
+      projectId: focus.projectId,
+    };
+  }
+  // Pending dropped but last reply still offered pricing — same speech act.
+  if (
+    bareAffirmBase &&
+    !s.rti?.pendingPrompt &&
+    /\bwant pricing\b/i.test(s.rti?.lastReplyExcerpt ?? '')
+  ) {
+    return { kind: 'answer', topic: 'price', projectId: focus.projectId };
+  }
+
+  const bareAffirm = bareAffirmBase && !s.rti?.pendingPrompt;
 
   // (a) Downgraded hold offer still fresh (≤6 turns): RE-PROPOSE — never book
   // off a stale yes ("hold it → digression → yes"), per HOLD-05.
