@@ -18,4 +18,10 @@ describe('placeability', () => {
     expect(isPlausiblePlaceLabel('Whitefield')).toBe(true);
     expect(isNonPlaceUtterance('Indiranagar')).toBe(false);
   });
+
+  it('does not treat catalog / next-step questions as noise', () => {
+    expect(isNonPlaceUtterance('what should I do next?')).toBe(false);
+    expect(isNonPlaceUtterance('which of these have proper khata and approvals?')).toBe(false);
+    expect(isNonPlaceUtterance('what will be the approximate cost of these?')).toBe(false);
+  });
 });

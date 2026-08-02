@@ -27,7 +27,9 @@ export function isNonPlaceUtterance(text: string): boolean {
   const t = text.trim();
   if (!t) return true;
   if (SMALLTALK_RE.test(t)) return true;
-  if (/[?]/.test(t) && t.split(/\s+/).length > 4) return true;
+  // Do NOT treat long questions as noise — facet / ask_next_step turns are
+  // often "which of these…?" / "what should I do next?" and must reach catalog
+  // ownership. Place labels already reject long questions via word-count.
   // Single smash token with digits ("3dsfoisuardo") — not a locality.
   if (/^[a-z0-9]{8,}$/i.test(t) && /\d/.test(t)) return true;
   const words = t.split(/\s+/).filter(Boolean);

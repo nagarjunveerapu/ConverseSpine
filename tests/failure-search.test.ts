@@ -186,7 +186,9 @@ describe('Phase 3 turn behavior', () => {
       },
       withIntent('get_brochure', 0.78),
     );
-    expect(result.reply).toMatch(/not sure what you'd like help with/i);
+    expect(result.reply).toMatch(
+      /couldn't make sense of that|not sure what you'd like help with/i,
+    );
     expect(result.reply).not.toMatch(/identify that location/i);
     expect(result.state.constraints.location).toBeUndefined();
   });

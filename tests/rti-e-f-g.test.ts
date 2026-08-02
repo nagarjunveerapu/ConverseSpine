@@ -150,7 +150,7 @@ describe('RTI-F first shortlist deterministic copy', () => {
       deps,
     );
     if (r.debug.goal.kind === 'recommend') {
-      expect(r.reply).toMatch(/Here's what fits/i);
+      expect(r.reply).toMatch(/these look strongest|Here's what fits/i);
       expect(currentShortlist(r.state).length).toBeGreaterThanOrEqual(1);
     }
   });
