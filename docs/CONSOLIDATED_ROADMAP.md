@@ -7,6 +7,13 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 
 **Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
 
+> **⚠ One line here is now wrong, and it matters.** "WhatsApp cutover deferred — Meta still on
+> Naya" is no longer true: the Spine owns the webhook (`src/webhook/whatsapp.ts` — signature
+> verify, message-id dedupe, per-buyer rate limit), and the legacy Naya worker has had no commit
+> since 5 July 2026. For current standing state across both repositories see
+> `NayaDesk/docs/designs/BOOK.html`; this file remains the authority on **phase sequencing and
+> the serial gates**, which are unchanged.
+
 **Last updated:** 2026-07-11 (P7 ✅ #34–#37; P6d BAML promote on Dev; WA cutover deferred; P8 needs discussion)
 **Rule for live failures:** Classify against this doc + [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) **before** coding. Prefer the next open phase slice over a one-off patch that drifts the plan.
 
