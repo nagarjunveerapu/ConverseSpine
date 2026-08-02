@@ -144,7 +144,7 @@ export async function handleAdvisorReveal(
       .filter(Boolean)
       .join(' ');
     await rt.engine.crm
-      .appendMessage(resp.conversation_id, 'outbound', note, { kind: 'advisor_reveal' })
+      .appendMessage(resp.conversation_id, 'outbound', note, { replyKey: 'advisor_reveal' })
       .catch(() => undefined);
 
     return {
