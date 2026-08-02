@@ -1,0 +1,36 @@
+{
+  "id": "VIS-ADX-07",
+  "title": "BREAK: soft ok after propose must not firm-book; then change to Monday evening",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "digression", "soft-ack"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    { "text": "I want to visit" },
+    {
+      "text": "Saturday morning",
+      "assert": { "reply_includes_any": ["Saturday", "block", "confirm"] }
+    },
+    {
+      "text": "ok thanks",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit", "Your visit is confirmed"]
+      }
+    },
+    {
+      "text": "actually Monday evening instead",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["4:00", "5:00"],
+        "reply_excludes": [
+          "Saturday",
+          "morning or afternoon",
+          "rephrase",
+          "don't see a confirmed visit"
+        ]
+      }
+    }
+  ]
+}

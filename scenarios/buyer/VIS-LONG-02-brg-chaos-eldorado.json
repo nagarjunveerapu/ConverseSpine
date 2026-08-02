@@ -1,0 +1,75 @@
+{
+  "id": "VIS-LONG-02",
+  "title": "LONG BREAK: Brigade search → Eldorado facets → gibberish → visit → switch → packed book (24 turns)",
+  "builder_id": "brigade-group",
+  "tags": ["visit", "adversarial", "long", "gibberish", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 BHK in Devanahalli under 80 lakh" },
+    { "text": "aaaaaaa bbbbbb ccccc" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    { "text": "what unit configurations are available?" },
+    { "text": "😂😂😂 okok" },
+    { "text": "what about the pricing" },
+    { "text": "payment plan?" },
+    { "text": "brooooo whatever man" },
+    { "text": "also Sanctuary briefly" },
+    { "text": "compare Eldorado and Sanctuary" },
+    { "text": "nskdjfhskdjfh" },
+    {
+      "text": "I want to plan a site visit",
+      "assert": {
+        "reply_includes_any": ["which should we visit", "day", "time", "when", "visit"],
+        "reply_excludes": ["don't see a confirmed visit", "tap a button"]
+      }
+    },
+    { "text": "1" },
+    { "text": "asdf asdf asdf" },
+    {
+      "text": "Saturday morning",
+      "assert": {
+        "reply_includes_any": ["Saturday", "block", "confirm", "day", "time"],
+        "reply_excludes": ["rephrase"]
+      }
+    },
+    { "text": "tell me amenities first" },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "Done — your visit", "confirmed your visit"]
+      }
+    },
+    { "text": "hmmmmmm idk lol" },
+    {
+      "text": "actually visit Sanctuary instead on Monday at 11am",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["Sanctuary", "sanctuary", "Monday", "11"],
+        "reply_excludes": ["Eldorado Saturday", "rephrase", "don't see a confirmed visit"]
+      }
+    },
+    { "text": "!!!@@@###" },
+    {
+      "text": "yes confirm",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["Sanctuary", "sanctuary", "Monday", "Done", "set", "confirm", "block"],
+        "reply_excludes": ["rephrase", "Eldorado at", "Saturday at 10:30"]
+      }
+    },
+    { "text": "my visits?" },
+    {
+      "text": "I want to visit Eldorado on Tuesday at 10am",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": ["Tuesday", "10"],
+        "reply_excludes": ["rephrase", "don't see a confirmed visit"]
+      }
+    }
+  ]
+}

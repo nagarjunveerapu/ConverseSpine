@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Contextual misunderstand recovery</title>
+<style>
+  :root {
+    --bg: #f3efe6;
+    --ink: #1a1714;
+    --mut: #6a635a;
+    --line: #ddd4c4;
+    --card: #fffdf8;
+    --buyer: #e8f1ea;
+    --bot: #fff;
+    --bad: #9b2c2c;
+    --good: #0f6b4c;
+    --accent: #c45c26;
+    --chip: #efe6d6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 420px at 10% -10%, #f7e4c8 0%, transparent 55%),
+      radial-gradient(700px 380px at 100% 0%, #dce9df 0%, transparent 50%),
+      var(--bg);
+    font: 15px/1.5 "IBM Plex Sans", "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 28px 18px 48px; }
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  .lead { color: var(--mut); margin: 0 0 18px; max-width: 62ch; }
+  .rule {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+  }
+  .rule b { color: var(--accent); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .tab {
+    border: 1px solid var(--line);
+    background: var(--chip);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .tab[aria-selected="true"] {
+    background: var(--ink);
+    color: #fffdf8;
+    border-color: var(--ink);
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .thread {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px;
+    min-height: 320px;
+  }
+  .thread h2 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--mut);
+  }
+  .thread.before h2 { color: var(--bad); }
+  .thread.after h2 { color: var(--good); }
+  .msg {
+    max-width: 92%;
+    margin: 0 0 8px;
+    padding: 9px 11px;
+    border-radius: 12px;
+    white-space: pre-wrap;
+  }
+  .msg.buyer {
+    background: var(--buyer);
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.bot {
+    background: var(--bot);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: 4px;
+  }
+  .msg.highlight {
+    outline: 2px solid var(--good);
+    outline-offset: 1px;
+  }
+  .msg.flat {
+    outline: 2px solid color-mix(in srgb, var(--bad) 55%, transparent);
+    outline-offset: 1px;
+  }
+  .meta { color: var(--mut); font-size: 12.5px; margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    background: #efe7d8;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>Contextual misunderstand recovery</h1>
+    <p class="lead">
+      When the buyer sends noise or off-topic, don’t silently re-ask the same line.
+      Acknowledge the miss, then re-anchor to <b>what we were doing</b>.
+    </p>
+
+    <div class="rule">
+      <b>Pattern:</b> “I couldn’t make sense of that” + <em>job still open</em> + concrete ask.<br />
+      Gate stays deterministic (placeability / noise). Copy is contextual by outstanding ask / topic — not a generic “rephrase”.
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="visit">Visit · origin</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="reqs">Discover · requirements</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="legal">Focused · legal</button>
+    </div>
+
+    <section class="panel active" id="visit">
+      <div class="cols">
+        <div class="thread before">
+          <h2>Today (flat re-ask)</h2>
+          <div class="msg bot">Happy to plan both — where will you be coming from that day? I'll sequence the 2 stops sensibly from there.</div>
+          <div class="msg buyer">asdfghjkl qwerty</div>
+          <div class="msg bot flat">Where will you be coming from that day? I'll sequence the stops sensibly from there.</div>
+          <div class="msg buyer">why is cricket so popular in india lol</div>
+          <div class="msg bot flat">Where will you be coming from that day? I'll sequence the stops sensibly from there.</div>
+        </div>
+        <div class="thread after">
+          <h2>Proposed</h2>
+          <div class="msg bot">Happy to plan both — where will you be coming from that day? I'll sequence the 2 stops sensibly from there.</div>
+          <div class="msg buyer">asdfghjkl qwerty</div>
+          <div class="msg bot highlight">I couldn't make sense of that. To plan your visits in order, I need a starting area — e.g. Indiranagar or Whitefield. Where will you be coming from?</div>
+          <div class="msg buyer">why is cricket so popular in india lol</div>
+          <div class="msg bot highlight">Ha — fair question, but I'm better on homes than cricket. Still need your starting area so I can sequence Ayana and Krishnaja. Where will you be coming from that day?</div>
+        </div>
+      </div>
+      <p class="meta">Regression: VIS-MV-08 — still must not stamp origin/locality; assert adds “couldn't make sense” / “need”.</p>
+    </section>
+
+    <section class="panel" id="reqs">
+      <div class="cols">
+        <div class="thread before">
+          <h2>Today (generic / thin)</h2>
+          <div class="msg bot">What are you looking for — location, budget, or BHK?</div>
+          <div class="msg buyer">3dsfoisuardo</div>
+          <div class="msg bot flat">I'm not sure what you'd like help with. Could you rephrase it in one sentence?</div>
+        </div>
+        <div class="thread after">
+          <h2>Proposed</h2>
+          <div class="msg bot">What are you looking for — location, budget, or BHK?</div>
+          <div class="msg buyer">3dsfoisuardo</div>
+          <div class="msg bot highlight">I couldn't make sense of that. I can help you pick the right property — tell me a locality, budget, or BHK (e.g. 2 BHK in Whitefield under 80L).</div>
+        </div>
+      </div>
+      <p class="meta">Uses outstanding discover ask / empty constraints — not a blank unknown_request.</p>
+    </section>
+
+    <section class="panel" id="legal">
+      <div class="cols">
+        <div class="thread before">
+          <h2>Today (drift risk)</h2>
+          <div class="msg bot">RERA for *Ayana* is … Want the OC / khata next?</div>
+          <div class="msg buyer">asdfghjkl</div>
+          <div class="msg bot flat">I'm not sure what you'd like help with. Could you rephrase it in one sentence?</div>
+        </div>
+        <div class="thread after">
+          <h2>Proposed</h2>
+          <div class="msg bot">RERA for *Ayana* is … Want the OC / khata next?</div>
+          <div class="msg buyer">asdfghjkl</div>
+          <div class="msg bot highlight">I couldn't make sense of that. Still on legal for *Ayana* — ask about RERA, OC, khata, or title, or name what you need next.</div>
+        </div>
+      </div>
+      <p class="meta">Re-anchor to last answer topic + focus project; don’t eject to generic help.</p>
+    </section>
+  </div>
+  <script>
+    const tabs = [...document.querySelectorAll('.tab')];
+    const panels = [...document.querySelectorAll('.panel')];
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const id = tab.dataset.panel;
+        tabs.forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
+        panels.forEach((p) => p.classList.toggle('active', p.id === id));
+      });
+    });
+  </script>
+</body>
+</html>

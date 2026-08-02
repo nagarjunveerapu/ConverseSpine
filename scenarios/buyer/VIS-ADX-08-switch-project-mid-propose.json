@@ -1,0 +1,35 @@
+{
+  "id": "VIS-ADX-08",
+  "title": "BREAK: Ayana propose open → switch to Krishnaja Monday 11 (must not book Ayana)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "project-switch"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "I want to visit Ayana" },
+    {
+      "text": "Saturday morning",
+      "assert": {
+        "reply_includes": ["ayana"],
+        "reply_includes_any": ["Saturday", "block", "confirm"]
+      }
+    },
+    {
+      "text": "actually let's visit Krishnaja on Monday at 11am",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes": ["krishnaja"],
+        "reply_includes_any": ["Monday", "11"],
+        "reply_excludes": [
+          "ayana",
+          "Saturday",
+          "I've booked",
+          "rephrase",
+          "don't see a confirmed visit"
+        ]
+      }
+    }
+  ]
+}

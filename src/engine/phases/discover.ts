@@ -4,8 +4,9 @@ import { nameMentioned } from '../project_references.js';
 import { resolvePick } from '../state.js';
 import { formatInr } from '../compose.js';
 import { currentShortlist, discussedList } from '../entity-store.js';
+import { isNonPlaceUtterance } from '../placeability.js';
 
-export function decide(s: ConversationState, ex: Extracted): TurnGoal {
+export function decide(s: ConversationState, ex: Extracted, buyerText?: string): TurnGoal {
   const d = s.discover;
   if (ex.recall) return { kind: 'visit_recall' };
   const asksEmi =
@@ -148,6 +149,17 @@ export function decide(s: ConversationState, ex: Extracted): TurnGoal {
     return { kind: 'probe', slot: nextSlot(s) };
   }
   if (ex.isQuestion && !ex.smalltalk && !ex.askTopic && !(ex.askTopics?.length)) {
+    return { kind: 'clarify_intent' };
+  }
+  // Keyboard smash / non-place noise — sticky clarify, never portfolio orient.
+  // (ask_next_step must also refuse noise — see shouldConsumeAskNextStep.)
+  if (
+    buyerText &&
+    isNonPlaceUtterance(buyerText) &&
+    !hasNarrowingConstraint(ex.constraints) &&
+    !(ex.namedProjects?.length) &&
+    ex.transition !== 'want_visit'
+  ) {
     return { kind: 'clarify_intent' };
   }
   // Turn-0 greet only when there is nothing to route — never discard a facet,

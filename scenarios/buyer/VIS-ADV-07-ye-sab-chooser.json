@@ -1,0 +1,25 @@
+{
+  "id": "VIS-ADV-07",
+  "title": "ADV: which-projects chooser via ye sab (not all of them)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "chooser", "hi-en"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    {
+      "text": "come for the visit",
+      "assert": {
+        "reply_includes_any": ["which should we visit", "1.", "Ayana"]
+      }
+    },
+    {
+      "text": "ye sab",
+      "assert": {
+        "reply_includes_any": ["coming from", "where will you be coming", "start from", "sequence the stops"],
+        "reply_excludes": ["which should we visit", "Great choice — let's look", "compare"]
+      }
+    }
+  ]
+}

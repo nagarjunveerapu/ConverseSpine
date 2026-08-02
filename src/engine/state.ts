@@ -100,8 +100,15 @@ export function applyVisitBooked(
     };
   }
   const { visit: _v, ...rest } = s;
-  if (s.focus) {
-    return { ...rest, phase: 'focused', postVisitAckPending: true };
+  // Advisor / board visit often books with visit.projectId set but focus unset
+  // (chooser / propose_visit). Without a pin, sticky handoff traps "2BHK" etc.
+  const focus =
+    s.focus ??
+    (prev.projectId && prev.projectName
+      ? { projectId: prev.projectId, projectName: prev.projectName }
+      : undefined);
+  if (focus) {
+    return { ...rest, phase: 'focused', focus, postVisitAckPending: true };
   }
   return { ...rest, phase: 'handoff' };
 }

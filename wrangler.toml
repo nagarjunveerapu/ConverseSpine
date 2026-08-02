@@ -129,6 +129,9 @@ UNDERSTANDING_AUTO_TEACH = "false"
 # its vector indexes are filled and this has soaked.
 SIL_INTENT_PROJECTION = "p256-f6665e0b79"
 SIL_EMBED_FIRST = "true"
+# Visit open acts: teach-only on dig (no ask-team / force regex fallback).
+# Ablation gate after visit-mv upsert — grow corpus if VIS-MV-04/06 fail.
+VISIT_EMBED_ACTS_ONLY = "true"
 
 # Weekly rebuild — Mondays 03:30 UTC. Nightly 22:30 UTC (04:00 IST) = Wave C
 # auto-teach (runs after Desk's 18:00 UTC sweep+teacher; no-op unless

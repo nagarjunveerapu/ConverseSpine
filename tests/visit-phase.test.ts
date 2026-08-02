@@ -24,6 +24,25 @@ describe('visit phase', () => {
     }
   });
 
+  it('bare 2BHK mid-visit defers to availability answer (not re-ask day)', () => {
+    const s = {
+      ...initState('t', 'brigade-group'),
+      phase: 'visit' as const,
+      focus: { projectId: 'eldorado', projectName: 'Brigade Eldorado' },
+      visit: { projectId: 'eldorado', projectName: 'Brigade Eldorado', lastAsk: 'day' as const },
+    };
+    const goal = decide(
+      s,
+      { constraints: { bhk: '2 BHK' }, transition: 'none' },
+      { text: '2BHK', now },
+    );
+    expect(goal.kind).toBe('answer');
+    if (goal.kind === 'answer') {
+      expect(goal.topic).toBe('availability');
+      expect(goal.projectId).toBe('eldorado');
+    }
+  });
+
   it('binds morning window even when extract stamps a deferrable facet', () => {
     const s = {
       ...initState('t', 'naya-advisor'),
@@ -171,6 +190,189 @@ describe('visit phase', () => {
     if (goal.kind === 'visit_ask') {
       expect(goal.ask).toBe('time');
       expect(goal.copy).toMatch(/past site hours|site hours/i);
+    }
+  });
+
+  it('VIS-ADX-04: bare yes after digression re-proposes, does not book', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+        awaitingConfirm: false,
+        proposedIso: '2026-07-11T10:30:00+05:30',
+        proposedLabel: 'Saturday at 10:30 AM',
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none', affirm: true },
+      { text: 'yes', now },
+    );
+    expect(goal.kind).toBe('visit_propose');
+    if (goal.kind === 'visit_propose') {
+      expect(goal.copy).toMatch(/just to confirm/i);
+      expect(goal.state.awaitingConfirm).toBe(true);
+    }
+  });
+
+  it('MV-06: ask the team after hours reject files pending, not firm book', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+        lastAsk: 'time' as const,
+        pendingDayIso: '2026-08-04',
+        pendingDayLabel: 'Monday',
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: 'ask the team for 6pm',
+        now,
+        siteVisitHours: 'Mon–Sun, 9am–7pm',
+        embedderIntentKind: 'visit_ask_team',
+      },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).toBe('team_request');
+      expect(goal.copy).toMatch(/not a firm booking|pending|team/i);
+      expect(goal.state.pendingTeamRequests?.length).toBeGreaterThan(0);
+      expect(goal.state.awaitingConfirm).toBeFalsy();
+    }
+  });
+
+  it('MV-08: gibberish on origin re-asks origin, does not stamp', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+        queued: [{ projectId: 'krishnaja', projectName: 'Krishnaja Greens' }],
+        lastAsk: 'origin' as const,
+        originAsked: true,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      { text: 'asdfghjkl qwerty', now },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).toBe('origin');
+      expect(goal.state.originText).toBeUndefined();
+      expect(goal.copy).toMatch(/couldn't make sense/i);
+      expect(goal.copy).toMatch(/coming from|starting area/i);
+    }
+  });
+
+  it('ablation: embedActsOnly ignores ask-team regex without teach bind', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+        lastAsk: 'time' as const,
+        pendingDayIso: '2026-08-04',
+        pendingDayLabel: 'Monday',
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: 'ask the team for 6pm',
+        now,
+        siteVisitHours: 'Mon–Sun, 9am–7pm',
+        embedActsOnly: true,
+      },
+    );
+    // Without teach bind, must not file team_request (regex path off).
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).not.toBe('team_request');
+      expect(goal.state.pendingTeamRequests ?? []).toHaveLength(0);
+    } else {
+      expect(goal.kind).not.toBe('visit_booked');
+    }
+  });
+
+  it('MV-04: force same day Monday proposes with team overflow, skips window dead-end', () => {
+    const s = {
+      ...initState('t', 'brigade-group'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'cornerstone-utopia',
+        projectName: 'Brigade Cornerstone Utopia',
+        queued: [
+          { projectId: 'eldorado', projectName: 'Brigade Eldorado' },
+          { projectId: 'orchards', projectName: 'Brigade Orchards' },
+        ],
+        lastAsk: 'split_day' as const,
+        splitOffered: true,
+        originText: 'Whitefield',
+        originAsked: true,
+        tripOrdered: true,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: 'force all same day Monday',
+        now,
+        siteVisitHours: 'Mon–Sun, 9am–7pm',
+        embedderIntentKind: 'visit_force_same_day',
+        driveFromPriorMin: 90,
+      },
+    );
+    expect(['visit_propose', 'visit_ask']).toContain(goal.kind);
+    if (goal.kind === 'visit_propose') {
+      expect(goal.copy).toMatch(/team|request/i);
+      expect(goal.state.awaitingTeamRequestConfirm || (goal.state.pendingTeamRequests?.length ?? 0) > 0).toBe(
+        true,
+      );
+    } else if (goal.kind === 'visit_ask') {
+      expect(goal.ask).not.toBe('window');
+      expect(goal.copy).toMatch(/team|force|same day|Monday/i);
+    }
+  });
+
+  it('VIS-ADX-08: actually visit other project with packed slot replaces, no origin for 2 stops', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+        awaitingConfirm: true,
+        proposedIso: '2026-07-11T10:30:00+05:30',
+        proposedLabel: 'Saturday at 10:30 AM',
+        slotText: 'Saturday morning',
+      },
+    };
+    const goal = decide(
+      s,
+      {
+        constraints: {},
+        transition: 'want_visit',
+        namedProjects: [{ projectId: 'krishnaja', name: 'Krishnaja Greens' }],
+      },
+      { text: "actually let's visit Krishnaja on Monday at 11am", now },
+    );
+    expect(goal.kind).toBe('visit_propose');
+    if (goal.kind === 'visit_propose') {
+      expect(goal.projectName).toMatch(/krishnaja/i);
+      expect(goal.label).toMatch(/Monday.*11/i);
+      expect(goal.state.queued?.length ?? 0).toBe(0);
     }
   });
 });

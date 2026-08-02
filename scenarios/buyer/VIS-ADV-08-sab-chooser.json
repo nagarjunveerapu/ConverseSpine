@@ -1,0 +1,26 @@
+{
+  "id": "VIS-ADV-08",
+  "title": "ADV: which-projects chooser via sab (Brigade 3-stop)",
+  "builder_id": "brigade-group",
+  "tags": ["visit", "adversarial", "chooser", "hi-en"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 BHK in Devanahalli under 80 lakh" },
+    { "text": "Brigade Eldorado" },
+    { "text": "also tell me about Brigade Cornerstone Utopia" },
+    { "text": "also Brigade Orchards briefly" },
+    {
+      "text": "I want to visit",
+      "assert": {
+        "reply_includes_any": ["which should we visit", "1."]
+      }
+    },
+    {
+      "text": "sab",
+      "assert": {
+        "reply_includes_any": ["coming from", "where will you be coming", "start from", "sequence the stops"],
+        "reply_excludes": ["which should we visit", "Great choice — let's look"]
+      }
+    }
+  ]
+}

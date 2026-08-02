@@ -3,6 +3,7 @@ import { currentShortlist, discourseEntities, focusedRef } from '../entity-store
 import { splitComposeTopics } from '../facts.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { holdUnitType } from '../hold-intent.js';
+import { BARE_BHK_CONFIG_RE } from '../turn-routing/intent-authority.js';
 import { DECLINE } from '../turn-intent/dialogue-acts.js';
 
 /** Unique projects the buyer can honestly compare / deictically address. */
@@ -205,6 +206,10 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
 
   const topics = answerTopics(ex);
   let primary = topics[0] ?? 'overview';
+  // Closed size token after visit book (focused + postVisitAck) — same as visit/handoff.
+  if (primary === 'overview' && BARE_BHK_CONFIG_RE.test(text.trim())) {
+    primary = 'availability';
+  }
   // P3-B: if extract already set a facet topic, never fall through to overview.
   if (primary === 'overview') {
     const facet =

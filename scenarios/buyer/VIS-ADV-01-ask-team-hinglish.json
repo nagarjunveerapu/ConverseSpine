@@ -1,0 +1,27 @@
+{
+  "id": "VIS-ADV-01",
+  "title": "ADV: after-hours → Hinglish ask-team paraphrase (not firm book)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "ask-team", "hi-en"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    { "text": "I want to visit" },
+    {
+      "text": "Monday 6pm",
+      "assert": {
+        "reply_includes_any": ["site hours", "Closest", "ask the team"],
+        "goal_kind_not": "visit_booked"
+      }
+    },
+    {
+      "text": "sales se bol do after hours possible hai kya",
+      "assert": {
+        "reply_includes_any": ["team", "request", "pending", "not a firm", "We'll confirm", "sales"],
+        "reply_excludes": ["Done — your visit", "I've booked", "Great choice — let's look"],
+        "goal_kind_not": "visit_booked"
+      }
+    }
+  ]
+}

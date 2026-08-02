@@ -48,6 +48,33 @@ describe('handoff catalog escape', () => {
     if (goal.kind === 'answer') expect(goal.topic).toBe('amenities');
   });
 
+  it('escapes sticky handoff on bare 2BHK to availability', () => {
+    const ex: Extracted = { constraints: { bhk: '2 BHK' } };
+    const goal = handoffDecide(stickyHandoffState(), ex, '2BHK');
+    expect(goal.kind).toBe('answer');
+    if (goal.kind === 'answer') {
+      expect(goal.topic).toBe('availability');
+      expect(goal.projectId).toBe('brigade-eldorado-naya-advisor');
+    }
+  });
+
+  it('escapes sticky handoff without focus via visit pin (advisor book path)', () => {
+    const s = {
+      ...initState('c1', 'naya-advisor'),
+      phase: 'handoff' as const,
+      visit: {
+        projectId: 'brigade-eldorado-naya-advisor',
+        projectName: 'Brigade Eldorado',
+      },
+    };
+    const goal = handoffDecide(s, { constraints: { bhk: '2 BHK' } }, '2BHK');
+    expect(goal.kind).toBe('answer');
+    if (goal.kind === 'answer') {
+      expect(goal.topic).toBe('availability');
+      expect(goal.projectId).toBe('brigade-eldorado-naya-advisor');
+    }
+  });
+
   it('keeps warm_ack / recall escapes', () => {
     expect(
       handoffDecide(stickyHandoffState(), { constraints: {}, recall: true }, 'what did we book'),

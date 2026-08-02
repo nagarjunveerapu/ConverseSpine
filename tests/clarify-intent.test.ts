@@ -70,6 +70,6 @@ describe('below-threshold clarify_intent', () => {
     );
     expect(out).toMatch(/\?$/); // ends in a question
     expect(out).not.toMatch(/₹|\d/); // no prices, no numbers
-    expect(out).toMatch(/rather get that right than guess/i);
+    expect(out).toMatch(/couldn't make sense|rather get that right than guess/i);
   });
 });

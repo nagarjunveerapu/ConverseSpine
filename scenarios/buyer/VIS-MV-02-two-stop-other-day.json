@@ -1,0 +1,44 @@
+{
+  "id": "VIS-MV-02",
+  "title": "MULTI: 2-stop → book stop1 → different day for stop2 (clean day ask, no team request)",
+  "builder_id": "lokations",
+  "tags": ["visit", "multi-visit", "other-day"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    { "text": "both" },
+    { "text": "Whitefield" },
+    {
+      "text": "Saturday morning",
+      "assert": {
+        "reply_includes_any": ["Saturday", "block", "confirm"]
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind": "visit_booked",
+        "reply_includes_any": ["same day", "different day", "Next up", "krishnaja"]
+      }
+    },
+    {
+      "text": "different day",
+      "assert": {
+        "reply_includes_any": ["which day", "day works", "Saturday", "Monday"],
+        "reply_excludes": ["team", "pending", "outside site hours"],
+        "reply_includes": ["krishnaja"]
+      }
+    },
+    {
+      "text": "Monday morning",
+      "assert": {
+        "reply_includes_any": ["Monday", "block", "confirm"],
+        "reply_includes": ["krishnaja"],
+        "goal_kind_not": "visit_booked"
+      }
+    }
+  ]
+}

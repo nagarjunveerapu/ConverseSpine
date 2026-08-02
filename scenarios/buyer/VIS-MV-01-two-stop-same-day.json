@@ -1,0 +1,55 @@
+{
+  "id": "VIS-MV-01",
+  "title": "MULTI: 2-stop → origin → book stop1 Sat → same-day choice → stagger propose stop2",
+  "builder_id": "lokations",
+  "tags": ["visit", "multi-visit", "origin", "same-day", "stagger"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    {
+      "text": "come for the visit",
+      "assert": {
+        "reply_includes_any": ["which should we visit", "1."],
+        "reply_excludes": ["don't see a confirmed visit"]
+      }
+    },
+    {
+      "text": "both",
+      "assert": {
+        "reply_includes_any": ["coming from", "where will you be coming", "start from", "sequence the stops"]
+      }
+    },
+    {
+      "text": "Indiranagar",
+      "assert": {
+        "reply_includes_any": ["day", "time", "when", "Indiranagar"],
+        "reply_excludes": ["which should we visit", "plantation options in"]
+      }
+    },
+    {
+      "text": "Saturday morning",
+      "assert": {
+        "reply_includes_any": ["Saturday", "block", "confirm"],
+        "reply_includes": ["ayana"]
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind": "visit_booked",
+        "reply_includes_any": ["Done", "set", "confirmed"],
+        "reply_includes": ["krishnaja"]
+      }
+    },
+    {
+      "text": "same day",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["krishnaja", "block", "confirm", "after", "time"],
+        "reply_excludes": ["which should we visit", "rephrase"]
+      }
+    }
+  ]
+}

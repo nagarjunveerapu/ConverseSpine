@@ -4,13 +4,21 @@
 
 import type { OfferedProject } from './types.js';
 
+/**
+ * Closed chooser deixis (EN + Hinglish) — not open-act understanding.
+ * Includes bilingual shorthand: dono/teenon/sab/ye sab/saare.
+ */
 const ALL_DEIXIS =
-  /\b(?:all(?:\s+of\s+them)?|everything|all\s+(?:three|four|\d+)|both|these|those|them|the\s+two)\b/i;
+  /\b(?:all(?:\s+of\s+them)?|everything|all\s+(?:three|four|\d+)|both|these|those|them|the\s+two|dono|teenon|ye\s+sab|yeh\s+sab|saare|sab)\b/i;
+
+/** Devanagari has no JS `\b` — match whole-token Hindi deixis separately. */
+const ALL_DEIXIS_HI = /(?:^|\s)(?:दोनों|तीनों|सब|ये\s+सब|येह\s+सब|सारे)(?:\s|$)/u;
 
 const ORDINAL_TOKEN = /\b(\d{1,2})\b/g;
 
 export function isAllDeixis(text: string): boolean {
-  return ALL_DEIXIS.test(text.trim());
+  const t = text.trim();
+  return ALL_DEIXIS.test(t) || ALL_DEIXIS_HI.test(t);
 }
 
 /** Parse "1", "1 and 2", "1,3" against a 1-based candidate list. */

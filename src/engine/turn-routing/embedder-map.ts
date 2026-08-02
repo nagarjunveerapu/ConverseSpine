@@ -257,6 +257,17 @@ export function mapIntentToRouting(
     return { routing: 'visit_schedule_stop', ...base };
   }
 
+  // Visit sub-acts under <visit_pending> — teach lane owns phrasing; visit.decide consumes.
+  if (
+    kind === 'visit_ask_team' ||
+    kind === 'visit_force_same_day' ||
+    kind === 'visit_same_day' ||
+    kind === 'visit_other_day' ||
+    kind === 'visit_choose_stops'
+  ) {
+    return { routing: 'visit_schedule_stop', ...base };
+  }
+
   if (kind === 'compare_projects') {
     return { routing: 'compare_offered', ...base };
   }

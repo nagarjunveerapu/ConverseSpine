@@ -36,6 +36,12 @@ export interface Env {
    */
   SIL_EMBED_FIRST?: string;
   /**
+   * "true" = visit open acts (ask-team, force same-day) bind from INTENT_VECTORS
+   * only — regex abstain-fallback is off. Use for teach ablation on dig after
+   * upserting visit-mv teach. Closed day/time phrases stay phrase-parseable.
+   */
+  VISIT_EMBED_ACTS_ONLY?: string;
+  /**
    * Understanding Flywheel Wave C — "true" runs the nightly auto-teach: teacher-
    * confident clusters pass an EXACT holdout no-regression gate; safe ones
    * promote as 'flywheel_auto' (one-tap Undo on the Desk board) and ship via an

@@ -1,0 +1,39 @@
+{
+  "id": "VIS-ADX-03",
+  "title": "BREAK: which-projects chooser → FAQ digression → both (must resume origin, not drop visit)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "digression", "chooser"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    {
+      "text": "come for the visit",
+      "assert": {
+        "reply_includes_any": ["which should we visit", "1."],
+        "goal_kind": "visit_ask"
+      }
+    },
+    {
+      "text": "btw what is RERA for Ayana?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["coming from", "Shall I block"]
+      }
+    },
+    {
+      "text": "both",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["coming from", "where will you be coming"],
+        "reply_excludes": [
+          "rephrase",
+          "which should we visit",
+          "don't see a confirmed visit",
+          "Compare"
+        ]
+      }
+    }
+  ]
+}

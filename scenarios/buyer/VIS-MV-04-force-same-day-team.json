@@ -1,0 +1,38 @@
+{
+  "id": "VIS-MV-04",
+  "title": "MULTI: from split → force same day → partial firm + team request for overflow",
+  "builder_id": "brigade-group",
+  "tags": ["visit", "multi-visit", "force-same-day", "team-request"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 BHK in Devanahalli under 80 lakh" },
+    { "text": "Brigade Eldorado" },
+    { "text": "also tell me about Brigade Cornerstone Utopia" },
+    { "text": "also Brigade Orchards briefly" },
+    { "text": "I want to visit" },
+    { "text": "all of them" },
+    {
+      "text": "Whitefield",
+      "assert": {
+        "reply_includes_any": ["force", "next day", "day 1", "same day", "site hours"]
+      }
+    },
+    {
+      "text": "force all same day Monday",
+      "assert": {
+        "reply_includes_any": ["request to the team", "I'll send a request to the team"],
+        "reply_includes": ["Monday"],
+        "reply_excludes": ["rephrase", "morning or afternoon"],
+        "goal_kind_not": "unknown_request"
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "reply_includes_any": ["pending", "requested with the team", "team request"],
+        "reply_includes": ["Done"],
+        "reply_excludes": ["rephrase"]
+      }
+    }
+  ]
+}

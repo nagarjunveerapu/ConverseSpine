@@ -1,0 +1,67 @@
+{
+  "id": "VIS-LONG-03",
+  "title": "LONG BREAK: flip-flop project pick → visit propose → cancel vibes → gibberish → packed rebook (21 turns)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "long", "gibberish", "flipflop"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation sakleshpur" },
+    { "text": "Ayana" },
+    { "text": "no wait Krishnaja" },
+    { "text": "actually Ayana again" },
+    { "text": "pricing?" },
+    { "text": "lmao ok fine" },
+    {
+      "text": "site visit please",
+      "assert": {
+        "reply_includes_any": ["day", "time", "when", "visit"],
+        "reply_excludes": ["don't see a confirmed visit"]
+      }
+    },
+    { "text": "tomorrow morning" },
+    { "text": "wait no Saturday" },
+    { "text": "asdfgh" },
+    {
+      "text": "Saturday 11am",
+      "assert": {
+        "reply_includes_any": ["Saturday", "11", "block", "confirm"],
+        "reply_excludes": ["rephrase"]
+      }
+    },
+    { "text": "cancel that thought" },
+    { "text": "what about amenities" },
+    { "text": "zzzzzzz" },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "Done — your visit"]
+      }
+    },
+    { "text": "bro just book something already" },
+    {
+      "text": "I want Ayana visit Monday 10am",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes": ["ayana"],
+        "reply_includes_any": ["Monday", "10"],
+        "reply_excludes": ["rephrase", "don't see a confirmed visit"]
+      }
+    },
+    { "text": "kjsdhfkjsdhf" },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "Done — your visit"]
+      }
+    },
+    {
+      "text": "yes confirm the Monday 10am Ayana visit",
+      "assert": {
+        "reply_includes_any": ["Monday", "Ayana", "Done", "set", "confirm", "block"],
+        "reply_excludes": ["rephrase", "Saturday"]
+      }
+    }
+  ]
+}

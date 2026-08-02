@@ -1,0 +1,42 @@
+{
+  "id": "VIS-MV-03",
+  "title": "MULTI: Brigade 3 discussed → all → origin → split-day offer (not silent 3-book)",
+  "builder_id": "brigade-group",
+  "tags": ["visit", "multi-visit", "split-day", "three-stop"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 BHK in Devanahalli under 80 lakh" },
+    { "text": "Brigade Eldorado" },
+    { "text": "also tell me about Brigade Cornerstone Utopia" },
+    { "text": "also Brigade Orchards briefly" },
+    {
+      "text": "I want to visit",
+      "assert": {
+        "reply_includes_any": ["which should we visit", "1."],
+        "reply_excludes": ["don't see a confirmed visit"]
+      }
+    },
+    {
+      "text": "all of them",
+      "assert": {
+        "reply_includes_any": ["coming from", "where will you be coming", "start from", "sequence the stops"]
+      }
+    },
+    {
+      "text": "Whitefield",
+      "assert": {
+        "reply_includes_any": [
+          "day 1",
+          "next day",
+          "force",
+          "same day",
+          "won't fit",
+          "spread",
+          "site hours"
+        ],
+        "reply_excludes": ["I've booked", "Done —"],
+        "goal_kind_not": "visit_booked"
+      }
+    }
+  ]
+}

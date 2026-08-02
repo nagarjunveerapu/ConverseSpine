@@ -1,0 +1,25 @@
+{
+  "id": "VIS-MV-05",
+  "title": "HOURS: single project Monday 6pm → reject/closest (never firm-book 6pm)",
+  "builder_id": "lokations",
+  "tags": ["visit", "hours", "after-hours"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    {
+      "text": "I want to visit",
+      "assert": {
+        "reply_includes_any": ["day", "time", "when"]
+      }
+    },
+    {
+      "text": "Monday 6pm",
+      "assert": {
+        "reply_includes_any": ["past site hours", "site hours", "Closest", "ask the team", "7"],
+        "reply_excludes": ["Done —", "I've booked", "is set for Monday at 6"],
+        "goal_kind_not": "visit_booked"
+      }
+    }
+  ]
+}

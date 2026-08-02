@@ -54,6 +54,16 @@ export function minutesFromIso(iso: string): number | null {
   return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
 }
 
+/** Buyer-facing drive label — hours when ≥60 min (avoid "~236 min"). */
+export function formatDriveDuration(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `~${m} min`;
+  const halfHours = Math.round((m / 60) * 2) / 2;
+  if (halfHours === 1) return '~1 hour';
+  const label = Number.isInteger(halfHours) ? String(halfHours) : halfHours.toFixed(1);
+  return `~${label} hours`;
+}
+
 export function addMinutesToIso(iso: string, addMin: number): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;

@@ -13,10 +13,12 @@
  * Embedder bind (`routing === 'ask_next_step'`) is the live path once corpus
  * is rebuilt under SIL_STATE_TOKENS.
  */
+import { visitProposeConfirmCopy } from './advisory-copy.js';
 import { isAskNextStepText } from './ask-next-step-detect.js';
 import { currentShortlist } from './entity-store.js';
 import { catalogAskOwns } from './turn-routing/intent-authority.js';
 import { discourseStateToken } from './turn-routing/state-tokens.js';
+import { isNonPlaceUtterance } from './placeability.js';
 import type { ConversationState, Extracted, TurnGoal } from './types.js';
 
 export { ASK_NEXT_STEP_RE, isAskNextStepText } from './ask-next-step-detect.js';
@@ -31,6 +33,8 @@ export function shouldConsumeAskNextStep(
   if ((ex.namedProjects?.length ?? 0) > 0) return false;
   if (ex.wantsMore || ex.rejected || ex.recall || ex.wantsHuman) return false;
   if (catalogAskOwns(ex, text)) return false;
+  // Smash / smalltalk noise must not ride ask_next_step → cold orient.
+  if (isNonPlaceUtterance(text)) return false;
 
   const routing = s.rti?.lastRouting;
   if (routing?.routing === 'ask_next_step') return true;
@@ -38,7 +42,10 @@ export function shouldConsumeAskNextStep(
   return isAskNextStepText(text);
 }
 
-export function resolveAskNextStepGoal(s: ConversationState): TurnGoal {
+export function resolveAskNextStepGoal(
+  s: ConversationState,
+  channel?: 'whatsapp' | 'advisor_web',
+): TurnGoal {
   const board = currentShortlist(s);
   const token = discourseStateToken({
     phase: s.phase,
@@ -66,7 +73,7 @@ export function resolveAskNextStepGoal(s: ConversationState): TurnGoal {
         label,
         projectName: name,
         projectId: v.projectId,
-        copy: `Shall I block *${label}* for your visit to *${name}*? Reply yes to confirm.`,
+        copy: visitProposeConfirmCopy({ channel, label, projectName: name }),
         state: v,
       };
     }

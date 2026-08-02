@@ -2,6 +2,7 @@ import type { Env } from './env.js';
 import { handleAdvisorBriefFacets } from './advisor/handle-brief-facets.js';
 import { handleAdvisorProjectDetail } from './advisor/handle-project-detail.js';
 import { handleAdvisorPreview } from './advisor/handle-preview.js';
+import { handleAdvisorReveal } from './advisor/handle-reveal.js';
 import { handleAdvisorTurn } from './advisor/handle-turn.js';
 import { createWorkerRuntime } from './runtime/deps.js';
 import { handleAgentSend, handleChat, health, json, toDeskChatResponse } from './worker/routes.js';
@@ -192,6 +193,29 @@ export default {
           (result.error === 'text_required' || result.error === 'session_id_required')
             ? 400
             : 200;
+        return json(result, status);
+      }
+
+      // A5 — consent reveal → Desk lead on source builder (not naya-advisor).
+      if (path === '/api/advisor/reveal' && method === 'POST') {
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ status: 'error', error: 'invalid_json' }, 400);
+        }
+        const rt = createWorkerRuntime(env);
+        const result = await handleAdvisorReveal(rt, body as Parameters<typeof handleAdvisorReveal>[1]);
+        const status =
+          result.status === 'error' &&
+          (result.error === 'session_id_required' ||
+            result.error === 'project_id_required' ||
+            result.error === 'buyer_phone_invalid' ||
+            result.error === 'buyer_name_required')
+            ? 400
+            : result.status === 'error'
+              ? 422
+              : 200;
         return json(result, status);
       }
 

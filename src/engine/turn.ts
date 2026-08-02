@@ -5,8 +5,15 @@
 import * as discover from './phases/discover.js';
 import * as focused from './phases/focused.js';
 import * as visit from './phases/visit.js';
-import { exitVisitPhase, isVisitFollowUpQuestion, shouldExitVisitForIntent } from './phases/visit.js';
+import {
+  exitVisitPhase,
+  hasResumableVisitDraft,
+  isVisitFollowUpQuestion,
+  shouldExitVisitForIntent,
+  shouldResumeVisitDraft,
+} from './phases/visit.js';
 import { isVisitDayUtterance } from './visit-slot.js';
+import { isDifferentDayPhrase, isSameDayPhrase } from './visit-itinerary.js';
 import * as handoff from './phases/handoff.js';
 import { buildTurnLogSnapshot } from '../observability/turn-log-snapshot.js';
 import { extractTurnAuthority } from './extract-authority.js';
@@ -42,6 +49,7 @@ import {
   resolvePendingStop,
 } from './optout-confirm.js';
 import { speakFailure } from './speak-failure.js';
+import { speakStickyClarify } from './clarify-outstanding.js';
 import { holdsFocusAgainstRelease } from './turn-routing/focus-hold.js';
 import { speakEducation } from './education.js';
 import type { ExtractProvenance, IngressSlotKey, TurnInputSource } from './ingress.js';
@@ -112,6 +120,7 @@ import {
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
 import { arbitrateFocusPivot, isImplausibleLocationCapture } from './turn-intent/pivot-arbiter.js';
+import { isNonPlaceUtterance, isPlausiblePlaceLabel } from './placeability.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
@@ -540,6 +549,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  // Itinerary anaphora ("same day …") is never a focus commit — always schedule.
+  if (isSameDayPhrase(trimmedText) || isDifferentDayPhrase(trimmedText)) {
+    rtiFocusCommitted = undefined;
+    state = { ...state, phase: 'visit' };
+  }
   if (rtiFocusCommitted) {
     return completeRtiFocusCommit(state, rtiFocusCommitted, input, deps, nd, trimmedText);
   }
@@ -1290,7 +1304,18 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         replyKey = 'failure:education_explainer';
       }
     } else {
-      reply = speakFailure(unsupportedFailure);
+      const sticky =
+        unsupportedFailure.subject === 'unknown_request'
+          ? speakStickyClarify({
+              phase: state.phase,
+              visit: state.visit,
+              focusName: state.focus?.projectName,
+              priorTopics: state.feedForward?.priorTopics,
+              constraints: state.constraints,
+              channel,
+            })
+          : null;
+      reply = sticky ?? speakFailure(unsupportedFailure);
     }
 
     state = { ...state, turnCount: state.turnCount + 1 };
@@ -1574,17 +1599,47 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = { ...state, phase: 'visit' };
   }
 
-  // Which-projects chooser: short deixis ("both", "1 and 2") can false-stamp
-  // compare and eject visit. Hold only that ask — not day/same_day (buyer may
-  // pivot with "Compare all 3" mid-queue; rti-visit-gate).
-  if (state.phase === 'visit' && shouldExitVisitForIntent(ex, trimmedText)) {
-    const holdChooserDeixis =
-      state.visit?.lastAsk === 'which_projects' &&
-      !/\bcompare\b/i.test(trimmedText) &&
-      trimmedText.trim().split(/\s+/).length <= 6;
-    if (!holdChooserDeixis) {
-      state = exitVisitPhase(state);
-    }
+  // Soft-exit keeps the visit draft — re-enter when buyer continues scheduling
+  // (e.g. compare digression → "I'll come from Indiranagar").
+  if (
+    state.phase !== 'visit' &&
+    shouldResumeVisitDraft(state.visit, trimmedText, ex, routing.embedder_intent_kind)
+  ) {
+    state = { ...state, phase: 'visit' };
+  }
+  // Named-project + same-day: rebuild draft from booked itinerary if digression wiped visit.
+  if (
+    (isSameDayPhrase(trimmedText) || isDifferentDayPhrase(trimmedText)) &&
+    (ex.namedProjects?.length ?? 0) === 1 &&
+    ((state.visitBookedCache?.length ?? 0) > 0 || !!state.visit?.projectId)
+  ) {
+    const n = ex.namedProjects![0]!;
+    state = {
+      ...state,
+      phase: 'visit',
+      visit: {
+        ...(state.visit ?? {}),
+        projectId: n.projectId,
+        projectName: n.name,
+        lastAsk:
+          state.visit?.lastAsk === 'day' || isDifferentDayPhrase(trimmedText)
+            ? 'day'
+            : 'same_day_choice',
+        originText: state.visit?.originText,
+        originAsked: state.visit?.originAsked,
+        tripOrdered: state.visit?.tripOrdered,
+      },
+    };
+  }
+
+  // Soft-exit when shouldExit says so. Stay via: teach itinerary kinds, or
+  // closed chooser deixis (both/dono/sab/ordinals) while which_projects open.
+  // Same-day phrase hold removed (V1) — dig must bind visit_same_day / visit_other_day.
+  if (
+    state.phase === 'visit' &&
+    shouldExitVisitForIntent(ex, trimmedText, routing.embedder_intent_kind, state.visit)
+  ) {
+    state = exitVisitPhase(state);
   }
 
   if (
@@ -1607,12 +1662,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const coordRows = await deps.data.projectCoords(state.builderId).catch(() => []);
     const projectGeoCatalog = catalogFromProjectCoords(coordRows);
 
-    const originCandidate =
+    const rawOriginCandidate =
       visitState?.lastAsk === 'origin' &&
       !visitState.originText &&
       !visit.isVisitProjectSwitchUtterance(trimmedText, ex.namedProjects?.length ?? 0) &&
       !(ex.namedProjects?.length ?? 0)
         ? visit.normalizeOriginText(trimmedText)
+        : undefined;
+    const originCandidate =
+      rawOriginCandidate && isPlausiblePlaceLabel(rawOriginCandidate)
+        ? rawOriginCandidate
         : visitState?.originText
           ? visit.normalizeOriginText(visitState.originText)
           : undefined;
@@ -1643,6 +1702,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           ? { lat: visitState.originLat, lng: visitState.originLng }
           : null,
       projectGeoCatalog,
+      embedderIntentKind: routing.embedder_intent_kind,
+      embedActsOnly: deps.visitEmbedActsOnly === true,
+      channel,
     };
     if (nd) {
       const booked = await deps.data.siteVisitsItinerary(nd).catch(() => []);
@@ -1712,9 +1774,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           .projectNames(state.builderId)
           .catch(() => [] as Array<{ projectId: string; name: string }>),
       );
-    goal = hit ? discover.commitPickWithFollowUp(hit, ex) : await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
+    goal = hit
+      ? discover.commitPickWithFollowUp(hit, ex)
+      : await decideGoalAsync(state, ex, visitCtx, deps, trimmedText, channel);
   } else {
-    goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText);
+    goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText, channel);
   }
 
   // W1 focus bind: answer goals must not silently drift to embedder-invented projects.
@@ -1883,6 +1947,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     alreadyShownSameSet,
     builderName: friendlyBuilder(state.builderId),
     buyerText: input.text,
+    channel,
     ...(state.focus ? { focusProjectName: state.focus.projectName } : {}),
     returningBuyer: state.returningBuyer,
     ...(ff?.priorTopics?.length ? { priorTopics: ff.priorTopics } : {}),
@@ -1913,6 +1978,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     (evidence.matches?.length ?? 0) > 0;
   const clarifyPickDeterministic = goal.kind === 'clarify_project_pick';
   const clarifyDiscourseDeterministic = goal.kind === 'clarify_discourse';
+  // Sticky / honest miss — never LLM into portfolio pitch.
+  const clarifyIntentDeterministic = goal.kind === 'clarify_intent';
   // Shortlist-wide facet blocks are structured facts — template-locked like compare.
   const shortlistAnswerDeterministic = goal.kind === 'shortlist_answer';
   const compareDeterministic = goal.kind === 'answer' && goal.topic === 'compare';
@@ -1960,6 +2027,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     firstShortlistTurn ||
     clarifyPickDeterministic ||
     clarifyDiscourseDeterministic ||
+    clarifyIntentDeterministic ||
     shortlistAnswerDeterministic ||
     compareDeterministic ||
     multiAnswerDeterministic ||
@@ -2106,6 +2174,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   if (goal.kind === 'visit_booked') {
     const next = goal.nextQueuedStop ?? state.visit?.queued?.[0];
+    const pendingNames = (state.visit?.pendingTeamRequests ?? []).map((t) => t.projectName);
     if (next) {
       const hint = state.visit?.preferredDayHint;
       const nextLine =
@@ -2113,8 +2182,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           ? `Next up — which day and time for *${next.projectName}*?`
           : `Next up — same day for *${next.projectName}*, or a different day?`;
       reply = `${reply.trim()}\n\n${nextLine}`;
-    } else if ((state.visit?.pendingTeamRequests?.length ?? 0) > 0) {
-      const pending = state.visit!.pendingTeamRequests!.map((t) => t.projectName).join(', ');
+    }
+    // Force-same-day overflow may sit alongside a firm next stop — always surface pending.
+    if (pendingNames.length > 0) {
+      const pending = pendingNames.join(', ');
       reply = `${reply.trim()}\n\n*${pending}*: requested with the team (pending) — we'll confirm on WhatsApp, or say a different day for a firm slot.`;
     }
   }
@@ -2129,6 +2200,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = {
       ...state,
       hold: { ...state.hold, awaitingConfirm: false, offeredAtTurn: state.turnCount },
+    };
+  }
+  // Same one-shot for visit confirm (VIS-ADX-04): possession/price digression
+  // must kill awaitingConfirm so a later bare "yes" cannot book the stale slot.
+  // visit.decide re-proposes when proposedIso is still future.
+  if (goal.kind !== 'visit_propose' && state.visit?.awaitingConfirm) {
+    state = {
+      ...state,
+      visit: { ...state.visit, awaitingConfirm: false },
     };
   }
   // W3 — remember the outbound line for the repeat guard.
@@ -2388,7 +2468,7 @@ function decideGoal(
   }
   switch (s.phase) {
     case 'discover':
-      return discover.decide(s, ex);
+      return discover.decide(s, ex, text);
     case 'focused':
       // text feeds the deterministic hold-intent gate (visit-style regex).
       return focused.decide(s, ex, text);
@@ -2408,11 +2488,23 @@ async function decideGoalAsync(
   visitCtx: visit.VisitCtx | null,
   deps: EngineDeps,
   text: string,
+  channel: TurnIntentChannel = 'whatsapp',
 ): Promise<TurnGoal> {
+  // Noise / smash — sticky clarify before ask_next_step / false brochure binds.
+  // Ignore askTopics: embedder often nearest-neighbours get_brochure on smash.
+  if (
+    s.phase === 'discover' &&
+    isNonPlaceUtterance(text) &&
+    !discover.hasNarrowingConstraint(ex.constraints) &&
+    !(ex.namedProjects?.length) &&
+    ex.transition !== 'want_visit'
+  ) {
+    return { kind: 'clarify_intent' };
+  }
   // Phase 2c — ask_next_step is state-conditioned; consume before phase decide
   // so cold/board/focused/visit don't fall through to search/overview.
   if (shouldConsumeAskNextStep(s, ex, text)) {
-    return resolveAskNextStepGoal(s);
+    return resolveAskNextStepGoal(s, channel);
   }
   if (s.phase === 'focused') {
     const switchGoal = await resolveFocusedSwitchGoal(text, ex, s, deps);

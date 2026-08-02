@@ -77,11 +77,15 @@ export function isUnclaimedIntent(routing: TurnRoutingResult | undefined): boole
  * Used so soft escalate/callback binds cannot steal "can I get the PDF/loan?".
  * True "talk to a human" still arrives via speech-act chips, not this path.
  */
+/** Closed size token — configs digression with no askTopic stamp ("2BHK"). */
+export const BARE_BHK_CONFIG_RE = /^\s*\d+(?:\.\d+)?\s*bhk\s*[.!?]?\s*$/i;
+
 export function catalogAskOwns(ex: Extracted, text = ''): boolean {
   if (ex.askTopic || (ex.askTopics?.length ?? 0) > 0) return true;
   if (ex.mediaAssetKind) return true;
   const t = text.trim();
   if (!t) return false;
+  if (BARE_BHK_CONFIG_RE.test(t)) return true;
   if (resolveFaqQuestionKeys(t).length > 0) return true;
   if (answerRequirements(t).length > 0) return true;
   return false;

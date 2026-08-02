@@ -11,6 +11,7 @@ import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 import { answerRequirements } from './answer-contract.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
 import { discourseOffered, currentShortlist, discussedList } from './entity-store.js';
+import { isPlausiblePlaceLabel } from './placeability.js';
 
 /** Keep aligned with turn-intent AFFIRM_ONLY (dialogue acts, not localities). */
 const AFFIRM =
@@ -1355,17 +1356,9 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
     if (isLocalityNoise(cleaned)) return undefined;
     if (NON_LOCALITY_LEXICON.test(cleaned)) return undefined;
     if (locationLooksPolluted(cleaned)) return undefined;
-    // Keyboard smash must not become a search locality.
-    if (
-      cleaned
-        .split(/\s+/)
-        .filter(Boolean)
-        .every(
-          (w) =>
-            /^(?:asdf|qwer|zxcv|qaz|wsx|foo|bar|baz|xxx+|aaa+|test|hjkl|uiop|abcd|xyz+)$/i.test(w) ||
-            !/[aeiouy]/i.test(w),
-        )
-    ) {
+    // Placeability gate — smash/slang/smalltalk never become a search locality.
+    // (Shared with visit origin; not intent classification.)
+    if (!isPlausiblePlaceLabel(cleaned)) {
       return undefined;
     }
     if (looksLikeOfferedProjectName(cleaned, hints)) return undefined;
