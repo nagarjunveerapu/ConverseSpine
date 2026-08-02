@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Visit which-and-when — flow prototype</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --ink: #e8eef4;
+      --muted: #8b9aab;
+      --buyer: #2a3f55;
+      --bot: #24352a;
+      --accent: #6ecf9a;
+      --warn: #e0b35a;
+      --danger: #e07a7a;
+      --line: #2c3845;
+      --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      background: radial-gradient(1200px 600px at 10% -10%, #1c2a22, var(--bg));
+      color: var(--ink); font-family: var(--font);
+    }
+    header {
+      padding: 1.25rem 1.5rem 0.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+    header p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.9rem; max-width: 52rem; }
+    .layout { display: grid; grid-template-columns: 220px 1fr; gap: 0; min-height: calc(100vh - 5rem); }
+    nav { border-right: 1px solid var(--line); padding: 1rem 0.75rem; }
+    nav button {
+      display: block; width: 100%; text-align: left;
+      background: transparent; border: 0; color: var(--muted);
+      padding: 0.55rem 0.7rem; border-radius: 8px; cursor: pointer; font: inherit;
+    }
+    nav button.active, nav button:hover { background: var(--panel); color: var(--ink); }
+    main { padding: 1rem 1.25rem 2rem; }
+    .thread {
+      max-width: 40rem; display: flex; flex-direction: column; gap: 0.65rem;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 1rem; min-height: 22rem;
+    }
+    .msg { max-width: 92%; padding: 0.65rem 0.85rem; border-radius: 12px; white-space: pre-wrap; line-height: 1.4; font-size: 0.92rem; }
+    .msg.buyer { align-self: flex-end; background: var(--buyer); }
+    .msg.bot { align-self: flex-start; background: var(--bot); border: 1px solid #355043; }
+    .msg .tag { display: inline-block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin-bottom: 0.25rem; }
+    .msg.warn .tag { color: var(--warn); }
+    .msg.danger .tag { color: var(--danger); }
+    .actions { margin-top: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.45rem; }
+    .actions button {
+      border: 1px solid var(--line); background: #121820; color: var(--ink);
+      border-radius: 999px; padding: 0.4rem 0.85rem; cursor: pointer; font: inherit; font-size: 0.85rem;
+    }
+    .actions button:hover { border-color: var(--accent); }
+    .note { margin-top: 1rem; color: var(--muted); font-size: 0.85rem; max-width: 40rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Visit which-and-when</h1>
+    <p>Click through chooser → all/numbers → origin → split-day → force same day → partial confirm + team request. Chat and Advisor share this Spine path.</p>
+  </header>
+  <div class="layout">
+    <nav id="nav"></nav>
+    <main>
+      <div class="thread" id="thread"></div>
+      <div class="actions" id="actions"></div>
+      <p class="note" id="note"></p>
+    </main>
+  </div>
+  <script>
+    const flows = {
+      chooser: {
+        label: "1. Chooser",
+        note: "Discussed ≥2 → always ask which (not shortlist dump).",
+        steps: [
+          { who: "buyer", text: "I want a site visit" },
+          { who: "bot", text: "You've looked at these — which should we visit?\n1. Eldorado\n2. Cornerstone\n3. Orchards\nReply with numbers or names (e.g. 1 and 2, or Eldorado)." },
+        ],
+        choices: [
+          { label: "1 and 2", next: "origin2" },
+          { label: "all / everything", next: "allThree" },
+          { label: "Eldorado only", next: "single" },
+        ],
+      },
+      origin2: {
+        label: "2. Origin (2 stops)",
+        note: "Origin mandatory only for multi-stop.",
+        steps: [
+          { who: "buyer", text: "1 and 2" },
+          { who: "bot", text: "Happy to plan Eldorado and Cornerstone — where will you be coming from that day? I'll sequence the 2 stops sensibly from there." },
+          { who: "buyer", text: "Whitefield" },
+          { who: "bot", text: "From Whitefield, Eldorado is your nearer first stop — which day and time work?\n(Site visits usually Mon–Sun, 9am–7pm.)" },
+        ],
+        choices: [
+          { label: "Monday morning", next: "proposeOk" },
+          { label: "Monday 6pm (end after close)", next: "lateEnd" },
+        ],
+      },
+      allThree: {
+        label: "3. All three → split",
+        note: '"all" maps to full candidateIds; far pack → split-day.',
+        steps: [
+          { who: "buyer", text: "all of them" },
+          { who: "bot", text: "Happy to plan all three — where will you be coming from that day?" },
+          { who: "buyer", text: "Whitefield" },
+          { who: "bot", tag: "split", cls: "warn", text: "These three are spread out. With ~2 hours at each site plus drives, a same-day run won't fit inside site hours (9am–7pm).\nI'd plan Eldorado + Cornerstone on day 1, then Orchards next day — OK, or force all same day?" },
+        ],
+        choices: [
+          { label: "Next day for Orchards", next: "splitAccept" },
+          { label: "Force same day", next: "forcePartial" },
+        ],
+      },
+      forcePartial: {
+        label: "4. Force → team request",
+        note: "Confirm what fits; overflow = team request, never outside-hours book.",
+        steps: [
+          { who: "buyer", text: "all three same day Monday" },
+          { who: "bot", tag: "partial", cls: "warn", text: "With ~2 hours at each site plus drives, Orchards would land after site hours.\nI can confirm Eldorado + Cornerstone for Monday now.\nFor Orchards same day, I'll send a request to the team — they may not be able to host after hours.\nShall I confirm the first two, and note Orchards as a same-day team request?" },
+          { who: "buyer", text: "yes" },
+          { who: "bot", tag: "firm + pending", cls: "danger", text: "Done — Eldorado Mon 10:30 AM, Cornerstone ~1:15 PM.\nOrchards: requested with the team for Monday (pending) — we'll confirm on WhatsApp.\nOr say a different day for Orchards if you want a firm slot now." },
+        ],
+        choices: [{ label: "Back to chooser", next: "chooser" }],
+      },
+      lateEnd: {
+        label: "5. End-after-close",
+        note: "Fit = start AND end (start+120) inside hours.",
+        steps: [
+          { who: "buyer", text: "Monday 6pm" },
+          { who: "bot", tag: "hours", cls: "warn", text: "6:00 PM start would run until 8:00 PM — past site hours (closes 7pm).\nClosest I can do is 5:00 PM Monday — OK, or another time? I can also ask the team if you need later." },
+        ],
+        choices: [
+          { label: "5 PM OK", next: "proposeOk" },
+          { label: "Ask team for 6pm", next: "teamLate" },
+        ],
+      },
+      proposeOk: {
+        label: "6. Propose in-hours",
+        note: "Morning maps to proposed clock; buyer can override.",
+        steps: [
+          { who: "bot", text: "Shall I block Monday at 10:30 AM for Eldorado? Reply yes, or suggest another time." },
+          { who: "buyer", text: "yes" },
+          { who: "bot", text: "Done — Eldorado Monday 10:30 AM.\nNext up — same day for Cornerstone, or a different day?" },
+        ],
+        choices: [{ label: "Restart", next: "chooser" }],
+      },
+      single: {
+        label: "7. Single stop",
+        note: "No chooser re-ask; no origin ask.",
+        steps: [
+          { who: "buyer", text: "Eldorado" },
+          { who: "bot", text: "Which day and time work for Eldorado?\n(Site visits usually Mon–Sun, 9am–7pm.)" },
+        ],
+        choices: [{ label: "Restart", next: "chooser" }],
+      },
+      splitAccept: {
+        label: "8. Split accepted",
+        steps: [
+          { who: "buyer", text: "next day for Orchards" },
+          { who: "bot", text: "Great — we'll firm Eldorado + Cornerstone first. Which day and time for day 1?\n(Orchards will ask for its own day after.)" },
+        ],
+        choices: [{ label: "Restart", next: "chooser" }],
+      },
+      teamLate: {
+        label: "9. Team request late",
+        steps: [
+          { who: "buyer", text: "ask the team for 6pm" },
+          { who: "bot", tag: "pending", cls: "danger", text: "Noted — I've sent a request to the team for Eldorado Monday 6:00 PM (outside standard hours). We'll confirm on WhatsApp. This is not a firm booking yet." },
+        ],
+        choices: [{ label: "Restart", next: "chooser" }],
+      },
+      consume: {
+        label: "10. Consume before ask",
+        note: "One utterance banks projects + day + origin + time.",
+        steps: [
+          { who: "buyer", text: "visit Eldorado and Cornerstone Monday 11am from Whitefield" },
+          { who: "bot", text: "From Whitefield, Eldorado is nearer first — shall I block Monday at 11:00 AM for Eldorado? After this we'll plan Cornerstone. Reply yes to confirm." },
+        ],
+        choices: [{ label: "Restart", next: "chooser" }],
+      },
+    };
+
+    const nav = document.getElementById("nav");
+    const thread = document.getElementById("thread");
+    const actions = document.getElementById("actions");
+    const note = document.getElementById("note");
+
+    Object.entries(flows).forEach(([id, f]) => {
+      const b = document.createElement("button");
+      b.textContent = f.label;
+      b.dataset.id = id;
+      b.onclick = () => show(id);
+      nav.appendChild(b);
+    });
+
+    function show(id) {
+      const f = flows[id];
+      [...nav.querySelectorAll("button")].forEach((b) => b.classList.toggle("active", b.dataset.id === id));
+      thread.innerHTML = "";
+      f.steps.forEach((s) => {
+        const d = document.createElement("div");
+        d.className = "msg " + s.who + (s.cls ? " " + s.cls : "");
+        d.innerHTML = (s.tag ? `<div class="tag">${s.tag}</div>` : "") + escapeHtml(s.text);
+        thread.appendChild(d);
+      });
+      actions.innerHTML = "";
+      (f.choices || []).forEach((c) => {
+        const b = document.createElement("button");
+        b.textContent = c.label;
+        b.onclick = () => show(c.next);
+        actions.appendChild(b);
+      });
+      note.textContent = f.note || "";
+    }
+
+    function escapeHtml(t) {
+      return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    show("chooser");
+  </script>
+</body>
+</html>

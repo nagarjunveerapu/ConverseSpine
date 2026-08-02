@@ -67,7 +67,7 @@ describe('visit phase', () => {
     expect(goal.kind).toBe('visit_booked');
   });
 
-  it('SA-2: come for the visit with 2 discussedProjects seeds multi-stop (no which-project ask)', () => {
+  it('which-projects: come for the visit with 2 discussed asks chooser (no silent multi-seed)', () => {
     const s = {
       ...initState('t', 'lokations'),
       phase: 'visit' as const,
@@ -90,14 +90,87 @@ describe('visit phase', () => {
       { constraints: {}, transition: 'want_visit' },
       { text: 'come for the visit', now },
     );
-    expect(goal.kind).not.toBe('visit_recall');
-    // Should not ask which project — discussed set seeds first + queued.
+    expect(goal.kind).toBe('visit_ask');
     if (goal.kind === 'visit_ask') {
-      expect(goal.ask).not.toBe('project');
+      expect(goal.ask).toBe('which_projects');
+      expect(goal.copy).toMatch(/which should we visit/i);
+      expect(goal.state.candidateIds?.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('which-projects: "both" maps to full candidate set then asks origin', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        lastAsk: 'which_projects' as const,
+        candidateIds: [
+          { projectId: 'ayana', projectName: 'Ayana' },
+          { projectId: 'krishnaja', projectName: 'Krishnaja Greens' },
+        ],
+      },
+    };
+    const goal = decide(
+      s,
+      {
+        constraints: {},
+        transition: 'none',
+        // Live dig: "both" can stamp compare — visit chooser must still win.
+        askTopic: 'compare',
+        compareProjectIds: ['ayana', 'krishnaja'],
+      },
+      { text: 'both', now },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).toBe('origin');
+      expect((goal.state.queued?.length ?? 0) + 1).toBe(2);
+    }
+  });
+
+  it('which-projects: "all" maps to full candidate set then asks origin', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        lastAsk: 'which_projects' as const,
+        candidateIds: [
+          { projectId: 'ayana', projectName: 'Ayana' },
+          { projectId: 'krishnaja', projectName: 'Krishnaja Greens' },
+        ],
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      { text: 'all of them', now },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).toBe('origin');
       expect(goal.state.projectId).toBeTruthy();
-      expect((goal.state.queued?.length ?? 0) + (goal.state.projectId ? 1 : 0)).toBeGreaterThanOrEqual(2);
-    } else {
-      expect(['visit_ask', 'visit_propose', 'visit_booked']).toContain(goal.kind);
+      expect((goal.state.queued?.length ?? 0) + 1).toBe(2);
+    }
+  });
+
+  it('hours: explicit 6pm rejected when end past close', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      { text: 'Monday 6pm', now, siteVisitHours: 'Mon–Sun, 9am–7pm' },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).toBe('time');
+      expect(goal.copy).toMatch(/past site hours|site hours/i);
     }
   });
 });

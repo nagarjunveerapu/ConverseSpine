@@ -1171,9 +1171,29 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         : {}),
     };
   }
+  // Visit chooser / origin / day-time answers ("both", "1 and 2", "Whitefield")
+  // often embedder-miss below_tau — never convert those into unknown_request
+  // before visit.decide owns the turn.
+  const visitSchedulingPending =
+    state.phase === 'visit' &&
+    !!state.visit?.lastAsk &&
+    [
+      'which_projects',
+      'origin',
+      'window',
+      'day',
+      'time',
+      'split_day',
+      'team_request',
+      'same_day_choice',
+      'stagger_propose',
+      'project',
+    ].includes(state.visit.lastAsk);
+
   if (
     deps.failureRouting &&
     !state.stopConfirmPending &&
+    !visitSchedulingPending &&
     shouldSurfaceUnknownIntent(ex, routing, authorityClaimed, trimmedText)
   ) {
     routing = {
@@ -1211,7 +1231,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           detail: { policy: 'prohibited', floor: 'keyword' },
         } satisfies Failure)
       : undefined);
-  if (unsupportedFailure) {
+  // unknown_request must not eclipse an outstanding visit scheduling ask
+  if (
+    unsupportedFailure &&
+    visitSchedulingPending &&
+    unsupportedFailure.subject === 'unknown_request'
+  ) {
+    // fall through to visit.decide
+  } else if (unsupportedFailure) {
     // Education resolver lives ONLY inside Phase-2 definition ownership —
     // not a second early owner before geo/search.
     const definitionPolicy =
@@ -1547,8 +1574,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     state = { ...state, phase: 'visit' };
   }
 
+  // Which-projects chooser: short deixis ("both", "1 and 2") can false-stamp
+  // compare and eject visit. Hold only that ask — not day/same_day (buyer may
+  // pivot with "Compare all 3" mid-queue; rti-visit-gate).
   if (state.phase === 'visit' && shouldExitVisitForIntent(ex, trimmedText)) {
-    state = exitVisitPhase(state);
+    const holdChooserDeixis =
+      state.visit?.lastAsk === 'which_projects' &&
+      !/\bcompare\b/i.test(trimmedText) &&
+      trimmedText.trim().split(/\s+/).length <= 6;
+    if (!holdChooserDeixis) {
+      state = exitVisitPhase(state);
+    }
   }
 
   if (
@@ -2071,7 +2107,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (goal.kind === 'visit_booked') {
     const next = goal.nextQueuedStop ?? state.visit?.queued?.[0];
     if (next) {
-      reply = `${reply.trim()}\n\nNext up — same day for *${next.projectName}*, or a different day?`;
+      const hint = state.visit?.preferredDayHint;
+      const nextLine =
+        hint === 'next' || hint === 'other'
+          ? `Next up — which day and time for *${next.projectName}*?`
+          : `Next up — same day for *${next.projectName}*, or a different day?`;
+      reply = `${reply.trim()}\n\n${nextLine}`;
+    } else if ((state.visit?.pendingTeamRequests?.length ?? 0) > 0) {
+      const pending = state.visit!.pendingTeamRequests!.map((t) => t.projectName).join(', ');
+      reply = `${reply.trim()}\n\n*${pending}*: requested with the team (pending) — we'll confirm on WhatsApp, or say a different day for a firm slot.`;
     }
   }
 

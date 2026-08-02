@@ -105,6 +105,13 @@ export interface QueuedVisit {
   slotText?: string;
 }
 
+export interface VisitTeamRequest {
+  projectId: string;
+  projectName: string;
+  preferredDateIso?: string;
+  reason: 'outside_hours' | 'overpacked' | 'buyer_late_time';
+}
+
 export interface VisitState {
   projectId?: string;
   projectName?: string;
@@ -114,7 +121,19 @@ export interface VisitState {
   proposedIso?: string;
   queued?: QueuedVisit[];
   askCount?: number;
-  lastAsk?: 'project' | 'day' | 'time' | 'origin' | 'window' | 'same_day_choice' | 'stagger_propose';
+  lastAsk?:
+    | 'project'
+    | 'day'
+    | 'time'
+    | 'origin'
+    | 'window'
+    | 'same_day_choice'
+    | 'stagger_propose'
+    | 'which_projects'
+    | 'split_day'
+    | 'team_request';
+  /** Discussed candidates shown in which-projects chooser (ordered). */
+  candidateIds?: Array<{ projectId: string; projectName: string }>;
   /** Buyer-stated pickup origin for multi-stop routing. */
   originText?: string;
   originLat?: number;
@@ -128,6 +147,14 @@ export interface VisitState {
   /** Precomputed drive from last booked stop (Maps). */
   driveFromPriorMin?: number | null;
   driveSource?: 'distance_matrix' | 'haversine' | 'none';
+  /** Prefer next/other day for remaining queue after split warn. */
+  preferredDayHint?: 'next' | 'other' | 'same_forced';
+  /** Split-day warn already shown; awaiting accept/force. */
+  splitOffered?: boolean;
+  /** Overflow stops pending team confirmation (not firm-booked). */
+  pendingTeamRequests?: VisitTeamRequest[];
+  /** Awaiting yes to confirm firm stops + file team requests. */
+  awaitingTeamRequestConfirm?: boolean;
 }
 
 /**
@@ -327,7 +354,22 @@ export type TurnGoal =
       followUpTopics?: AnswerTopic[];
     }
   | { kind: 'propose_visit'; projectId?: string }
-  | { kind: 'visit_ask'; ask: 'project' | 'day' | 'time' | 'origin' | 'window' | 'same_day_choice' | 'stagger_propose'; copy: string; state: VisitState }
+  | {
+      kind: 'visit_ask';
+      ask:
+        | 'project'
+        | 'day'
+        | 'time'
+        | 'origin'
+        | 'window'
+        | 'same_day_choice'
+        | 'stagger_propose'
+        | 'which_projects'
+        | 'split_day'
+        | 'team_request';
+      copy: string;
+      state: VisitState;
+    }
   | { kind: 'visit_propose'; iso: string; label: string; projectName: string; projectId: string; copy: string; state: VisitState }
   | {
       kind: 'visit_booked';

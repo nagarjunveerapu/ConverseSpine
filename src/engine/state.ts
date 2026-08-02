@@ -56,9 +56,24 @@ export function applyVisitBooked(
 ): ConversationState {
   const queued = s.visit?.queued ?? [];
   const next = queued[0] ?? explicitNext;
+  const prev = s.visit ?? {};
+  const carry = {
+    ...(prev.originText ? { originText: prev.originText } : {}),
+    ...(prev.originLat != null ? { originLat: prev.originLat } : {}),
+    ...(prev.originLng != null ? { originLng: prev.originLng } : {}),
+    ...(prev.originAsked ? { originAsked: prev.originAsked } : {}),
+    ...(prev.tripOrdered ? { tripOrdered: prev.tripOrdered } : {}),
+    ...(prev.preferredDayHint ? { preferredDayHint: prev.preferredDayHint } : {}),
+    ...(prev.pendingTeamRequests?.length
+      ? { pendingTeamRequests: prev.pendingTeamRequests }
+      : {}),
+  };
   if (next) {
     const rest = queued.length > 0 ? queued.slice(1) : [];
-    const prev = s.visit ?? {};
+    const lastAsk =
+      prev.preferredDayHint === 'next' || prev.preferredDayHint === 'other'
+        ? ('day' as const)
+        : ('same_day_choice' as const);
     return {
       ...s,
       phase: 'visit',
@@ -67,12 +82,20 @@ export function applyVisitBooked(
         projectName: next.projectName,
         ...(next.slotText ? { slotText: next.slotText } : {}),
         ...(rest.length ? { queued: rest } : {}),
-        lastAsk: 'same_day_choice',
-        ...(prev.originText ? { originText: prev.originText } : {}),
-        ...(prev.originLat != null ? { originLat: prev.originLat } : {}),
-        ...(prev.originLng != null ? { originLng: prev.originLng } : {}),
-        ...(prev.originAsked ? { originAsked: prev.originAsked } : {}),
-        ...(prev.tripOrdered ? { tripOrdered: prev.tripOrdered } : {}),
+        lastAsk,
+        ...carry,
+      },
+    };
+  }
+  // Firm queue empty but team requests remain — stay in visit with pending note
+  if (prev.pendingTeamRequests?.length) {
+    return {
+      ...s,
+      phase: 'visit',
+      visit: {
+        lastAsk: 'team_request',
+        ...carry,
+        pendingTeamRequests: prev.pendingTeamRequests,
       },
     };
   }

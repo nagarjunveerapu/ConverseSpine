@@ -3,7 +3,8 @@
 import type { StoredVisit } from './ports.js';
 import { addMinutesToIso, minutesFromIso } from './visit-itinerary.js';
 
-export const VISIT_ON_SITE_MIN = 90;
+/** Buyer spends ~2 hours on site per stop (founder lock 2026-08-01). */
+export const VISIT_ON_SITE_MIN = 120;
 
 export type DayWindow = 'morning' | 'afternoon';
 
@@ -28,8 +29,11 @@ export interface VisitDayCalendar {
 
 const MORNING_START_MIN = 10 * 60 + 30;
 const AFTERNOON_START_MIN = 14 * 60;
+/** Latest *start* still considered morning / afternoon (end may extend past). */
 const MORNING_END_MIN = 12 * 60;
 const AFTERNOON_END_MIN = 17 * 60;
+/** Default site close for window search when hours not passed (9–7). */
+const DEFAULT_DAY_CLOSE_MIN = 19 * 60;
 
 function endIso(startIso: string, durationMin: number): string {
   return addMinutesToIso(startIso, durationMin);
@@ -103,12 +107,15 @@ export function firstFreeWindow(
   dayIso: string,
   window: DayWindow,
   durationMin: number,
+  dayCloseMin: number = DEFAULT_DAY_CLOSE_MIN,
 ): string | null {
   const dayBlocks = blocksOnDay(blocks, dayIso);
   const startBound = window === 'morning' ? MORNING_START_MIN : AFTERNOON_START_MIN;
   const endBound = window === 'morning' ? MORNING_END_MIN : AFTERNOON_END_MIN;
+  const latestStart = dayCloseMin - durationMin;
 
-  for (let min = startBound; min + durationMin <= endBound; min += 15) {
+  // Start must fall in the window; visit end must finish by site close (2h on-site).
+  for (let min = startBound; min <= endBound && min <= latestStart; min += 15) {
     const hh = String(Math.floor(min / 60)).padStart(2, '0');
     const mm = String(min % 60).padStart(2, '0');
     const candidate = `${dayIso}T${hh}:${mm}:00+05:30`;

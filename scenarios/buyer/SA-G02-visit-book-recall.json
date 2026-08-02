@@ -1,6 +1,6 @@
 {
   "id": "SA-G02",
-  "title": "visit_book after two focuses seeds multi-stop (not which-project / not recall)",
+  "title": "visit_book after two focuses asks which projects then origin (not silent multi-seed / not recall)",
   "builder_id": "lokations",
   "tags": ["speech-act", "sa-2", "visit", "lokations"],
   "turns": [
@@ -12,12 +12,19 @@
       "text": "come for the visit",
       "assert": {
         "goal_kind": "visit_ask",
-        "reply_includes": ["coming from"],
+        "reply_includes_any": ["which should we visit", "1."],
         "reply_excludes": [
           "don't see a confirmed visit",
           "Which project should I set up the visit for",
           "Which day works"
         ]
+      }
+    },
+    {
+      "text": "1 and 2",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes": ["coming from"]
       }
     }
   ]
