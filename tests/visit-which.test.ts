@@ -8,10 +8,16 @@ const pool = [
 ];
 
 describe('visit-which', () => {
-  it('maps all / everything / both to full set', () => {
+  it('maps all / everything / both / dono / sab / ye sab to full set', () => {
     expect(resolveWhichPick('all of them', pool).kind).toBe('all');
     expect(resolveWhichPick('everything', pool).kind).toBe('all');
     expect(resolveWhichPick('both', pool.slice(0, 2)).kind).toBe('all');
+    expect(resolveWhichPick('dono', pool.slice(0, 2)).kind).toBe('all');
+    expect(resolveWhichPick('दोनों', pool.slice(0, 2)).kind).toBe('all');
+    expect(resolveWhichPick('sab', pool).kind).toBe('all');
+    expect(resolveWhichPick('ye sab', pool).kind).toBe('all');
+    expect(resolveWhichPick('saare', pool).kind).toBe('all');
+    expect(resolveWhichPick('सब', pool).kind).toBe('all');
   });
 
   it('parses ordinals', () => {

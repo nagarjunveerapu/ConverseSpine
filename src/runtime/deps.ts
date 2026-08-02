@@ -73,6 +73,7 @@ export class ConverseRuntime {
       ...(env.UNDERSTANDING_BEFORE_MUTATION === 'true'
         ? { understandingBeforeMutation: true }
         : {}),
+      ...(env.VISIT_EMBED_ACTS_ONLY === 'true' ? { visitEmbedActsOnly: true } : {}),
       ...(env.TOPIC_UNION === 'true' ? { topicUnion: true } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }

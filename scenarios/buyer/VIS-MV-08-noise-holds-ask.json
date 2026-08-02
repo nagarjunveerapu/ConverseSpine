@@ -1,0 +1,64 @@
+{
+  "id": "VIS-MV-08",
+  "title": "MULTI: mid origin/day flow + gibberish must re-ask visit step (not locality/origin stamp)",
+  "builder_id": "lokations",
+  "tags": ["visit", "multi-visit", "gibberish", "placeability"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    {
+      "text": "both",
+      "assert": {
+        "reply_includes_any": ["coming from", "where will you be coming", "start from", "sequence the stops"]
+      }
+    },
+    {
+      "text": "asdfghjkl qwerty",
+      "assert": {
+        "reply_excludes": [
+          "plantation options in",
+          "apartments in",
+          "i do have plantation options in"
+        ],
+        "reply_includes_any": ["couldn't make sense", "coming from", "starting area"],
+        "goal_kind_not": "visit_booked"
+      }
+    },
+    {
+      "text": "why is cricket so popular in india lol",
+      "assert": {
+        "reply_excludes": [
+          "from *why is cricket",
+          "plantation options in",
+          "nearer first stop"
+        ],
+        "reply_includes_any": ["couldn't make sense", "coming from", "starting area"],
+        "goal_kind_not": "visit_booked"
+      }
+    },
+    {
+      "text": "Indiranagar",
+      "assert": {
+        "reply_includes_any": ["day", "time", "when", "Indiranagar"],
+        "reply_excludes": ["which should we visit"]
+      }
+    },
+    {
+      "text": "lmao ok fine",
+      "assert": {
+        "reply_excludes": ["plantation options in *lmao", "options in *lmao", "apartments in *lmao"],
+        "reply_includes_any": ["day", "time", "when", "rephrase", "Saturday", "Monday"],
+        "goal_kind_not": "visit_booked"
+      }
+    },
+    {
+      "text": "Saturday morning",
+      "assert": {
+        "reply_includes_any": ["Saturday", "block", "confirm"]
+      }
+    }
+  ]
+}

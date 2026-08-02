@@ -1,0 +1,46 @@
+{
+  "id": "VIS-ADX-01",
+  "title": "BREAK: propose slot → small talk → packed resume Monday 10am (must not book stale Saturday / not rephrase)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "digression", "smalltalk"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "I want to visit",
+      "assert": {
+        "reply_includes_any": ["day", "time", "when"],
+        "reply_excludes": ["don't see a confirmed visit"]
+      }
+    },
+    {
+      "text": "Saturday morning",
+      "assert": {
+        "reply_includes_any": ["Saturday", "10:30", "block", "confirm"],
+        "goal_kind_not": "unknown_request"
+      }
+    },
+    {
+      "text": "haha how are you doing today?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["confirmed", "I've booked", "blocked for you"]
+      }
+    },
+    {
+      "text": "I want to visit Ayana on Monday at 10am",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["Monday", "10"],
+        "reply_includes": ["ayana"],
+        "reply_excludes": [
+          "Saturday",
+          "rephrase",
+          "don't see a confirmed visit",
+          "which should we visit"
+        ]
+      }
+    }
+  ]
+}

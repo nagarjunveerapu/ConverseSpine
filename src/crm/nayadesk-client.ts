@@ -43,6 +43,9 @@ export interface NdProjectSummary {
   loan_eligibility?: string;
   summary?: string;
   project_type?: string;
+  /** Advisor syndication — source_builder_id / source_project_id for A5 reveal. */
+  bot_hints_json?: string;
+  builder_id?: string;
   /** Investment / managed-asset fields (Desk projects SELECT *). */
   expected_roi?: string;
   revenue_model?: string;
@@ -317,6 +320,9 @@ export class NayaDeskClient {
     purpose?: string;
     /** W6 — ingress door label; Desk stores it on conversations.channel. */
     channel?: string;
+    /** A5 reveal — e.g. naya_advisor. */
+    source?: string;
+    source_detail?: string;
     pending_action?: string;
     pending_action_payload?: unknown;
   }): Promise<{ ok: true; conversation_id: string; created: boolean }> {

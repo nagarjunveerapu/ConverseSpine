@@ -1,0 +1,36 @@
+{
+  "id": "VIS-ADX-05",
+  "title": "BREAK: origin ask → compare digression → from Indiranagar (must take origin, not restart chooser)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "digression", "origin"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    {
+      "text": "both",
+      "assert": { "reply_includes_any": ["coming from", "where will you be coming"] }
+    },
+    {
+      "text": "wait compare them once more first",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked"]
+      }
+    },
+    {
+      "text": "I'll come from Indiranagar",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["day", "time", "when", "Monday", "Saturday", "Indiranagar"],
+        "reply_excludes": [
+          "which should we visit",
+          "rephrase",
+          "don't see a confirmed visit"
+        ]
+      }
+    }
+  ]
+}

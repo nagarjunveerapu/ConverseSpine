@@ -1,0 +1,46 @@
+{
+  "id": "VIS-ADX-06",
+  "title": "BREAK: Eldorado visit propose → payment digression → smalltalk → packed Monday 10am Eldorado",
+  "builder_id": "brigade-group",
+  "tags": ["visit", "adversarial", "digression", "brigade"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 BHK in Devanahalli under 80 lakh" },
+    { "text": "Brigade Eldorado", "assert": { "reply_includes": ["eldorado"] } },
+    {
+      "text": "I want to visit",
+      "assert": {
+        "reply_includes_any": ["day", "time", "when", "visit"],
+        "reply_excludes": ["don't see a confirmed visit"]
+      }
+    },
+    {
+      "text": "what is the payment plan?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit"]
+      }
+    },
+    {
+      "text": "cool thanks, busy day huh",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit"]
+      }
+    },
+    {
+      "text": "I want to visit Eldorado on Monday at 10am",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": ["Monday", "10"],
+        "reply_excludes": [
+          "rephrase",
+          "don't see a confirmed visit",
+          "tap a button",
+          "which should we visit"
+        ]
+      }
+    }
+  ]
+}

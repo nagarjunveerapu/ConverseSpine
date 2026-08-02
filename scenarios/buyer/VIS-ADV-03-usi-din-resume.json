@@ -1,0 +1,41 @@
+{
+  "id": "VIS-ADV-03",
+  "title": "ADV: digression → Hinglish same-day resume (usi din)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "same-day", "hi-en"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    { "text": "both" },
+    { "text": "Indiranagar" },
+    { "text": "Saturday morning" },
+    {
+      "text": "yes",
+      "assert": {
+        "reply_includes_any": ["same day", "different day", "Next up"]
+      }
+    },
+    {
+      "text": "wait is Ayana RERA approved?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "Done — your visit"]
+      }
+    },
+    {
+      "text": "usi din Krishnaja",
+      "assert": {
+        "reply_includes_any": ["placing", "works", "block", "confirm", "hours", "drive"],
+        "reply_includes": ["krishnaja"],
+        "reply_excludes": [
+          "Great choice — let's look",
+          "which should we visit",
+          "where will you be coming"
+        ]
+      }
+    }
+  ]
+}

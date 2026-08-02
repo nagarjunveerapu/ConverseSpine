@@ -1,0 +1,21 @@
+{
+  "id": "VIS-ADV-05",
+  "title": "ADV: discover gibberish → sticky requirements clarify (not portfolio orient)",
+  "builder_id": "lokations",
+  "tags": ["discover", "adversarial", "clarify"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "3dsfoisuardo",
+      "assert": {
+        "reply_includes_any": ["couldn't make sense", "locality", "budget", "BHK", "property"],
+        "reply_excludes": [
+          "managed plantation",
+          "Sakleshpur, Mysuru",
+          "We've got a lovely mix",
+          "We have a lovely mix"
+        ]
+      }
+    }
+  ]
+}

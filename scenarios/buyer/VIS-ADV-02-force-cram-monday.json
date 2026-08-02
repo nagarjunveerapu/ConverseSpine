@@ -1,0 +1,29 @@
+{
+  "id": "VIS-ADV-02",
+  "title": "ADV: split → cram/squeeze force same-day paraphrase (not VIS-MV-04 wording)",
+  "builder_id": "brigade-group",
+  "tags": ["visit", "adversarial", "force-same-day"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 BHK in Devanahalli under 80 lakh" },
+    { "text": "Brigade Eldorado" },
+    { "text": "also tell me about Brigade Cornerstone Utopia" },
+    { "text": "also Brigade Orchards briefly" },
+    { "text": "I want to visit" },
+    { "text": "all of them" },
+    {
+      "text": "Whitefield",
+      "assert": {
+        "reply_includes_any": ["day", "same day", "next day", "split", "hours", "OK"]
+      }
+    },
+    {
+      "text": "cram all three into Monday anyway",
+      "assert": {
+        "reply_includes_any": ["Monday", "block", "confirm", "firm", "team"],
+        "reply_excludes": ["which should we visit", "Great choice — let's look"],
+        "goal_kind_not": "unknown_request"
+      }
+    }
+  ]
+}

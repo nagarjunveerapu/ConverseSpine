@@ -1,0 +1,46 @@
+{
+  "id": "VIS-MV-09",
+  "title": "MULTI: book stop1 → amenities digression → same day for stop2 (itinerary must resume)",
+  "builder_id": "lokations",
+  "tags": ["visit", "multi-visit", "digression", "same-day"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    { "text": "both" },
+    { "text": "Indiranagar" },
+    { "text": "Saturday morning" },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind": "visit_booked",
+        "reply_includes_any": ["same day", "different day", "Next up"]
+      }
+    },
+    {
+      "text": "wait what amenities does Ayana have?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "Done — your visit"]
+      }
+    },
+    {
+      "text": "same day for Krishnaja",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["placing", "works", "block", "confirm", "Shall I", "after"],
+        "reply_includes": ["krishnaja"],
+        "reply_excludes": [
+          "which should we visit",
+          "where will you be coming",
+          "don't see a confirmed visit",
+          "rephrase",
+          "Great choice — let's look",
+          "Want pricing, legal status"
+        ]
+      }
+    }
+  ]
+}

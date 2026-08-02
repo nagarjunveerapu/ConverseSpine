@@ -1,0 +1,32 @@
+{
+  "id": "VIS-ADV-06",
+  "title": "ADV: origin outstanding + cricket smalltalk → sticky starting-area clarify",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "placeability", "clarify"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    {
+      "text": "both",
+      "assert": {
+        "reply_includes_any": ["coming from", "where will you be coming", "start from", "sequence the stops"]
+      }
+    },
+    {
+      "text": "why is cricket so popular in india lol",
+      "assert": {
+        "reply_includes_any": ["couldn't make sense", "starting area", "coming from"],
+        "reply_excludes": ["from *why is cricket", "plantation options in", "nearer first stop"]
+      }
+    },
+    {
+      "text": "Indiranagar",
+      "assert": {
+        "reply_includes_any": ["day", "time", "when", "Indiranagar", "Saturday", "Monday"]
+      }
+    }
+  ]
+}

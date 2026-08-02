@@ -1,0 +1,30 @@
+{
+  "id": "VIS-ADX-04",
+  "title": "BREAK: visit propose → possession digression → bare yes must NOT book stale slot",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "digression", "stale-yes"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    { "text": "I want to visit" },
+    {
+      "text": "Saturday morning",
+      "assert": { "reply_includes_any": ["Saturday", "block", "confirm"] }
+    },
+    {
+      "text": "when is possession?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit"]
+      }
+    },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit", "blocked for you"]
+      }
+    }
+  ]
+}

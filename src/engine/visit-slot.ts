@@ -87,7 +87,12 @@ export function isMorningWindow(text: string): boolean {
 }
 
 export function isAfternoonWindow(text: string): boolean {
-  return /\b(afternoon|dopahar)\b/i.test(text) && !/\bmorning\b/i.test(text);
+  return /\b(afternoon|dopahar)\b/i.test(text) && !/\b(morning|evening|shaam)\b/i.test(text);
+}
+
+/** Evening / shaam — default propose ~5pm (VIS-ADX-07), not morning/afternoon trap. */
+export function isEveningWindow(text: string): boolean {
+  return /\b(evening|shaam)\b/i.test(text) && !/\b(morning|afternoon|dopahar|subah)\b/i.test(text);
 }
 
 /** Re-time a previously chosen day — e.g. buyer says "12 PM" after Saturday was proposed. */
@@ -169,7 +174,8 @@ export function parseVisitSlot(
   if (!text && !opts?.forceTime) return null;
 
   const explicit = opts?.forceTime ?? extractVisitTime(raw);
-  const dayOnly = !explicit && !isMorningWindow(raw) && !isAfternoonWindow(raw);
+  const dayOnly =
+    !explicit && !isMorningWindow(raw) && !isAfternoonWindow(raw) && !isEveningWindow(raw);
 
   let dayAnchor = parseDayAnchor(raw, now, opts?.anchorDateIso);
   if (!dayAnchor && opts?.anchorDateIso && explicit) {
@@ -192,6 +198,9 @@ export function parseVisitSlot(
   } else if (isMorningWindow(raw)) {
     hour = 10;
     minute = 30;
+  } else if (isEveningWindow(raw)) {
+    hour = 17;
+    minute = 0;
   } else if (isAfternoonWindow(raw)) {
     hour = 14;
     minute = 0;

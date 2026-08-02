@@ -425,6 +425,8 @@ export interface EngineDeps {
    * See docs/lld/PHASE_0D_UNDERSTANDING_BEFORE_MUTATION.md.
    */
   understandingBeforeMutation?: boolean;
+  /** Visit open acts teach-only (no ask-team / force regex fallback). */
+  visitEmbedActsOnly?: boolean;
   /** Multi-intent Phase A — union topic merges (TOPIC_UNION env). */
   topicUnion?: boolean;
   /** Local dev JSONL turn log (wrangler dev only). */

@@ -1,0 +1,84 @@
+{
+  "id": "VIS-LONG-01",
+  "title": "LONG BREAK: plantation select → facets → gibberish → multi-visit chaos → confirm (22 turns)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "long", "gibberish"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "looking for plantation near sakleshpur under 50L" },
+    {
+      "text": "asdfghjkl qwerty",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit"]
+      }
+    },
+    {
+      "text": "give me details on the project",
+      "assert": { "reply_includes_any": ["which", "ayana", "project"] }
+    },
+    {
+      "text": "Ayana",
+      "assert": { "reply_includes": ["ayana"] }
+    },
+    { "text": "what plot sizes are offered?" },
+    { "text": "???!!!!" },
+    { "text": "are there any legal issues?" },
+    { "text": "and pricing" },
+    {
+      "text": "also tell me about krishnaja greens",
+      "assert": { "reply_includes": ["krishnaja"] }
+    },
+    { "text": "compare both" },
+    { "text": "hmnmnmnm lol idk" },
+    {
+      "text": "ok come for the visit",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["which should we visit", "1."],
+        "reply_excludes": ["don't see a confirmed visit"]
+      }
+    },
+    { "text": "blabla xyz 999" },
+    {
+      "text": "both",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["coming from", "where will you be coming"]
+      }
+    },
+    { "text": "why is cricket so popular in india lol" },
+    {
+      "text": "I'll start from Indiranagar",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_excludes": ["rephrase", "don't see a confirmed visit", "which should we visit"]
+      }
+    },
+    { "text": "qwertyuiop zxcvbnm" },
+    {
+      "text": "Saturday morning for Ayana first",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["Saturday", "Ayana", "block", "confirm", "day"],
+        "reply_excludes": ["rephrase"]
+      }
+    },
+    { "text": "wait when is possession on Ayana?" },
+    {
+      "text": "yes",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "Done — your visit", "confirmed your visit"]
+      }
+    },
+    {
+      "text": "yes lock Saturday morning for Ayana",
+      "assert": {
+        "goal_kind_not": "unknown_request",
+        "reply_includes_any": ["Saturday", "Ayana", "confirm", "block", "Done", "set"],
+        "reply_excludes": ["rephrase", "don't see a confirmed visit"]
+      }
+    }
+  ]
+}

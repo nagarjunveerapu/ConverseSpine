@@ -1,0 +1,27 @@
+{
+  "id": "VIS-MV-06",
+  "title": "HOURS: Monday 6pm → ask the team → pending team request (not firm book)",
+  "builder_id": "lokations",
+  "tags": ["visit", "hours", "team-request"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "Ayana" },
+    { "text": "I want to visit" },
+    {
+      "text": "Monday 6pm",
+      "assert": {
+        "reply_includes_any": ["site hours", "Closest", "ask the team"],
+        "goal_kind_not": "visit_booked"
+      }
+    },
+    {
+      "text": "ask the team for 6pm",
+      "assert": {
+        "reply_includes_any": ["team", "request", "pending", "not a firm", "We'll confirm"],
+        "reply_excludes": ["Done — your visit", "I've booked"],
+        "goal_kind_not": "visit_booked"
+      }
+    }
+  ]
+}

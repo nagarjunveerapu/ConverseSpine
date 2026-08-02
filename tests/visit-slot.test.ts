@@ -28,6 +28,12 @@ describe('visit-slot', () => {
     expect(parseDayAnchor('Saturday', mondayBase)?.dayLabel).toBe('Saturday');
   });
 
+  it('VIS-ADX-07: Monday evening proposes ~5pm (not day-only window trap)', () => {
+    const slot = parseVisitSlot('actually Monday evening instead', mondayBase);
+    expect(slot?.humanLabel).toMatch(/Monday at 5:00 PM/);
+    expect(slot?.proposedIso).toContain('T17:00:00+05:30');
+  });
+
   it('isVisitDayUtterance treats weekdays as scheduling not location', () => {
     expect(isVisitDayUtterance('Tuesday')).toBe(true);
     expect(isVisitDayUtterance('Tuesday morning')).toBe(true);

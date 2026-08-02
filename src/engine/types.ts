@@ -849,6 +849,8 @@ export interface ComposeContext {
   priorTopics?: string[];
   priorReplyExcerpt?: string;
   disclosedFacts?: Array<import('./disclosed-facts.js').DisclosedFact | Record<string, unknown>>;
+  /** Voice gate — advisor_web gets consultative framing; default WhatsApp. */
+  channel?: 'whatsapp' | 'advisor_web';
 }
 
 export interface ComposeRequest {

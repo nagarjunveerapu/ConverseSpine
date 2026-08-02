@@ -25,19 +25,29 @@ const RELAXED_NOUN: Record<RelaxedDimension, string> = {
  * relaxed is NOT a fit, and must not be announced as one — broadening exists so
  * the buyer is never dead-ended, not so we can overstate the match.
  */
-function relaxedLead(relaxed: readonly RelaxedDimension[] | undefined): string {
-  if (!relaxed?.length) return `Here's what fits`;
+function relaxedLead(
+  relaxed: readonly RelaxedDimension[] | undefined,
+  channel?: 'whatsapp' | 'advisor_web',
+): string {
+  const exact =
+    channel === 'advisor_web'
+      ? `Based on what you've shared, these look strongest`
+      : `Here's what fits`;
+  if (!relaxed?.length) return exact;
   const nouns = relaxed.map((r) => RELAXED_NOUN[r]).filter(Boolean);
-  if (!nouns.length) return `Here's what fits`;
+  if (!nouns.length) return exact;
   const phrase =
     nouns.length === 1
       ? nouns[0]!
       : `${nouns.slice(0, -1).join(', ')} or ${nouns[nouns.length - 1]!}`;
-  return `I couldn't match ${phrase} — here's what we do have`;
+  return channel === 'advisor_web'
+    ? `I couldn't match ${phrase} tightly — here's the closest I can stand behind`
+    : `I couldn't match ${phrase} — here's what we do have`;
 }
 import { isInventoryAsk } from './facts.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
 import { answerRequirements } from './answer-contract.js';
+import { speakStickyClarify } from './clarify-outstanding.js';
 
 const PARK_TOPIC_LABEL: Partial<Record<AnswerTopic, string>> = {
   price: 'pricing',
@@ -146,10 +156,19 @@ export function buildComposeRequest(
 export function renderComposePrompt(req: ComposeRequest): string {
   const { goal, evidence, context } = req;
   const lines: string[] = [];
-  lines.push(
-    `You are a warm, concise WhatsApp property advisor for ${context.builderName || 'the builder'}.`,
-  );
-  lines.push(`Write ONE short reply (2-4 sentences, WhatsApp tone). No markdown headers or bullet dumps.`);
+  if (context.channel === 'advisor_web') {
+    lines.push(
+      `You are a warm, consultative property advisor on the Naya Advisor web app for ${context.builderName || 'the builder'}.`,
+    );
+    lines.push(
+      `Write ONE short reply (2-4 sentences). Sound advisory — weigh trade-offs only from EVIDENCE, one clear next step. Avoid WhatsApp chrome like "Reply yes to confirm". No markdown headers or bullet dumps.`,
+    );
+  } else {
+    lines.push(
+      `You are a warm, concise WhatsApp property advisor for ${context.builderName || 'the builder'}.`,
+    );
+    lines.push(`Write ONE short reply (2-4 sentences, WhatsApp tone). No markdown headers or bullet dumps.`);
+  }
   lines.push(`This turn's GOAL: ${describeGoal(goal)}.`);
   if (req.vary) {
     // W3 — anti-repeat retry: the previous draft matched the last bot reply
@@ -457,11 +476,22 @@ export function fallbackReply(req: ComposeRequest): string {
         ev.catalog && ev.catalog.priceMinInr > 0 ? `, starting from ${formatInr(ev.catalog.priceMinInr)}` : '';
       return `We have ${types} on our books${from}. Which area, budget, and size are you thinking?`;
     }
-    case 'clarify_intent':
-      // Acknowledge-then-orient: admit the miss, then ONE next-step question
-      // that steers to the brief. Asserts nothing — this goal is only ever
-      // reached with no evidence to speak from.
-      return `I'd rather get that right than guess — could you tell me a bit more about what you're after, like the area, budget, or size you have in mind?`;
+    case 'clarify_intent': {
+      // Sticky clarify when we can re-anchor to outstanding job; else generic.
+      const sticky = speakStickyClarify({
+        phase: context.focusProjectName ? 'focused' : 'discover',
+        focusName: context.focusProjectName,
+        priorTopics: context.priorTopics,
+        constraints: context.constraints,
+        channel: context.channel,
+      });
+      return (
+        sticky ??
+        (context.channel === 'advisor_web'
+          ? `I'd rather get that right than guess — tell me what you're after in your own words (area, budget, or size).`
+          : `I'd rather get that right than guess — could you tell me a bit more about what you're after, like the area, budget, or size you have in mind?`)
+      );
+    }
     case 'probe':
       return probeCopy(goal.slot);
     case 'recommend':
@@ -506,8 +536,12 @@ export function fallbackReply(req: ComposeRequest): string {
       // Some part of the ask had to be relaxed for this list to exist, so it is
       // NOT a fit — say which dimension gave. Dimensions only, never the buyer's
       // raw values: a location capture may be dialogue noise.
-      const lead = relaxedLead(ev.relaxed);
-      let body = `${pre}${lead}: ${list}.${tail} Want details on any of these, or shall I set up a visit?`;
+      const lead = relaxedLead(ev.relaxed, context.channel);
+      const nextAsk =
+        context.channel === 'advisor_web'
+          ? 'Want a closer look at any of these, or shall we plan a visit?'
+          : 'Want details on any of these, or shall I set up a visit?';
+      let body = `${pre}${lead}: ${list}.${tail} ${nextAsk}`;
       // Singleton exact fit — soft nearby CTA (board stays exact until they opt in).
       if (ev.nearbyOffer?.asked && ev.nearbyOffer.nearbyAreas.length && ms.length === 1) {
         const noun = inventoryNoun(
@@ -955,7 +989,9 @@ export function fallbackReply(req: ComposeRequest): string {
     case 'commit':
       return `Great choice${name} — let's look at *${goal.projectName}*. Want pricing, legal status, or to line up a visit?`;
     case 'propose_visit':
-      return `Happy to set up a visit. Which day works for you?`;
+      return context.channel === 'advisor_web'
+        ? `I can help plan a site visit — which day works best for you?`
+        : `Happy to set up a visit. Which day works for you?`;
     case 'visit_ask':
     case 'visit_propose':
       return goal.copy;
