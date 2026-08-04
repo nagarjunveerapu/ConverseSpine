@@ -49,8 +49,9 @@ interface AssertSpec {
   /** debug.tools must include each of these */
   tools_include?: string[];
   /**
-   * Media emit or honest miss: tools include mediaShare, reply has CDN URL,
-   * whatsapp_actions present, or honest "no brochure / after visit" copy.
+   * Media emit or honest miss: `media_attachments[]`, mediaShare tool,
+   * whatsapp_actions, or honest "no brochure / after visit" copy.
+   * Successful shares must NOT paste raw https URLs in reply prose.
    */
   expect_media?: boolean;
 }
@@ -70,11 +71,21 @@ interface BuyerScenario {
   turns: ScenarioTurn[];
 }
 
+interface MediaAttachmentRecord {
+  asset_kind?: string;
+  label?: string;
+  url?: string;
+  delivery?: string;
+  filename?: string;
+  project_name?: string;
+}
+
 interface TurnRecord {
   index: number;
   buyer: string;
   reply: string;
   conversation_id: string;
+  media_attachments?: MediaAttachmentRecord[];
   debug?: Record<string, unknown>;
   pass: boolean;
   failures: string[];
@@ -113,6 +124,7 @@ async function chat(
   conversation_id: string;
   debug?: Record<string, unknown>;
   whatsapp_actions?: unknown[];
+  media_attachments?: MediaAttachmentRecord[];
   error?: string;
 }> {
   const r = await fetch(`${SPINE}/chat`, {
@@ -135,6 +147,7 @@ async function chat(
     conversation_id?: string;
     debug?: Record<string, unknown>;
     whatsapp_actions?: unknown[];
+    media_attachments?: MediaAttachmentRecord[];
     error?: string;
   };
   if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
@@ -143,6 +156,7 @@ async function chat(
     conversation_id: body.conversation_id ?? '',
     debug: body.debug,
     whatsapp_actions: body.whatsapp_actions,
+    media_attachments: body.media_attachments,
   };
 }
 
@@ -156,6 +170,7 @@ async function advisor(
   conversation_id: string;
   debug?: Record<string, unknown>;
   whatsapp_actions?: unknown[];
+  media_attachments?: MediaAttachmentRecord[];
   error?: string;
 }> {
   const r = await fetch(`${SPINE}/api/advisor/turn`, {
@@ -175,6 +190,7 @@ async function advisor(
     reply?: string;
     conversation_id?: string;
     debug?: Record<string, unknown>;
+    media_attachments?: MediaAttachmentRecord[];
     status?: string;
     error?: string;
   };
@@ -185,6 +201,7 @@ async function advisor(
     reply_text: body.reply ?? '',
     conversation_id: body.conversation_id ?? '',
     debug: body.debug,
+    media_attachments: body.media_attachments,
   };
 }
 
@@ -192,11 +209,12 @@ function hasMediaSignal(
   reply: string,
   debug: Record<string, unknown> | undefined,
   whatsappActions?: unknown[],
+  mediaAttachments?: MediaAttachmentRecord[],
 ): boolean {
+  if (mediaAttachments?.some((a) => a.url && a.label)) return true;
   const tools = (debug?.tools as string[] | undefined) ?? [];
   if (tools.some((t) => /media/i.test(t))) return true;
   if (whatsappActions && whatsappActions.length > 0) return true;
-  if (/https?:\/\/\S+/i.test(reply)) return true;
   // Honest miss — media tool path answered without inventing a file.
   if (
     /\b(?:no brochure|don'?t have|do not have|aren'?t published|after (?:a )?site visit|not (?:yet )?available|share that after)\b/i.test(
@@ -213,6 +231,7 @@ function checkAssert(
   debug: Record<string, unknown> | undefined,
   a: AssertSpec,
   whatsappActions?: unknown[],
+  mediaAttachments?: MediaAttachmentRecord[],
 ): string[] {
   const fails: string[] = [];
   const lower = reply.toLowerCase();
@@ -258,8 +277,14 @@ function checkAssert(
       if (!tools.includes(need)) fails.push(`expected tools to include "${need}" (got ${tools.join(',') || 'none'})`);
     }
   }
-  if (a.expect_media && !hasMediaSignal(reply, debug, whatsappActions)) {
-    fails.push('expected media emit (CDN/tools/whatsapp_actions) or honest media miss');
+  if (a.expect_media) {
+    if (!hasMediaSignal(reply, debug, whatsappActions, mediaAttachments)) {
+      fails.push('expected media_attachments / media tool / honest media miss');
+    }
+    // Successful attach: prose must not dump signed URLs (cards / WA native own the link).
+    if (mediaAttachments?.some((x) => x.url) && /https?:\/\/\S+/i.test(reply)) {
+      fails.push('reply must not paste raw media URL when media_attachments present');
+    }
   }
   return fails;
 }
@@ -312,7 +337,13 @@ async function main(): Promise<void> {
             : await chat(sc.builder_id, phone, turn.text, convId);
         convId = resp.conversation_id || convId;
         const failures = turn.assert
-          ? checkAssert(resp.reply_text, resp.debug, turn.assert, resp.whatsapp_actions)
+          ? checkAssert(
+              resp.reply_text,
+              resp.debug,
+              turn.assert,
+              resp.whatsapp_actions,
+              resp.media_attachments,
+            )
           : [];
         const pass = failures.length === 0;
         if (!pass) ok = false;
@@ -321,9 +352,15 @@ async function main(): Promise<void> {
           buyer: turn.text,
           reply: resp.reply_text,
           conversation_id: convId ?? '',
+          ...(resp.media_attachments?.length
+            ? { media_attachments: resp.media_attachments }
+            : {}),
           debug: {
             ...(resp.debug ?? {}),
             ...(resp.whatsapp_actions ? { whatsapp_actions: resp.whatsapp_actions } : {}),
+            ...(resp.media_attachments?.length
+              ? { media_attachments: resp.media_attachments }
+              : {}),
           },
           pass,
           failures,
@@ -331,6 +368,11 @@ async function main(): Promise<void> {
         const mark = pass ? '✓' : '✗';
         console.log(`  ${mark} t${i + 1}  ${turn.text.slice(0, 60)}`);
         console.log(`         → ${resp.reply_text.replace(/\s+/g, ' ').slice(0, 140)}`);
+        if (resp.media_attachments?.length) {
+          console.log(
+            `         📎 ${resp.media_attachments.map((a) => a.label ?? a.asset_kind).join(', ')}`,
+          );
+        }
         if (failures.length) {
           for (const f of failures) console.log(`         !! ${f}`);
         }
@@ -454,9 +496,23 @@ ${summary
       .map((t) => {
         const goal = t.debug?.goal as { kind?: string; topic?: string } | undefined;
         const tools = (t.debug?.tools as string[] | undefined)?.join(', ') ?? '';
+        const atts = t.media_attachments ?? [];
+        const attHtml = atts.length
+          ? `<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">${atts
+              .map(
+                (a) =>
+                  `<a href="${esc(a.url ?? '#')}" target="_blank" rel="noopener" style="display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#121820;color:var(--text);text-decoration:none"><span style="display:grid;place-items:center;height:44px;width:44px;border-radius:8px;background:#143528;color:var(--ok);font-size:10px;font-weight:700">${esc(
+                    (a.delivery === 'image' ? 'IMG' : 'DOC') as string,
+                  )}</span><span><strong>${esc(a.label ?? a.asset_kind ?? 'Media')}</strong><br/><span class="dbg">${esc(
+                    [a.project_name, a.filename].filter(Boolean).join(' · '),
+                  )}</span></span><span style="color:var(--ok);font-size:11px;font-weight:700">${a.delivery === 'image' ? 'View' : 'Open'}</span></a>`,
+              )
+              .join('')}</div>`
+          : '';
         return `<div class="turn ${t.pass ? '' : 't-bad'}">
   <div><span class="lbl">Buyer</span> ${esc(t.buyer)}</div>
   <div style="margin-top:6px"><span class="lbl">Bot</span> ${esc(t.reply || '(empty)')}</div>
+  ${attHtml}
   <div class="dbg">${esc(
           [goal?.kind, goal?.topic].filter(Boolean).join(' / ') + (tools ? ` · tools: ${tools}` : ''),
         )}</div>

@@ -8,8 +8,17 @@ import { buildAdvisorNba, buildChecklistSnapshot } from './nba.js';
 import type { AdvisorMapInput, AdvisorProjectCard, AdvisorTurnResponse } from './types.js';
 
 export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnResponse {
-  const { sessionId, state, reply, debug, compareMatrix, searchRecovery, uiMode, chipRankLive } =
-    input;
+  const {
+    sessionId,
+    state,
+    reply,
+    debug,
+    compareMatrix,
+    searchRecovery,
+    uiMode,
+    chipRankLive,
+    mediaAttachments,
+  } = input;
   const projects = mapProjectCards(state);
   const prefs = mapPrefsSnapshot(state);
   const focusId = focusedRef(state)?.projectId;
@@ -79,6 +88,7 @@ export function mapAdvisorTurnResponse(input: AdvisorMapInput): AdvisorTurnRespo
     suggest_refine,
     nba,
     checklist_snapshot,
+    ...(mediaAttachments?.length ? { media_attachments: mediaAttachments } : {}),
     debug: {
       phase: debug.phase,
       goal: debug.goal,

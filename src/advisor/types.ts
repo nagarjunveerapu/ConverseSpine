@@ -47,12 +47,24 @@ export interface AdvisorProjectCard {
   dimension_gap?: { dimension: string; weight: number; label: string };
 }
 
+export interface AdvisorMediaAttachment {
+  asset_kind: string;
+  label: string;
+  url: string;
+  mime_type?: string;
+  delivery: 'image' | 'document' | 'video';
+  filename?: string;
+  project_name?: string;
+}
+
 export interface AdvisorTurnResponse {
   status: 'ok' | 'error';
   session_id: string;
   reply: string;
   conversation_id: string;
   nd_conversation_id?: string;
+  /** Named media cards — URL not embedded in reply prose. */
+  media_attachments?: AdvisorMediaAttachment[];
   projects?: AdvisorProjectCard[];
   shortlist?: string[];
   prefs_snapshot?: Record<string, string | undefined>;
@@ -116,4 +128,5 @@ export interface AdvisorMapInput {
   uiMode?: AdvisorUiMode;
   /** ADR-005: rank chips by the transition table instead of the fixed nba list. */
   chipRankLive?: boolean;
+  mediaAttachments?: AdvisorMediaAttachment[];
 }

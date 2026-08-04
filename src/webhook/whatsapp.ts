@@ -139,6 +139,13 @@ export async function handleWhatsAppWebhook(
             } else {
               await sendText(phoneNumberId, buyerPhone, body, creds.access_token);
             }
+            const { deliverWhatsAppMediaAttachments } = await import('../channel/deliver-media.js');
+            await deliverWhatsAppMediaAttachments(
+              phoneNumberId,
+              buyerPhone,
+              result.media_attachments,
+              creds.access_token,
+            );
           }
         };
 

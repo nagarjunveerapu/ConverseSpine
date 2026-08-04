@@ -74,6 +74,19 @@ export async function runTurn(
     composer: result.debug.goal.kind,
     turn_index: result.state.turnCount,
     ...(result.whatsappActions ? { whatsapp_actions: result.whatsappActions } : {}),
+    ...(result.mediaAttachments?.length
+      ? {
+          media_attachments: result.mediaAttachments.map((a) => ({
+            asset_kind: a.asset_kind,
+            label: a.label,
+            url: a.url,
+            delivery: a.delivery,
+            ...(a.mime_type ? { mime_type: a.mime_type } : {}),
+            ...(a.filename ? { filename: a.filename } : {}),
+            ...(a.project_name ? { project_name: a.project_name } : {}),
+          })),
+        }
+      : {}),
     debug: {
       phase: result.debug.phase,
       goal: result.debug.goal,

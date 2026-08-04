@@ -83,6 +83,7 @@ export interface MediaShareResult {
   title?: string;
   cdnUrl?: string;
   assetKind?: string;
+  mimeType?: string;
   reason?: string;
   redirectHint?: string;
 }

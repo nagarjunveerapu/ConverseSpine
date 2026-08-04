@@ -1292,17 +1292,19 @@ function stripProjectNameLead(line: string): string {
     .trim();
 }
 
-/** Buyer-safe media line — shared by single-topic and AB-8 multi-topic paths. */
+/** Buyer-safe media line — shared by single-topic and AB-8 multi-topic paths.
+ *  Successful shares never paste signed URLs into prose — channels render
+ *  `media_attachments` as cards / native WhatsApp media. */
 function mediaShareLine(
   media: NonNullable<EvidenceSet['media']>,
   focusProjectName?: string,
   opts?: { omitProjectName?: boolean },
 ): string {
-  const asset = media.title ?? humanizeAsset(media.assetKind);
+  const asset = humanizeAsset(media.assetKind);
   if (media.allowed && media.cdnUrl) {
-    if (opts?.omitProjectName) return `here's the ${asset}: ${media.cdnUrl}`;
+    if (opts?.omitProjectName) return `here's the ${asset}`;
     const pname = media.projectName || focusProjectName || 'this project';
-    return `Here's the ${asset} for *${pname}*: ${media.cdnUrl}`;
+    return `Here's the ${asset} for *${pname}*`;
   }
   const pname = media.projectName || focusProjectName || 'this project';
   // media.redirectHint / reason are INTERNAL composer instructions — Desk

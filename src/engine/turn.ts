@@ -110,6 +110,7 @@ import { checkGrounding, stripBanned, stripComposerDirectives } from './groundin
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
 import { mediaKindMissingFromInventory, normalizeMediaAssetKind } from './media-asset.js';
+import { attachmentFromMediaEvidence, type MediaAttachment } from './media-attachment.js';
 import { gateMarketIntel } from './market-intel.js';
 import { filterUnitsByBhk, resolveAvailabilityBhkFilter } from './unit-config.js';
 import { planSearchRecovery, type RecoveryHint, type SearchRecoveryEnvelope, type AdvisorUiMode, type SuggestedAction } from './recovery-planner.js';
@@ -192,6 +193,8 @@ export interface EngineTurnOutput {
   searchRecovery?: SearchRecoveryEnvelope;
   uiMode?: AdvisorUiMode;
   whatsappActions?: SuggestedAction[];
+  /** Structured media for Advisor cards / WhatsApp native send — never in prose. */
+  mediaAttachments?: MediaAttachment[];
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
@@ -2398,6 +2401,13 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }),
   );
 
+  const mediaAttachments = evidence.media
+    ? (() => {
+        const a = attachmentFromMediaEvidence(evidence.media!);
+        return a ? [a] : undefined;
+      })()
+    : undefined;
+
   return {
     reply,
     state,
@@ -2410,6 +2420,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       (channel === 'whatsapp' && evidence.nearbyOffer
         ? nearbyOfferSuggestedActions(evidence.nearbyOffer).slice(0, 2)
         : undefined),
+    ...(mediaAttachments?.length ? { mediaAttachments } : {}),
   };
 }
 

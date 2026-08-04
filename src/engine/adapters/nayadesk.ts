@@ -578,6 +578,7 @@ export function nayadeskData(
           ...(resp.asset?.title ? { title: resp.asset.title } : {}),
           ...(resp.asset?.cdn_url ? { cdnUrl: resp.asset.cdn_url } : {}),
           ...(resp.asset?.asset_kind ? { assetKind: resp.asset.asset_kind } : {}),
+          ...(resp.asset?.mime_type ? { mimeType: resp.asset.mime_type } : {}),
           ...(resp.reason ? { reason: resp.reason } : {}),
           ...(resp.redirect_hint ? { redirectHint: resp.redirect_hint } : {}),
         };

@@ -133,12 +133,24 @@ export interface TurnInput {
   channel?: 'whatsapp' | 'advisor_web' | 'api';
 }
 
+export interface MediaAttachmentDto {
+  asset_kind: string;
+  label: string;
+  url: string;
+  mime_type?: string;
+  delivery: 'image' | 'document' | 'video';
+  filename?: string;
+  project_name?: string;
+}
+
 export interface TurnResult {
   reply_text: string;
   /** Engine turn goal kind (e.g. recommend, answer, visit_booked). */
   composer: string;
   turn_index: number;
   whatsapp_actions?: Array<{ id: string; label: string; patch: Record<string, string | undefined>; user_line: string; expected_matches: number }>;
+  /** Named media for client cards / WhatsApp native send (URL not in reply_text). */
+  media_attachments?: MediaAttachmentDto[];
   /** Engine debug — NayaDesk Auto/Vault map tools → brain.tool_calls. */
   debug?: {
     phase?: string;

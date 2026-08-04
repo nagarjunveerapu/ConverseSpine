@@ -45,6 +45,7 @@ export interface DeskChatResponse {
     last_offered_ids?: string[];
   };
   whatsapp_actions?: TurnResult['whatsapp_actions'];
+  media_attachments?: TurnResult['media_attachments'];
 }
 
 /** POST /chat — channel-agnostic ingress (CLI, curl, NayaDesk playground). */
@@ -107,6 +108,9 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
         : {}),
     },
     ...(result.whatsapp_actions ? { whatsapp_actions: result.whatsapp_actions } : {}),
+    ...(result.media_attachments?.length
+      ? { media_attachments: result.media_attachments }
+      : {}),
   };
 }
 

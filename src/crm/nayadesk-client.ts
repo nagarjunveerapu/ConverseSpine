@@ -564,7 +564,7 @@ export class NayaDeskClient {
     unit_type_filter?: string;
   }): Promise<{
     allowed: boolean;
-    asset?: { title: string; cdn_url: string; asset_kind: string };
+    asset?: { title: string; cdn_url: string; asset_kind: string; mime_type?: string };
     reason?: string;
     redirect_hint?: string;
   }> {

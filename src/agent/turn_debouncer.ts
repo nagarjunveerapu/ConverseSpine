@@ -82,6 +82,13 @@ export class TurnDebouncer implements DurableObject {
       } else {
         await sendText(phone_number_id, buyer_phone, body, token);
       }
+      const { deliverWhatsAppMediaAttachments } = await import('../channel/deliver-media.js');
+      await deliverWhatsAppMediaAttachments(
+        phone_number_id,
+        buyer_phone,
+        result.media_attachments,
+        token,
+      );
     }
   }
 }

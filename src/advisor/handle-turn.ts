@@ -276,6 +276,19 @@ export async function handleAdvisorTurn(
       searchRecovery: result.searchRecovery,
       uiMode: result.uiMode,
       chipRankLive: rt.env.CHIP_RANK_LIVE === 'true',
+      ...(result.mediaAttachments?.length
+        ? {
+            mediaAttachments: result.mediaAttachments.map((a) => ({
+              asset_kind: a.asset_kind,
+              label: a.label,
+              url: a.url,
+              delivery: a.delivery,
+              ...(a.mime_type ? { mime_type: a.mime_type } : {}),
+              ...(a.filename ? { filename: a.filename } : {}),
+              ...(a.project_name ? { project_name: a.project_name } : {}),
+            })),
+          }
+        : {}),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

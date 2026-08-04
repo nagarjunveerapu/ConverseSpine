@@ -619,6 +619,8 @@ export interface MediaEvidence {
   title?: string;
   cdnUrl?: string;
   assetKind?: string;
+  /** Desk mime when share returns it (image/png, application/pdf, …). */
+  mimeType?: string;
   reason?: string;
   redirectHint?: string;
 }

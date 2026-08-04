@@ -56,7 +56,8 @@ describe('availability + unit media', () => {
       'what 2BHK configurations are available?',
     );
     expect(reply).toMatch(/740|₹65|65\s*L/i);
-    expect(reply).toContain('https://cdn.example/eldorado-2bhk.png');
+    expect(reply).toMatch(/site photo|unit view/i);
+    expect(reply).not.toContain('https://cdn.example/eldorado-2bhk.png');
   });
 
   it('keeps config summary when availability + media are multi-topic', () => {
@@ -83,7 +84,8 @@ describe('availability + unit media', () => {
       ['availability', 'media'],
     );
     expect(reply).toMatch(/740|₹65|65\s*L/i);
-    expect(reply).toContain('https://cdn.example/eldorado-2bhk.png');
+    expect(reply).toMatch(/site photo|unit view/i);
+    expect(reply).not.toContain('https://cdn.example/eldorado-2bhk.png');
   });
 });
 
