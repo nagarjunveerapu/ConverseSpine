@@ -111,15 +111,17 @@ export async function handleAdvisorTurn(
     if (Object.keys(effectivePrefs).length > 0) {
       const acceptedPrefs = { ...effectivePrefs };
       if (rt.engine.failureSearch && acceptedPrefs.location?.trim()) {
-        const resolved = await resolveDurableLocation(
-          acceptedPrefs.location,
-          rt.engine.data,
-        );
+        // Resolve only as a validity gate. Keep the buyer-facing chip label
+        // (e.g. "North Bangalore") — Desk search expands via expanded_locations.
+        // Replacing with a coverage micro-market ("Aerospace Park") polluted
+        // prefs_snapshot / recall_constraints (ADVX-01 soft crack).
+        const declaredLoc = acceptedPrefs.location.trim();
+        const resolved = await resolveDurableLocation(declaredLoc, rt.engine.data);
         if (!resolved.ok) {
           ingressFailure = resolved.failure;
           delete acceptedPrefs.location;
         } else {
-          acceptedPrefs.location = resolved.value.value;
+          acceptedPrefs.location = declaredLoc;
         }
       }
       preferenceClears = preferenceClearsFromPatch(acceptedPrefs);
