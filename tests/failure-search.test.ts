@@ -339,7 +339,9 @@ describe('Phase 3 turn behavior', () => {
     );
     expect(yes.state.constraints.location).toMatch(/North Bangalore|Whitefield|Devanahalli/i);
     expect(yes.debug.goal).toMatchObject({ kind: 'recommend' });
-    expect(yes.reply).toMatch(/Eldorado|Cornerstone|Orchards/i);
+    // A4 advisor_web: thin board commentary — catalog names are on shortlist/cards.
+    expect(yes.reply).toMatch(/on your board|matches are on your board/i);
+    expect((yes.state.shortlistIds ?? []).length).toBeGreaterThan(0);
     expect(yes.reply).not.toMatch(/Want me to show those/i);
     expect(yes.reply).not.toMatch(/don't have .+ in \*Jayanagar\*/i);
   });

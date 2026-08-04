@@ -97,7 +97,8 @@ describe('nearby offer engine turns', () => {
     await say('tell me about ayana');
     const r = await say('show me other projects too');
     expect(r.state.phase).toBe('discover');
-    expect(r.reply).toMatch(/krishnaja|coorg hills/i);
+    // A4 advisor_web: board owns catalog names; reply stays thin.
+    expect(r.reply).toMatch(/on your board|nearby options are on your board/i);
     expect(r.reply).toMatch(/nearby|only got \*Ayana\*/i);
     const ids = r.state.shortlistIds ?? [];
     expect(ids.includes('krishnaja') || ids.includes('coorg-estate')).toBe(true);
@@ -117,7 +118,8 @@ describe('nearby offer engine turns', () => {
     const mid = await deps.store.load(convId);
     expect(mid?.rti?.pendingPrompt?.kind).toBe('location_broaden');
     const r = await say('yes, show me those nearby estates');
-    expect(r.reply).toMatch(/krishnaja|coorg|virajpet/i);
+    // A4 advisor_web: names live on the board / shortlist, not in chat dump.
+    expect(r.reply).toMatch(/on your board|matches are on your board/i);
     const ids = r.state.shortlistIds ?? [];
     expect(ids.some((id) => id === 'krishnaja' || id === 'coorg-estate')).toBe(true);
   });
