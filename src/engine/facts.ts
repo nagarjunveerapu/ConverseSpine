@@ -1266,7 +1266,8 @@ const LOCALITY_STOP = new Set([
   'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
   'show', 'looking', 'some', 'any', 'other', 'else', 'something', 'anything', 'please',
   // Discourse markers buyers open a correction with ("no wait, …", "ok so, …").
-  'no', 'yes', 'yeah', 'yep', 'nope', 'ok', 'okay', 'wait', 'well', 'so', 'sure', 'hmm',
+  'no', 'yes', 'yeah', 'yep', 'nope', 'ok', 'okay', 'wait', 'well', 'so', 'sure', 'yet', 'hmm',
+  'maybe', 'probably', 'perhaps',
   // Comma-lead / chip noise ("fine, just yield", "which project has…").
   'fine', 'which', 'what', 'how', 'when', 'loan', 'loans', 'discount', 'yield', 'rental',
   'ltv',
@@ -1437,10 +1438,15 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   const leadIn = /^([^,]{1,40}),\s*(.+)$/.exec(scan);
   if (leadIn && isLocalityNoise(leadIn[1])) scan = leadIn[2];
 
-  // Stop at em-dash / comma so "in Whitefield — ignore the chip" → Whitefield.
-  const inTail = /\bin\s+([A-Za-z][A-Za-z\s'-]{1,40}?)(?:\s*[—–,.]|\s*$)/i.exec(scan);
+  // Prefer `in …` locality. Allow slash micro-markets ("Aerospace Park / Devanahalli").
+  // Stop at em-dash / UI tails AND before budget/soft-pref glue ("in North Bangalore under 1.2 Cr")
+  // — the older `(?:\s|$)` patterns otherwise non-greedily captured just "North".
+  const inTail =
+    /\bin\s+([A-Za-z][A-Za-z0-9\s'\/-]{1,48}?)(?=\s*(?:[—–,]|\.|$|\b(?:under|below|above|upto|up\s+to|preferably|instead|with|and)\b))/i.exec(
+      scan,
+    );
   if (inTail?.[1]) {
-    const loc = acceptLocality(inTail[1]);
+    const loc = acceptLocality(inTail[1].replace(/\s*\/\s*/g, ' / ').trim());
     if (loc) return loc;
   }
 
@@ -1463,7 +1469,12 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   }
 
   const commaLead = /^([A-Za-z][A-Za-z\s]{2,24}?)\s*,/i.exec(scan);
-  if (commaLead?.[1] && !/\b(lakhs|crore|bhk|budget)\b/i.test(commaLead[1])) {
+  if (
+    commaLead?.[1] &&
+    !/\b(lakhs|crore|bhk|budget)\b/i.test(commaLead[1]) &&
+    !isLocalityNoise(commaLead[1]) &&
+    !/\bnot\s+sure\b/i.test(commaLead[1])
+  ) {
     const loc = acceptLocality(commaLead[1]);
     if (loc) return loc;
   }
