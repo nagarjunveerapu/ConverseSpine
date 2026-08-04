@@ -17,6 +17,8 @@
       "assert": {
         "projects_min": 1,
         "no_wa_project_dump": true,
+        "prefs_includes": { "location": "North Bangalore" },
+        "prefs_excludes": { "location": "Aerospace" },
         "reply_excludes": [
           "which BHK",
           "what's your budget",
@@ -36,6 +38,8 @@
       },
       "assert": {
         "goal_kind": "recall_constraints",
+        "prefs_includes": { "location": "North Bangalore" },
+        "prefs_excludes": { "location": "Aerospace" },
         "reply_excludes": [
           "which BHK",
           "what's your budget",
@@ -44,7 +48,8 @@
           "where are you looking",
           "tell me your budget",
           "overview",
-          "Eldorado is"
+          "Eldorado is",
+          "Aerospace Park"
         ],
         "reply_includes_any": ["80", "1 Cr", "1 cr", "north", "bangalore", "budget", "area", "brief"]
       }

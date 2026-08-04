@@ -903,20 +903,29 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           const served = matchServedMarket(locationCandidate, markets);
           if (served) {
             locationValidated = true;
+            // Keep buyer phrasing when already declared (advisor chip / prior
+            // declare). Soft-adopting a catalog micro-market ("Aerospace Park")
+            // over "North Bangalore" polluted prefs/recall (ADVX-01).
+            const keepDeclaredLabel =
+              state.constraintAuthority?.location === 'declared' &&
+              Boolean(state.constraints.location?.trim());
+            const durableLabel = keepDeclaredLabel
+              ? (state.constraints.location as string).trim()
+              : served.name;
             if (ex.constraints.location) {
               ex = {
                 ...ex,
-                constraints: { ...ex.constraints, location: served.name },
+                constraints: { ...ex.constraints, location: durableLabel },
               };
             }
             state = {
               ...state,
-              constraints: { ...state.constraints, location: served.name },
+              constraints: { ...state.constraints, location: durableLabel },
               constraintAuthority: {
                 ...(state.constraintAuthority ?? {}),
                 // Score 3/2 → declared (hard). Score 1 (token/typo) → inferred
                 // so Phase-3 relaxation can still release a weak adopt.
-                location: served.authority,
+                location: keepDeclaredLabel ? 'declared' : served.authority,
               },
             };
           } else if (!looksLikePlaceFramedAsk(input.text)) {
@@ -1013,12 +1022,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         }
       } else {
         locationValidated = true;
+        // Validity gate only — keep the buyer/chip label. Desk maps regional
+        // asks ("North Bangalore") onto coverage pin names ("Aerospace Park");
+        // writing that into constraints polluted prefs_snapshot / recall.
+        // Search still expands via Desk expanded_locations / geo.
+        const durableLabel = locationCandidate.trim();
         if (ex.constraints.location) {
           ex = {
             ...ex,
             constraints: {
               ...ex.constraints,
-              location: resolved.value.value,
+              location: durableLabel,
             },
           };
         } else {
@@ -1026,7 +1040,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
             ...state,
             constraints: {
               ...state.constraints,
-              location: resolved.value.value,
+              location: durableLabel,
             },
             constraintAuthority: {
               ...(state.constraintAuthority ?? {}),

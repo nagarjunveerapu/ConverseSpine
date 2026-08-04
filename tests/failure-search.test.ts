@@ -385,4 +385,26 @@ describe('Phase 3 turn behavior', () => {
     expect(result.state.constraintAuthority?.propertyType).toBe('declared');
     expect(result.reply).not.toMatch(/Eldorado|Cornerstone/i);
   });
+
+  it('keeps buyer region label when Desk resolves to a coverage pin', async () => {
+    const deps = fakeDeps();
+    deps.failureSearch = true;
+    deps.data.resolveLocation = async () => ({
+      status: 'resolved' as const,
+      canonical: 'Aerospace Park',
+      lat: 13.14,
+      lng: 77.68,
+    });
+    const result = await runEngineTurn(
+      {
+        convId: 'fv3-north-label',
+        builderId: 'lokations',
+        text: '2 BHK in North Bangalore under 1 crore',
+        channel: 'advisor_web',
+      },
+      deps,
+    );
+    expect(result.state.constraints.location).toBe('North Bangalore');
+    expect(result.state.constraints.location).not.toMatch(/Aerospace/i);
+  });
 });
