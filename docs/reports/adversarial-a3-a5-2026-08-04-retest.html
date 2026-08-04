@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Adversarial A3–A5 retest — dig</title>
+  <style>
+    :root { --ink:#14201c; --muted:#5a6b64; --ok:#14532d; --warn:#9a3412; --line:#d5ddd8; --paper:#f6f8f6; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; color:var(--ink); background:var(--paper); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 28px 18px 64px; }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; }
+    .lede { color: var(--muted); line-height: 1.5; margin: 0 0 22px; }
+    .score { display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 22px; }
+    .pill { border:1px solid var(--line); background:#fff; border-radius:999px; padding:6px 12px; font-size:.85rem; font-weight:600; }
+    .pill.ok { color: var(--ok); }
+    table { width:100%; border-collapse: collapse; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:.9rem; }
+    th { background:#eef5f2; font-size:.75rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+    tr:last-child td { border-bottom:0; }
+    .pass { color: var(--ok); font-weight:700; }
+    .warn { color: var(--warn); font-weight:600; }
+    code { font-size:.85em; background:#eef2f0; padding:1px 5px; border-radius:4px; }
+    .note { margin-top: 20px; padding: 14px 16px; background:#fff; border:1px solid var(--line); border-radius:12px; line-height:1.5; color:var(--muted); font-size:.92rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Adversarial A3–A5 retest</h1>
+    <p class="lede">
+      Dig Spine · 2026-08-04 ·
+      <a href="../../scenarios/runs/2026-08-04T13-23-23-581Z/report.html">full turn report</a>
+      · after prefs-recall / location-clean / sticky-brief / board-chrome fixes + SIL teach upsert
+    </p>
+    <div class="score">
+      <span class="pill ok">Assert pass 12/12</span>
+      <span class="pill ok">Prior fail ADVX-01 fixed</span>
+      <span class="pill">SIL teach: 23 vectors upserted</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Attack</th><th>Assert</th><th>Quality</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>ADVX-01</code></td>
+          <td>Prefs recall bait</td>
+          <td class="pass">PASS</td>
+          <td class="pass">goal <code>recall_constraints</code>; echoes budget/BHK — area may show match micro-market (<code>Aerospace Park</code>) vs chip North Bangalore</td>
+        </tr>
+        <tr>
+          <td><code>ADVX-03</code></td>
+          <td>Whitefield + ignore chip</td>
+          <td class="pass">PASS</td>
+          <td class="pass">prefs location clean Whitefield (no “ignore the chip”)</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-01</code></td>
+          <td>bare ok after brief</td>
+          <td class="pass">PASS</td>
+          <td class="pass">clarify which project — no locality/budget/BHK re-probe</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-03</code></td>
+          <td>smalltalk → ok</td>
+          <td class="pass">PASS</td>
+          <td class="pass">visit/hold nudge on Eldorado — no BHK probe</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-06</code></td>
+          <td>open the board</td>
+          <td class="pass">PASS</td>
+          <td class="pass">clarify project pick — not no_fit locality</td>
+        </tr>
+        <tr>
+          <td colspan="4">ADVX-02/04/05/06 + CHATX-02/04/05 — all PASS; A4/A5 holds unchanged</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>Embeddings.</b> Yes — media/CRM + board chrome needed teach rows under
+      <code>get_brochure</code> / <code>ask_next_step</code> (prefs recall stays deterministic
+      <code>recall_constraints</code>). Upserted
+      <code>corpus/pending/a3-a5-media-teach/upsert-items.jsonl</code> → dig Vectorize (23/23).
+    </div>
+  </div>
+</body>
+</html>

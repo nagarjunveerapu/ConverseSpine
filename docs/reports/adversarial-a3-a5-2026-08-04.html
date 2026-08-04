@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Adversarial A3–A5 pack — dig</title>
+  <style>
+    :root { --ink:#14201c; --muted:#5a6b64; --ok:#14532d; --bad:#9f1239; --line:#d5ddd8; --paper:#f6f8f6; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; color:var(--ink); background:var(--paper); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 28px 18px 64px; }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; }
+    .lede { color: var(--muted); line-height: 1.5; margin: 0 0 22px; }
+    .score { display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 22px; }
+    .pill { border:1px solid var(--line); background:#fff; border-radius:999px; padding:6px 12px; font-size:.85rem; font-weight:600; }
+    .pill.ok { color: var(--ok); } .pill.bad { color: var(--bad); }
+    table { width:100%; border-collapse: collapse; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:.9rem; }
+    th { background:#eef5f2; font-size:.75rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+    tr:last-child td { border-bottom:0; }
+    .fail { color: var(--bad); font-weight:700; }
+    .pass { color: var(--ok); font-weight:700; }
+    .warn { color:#9a3412; font-weight:600; }
+    code { font-size:.85em; background:#eef2f0; padding:1px 5px; border-radius:4px; }
+    .note { margin-top: 20px; padding: 14px 16px; background:#fff; border:1px solid var(--line); border-radius:12px; line-height:1.5; color:var(--muted); font-size:.92rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Adversarial A3–A5 pack</h1>
+    <p class="lede">
+      Dig Spine · 2026-08-04 ·
+      <a href="../../scenarios/runs/2026-08-04T12-58-28-260Z/report.html">full turn report</a>
+      · 12 scenarios (6 advisor ADVX + 6 chat CHATX)
+    </p>
+    <div class="score">
+      <span class="pill ok">Assert pass 11/12</span>
+      <span class="pill bad">Assert fail 1 (ADVX-01)</span>
+      <span class="pill">Quality soft-breaks noted below</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Channel</th><th>Attack</th><th>Assert</th><th>Quality hold?</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>ADVX-01</code></td><td>advisor</td><td>Probe bait: “what was my budget / which area”</td>
+          <td class="fail">FAIL</td>
+          <td class="fail">Broke — jumped to Eldorado overview; did not recall brief (₹80L / North Bangalore)</td>
+        </tr>
+        <tr>
+          <td><code>ADVX-02</code></td><td>advisor</td><td>Smalltalk then show options</td>
+          <td class="pass">PASS</td>
+          <td class="warn">Soft — early turns auto-focused Eldorado overview before recommend; t3 thin board copy held</td>
+        </tr>
+        <tr>
+          <td><code>ADVX-03</code></td><td>advisor</td><td>Stale chip + Whitefield pivot</td>
+          <td class="pass">PASS</td>
+          <td class="warn">Soft — location polluted with “Whitefield — ignore the chip”; no_fit tone odd</td>
+        </tr>
+        <tr>
+          <td><code>ADVX-04</code></td><td>advisor</td><td>Focus → price → other options</td>
+          <td class="pass">PASS</td>
+          <td class="pass">Held — no hard-slot re-ask; thin board on “other options”</td>
+        </tr>
+        <tr>
+          <td><code>ADVX-05</code></td><td>advisor</td><td>Noise + packed FAQ then reveal</td>
+          <td class="pass">PASS</td>
+          <td class="pass">Held — reveal → <code>brigade-group/brigade-eldorado</code></td>
+        </tr>
+        <tr>
+          <td><code>ADVX-06</code></td><td>advisor</td><td>Packed 3BHK Whitefield vs stale chips</td>
+          <td class="pass">PASS</td>
+          <td class="pass">Held — no re-ask; board matches</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-01</code></td><td>chat</td><td>Packed brief then ok / more</td>
+          <td class="pass">PASS</td>
+          <td class="warn">Soft — bare “ok” asked locality/budget/BHK again (phrase dodge)</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-02</code></td><td>chat</td><td>WA list must survive A4</td>
+          <td class="pass">PASS</td>
+          <td class="pass">Held — WhatsApp still lists <code>*Brigade…*</code>; no “on your board”</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-03</code></td><td>chat</td><td>Smalltalk then bare ok</td>
+          <td class="pass">PASS</td>
+          <td class="warn">Soft — “ok” asked 2 vs 3 BHK after weekend digression</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-04</code></td><td>chat</td><td>Project switch mid-price</td>
+          <td class="pass">PASS</td>
+          <td class="pass">Held — Orchards pricing after switch</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-05</code></td><td>chat</td><td>Gibberish then visit</td>
+          <td class="pass">PASS</td>
+          <td class="pass">Held — no false book; visit day/time ask</td>
+        </tr>
+        <tr>
+          <td><code>CHATX-06</code></td><td>chat</td><td>SPA “board” vocabulary leak</td>
+          <td class="pass">PASS</td>
+          <td class="warn">Soft — “open the board” misread as locality</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>Verdict.</b> A4 channel split and A5 reveal hold under chaos. A3 “never re-ask” mostly holds on advisor recommend paths,
+      but <b>preference recall</b> (ADVX-01) and <b>chat bare-ack</b> (CHATX-01/03) are the real cracks — pass-count alone would hide them.
+      Next fixes should be extract/recall (prefs snapshot answer) and sticky-brief on chat <code>ok</code>, not compose regex.
+    </div>
+  </div>
+</body>
+</html>

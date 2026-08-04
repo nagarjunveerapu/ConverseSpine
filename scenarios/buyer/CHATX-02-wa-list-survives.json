@@ -1,0 +1,17 @@
+{
+  "id": "CHATX-02",
+  "title": "HOLD(chat/A4): WhatsApp recommend must KEEP project-name list (advisor thin must not leak here)",
+  "builder_id": "brigade-group",
+  "channel": "chat",
+  "tags": ["adversarial", "a4", "chat", "channel-native"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "Apartment in North Bangalore under 1 crore",
+      "assert": {
+        "reply_includes_any": ["*Brigade", "Eldorado", "Orchards"],
+        "reply_excludes": ["on your board"]
+      }
+    }
+  ]
+}

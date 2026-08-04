@@ -1,0 +1,44 @@
+{
+  "id": "ADV-A5-01",
+  "title": "A5: reveal creates Desk lead on source builder (Spine /api/advisor/reveal)",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "a5", "reveal", "quality"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      },
+      "assert": {
+        "projects_min": 1,
+        "no_wa_project_dump": true
+      }
+    },
+    {
+      "text": "Brigade Eldorado",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_includes": ["eldorado"]
+      }
+    }
+  ],
+  "reveal": {
+    "project_id_from": "projects",
+    "buyer_name": "A5 Scenario Buyer",
+    "buyer_phone": "+919988776655",
+    "assert": {
+      "source_builder_id": "brigade-group",
+      "source_project_id_includes": "eldorado"
+    }
+  }
+}

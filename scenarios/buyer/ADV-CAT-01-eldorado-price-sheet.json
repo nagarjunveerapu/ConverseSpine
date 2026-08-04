@@ -8,7 +8,21 @@
     { "text": "hi" },
     {
       "text": "I'm looking for an apartment in North Bangalore around 80 lakhs",
-      "assert": { "reply_includes_any": ["north", "bangalore", "apartment", "project", "eldorado", "budget"] }
+      "assert": {
+        "reply_includes_any": [
+          "north",
+          "bangalore",
+          "apartment",
+          "project",
+          "eldorado",
+          "budget",
+          "board",
+          "match",
+          "strongest"
+        ],
+        "projects_min": 1,
+        "no_wa_project_dump": true
+      }
     },
     {
       "text": "Brigade Eldorado",

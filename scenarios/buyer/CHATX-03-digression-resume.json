@@ -1,0 +1,43 @@
+{
+  "id": "CHATX-03",
+  "title": "BREAK(chat): shortlist → smalltalk → bare 'ok' must not invent visit book or restart brief",
+  "builder_id": "brigade-group",
+  "channel": "chat",
+  "tags": ["adversarial", "digression", "chat"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "Apartment in North Bangalore under 1 crore",
+      "assert": { "reply_includes_any": ["Eldorado", "Orchards"] }
+    },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "haha how was your weekend?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit", "which BHK", "what's your budget"]
+      }
+    },
+    {
+      "text": "ok",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": [
+          "I've booked",
+          "confirmed your visit",
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking",
+          "How many bedrooms",
+          "2 BHK, 3 BHK",
+          "share your locality",
+          "locality, budget, or BHK"
+        ]
+      }
+    }
+  ]
+}

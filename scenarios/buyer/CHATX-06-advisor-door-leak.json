@@ -1,0 +1,30 @@
+{
+  "id": "CHATX-06",
+  "title": "BREAK(chat): buyer says 'on your board' / 'naya advisor' — must not pretend SPA board exists",
+  "builder_id": "brigade-group",
+  "channel": "chat",
+  "tags": ["adversarial", "a4", "channel-leak", "chat"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "2 BHK in North Bangalore under 1 Cr — put them on my board",
+      "assert": {
+        "reply_includes_any": ["Eldorado", "Orchards", "fits", "Here's"],
+        "reply_excludes": ["on your board", "tap one", "Matches are on your board"]
+      }
+    },
+    {
+      "text": "open the board",
+      "assert": {
+        "goal_kind_not": "no_fit",
+        "reply_excludes": [
+          "Matches are on your board →",
+          "tap one to focus",
+          "No exact match for",
+          "apartments in *board",
+          "in board"
+        ]
+      }
+    }
+  ]
+}

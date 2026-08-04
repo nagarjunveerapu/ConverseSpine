@@ -16,6 +16,7 @@
 import { visitProposeConfirmCopy } from './advisory-copy.js';
 import { isAskNextStepText } from './ask-next-step-detect.js';
 import { currentShortlist } from './entity-store.js';
+import { firstMissingSlot } from './phases/discover.js';
 import { catalogAskOwns } from './turn-routing/intent-authority.js';
 import { discourseStateToken } from './turn-routing/state-tokens.js';
 import { isNonPlaceUtterance } from './placeability.js';
@@ -31,10 +32,13 @@ export function shouldConsumeAskNextStep(
   if (ex.askTopic || (ex.askTopics?.length ?? 0) > 0) return false;
   if (ex.transition === 'want_visit' || ex.transition === 'want_details') return false;
   if ((ex.namedProjects?.length ?? 0) > 0) return false;
-  if (ex.wantsMore || ex.rejected || ex.recall || ex.wantsHuman) return false;
+  if (ex.wantsMore || ex.rejected || ex.recall || ex.recallConstraints || ex.wantsHuman) {
+    return false;
+  }
   if (catalogAskOwns(ex, text)) return false;
   // Smash / smalltalk noise must not ride ask_next_step → cold orient.
-  if (isNonPlaceUtterance(text)) return false;
+  // Board/shortlist chrome is ask_next_step text, not filler — allow through.
+  if (isNonPlaceUtterance(text) && !isAskNextStepText(text)) return false;
 
   const routing = s.rti?.lastRouting;
   if (routing?.routing === 'ask_next_step') return true;
@@ -97,7 +101,9 @@ export function resolveAskNextStepGoal(
     }
   }
 
-  // cold
+  // cold — never hardcode location when the brief already filled hard slots (A3).
   if (!s.discover.oriented) return { kind: 'orient' };
-  return { kind: 'probe', slot: 'location' };
+  const missing = firstMissingSlot(s);
+  if (missing) return { kind: 'probe', slot: missing };
+  return { kind: 'recommend' };
 }

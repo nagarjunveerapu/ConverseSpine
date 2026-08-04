@@ -28,6 +28,7 @@ function catalogPin(
  * True human/stop asks stay handoff (no catalog ownership).
  */
 export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal {
+  if (ex.recallConstraints) return { kind: 'recall_constraints' };
   if (ex.recall) return { kind: 'visit_recall' };
   if (ex.postVisitAck || (ex.affirm && !ex.askTopic && !ex.isQuestion) || ex.smalltalk) {
     return { kind: 'warm_ack' };

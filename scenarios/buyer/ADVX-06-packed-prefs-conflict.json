@@ -1,0 +1,28 @@
+{
+  "id": "ADVX-06",
+  "title": "BREAK(A3): packed free-text '3BHK Whitefield' with stale 2BHK/North chips — extract pivot wins, no re-ask",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["adversarial", "a3", "packed", "advisor"],
+  "turns": [
+    {
+      "text": "actually I want 3 BHK in Whitefield under 1.2 Cr show options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      },
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking"
+        ],
+        "reply_includes_any": ["board", "match", "whitefield", "option", "look", "visit", "strongest", "cornerstone", "utopia"]
+      }
+    }
+  ]
+}

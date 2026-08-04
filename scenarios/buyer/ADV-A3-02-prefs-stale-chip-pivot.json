@@ -1,0 +1,58 @@
+{
+  "id": "ADV-A3-02",
+  "title": "A3: stale location chip must not block free-text area pivot (delta-only extract mask)",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "a3", "prefs", "quality", "pivot"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking"
+        ]
+      }
+    },
+    {
+      "text": "staying on budget",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_includes_any": ["eldorado", "brigade", "north", "devanahalli", "aerospace"]
+      }
+    },
+    {
+      "text": "actually looking in Whitefield instead",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking"
+        ],
+        "prefs_includes": {
+          "location": "Whitefield"
+        }
+      }
+    }
+  ]
+}

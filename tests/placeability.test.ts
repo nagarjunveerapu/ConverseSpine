@@ -19,6 +19,12 @@ describe('placeability', () => {
     expect(isNonPlaceUtterance('Indiranagar')).toBe(false);
   });
 
+  it('rejects Advisor SPA chrome as place labels', () => {
+    expect(isPlausiblePlaceLabel('board')).toBe(false);
+    expect(isPlausiblePlaceLabel('the board')).toBe(false);
+    expect(isPlausiblePlaceLabel('shortlist')).toBe(false);
+  });
+
   it('does not treat catalog / next-step questions as noise', () => {
     expect(isNonPlaceUtterance('what should I do next?')).toBe(false);
     expect(isNonPlaceUtterance('which of these have proper khata and approvals?')).toBe(false);

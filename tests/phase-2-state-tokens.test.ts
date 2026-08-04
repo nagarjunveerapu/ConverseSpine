@@ -211,6 +211,21 @@ describe('Phase 2c — ask_next_step consumer (four states)', () => {
     expect(resolveAskNextStepGoal(s)).toEqual({ kind: 'probe', slot: 'location' });
   });
 
+  it('cold oriented + filled brief → recommend (not hardcoded location)', () => {
+    let s = initState('p2', 'lokations');
+    s = {
+      ...s,
+      constraints: {
+        location: 'North Bangalore',
+        budgetMaxInr: 10_000_000,
+        bhk: '2 BHK',
+        purpose: 'self_use',
+      },
+      discover: { ...s.discover, oriented: true, asked: ['location', 'budget', 'bhk', 'purpose'] },
+    };
+    expect(resolveAskNextStepGoal(s)).toEqual({ kind: 'recommend' });
+  });
+
   it('board (≥2) → clarify_project_pick', () => {
     let s = initState('p2', 'lokations');
     s = recordOffered(s, [m('ayana', 'Ayana'), m('krishnaja', 'Krishnaja Greens')]);

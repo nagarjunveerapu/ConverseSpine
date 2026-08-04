@@ -1,0 +1,43 @@
+{
+  "id": "CHATX-01",
+  "title": "BREAK(chat): packed brief in text — later turns must not re-ask BHK/budget/area",
+  "builder_id": "brigade-group",
+  "channel": "chat",
+  "tags": ["adversarial", "a3", "chat", "prefs"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "2 BHK apartment in North Bangalore under 1 crore",
+      "assert": {
+        "reply_includes_any": ["eldorado", "orchard", "north", "devanahalli", "fits", "here's"]
+      }
+    },
+    {
+      "text": "ok",
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "what is your budget",
+          "which area",
+          "where are you looking",
+          "tell me your budget",
+          "share your locality",
+          "locality, budget, or BHK",
+          "How many bedrooms"
+        ]
+      }
+    },
+    {
+      "text": "show me more",
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking"
+        ]
+      }
+    }
+  ]
+}

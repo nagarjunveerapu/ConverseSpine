@@ -8,6 +8,7 @@ import { isNonPlaceUtterance } from '../placeability.js';
 
 export function decide(s: ConversationState, ex: Extracted, buyerText?: string): TurnGoal {
   const d = s.discover;
+  if (ex.recallConstraints) return { kind: 'recall_constraints' };
   if (ex.recall) return { kind: 'visit_recall' };
   const asksEmi =
     ex.askTopic === 'emi' || (ex.askTopics?.includes('emi') ?? false);

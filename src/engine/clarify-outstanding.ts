@@ -75,7 +75,13 @@ export function speakStickyClarify(input: StickyClarifyInput): string | null {
     if (!c.location) bits.push('locality');
     if (!c.budgetMaxInr) bits.push('budget');
     if (!c.bhk && c.purpose !== 'investment') bits.push('BHK');
-    const need = bits.length ? bits.slice(0, 3).join(', ') : 'locality, budget, or BHK';
+    // Brief already filled — never invent "locality, budget, or BHK" as a re-probe.
+    if (!bits.length) {
+      return advisor
+        ? "I couldn't make sense of that. Your brief is already on file — pick a match on the board, or tell me what to change."
+        : "I couldn't make sense of that. I've got your brief — want me to show matches again, or open one by name?";
+    }
+    const need = bits.slice(0, 3).join(', ');
     return advisor
       ? `I couldn't make sense of that. Tell me in your own words what you're looking for — ${need} helps me shortlist well.`
       : "I couldn't make sense of that. I can help you pick the right property — " +

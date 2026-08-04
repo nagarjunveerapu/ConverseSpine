@@ -50,7 +50,8 @@ export function isPlausiblePlaceLabel(label: string): boolean {
   const words = l.split(/\s+/).filter(Boolean);
   if (words.length > 6) return false;
   if (isNonPlaceUtterance(l)) return false;
-  if (words.every((w) => isNoiseToken(w.replace(/[^a-z0-9]/gi, '')))) return false;
+  if (words.every((w) => isNoiseToken(w.replace(/[^a-z0-9']/gi, '')))) return false;
   if (SMALLTALK_RE.test(l)) return false;
+  if (/\b(?:board|shortlist|chip|panel)\b/i.test(l)) return false;
   return true;
 }

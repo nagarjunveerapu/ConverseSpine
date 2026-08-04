@@ -1,7 +1,7 @@
 import { parseBudgetToInr } from '../engine/facts.js';
 import type { IngressSlotKey } from '../engine/ingress.js';
 import type { PatchClearKey } from '../engine/turn-intent/types.js';
-import type { Constraints } from '../engine/types.js';
+import type { Constraints, ConversationState, ProbeKind } from '../engine/types.js';
 
 /** Deterministic brief → search constraints (advisor UI is source of truth). */
 export function constraintsFromAdvisorPreferences(
@@ -134,6 +134,30 @@ export function advisorPrefsSnapshot(
   const out: Record<string, string> = { ...(prior ?? {}) };
   for (const [k, v] of Object.entries(prefs)) out[k] = v?.trim() ?? '';
   return out;
+}
+
+/**
+ * A3 — panel-filled hard slots are treated as already asked so discover /
+ * ask_next_step never re-probes them. Does not bump ignoredProbes (filled ≠ ignored).
+ */
+export function markAskedFromAdvisorConstraints(s: ConversationState): ConversationState {
+  const c = s.constraints;
+  const toMark: ProbeKind[] = [];
+  if (c.location?.trim()) toMark.push('location');
+  if (c.budgetMaxInr) toMark.push('budget');
+  if (c.bhk?.trim()) toMark.push('bhk');
+  if (c.purpose) toMark.push('purpose');
+
+  const asked = [...s.discover.asked];
+  let changed = false;
+  for (const slot of toMark) {
+    if (!asked.includes(slot)) {
+      asked.push(slot);
+      changed = true;
+    }
+  }
+  if (!changed) return s;
+  return { ...s, discover: { ...s.discover, asked } };
 }
 
 /** Slots explicitly set by advisor preferences this turn — extract must not re-parse them. */

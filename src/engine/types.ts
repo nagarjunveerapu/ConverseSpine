@@ -381,6 +381,8 @@ export type TurnGoal =
       nextQueuedStop?: { projectId: string; projectName: string; slotText?: string };
     }
   | { kind: 'visit_recall' }
+  /** Echo stored hard prefs (budget/area/BHK) — not visit booking recall. */
+  | { kind: 'recall_constraints' }
   /** Offer to hold a unit of a TYPE — copy is deterministic; sets hold.awaitingConfirm. */
   | { kind: 'hold_propose'; projectId: string; projectName: string; unitType: string; copy: string; state: HoldState }
   /**
@@ -795,6 +797,8 @@ export interface Extracted {
   objectionTopic?: ObjectionTopic;
   wantsMore?: boolean;
   recall?: boolean;
+  /** "What was my budget / which area did I pick?" — echo constraints, not visit list. */
+  recallConstraints?: boolean;
   /** Deterministic hold-intent gate (hold-intent.ts) — stamped by the extract funnel. */
   holdAsk?: boolean;
   visitSlotText?: string;
