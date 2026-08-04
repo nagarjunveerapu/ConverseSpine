@@ -40,10 +40,10 @@ describe('an intel-gated atom declines for the reason it actually has', () => {
     expect(noData('rental_yield')).toMatch(/rent data|stated return/i);
   });
 
-  it('yield names the focused project when subjectLabel is passed (CAT-03)', () => {
+  it('yield names the focused project when projectName is passed (CAT-03)', () => {
     const reply = speakFailure(
       { kind: 'no_data', stage: 'compose', subject: 'rental_yield' } as never,
-      { subjectLabel: 'Brigade Eldorado' },
+      { projectName: 'Brigade Eldorado' },
     );
     expect(reply).toMatch(/eldorado/i);
     expect(reply).toMatch(/(?:can'?t|don'?t|won'?t)\s+(?:quote|source)|can'?t source/i);
