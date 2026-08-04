@@ -44,12 +44,21 @@ const UNSUPPORTED_COPY: Readonly<Record<string, string>> = Object.freeze({
  * thinner than we are. State the real reason instead — the refusal is the
  * product, and hiding it behind a shrug spends the credibility it earns.
  */
-const INTEL_GATED_COPY: Readonly<Record<string, string>> = Object.freeze({
-  rental_yield:
-    "I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and I have neither for this one.",
-  appreciation:
-    "I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.",
-});
+/** Intel-gated declines — keep the policy reason; name the focused project when known. */
+function intelGatedCopy(subject: string, projectName?: string): string | undefined {
+  const named = (projectName ?? '').trim();
+  if (subject === 'rental_yield') {
+    return named
+      ? `I don't quote a rental-yield figure I can't source for *${named}* — that means approved rent data for the corridor or the builder's own stated return, and I have neither.`
+      : "I don't quote a rental-yield figure I can't source — that means approved rent data for the corridor or the builder's own stated return, and I have neither for this one.";
+  }
+  if (subject === 'appreciation') {
+    return named
+      ? `I don't have sourced price-trend data for *${named}*'s corridor, and I won't put a number on it without one.`
+      : "I don't have sourced price-trend data for this corridor, and I won't put a number on it without one.";
+  }
+  return undefined;
+}
 
 /**
  * The sole failure-to-copy boundary.
@@ -68,7 +77,7 @@ export function speakFailure(failure: Failure, ctx: SpeakContext = {}): string {
       if (failure.subject === 'education_explainer') {
         return "I don't have a short explainer for that yet — ask me about property types, buying steps, or buyer documents, or name a project.";
       }
-      const gated = INTEL_GATED_COPY[failure.subject];
+      const gated = intelGatedCopy(failure.subject, ctx.subjectLabel);
       if (gated) {
         return `${gated}${ctx.alternatives?.length ? ` I do have ${ctx.alternatives.join(' and ')}.` : ''}`;
       }

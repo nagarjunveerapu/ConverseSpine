@@ -2049,7 +2049,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     draft = speakFailure(terminalFailure, {
       ...(terminalFailure.subject === 'emi.principal'
         ? { subjectLabel: 'a loan amount (for example, ₹85 lakh)' }
-        : {}),
+        : state.focus?.projectName
+          ? { subjectLabel: state.focus.projectName }
+          : {}),
       ...(terminalFailure.subject === 'budget' &&
       state.constraints.budgetMaxInr !== undefined
         ? { buyerValue: formatInr(state.constraints.budgetMaxInr) }
@@ -2165,6 +2167,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const failureCopy = evidence.notices
       .map((failure) =>
         speakFailure(failure, {
+          ...(state.focus?.projectName ? { subjectLabel: state.focus.projectName } : {}),
           alternatives: failureAlternatives(failure, evidence),
         }),
       )

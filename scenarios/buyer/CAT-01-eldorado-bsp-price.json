@@ -1,0 +1,23 @@
+{
+  "id": "CAT-01",
+  "title": "Catalog: focused Eldorado BSP / price-per-sqft speaks pricing (not sticky digress)",
+  "builder_id": "brigade-group",
+  "tags": ["catalog", "pricing", "completeness", "R1"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"], "phase": "focused" }
+    },
+    {
+      "text": "what's the BSP / price per sqft?",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": ["₹", "rs", "lakh", "cr", "sq", "price", "bsp", "starting"],
+        "reply_excludes": ["which project", "buena vista", "want pricing, legal details"],
+        "goal_topic": "price"
+      }
+    }
+  ]
+}
