@@ -206,6 +206,15 @@ export function renderComposePrompt(req: ComposeRequest): string {
   if (context.alreadyShownSameSet) {
     lines.push(`You already showed these exact projects — do NOT relist; advance the conversation.`);
   }
+  // A4 — advisor board owns the catalog; chat must not dump *Name* in market, price.
+  if (
+    context.channel === 'advisor_web' &&
+    (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend')
+  ) {
+    lines.push(
+      `CRITICAL: project cards are on the buyer's board from structured JSON. Write 1–2 short sentences of commentary + a clear next step. Do NOT list project names, micro-markets, or prices in the reply.`,
+    );
+  }
   if (context.buyerText && /\b(which.*better|better for)\b/i.test(context.buyerText)) {
     lines.push(
       `The buyer wants consultative guidance using ONLY the comparison facts — weigh trade-offs honestly, no invented claims.`,
@@ -327,6 +336,8 @@ function describeGoal(g: TurnGoal): string {
       return 'confirm the unit hold outcome — use the exact template';
     case 'visit_recall':
       return 'recall visits from EVIDENCE only';
+    case 'recall_constraints':
+      return 'recall the buyer brief (area, budget, BHK) from Known so far — do not open a project overview';
     case 'warm_ack':
       return 'warm short ack after visit booked — no escalation';
     case 'handoff':
@@ -501,16 +512,18 @@ export function fallbackReply(req: ComposeRequest): string {
         return `I couldn't find a fresh match with those filters — tell me if you'd like to adjust area or budget?`;
       }
       const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
-      // Four-questions rendering: each match speaks its receipts (Q1 why +
-      // Q2 trade-offs, fits-first, Desk note only as fallback), then the
-      // shortlist speaks its sensitivity (Q3) once. Chips carry Q4.
+      // Four-questions rendering (WhatsApp): each match speaks its receipts
+      // (Q1 why + Q2 trade-offs), then sensitivity (Q3). Advisor web (A4):
+      // cards on the board own the catalog — chat is thin commentary only.
       const list = ms
         .map((m) => {
           const fit = matchFitClauses(m);
           return `*${m.name}* in ${m.microMarket}${priceOf(m) ? `, ${fromPrice(priceOf(m))}` : ''}${fit ? ` — ${fit}` : ''}`;
         })
         .join('; ');
-      const sensitivity = sensitivityLine(ms);
+      const advisorWeb = context.channel === 'advisor_web';
+      // A4 — board cards carry fit/sensitivity; don't name a "leads today" winner in chat.
+      const sensitivity = advisorWeb ? '' : sensitivityLine(ms);
       const tail = sensitivity ? ` ${sensitivity}` : '';
       // Empty-locality widen: speak MARKETS (Devanahalli), never project names
       // as if they were places (Eldorado is a project).
@@ -528,6 +541,9 @@ export function fallbackReply(req: ComposeRequest): string {
         const places = joinPlaceLabels(markets) || 'nearby areas I cover';
         const exact = ev.localityWiden.exactFitName;
         if (exact) {
+          if (advisorWeb) {
+            return `${pre}I've only got *${exact}* in *${ev.localityWiden.asked}* for ${noun}. Nearby options are on your board.${tail} Want a closer look at any of these?`;
+          }
           // wantsMore after a singleton — list the nearby matches as a widen, not a Sakleshpur fit.
           return `${pre}I've only got *${exact}* in *${ev.localityWiden.asked}* for ${noun}. Nearby: ${list}.${tail} Want details on any of these?`;
         }
@@ -537,11 +553,17 @@ export function fallbackReply(req: ComposeRequest): string {
       // NOT a fit — say which dimension gave. Dimensions only, never the buyer's
       // raw values: a location capture may be dialogue noise.
       const lead = relaxedLead(ev.relaxed, context.channel);
-      const nextAsk =
-        context.channel === 'advisor_web'
-          ? 'Want a closer look at any of these, or shall we plan a visit?'
-          : 'Want details on any of these, or shall I set up a visit?';
-      let body = `${pre}${lead}: ${list}.${tail} ${nextAsk}`;
+      const nextAsk = advisorWeb
+        ? 'Want a closer look at any of these, or shall we plan a visit?'
+        : 'Want details on any of these, or shall I set up a visit?';
+      let body: string;
+      if (advisorWeb) {
+        const n = ms.length;
+        const countCue = n === 1 ? '1 match is on your board' : `${n} matches are on your board`;
+        body = `${pre}${lead} — ${countCue}.${tail} ${nextAsk}`;
+      } else {
+        body = `${pre}${lead}: ${list}.${tail} ${nextAsk}`;
+      }
       // Singleton exact fit — soft nearby CTA (board stays exact until they opt in).
       if (ev.nearbyOffer?.asked && ev.nearbyOffer.nearbyAreas.length && ms.length === 1) {
         const noun = inventoryNoun(
@@ -1035,6 +1057,23 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       const list = vs.map((v) => `*${v.projectName}* — ${v.label}${v.confirmed ? '' : ' (pending)'}`).join('; ');
       return `Your visits: ${list}. Our team will confirm details before the day.`;
+    }
+    case 'recall_constraints': {
+      const c = context.constraints;
+      const bits = [
+        c.location && `area *${c.location}*`,
+        c.budgetMaxInr && `budget ~${formatInr(c.budgetMaxInr)}`,
+        c.bhk && `*${c.bhk}*`,
+        c.purpose && `purpose ${c.purpose}`,
+      ].filter(Boolean);
+      if (!bits.length) {
+        return context.channel === 'advisor_web'
+          ? "I don't have a brief on file yet — set area, budget, or size in preferences (or tell me here)."
+          : "I don't have your brief on file yet — share area, budget, or BHK and I'll lock it in.";
+      }
+      return context.channel === 'advisor_web'
+        ? `Your brief so far: ${bits.join(', ')}. It's on the board side — change a chip anytime, or ask me to refine.`
+        : `Your brief so far: ${bits.join(', ')}. Want me to show matches again, or open one by name?`;
     }
     case 'handoff':
       return `I'll have our team reach out directly on this — they'll take it from here.`;

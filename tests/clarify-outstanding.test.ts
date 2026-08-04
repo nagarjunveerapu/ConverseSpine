@@ -11,6 +11,16 @@ describe('speakStickyClarify', () => {
     expect(copy).toMatch(/locality|budget|BHK/i);
   });
 
+  it('discover: filled brief does not hardcode locality/budget/BHK', () => {
+    const copy = speakStickyClarify({
+      phase: 'discover',
+      constraints: { location: 'Whitefield', budgetMaxInr: 8_000_000, bhk: '3 BHK' },
+    });
+    expect(copy).toMatch(/couldn't make sense/i);
+    expect(copy).not.toMatch(/locality, budget, or BHK/);
+    expect(copy).not.toMatch(/please share your/i);
+  });
+
   it('focused legal: sticky to RERA/OC', () => {
     const copy = speakStickyClarify({
       phase: 'focused',

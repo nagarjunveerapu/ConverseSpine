@@ -1,0 +1,33 @@
+{
+  "id": "CHATX-04",
+  "title": "BREAK(chat): Eldorado price → switch to Orchards — must not stay on Eldorado pricing",
+  "builder_id": "brigade-group",
+  "channel": "chat",
+  "tags": ["adversarial", "switch", "chat"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore under 1 crore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "price?",
+      "assert": { "reply_includes_any": ["eldorado", "₹", "price", "sqft"] }
+    },
+    {
+      "text": "actually tell me about Brigade Orchards instead",
+      "assert": {
+        "reply_includes": ["orchard"],
+        "reply_excludes": ["which BHK", "what's your budget", "which area"]
+      }
+    },
+    {
+      "text": "price?",
+      "assert": {
+        "reply_includes_any": ["orchard", "₹", "price", "sqft"],
+        "reply_excludes": ["which BHK", "what's your budget"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "id": "ADV-A3-01",
+  "title": "A3: panel-filled BHK/budget/area never re-asked; brief leads to shortlist",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "a3", "prefs", "quality", "no-reask"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "Which BHK",
+          "how many bedrooms",
+          "how many BHK",
+          "what's your budget",
+          "Whats your budget",
+          "what is your budget",
+          "which area",
+          "Which area",
+          "which location",
+          "Which location",
+          "where are you looking",
+          "Where are you looking",
+          "preferred area"
+        ]
+      }
+    },
+    {
+      "text": "staying on budget",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "Which BHK",
+          "how many bedrooms",
+          "how many BHK",
+          "what's your budget",
+          "what is your budget",
+          "which area",
+          "Which area",
+          "which location",
+          "where are you looking",
+          "preferred area"
+        ],
+        "reply_includes_any": [
+          "eldorado",
+          "board",
+          "match",
+          "look",
+          "visit",
+          "these",
+          "strongest",
+          "pricing",
+          "config"
+        ]
+      }
+    }
+  ]
+}

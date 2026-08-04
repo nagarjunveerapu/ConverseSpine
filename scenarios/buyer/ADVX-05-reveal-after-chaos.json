@@ -1,0 +1,55 @@
+{
+  "id": "ADVX-05",
+  "title": "BREAK(A5): digression + FAQ chaos then reveal still lands on source builder",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["adversarial", "a5", "reveal", "advisor"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      },
+      "assert": { "projects_min": 1 }
+    },
+    {
+      "text": "asdfgh qwerty",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_excludes": ["which BHK", "what's your budget", "which area"]
+      }
+    },
+    {
+      "text": "Brigade Eldorado — send RERA and also lol never mind just overview",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_excludes": ["which BHK", "what's your budget"]
+      }
+    }
+  ],
+  "reveal": {
+    "project_id_from": "projects",
+    "buyer_name": "ADX Reveal Chaos",
+    "buyer_phone": "+919911223344",
+    "visit_label": "Saturday 11:00",
+    "assert": {
+      "source_builder_id": "brigade-group",
+      "source_project_id_includes": "eldorado"
+    }
+  }
+}

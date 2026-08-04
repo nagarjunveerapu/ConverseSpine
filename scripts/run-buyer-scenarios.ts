@@ -54,11 +54,34 @@ interface AssertSpec {
    * Successful shares must NOT paste raw https URLs in reply prose.
    */
   expect_media?: boolean;
+  /** Advisor `prefs_snapshot` values must include these (case-insensitive). */
+  prefs_includes?: Record<string, string>;
+  /** Advisor `prefs_snapshot` values must NOT include these substrings. */
+  prefs_excludes?: Record<string, string>;
+  /** Advisor response `projects[]` length must be >= this. */
+  projects_min?: number;
+  /** A4 — fail if reply dumps WhatsApp-style `*Name* in market` catalog lines. */
+  no_wa_project_dump?: boolean;
 }
 
 interface ScenarioTurn {
   text: string;
+  /** Advisor brief chips — sent on /api/advisor/turn as `preferences`. */
+  preferences?: Record<string, string | undefined>;
   assert?: AssertSpec;
+}
+
+interface RevealSpec {
+  /** Use project id from last turn that returned projects[]. */
+  project_id_from?: 'projects';
+  project_id?: string;
+  buyer_name: string;
+  buyer_phone: string;
+  visit_label?: string;
+  assert?: {
+    source_builder_id?: string;
+    source_project_id_includes?: string;
+  };
 }
 
 interface BuyerScenario {
@@ -69,6 +92,8 @@ interface BuyerScenario {
   channel?: 'chat' | 'advisor';
   tags?: string[];
   turns: ScenarioTurn[];
+  /** A5 — POST /api/advisor/reveal after turns (advisor channel). */
+  reveal?: RevealSpec;
 }
 
 interface MediaAttachmentRecord {
@@ -165,12 +190,15 @@ async function advisor(
   sessionId: string,
   text: string,
   convId?: string,
+  preferences?: Record<string, string | undefined>,
 ): Promise<{
   reply_text: string;
   conversation_id: string;
   debug?: Record<string, unknown>;
   whatsapp_actions?: unknown[];
   media_attachments?: MediaAttachmentRecord[];
+  prefs_snapshot?: Record<string, string>;
+  projects?: Array<{ id?: string; name?: string }>;
   error?: string;
 }> {
   const r = await fetch(`${SPINE}/api/advisor/turn`, {
@@ -184,6 +212,9 @@ async function advisor(
       session_id: sessionId,
       text,
       ...(convId ? { conversation_id: convId } : {}),
+      ...(preferences && Object.keys(preferences).length > 0
+        ? { preferences }
+        : {}),
     }),
   });
   const body = (await r.json()) as {
@@ -191,6 +222,8 @@ async function advisor(
     conversation_id?: string;
     debug?: Record<string, unknown>;
     media_attachments?: MediaAttachmentRecord[];
+    prefs_snapshot?: Record<string, string>;
+    projects?: Array<{ id?: string; name?: string }>;
     status?: string;
     error?: string;
   };
@@ -202,6 +235,8 @@ async function advisor(
     conversation_id: body.conversation_id ?? '',
     debug: body.debug,
     media_attachments: body.media_attachments,
+    prefs_snapshot: body.prefs_snapshot,
+    projects: body.projects,
   };
 }
 
@@ -232,6 +267,8 @@ function checkAssert(
   a: AssertSpec,
   whatsappActions?: unknown[],
   mediaAttachments?: MediaAttachmentRecord[],
+  prefsSnapshot?: Record<string, string>,
+  projects?: Array<{ id?: string; name?: string }>,
 ): string[] {
   const fails: string[] = [];
   const lower = reply.toLowerCase();
@@ -250,6 +287,33 @@ function checkAssert(
     if (lower.includes(needle.toLowerCase())) {
       fails.push(`expected reply to exclude "${needle}"`);
     }
+  }
+  if (a.prefs_includes) {
+    const snap = prefsSnapshot ?? {};
+    for (const [k, want] of Object.entries(a.prefs_includes)) {
+      const got = (snap[k] ?? '').toLowerCase();
+      if (!got.includes(want.toLowerCase())) {
+        fails.push(`prefs_snapshot.${k}=${snap[k] ?? '(missing)'} want includes "${want}"`);
+      }
+    }
+  }
+  if (a.prefs_excludes) {
+    const snap = prefsSnapshot ?? {};
+    for (const [k, needle] of Object.entries(a.prefs_excludes)) {
+      const got = (snap[k] ?? '').toLowerCase();
+      if (got.includes(needle.toLowerCase())) {
+        fails.push(`prefs_snapshot.${k}=${snap[k] ?? '(missing)'} must not include "${needle}"`);
+      }
+    }
+  }
+  if (typeof a.projects_min === 'number') {
+    const n = projects?.length ?? 0;
+    if (n < a.projects_min) {
+      fails.push(`projects.length=${n} want >= ${a.projects_min}`);
+    }
+  }
+  if (a.no_wa_project_dump && /\*[^*]+\*\s+in\s+/i.test(reply)) {
+    fails.push('reply must not dump *Project* in market (cards own catalog)');
   }
   if (a.speech_act && debug?.speech_act && debug.speech_act !== a.speech_act) {
     fails.push(`speech_act=${String(debug.speech_act)} want ${a.speech_act}`);
@@ -325,6 +389,7 @@ async function main(): Promise<void> {
     let convId: string | undefined;
     const turns: TurnRecord[] = [];
     let ok = true;
+    let lastProjects: Array<{ id?: string; name?: string }> = [];
 
     console.log(`══ ${sc.id} — ${sc.title} (${sc.builder_id} / ${channel}) ══`);
 
@@ -333,9 +398,12 @@ async function main(): Promise<void> {
       try {
         const resp =
           channel === 'advisor'
-            ? await advisor(sc.builder_id, sessionId, turn.text, convId)
+            ? await advisor(sc.builder_id, sessionId, turn.text, convId, turn.preferences)
             : await chat(sc.builder_id, phone, turn.text, convId);
         convId = resp.conversation_id || convId;
+        const projects =
+          'projects' in resp ? (resp.projects as Array<{ id?: string; name?: string }> | undefined) : undefined;
+        if (projects?.length) lastProjects = projects;
         const failures = turn.assert
           ? checkAssert(
               resp.reply_text,
@@ -343,6 +411,8 @@ async function main(): Promise<void> {
               turn.assert,
               resp.whatsapp_actions,
               resp.media_attachments,
+              'prefs_snapshot' in resp ? resp.prefs_snapshot : undefined,
+              projects,
             )
           : [];
         const pass = failures.length === 0;
@@ -361,6 +431,10 @@ async function main(): Promise<void> {
             ...(resp.media_attachments?.length
               ? { media_attachments: resp.media_attachments }
               : {}),
+            ...('prefs_snapshot' in resp && resp.prefs_snapshot
+              ? { prefs_snapshot: resp.prefs_snapshot }
+              : {}),
+            ...(projects?.length ? { projects } : {}),
           },
           pass,
           failures,
@@ -389,6 +463,110 @@ async function main(): Promise<void> {
         });
         console.log(`  ✗ t${i + 1}  ERROR: ${msg}`);
         break;
+      }
+    }
+
+    if (ok && sc.reveal && channel === 'advisor') {
+      const rev = sc.reveal;
+      const projectId =
+        rev.project_id ??
+        (rev.project_id_from === 'projects'
+          ? (lastProjects.find(
+              (p) => /eldorado/i.test(p.name ?? '') || /eldorado/i.test(p.id ?? ''),
+            )?.id ?? lastProjects[0]?.id)
+          : undefined);
+      const revealFailures: string[] = [];
+      if (!projectId) {
+        revealFailures.push('reveal: no project_id from prior turns');
+        ok = false;
+        turns.push({
+          index: turns.length + 1,
+          buyer: '[reveal]',
+          reply: '',
+          conversation_id: convId ?? '',
+          pass: false,
+          failures: revealFailures,
+        });
+        console.log(`  ✗ reveal  ${revealFailures.join('; ')}`);
+      } else {
+        try {
+          const r = await fetch(`${SPINE}/api/advisor/reveal`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'user-agent': 'converse-spine-buyer-scenarios/1.0',
+            },
+            body: JSON.stringify({
+              session_id: sessionId,
+              project_id: projectId,
+              buyer_name: rev.buyer_name,
+              buyer_phone: rev.buyer_phone,
+              ...(rev.visit_label ? { visit_label: rev.visit_label } : {}),
+            }),
+          });
+          const body = (await r.json()) as {
+            status?: string;
+            source_builder_id?: string;
+            source_project_id?: string;
+            conversation_id?: string;
+            error?: string;
+          };
+          if (!r.ok || body.status === 'error') {
+            revealFailures.push(`reveal HTTP/error: ${body.error ?? r.status}`);
+          } else {
+            if (
+              rev.assert?.source_builder_id &&
+              body.source_builder_id !== rev.assert.source_builder_id
+            ) {
+              revealFailures.push(
+                `source_builder_id=${body.source_builder_id} want ${rev.assert.source_builder_id}`,
+              );
+            }
+            if (
+              rev.assert?.source_project_id_includes &&
+              !(body.source_project_id ?? '')
+                .toLowerCase()
+                .includes(rev.assert.source_project_id_includes.toLowerCase())
+            ) {
+              revealFailures.push(
+                `source_project_id=${body.source_project_id} want includes ${rev.assert.source_project_id_includes}`,
+              );
+            }
+          }
+          const pass = revealFailures.length === 0;
+          if (!pass) ok = false;
+          turns.push({
+            index: turns.length + 1,
+            buyer: `[reveal] ${rev.buyer_name} ${rev.buyer_phone}`,
+            reply: pass
+              ? `ok · source=${body.source_builder_id}/${body.source_project_id} · lead=${body.conversation_id}`
+              : body.error ?? 'reveal_failed',
+            conversation_id: body.conversation_id ?? convId ?? '',
+            pass,
+            failures: revealFailures,
+            debug: { reveal: body },
+          });
+          console.log(`  ${pass ? '✓' : '✗'} reveal  ${projectId}`);
+          console.log(
+            `         → ${
+              pass
+                ? `source ${body.source_builder_id}/${body.source_project_id}`
+                : revealFailures.join('; ')
+            }`,
+          );
+        } catch (e) {
+          ok = false;
+          const msg = e instanceof Error ? e.message : String(e);
+          turns.push({
+            index: turns.length + 1,
+            buyer: '[reveal]',
+            reply: '',
+            conversation_id: convId ?? '',
+            pass: false,
+            failures: [msg],
+          });
+          console.log(`  ✗ reveal  ERROR: ${msg}`);
+        }
       }
     }
 

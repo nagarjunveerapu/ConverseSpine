@@ -1,0 +1,32 @@
+{
+  "id": "ADV-A4-01",
+  "title": "A4: advisor recommend is thin commentary; projects[] carry the catalog",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "a4", "cards", "quality"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      },
+      "assert": {
+        "projects_min": 1,
+        "no_wa_project_dump": true,
+        "reply_includes_any": ["board", "match", "look", "visit", "closer", "strongest"],
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking",
+          "Aerospace Park",
+          "₹31 L"
+        ]
+      }
+    }
+  ]
+}

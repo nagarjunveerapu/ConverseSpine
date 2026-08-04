@@ -1,0 +1,56 @@
+{
+  "id": "ADVX-02",
+  "title": "BREAK(A3): full prefs → smalltalk → 'ok show options' must not re-ask hard slots",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["adversarial", "a3", "digression", "advisor"],
+  "turns": [
+    {
+      "text": "hi",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      }
+    },
+    {
+      "text": "haha how are you doing today?",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking"
+        ]
+      }
+    },
+    {
+      "text": "ok show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "projects_min": 1,
+        "no_wa_project_dump": true,
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking"
+        ],
+        "reply_includes_any": ["board", "match", "look", "visit", "strongest"]
+      }
+    }
+  ]
+}

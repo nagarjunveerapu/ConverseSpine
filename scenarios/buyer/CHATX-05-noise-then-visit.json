@@ -1,0 +1,30 @@
+{
+  "id": "CHATX-05",
+  "title": "BREAK(chat): gibberish mid-focus must not book visit; later visit ask still works",
+  "builder_id": "brigade-group",
+  "channel": "chat",
+  "tags": ["adversarial", "noise", "visit", "chat"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "!!!! ??? xxx",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked", "confirmed your visit"]
+      }
+    },
+    {
+      "text": "I want to visit",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_includes_any": ["day", "time", "when", "visit", "Saturday", "slot"],
+        "reply_excludes": ["I've booked", "confirmed your visit"]
+      }
+    }
+  ]
+}

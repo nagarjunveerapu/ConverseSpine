@@ -1980,6 +1980,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     currentShortlist(state).length === 0 &&
     (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
     (evidence.matches?.length ?? 0) > 0;
+  // A4 — advisor board owns the catalog; never let LLM re-dump *Name* in market.
+  const advisorRecommendDeterministic =
+    channel === 'advisor_web' &&
+    (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') &&
+    (evidence.matches?.length ?? 0) > 0;
   const clarifyPickDeterministic = goal.kind === 'clarify_project_pick';
   const clarifyDiscourseDeterministic = goal.kind === 'clarify_discourse';
   // Sticky / honest miss — never LLM into portfolio pitch.
@@ -1998,6 +2003,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   const visitRecallDeterministic = goal.kind === 'visit_recall' && !!evidence.visits;
   const warmAckDeterministic = goal.kind === 'warm_ack';
   const ctaDeclineDeterministic = goal.kind === 'advance' && goal.reason === 'cta_decline';
+  // Focused bare-ack advance must stay on visit/hold nudge — LLM was re-probing BHK.
+  const focusedAdvanceDeterministic =
+    goal.kind === 'advance' && goal.reason === 'same_set' && !!state.focus?.projectName;
+  const recallConstraintsDeterministic = goal.kind === 'recall_constraints';
   // FAQ miss must stay on the honest-miss template — never LLM paraphrase into overview.
   const faqMissDeterministic =
     goal.kind === 'answer' && Boolean(evidence.faqMiss?.keys.length);
@@ -2029,6 +2038,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     visitDeterministic ||
     holdDeterministic ||
     firstShortlistTurn ||
+    advisorRecommendDeterministic ||
     clarifyPickDeterministic ||
     clarifyDiscourseDeterministic ||
     clarifyIntentDeterministic ||
@@ -2040,8 +2050,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     availabilityDeterministic ||
     legalDeterministic ||
     visitRecallDeterministic ||
+    recallConstraintsDeterministic ||
     warmAckDeterministic ||
     ctaDeclineDeterministic ||
+    focusedAdvanceDeterministic ||
     faqMissDeterministic ||
     propertyTypeDeterministic ||
     commitDeterministic ||
@@ -2468,6 +2480,7 @@ function decideGoal(
   visitCtx: visit.VisitCtx | null,
   text = '',
 ): TurnGoal {
+  if (ex.recallConstraints) return { kind: 'recall_constraints' };
   if (ex.recall) return { kind: 'visit_recall' };
   // "Get me a person" outranks the phase, exactly as recall does. Someone
   // asking for grievance redressal, or reporting the third leak in their
@@ -2504,8 +2517,10 @@ async function decideGoalAsync(
   text: string,
   channel: TurnIntentChannel = 'whatsapp',
 ): Promise<TurnGoal> {
+  if (ex.recallConstraints) return { kind: 'recall_constraints' };
   // Noise / smash — sticky clarify before ask_next_step / false brochure binds.
   // Ignore askTopics: embedder often nearest-neighbours get_brochure on smash.
+  // When the hard brief is already filled, bare "ok" must advance — not re-probe.
   if (
     s.phase === 'discover' &&
     isNonPlaceUtterance(text) &&
@@ -2513,6 +2528,9 @@ async function decideGoalAsync(
     !(ex.namedProjects?.length) &&
     ex.transition !== 'want_visit'
   ) {
+    if (discover.hasNarrowingConstraint(s.constraints) && !discover.firstMissingSlot(s)) {
+      return resolveAskNextStepGoal(s, channel);
+    }
     return { kind: 'clarify_intent' };
   }
   // Phase 2c — ask_next_step is state-conditioned; consume before phase decide

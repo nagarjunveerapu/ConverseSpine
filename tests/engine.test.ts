@@ -338,6 +338,54 @@ describe('ConverseEngine compose fallback', () => {
     expect(reply).toMatch(/24\.95 L/);
   });
 
+  it('A4 advisor_web recommend is thin commentary (no project-name dump)', () => {
+    const matches = [
+      {
+        projectId: 'brigade-eldorado',
+        name: 'Brigade Eldorado',
+        microMarket: 'Aerospace Park / Devanahalli Corridor',
+        startingPriceInr: 3_100_000,
+        startingPriceDisplay: '₹31 L',
+        matchReasons: [],
+      },
+      {
+        projectId: 'brigade-orchards',
+        name: 'Brigade Orchards',
+        microMarket: 'Devanahalli / Airport Corridor',
+        startingPriceInr: 4_100_000,
+        startingPriceDisplay: '₹41 L',
+        matchReasons: [],
+      },
+    ];
+    const evidence = { tools: ['search'], matches };
+    const wa = fallbackReply(
+      buildComposeRequest(
+        { kind: 'recommend' },
+        evidence,
+        { constraints: {}, alreadyShownSameSet: false, builderName: 'Naya', channel: 'whatsapp' },
+      ),
+    );
+    expect(wa).toMatch(/\*Brigade Eldorado\*/);
+    expect(wa).toMatch(/Aerospace Park/);
+
+    const web = fallbackReply(
+      buildComposeRequest(
+        { kind: 'recommend' },
+        evidence,
+        {
+          constraints: { location: 'North Bangalore' },
+          alreadyShownSameSet: false,
+          builderName: 'Naya',
+          channel: 'advisor_web',
+        },
+      ),
+    );
+    expect(web).toMatch(/on your board/i);
+    expect(web).not.toMatch(/\*Brigade Eldorado\*/);
+    expect(web).not.toMatch(/Aerospace Park/);
+    expect(web).not.toMatch(/₹31 L/);
+  });
+
   it('multi-intent pricing + legal in one reply', () => {
     const req = buildComposeRequest(
       { kind: 'answer', topic: 'price', topics: ['price', 'legal'], projectId: 'ayana' },

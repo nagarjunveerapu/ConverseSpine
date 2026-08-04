@@ -14,6 +14,7 @@ import {
   advisorPrefsDelta,
   advisorPrefsSnapshot,
   ingressFilledSlotsFromPreferences,
+  markAskedFromAdvisorConstraints,
   mergeAdvisorPreferences,
   preferenceClearsFromPatch,
 } from './apply-preferences.js';
@@ -148,6 +149,9 @@ export async function handleAdvisorTurn(
           existing.advisorPrefsSnapshot,
         ),
       };
+      // A3 — post-merge constraints drive markAsked so re-sent briefs keep
+      // hard slots off the probe ladder even when the delta is empty.
+      existing = markAskedFromAdvisorConstraints(existing);
       await rt.engine.store.save(existing);
     }
     if (!inRecovery && !ingressFailure) {

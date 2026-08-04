@@ -1,0 +1,20 @@
+{
+  "base": "https://converse-spine-dev.nagarjun-arjun.workers.dev",
+  "file": "/Users/arjun/Nayaworkspace/ConverseSpine/corpus/pending/a3-a5-media-teach/upsert-items.jsonl",
+  "items": 23,
+  "written": 23,
+  "errors": 0,
+  "reports": [
+    {
+      "http": 200,
+      "batch_start": 0,
+      "size": 23,
+      "ok": true,
+      "written": 23,
+      "space": "p256-f6665e0b79",
+      "model": "@cf/baai/bge-base-en-v1.5",
+      "errors": []
+    }
+  ],
+  "at": "2026-08-04T13:12:38.150Z"
+}

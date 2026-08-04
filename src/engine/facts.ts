@@ -27,6 +27,9 @@ const WANTS_MORE_RE =
 // Booking deixis only — bare "the visit" is visit_book (chip resolve), not recall (SA-2).
 const VISIT_RECALL_RE =
   /\b(?:my|all) (?:site )?(?:visits?|bookings?)\b|visits? (?:i have )?(?:planned|booked|scheduled)/i;
+/** Prefs/brief recall — not visit_recall, not a probe for missing slots. */
+const CONSTRAINT_RECALL_RE =
+  /\b(?:what was my budget|what'?s my budget again|remind me (?:of )?my (?:budget|area|brief|prefs?|preferences?)|which area did i (?:pick|choose|set|say)|what(?:'s| is) my (?:budget|area|brief)\b|mera budget (?:kya|kitna)|kaunsa area (?:tha|liya))/i;
 const COMPARE_ADVICE_RE =
   /\b(which one is better|which is better|better for|recommend between|which fits my budget|best for my budget|fits my budget best)\b/i;
 // Opt-out is a destructive action (buyer memory delete) — the trigger must target
@@ -124,6 +127,7 @@ export async function extractFacts(
     /\b(?:not|don'?t|do not|no|skip|drop|other than|except)\b/i.test(text);
   const reject = REJECT.test(text) || negatesShown;
   const recall = VISIT_RECALL_RE.test(text);
+  const recallConstraints = !recall && CONSTRAINT_RECALL_RE.test(text);
   const wantsMore = WANTS_MORE_RE.test(text);
   const compareAdvice = COMPARE_ADVICE_RE.test(text);
   const objection =
@@ -254,6 +258,7 @@ export async function extractFacts(
     ...(objection ? { objection: true, objectionTopic: mapObjectionTopic(text) } : {}),
     wantsMore,
     recall,
+    ...(recallConstraints ? { recallConstraints: true } : {}),
     smalltalk,
     ...(postVisitAck ? { postVisitAck: true } : {}),
     ...(stop ? { stop: true } : {}),
@@ -999,6 +1004,12 @@ export function detectMediaAssetKind(text: string): string | undefined {
   if (/\b(?:rera\s*(?:cert(?:ificate)?|document)|ownership\s+cert(?:ificate)?)\b/.test(s)) {
     return 'ownership_certificate';
   }
+  if (/\b(?:crop\s*yield|yield\s*report|soil\s*report)\b/.test(s)) {
+    if (/\b(?:soil)\b/.test(s)) return 'soil_report';
+    return 'crop_yield_report';
+  }
+  if (/\b(?:revenue\s*sharing|rev\s*share)\b/.test(s)) return 'revenue_sharing_model';
+  if (/\b(?:location\s*map|site\s*map|project\s*map)\b/.test(s)) return 'location_map';
   if (/\b(?:brochure|pdf|e-?brochure)\b/.test(s)) return 'brochure';
   return undefined;
 }
@@ -1222,6 +1233,11 @@ function cleanLocalityFragment(raw: string): string {
     .trim()
     .replace(/[?!.,;:]+$/, '')
     .replace(/\s+(?:too|also|as well)\.?\s*$/i, '')
+    // UI / chip chrome after an em-dash or spaced dash ("Whitefield — ignore the chip").
+    .replace(/\s*[—–]\s*.*$/u, '')
+    .replace(/\s+-\s+(?:ignore|not|forget|skip)\b.*$/i, '')
+    .replace(/\bignore\s+the\s+chip\b.*$/i, '')
+    .replace(/\bnot\s+the\s+chip\b.*$/i, '')
     // Budget / BHK glued by greedy `in …` capture — not part of locality.
     .replace(
       /\s+(?:under|below|above|upto|up\s+to|around|about|within)\s+[\d.,]+\s*(?:cr|crore|crs|lakh|lakhs|lacs?|l)\b.*$/i,
@@ -1269,11 +1285,14 @@ const LOCALITY_STOP = new Set([
   // Facet words that survive after peeling "tell me …" — never places.
   'location', 'locations', 'connectivity', 'distance', 'map', 'directions',
   'commute',
+  // Advisor / SPA chrome — never a search locality ("open the board", "ignore the chip").
+  'board', 'shortlist', 'chip', 'chips', 'panel', 'prefs', 'preferences',
+  'ignore', 'open', 'tap',
 ]);
 
 /** Facet / Q&A chips that must never become constraints.location. */
 const NON_LOCALITY_LEXICON =
-  /\b(?:appreciat\w*|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loans?|discount|honest|guarantee|flexible|years?|book\s+today|emi|offers?|looking|invest(?:ing|ment)?|interested|searching|weekends?|hills?|greenery|nature|\bltv\b)\b/i;
+  /\b(?:appreciat\w*|possession|rera|pricing|budget|bhk|yield|rental|percent|ballpark|loans?|discount|honest|guarantee|flexible|years?|book\s+today|emi|offers?|looking|invest(?:ing|ment)?|interested|searching|weekends?|hills?|greenery|nature|\bltv\b|open\s+the\s+board|on\s+(?:my|the)\s+board|shortlist|ignore\s+the\s+chip)\b/i;
 
 /**
  * Peel stopwords off both ends of a captured fragment. `isLocalityNoise` only
@@ -1340,6 +1359,16 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   }
   // Project re-focus / switch — not a locality (W1: "back to Ayana").
   if (/\bback\s+to\b/i.test(trimmed)) return undefined;
+  // Advisor SPA chrome as the whole ask — never invent a locality ("open the board").
+  // Do NOT bail when chrome is a trailing aside after a real place
+  // ("looking in Whitefield — ignore the chip" still extracts Whitefield).
+  if (
+    /^(?:(?:open|show|back\s+to)\s+(?:the\s+)?(?:board|shortlist)|(?:on|to)\s+(?:my|the)\s+board)\b/i.test(
+      trimmed,
+    )
+  ) {
+    return undefined;
+  }
   if (
     /\b(?:keep|continue)\s+refining\b/i.test(trimmed) ||
     /\brefine(?:\s+(?:the|my))?\s+search\b/i.test(trimmed)
@@ -1408,7 +1437,8 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   const leadIn = /^([^,]{1,40}),\s*(.+)$/.exec(scan);
   if (leadIn && isLocalityNoise(leadIn[1])) scan = leadIn[2];
 
-  const inTail = /\bin\s+(.+?)\s*$/i.exec(scan);
+  // Stop at em-dash / comma so "in Whitefield — ignore the chip" → Whitefield.
+  const inTail = /\bin\s+([A-Za-z][A-Za-z\s'-]{1,40}?)(?:\s*[—–,.]|\s*$)/i.exec(scan);
   if (inTail?.[1]) {
     const loc = acceptLocality(inTail[1]);
     if (loc) return loc;

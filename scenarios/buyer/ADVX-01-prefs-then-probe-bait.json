@@ -1,0 +1,53 @@
+{
+  "id": "ADVX-01",
+  "title": "BREAK(A3): filled prefs + probe bait ('what's my budget/which area') must not restart brief",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["adversarial", "a3", "prefs", "advisor"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      },
+      "assert": {
+        "projects_min": 1,
+        "no_wa_project_dump": true,
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "what is your budget",
+          "which area",
+          "where are you looking"
+        ]
+      }
+    },
+    {
+      "text": "wait what was my budget again and which area did I pick?",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "goal_kind": "recall_constraints",
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "what is your budget",
+          "which area are you",
+          "where are you looking",
+          "tell me your budget",
+          "overview",
+          "Eldorado is"
+        ],
+        "reply_includes_any": ["80", "1 Cr", "1 cr", "north", "bangalore", "budget", "area", "brief"]
+      }
+    }
+  ]
+}

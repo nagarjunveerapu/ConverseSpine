@@ -1,0 +1,41 @@
+{
+  "id": "ADVX-03",
+  "title": "BREAK(A3/A4): stale North Bangalore chip + free-text Whitefield pivot must update prefs",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["adversarial", "a3", "a4", "pivot", "advisor"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      },
+      "assert": { "projects_min": 1, "no_wa_project_dump": true }
+    },
+    {
+      "text": "actually looking in Whitefield instead — ignore the chip",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "prefs_includes": { "location": "Whitefield" },
+        "prefs_excludes": { "location": "ignore" },
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "which area",
+          "where are you looking",
+          "ignore the chip"
+        ],
+        "no_wa_project_dump": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "id": "ADVX-04",
+  "title": "BREAK(A3/A4): recommend → focus → price FAQ → 'show other options' must not re-ask brief",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["adversarial", "a3", "a4", "focus", "advisor"],
+  "turns": [
+    {
+      "text": "show me options",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use",
+        "commute_hub": "not commute"
+      },
+      "assert": { "projects_min": 1, "no_wa_project_dump": true }
+    },
+    {
+      "text": "Brigade Eldorado",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "what's the price?",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_includes_any": ["eldorado", "₹", "price", "sqft", "lakh", "cr"],
+        "reply_excludes": ["which BHK", "what's your budget", "which area"]
+      }
+    },
+    {
+      "text": "show me other options too",
+      "preferences": {
+        "bhk": "2 BHK",
+        "budget": "₹80L–1 Cr",
+        "location": "North Bangalore",
+        "purpose": "self_use"
+      },
+      "assert": {
+        "reply_excludes": [
+          "which BHK",
+          "what's your budget",
+          "what is your budget",
+          "which area",
+          "where are you looking"
+        ],
+        "no_wa_project_dump": true,
+        "reply_includes_any": ["board", "match", "option", "look", "visit", "orchard", "eldorado", "strongest"]
+      }
+    }
+  ]
+}

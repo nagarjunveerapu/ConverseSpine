@@ -79,6 +79,7 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
     return { kind: 'warm_ack' };
   }
 
+  if (ex.recallConstraints) return { kind: 'recall_constraints' };
   if (ex.recall) return { kind: 'visit_recall' };
   if (
     ex.emiContractV1 &&
@@ -125,6 +126,7 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
     !ex.askTopics?.length &&
     !ex.objection &&
     !ex.recall &&
+    !ex.recallConstraints &&
     !(ex.namedProjects?.length);
 
   // P4-CTA defense: pending offer_pricing blocks bareAffirm below, so a missed
