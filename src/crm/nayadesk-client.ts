@@ -562,6 +562,8 @@ export class NayaDeskClient {
     conversation_id: string;
     asset_kind: string;
     unit_type_filter?: string;
+    /** Prefer phase-scoped media when Desk has phase_id rows (R4). */
+    phase_id?: string;
   }): Promise<{
     allowed: boolean;
     asset?: { title: string; cdn_url: string; asset_kind: string; mime_type?: string };

@@ -1,7 +1,10 @@
 import type { Failure } from './outcome.js';
 
 export interface SpeakContext {
+  /** Human label for the failed subject (e.g. "carpet area", loan amount). */
   subjectLabel?: string;
+  /** Focused project name for intel-gated declines — never used as the subject. */
+  projectName?: string;
   buyerValue?: string;
   readings?: readonly [string, string];
   alternatives?: readonly string[];
@@ -77,7 +80,7 @@ export function speakFailure(failure: Failure, ctx: SpeakContext = {}): string {
       if (failure.subject === 'education_explainer') {
         return "I don't have a short explainer for that yet — ask me about property types, buying steps, or buyer documents, or name a project.";
       }
-      const gated = intelGatedCopy(failure.subject, ctx.subjectLabel);
+      const gated = intelGatedCopy(failure.subject, ctx.projectName);
       if (gated) {
         return `${gated}${ctx.alternatives?.length ? ` I do have ${ctx.alternatives.join(' and ')}.` : ''}`;
       }

@@ -565,13 +565,14 @@ export function nayadeskData(
       }
     },
 
-    async mediaShare(nd, projectId, assetKind, unitType) {
+    async mediaShare(nd, projectId, assetKind, unitType, phaseId) {
       try {
         const resp = await crm.mediaShare({
           project_id: projectId,
           conversation_id: nd,
           asset_kind: assetKind,
           ...(unitType ? { unit_type_filter: unitType } : {}),
+          ...(phaseId ? { phase_id: phaseId } : {}),
         });
         return {
           allowed: resp.allowed,

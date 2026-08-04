@@ -2053,9 +2053,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     draft = speakFailure(terminalFailure, {
       ...(terminalFailure.subject === 'emi.principal'
         ? { subjectLabel: 'a loan amount (for example, ₹85 lakh)' }
-        : state.focus?.projectName
-          ? { subjectLabel: state.focus.projectName }
-          : {}),
+        : {}),
+      ...(state.focus?.projectName ? { projectName: state.focus.projectName } : {}),
       ...(terminalFailure.subject === 'budget' &&
       state.constraints.budgetMaxInr !== undefined
         ? { buyerValue: formatInr(state.constraints.budgetMaxInr) }
@@ -2171,7 +2170,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const failureCopy = evidence.notices
       .map((failure) =>
         speakFailure(failure, {
-          ...(state.focus?.projectName ? { subjectLabel: state.focus.projectName } : {}),
+          ...(state.focus?.projectName ? { projectName: state.focus.projectName } : {}),
           alternatives: failureAlternatives(failure, evidence),
         }),
       )
@@ -3578,7 +3577,11 @@ async function fetchAnswer(
         },
       };
     } else {
-      const media = await deps.data.mediaShare(nd, goal.projectId, assetKind, unitType).catch(() => null);
+      // R4 — prefer first active phase when Desk has phase-scoped media.
+      const phaseId = evidence.detail?.phases?.[0]?.phaseId;
+      const media = await deps.data
+        .mediaShare(nd, goal.projectId, assetKind, unitType, phaseId)
+        .catch(() => null);
       if (media) {
         tools.push('mediaShare');
         // Requested `assetKind` first so an honest miss can name it ("floor plan");
@@ -3661,8 +3664,9 @@ async function fetchAnswer(
         focusName;
       const projectName = mediaName || focusName || 'this project';
       for (const kind of ['site_image', 'floor_plan'] as const) {
+        const phaseId = evidence.detail?.phases?.[0]?.phaseId;
         const media = await deps.data
-          .mediaShare(nd, goal.projectId, kind, bhkFilter)
+          .mediaShare(nd, goal.projectId, kind, bhkFilter, phaseId)
           .catch(() => null);
         if (media?.allowed && media.cdnUrl) {
           tools.push('mediaShare');

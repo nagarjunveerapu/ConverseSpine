@@ -150,6 +150,7 @@ export async function runTool(
           conversation_id: conversationId,
           asset_kind: assetKind,
           unit_type_filter: call.args.unit_type ? String(call.args.unit_type) : undefined,
+          ...(call.args.phase_id ? { phase_id: String(call.args.phase_id) } : {}),
         });
         const p = await resolveProject(rt, conversationId, pid);
         return {
