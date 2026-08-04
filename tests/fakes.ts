@@ -326,12 +326,22 @@ export function fakeData(): EngineData & {
         },
       ];
     },
-    async mediaShare(_nd, _pid, assetKind) {
+    async mediaShare(_nd, _pid, assetKind, unitType) {
+      const kind = assetKind || 'brochure';
+      if (kind === 'site_image') {
+        const ut = (unitType ?? 'gallery').toLowerCase().replace(/\s+/g, '');
+        return {
+          allowed: true,
+          title: unitType ? `${unitType} Unit View` : 'Site Gallery',
+          cdnUrl: `https://cdn.example/site-${ut}.png`,
+          assetKind: kind,
+        };
+      }
       return {
         allowed: true,
-        title: assetKind === 'brochure' ? 'Project brochure' : 'Floor plan',
+        title: kind === 'brochure' ? 'Project brochure' : 'Floor plan',
         cdnUrl: 'https://cdn.example/brochure.pdf',
-        assetKind,
+        assetKind: kind,
       };
     },
     async marketIntel(_microMarket) {

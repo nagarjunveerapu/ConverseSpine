@@ -1,0 +1,26 @@
+{
+  "id": "ADV-CAT-01",
+  "title": "Advisor catalog: Eldorado price sheet PDF",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "catalog", "media", "price_sheet"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "I'm looking for an apartment in North Bangalore around 80 lakhs",
+      "assert": { "reply_includes_any": ["north", "bangalore", "apartment", "project", "eldorado", "budget"] }
+    },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "send the price sheet",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": ["price", "sheet", "http", "pdf", "don't have", "do not have"],
+        "expect_media": true
+      }
+    }
+  ]
+}

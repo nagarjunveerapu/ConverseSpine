@@ -63,12 +63,13 @@ describe('AB-10 — media miss composes buyer-safe copy, never the internal hint
     expect(reply).toMatch(/document/);
   });
 
-  it('still shares the asset when it is allowed', () => {
+  it('names the asset when allowed without pasting the signed URL', () => {
     const reply = fallbackReply(
       mediaMissReq({ allowed: true, cdnUrl: 'https://cdn/x.pdf', title: 'Oasis Floor Plan' }),
     );
-    expect(reply).toContain('https://cdn/x.pdf');
-    expect(reply).toMatch(/Oasis Floor Plan/);
+    expect(reply).not.toContain('https://cdn/x.pdf');
+    expect(reply).toMatch(/floor plan/i);
+    expect(reply).toMatch(/Brigade Oasis/);
   });
 });
 

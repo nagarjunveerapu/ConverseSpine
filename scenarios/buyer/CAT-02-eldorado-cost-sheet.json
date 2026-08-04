@@ -1,0 +1,33 @@
+{
+  "id": "CAT-02",
+  "title": "Catalog: cost sheet / stamp duty / GST on focused Eldorado (W7 price path)",
+  "builder_id": "brigade-group",
+  "tags": ["catalog", "pricing", "cost-sheet", "W7"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "show me the cost sheet — stamp duty and GST?",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": [
+          "stamp",
+          "gst",
+          "registration",
+          "₹",
+          "charge",
+          "don't have",
+          "do not have",
+          "on file",
+          "cost"
+        ],
+        "reply_excludes": ["which project", "buena vista", "want pricing, legal details"],
+        "goal_topic": "price"
+      }
+    }
+  ]
+}

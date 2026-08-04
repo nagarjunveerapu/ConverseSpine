@@ -227,6 +227,6 @@ describe('Phase C — answer all capped topics', () => {
     });
     expect(reply).toMatch(/₹9,000|Pricing/i);
     expect(reply).toMatch(/brochure/i);
-    expect(reply).toContain('https://cdn.example/brochure.pdf');
+    expect(reply).not.toContain('https://cdn.example/brochure.pdf');
   });
 });

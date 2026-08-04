@@ -1,0 +1,31 @@
+{
+  "id": "CAT-12",
+  "title": "Catalog: OC / ownership certificate shareable (R3 cleared path)",
+  "builder_id": "brigade-group",
+  "tags": ["catalog", "media", "ownership_certificate", "R3"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "send the ownership certificate",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": [
+          "ownership",
+          "certificate",
+          "oc",
+          "http",
+          "pdf",
+          "don't have",
+          "do not have",
+          "site visit"
+        ],
+        "expect_media": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "CAT-05",
+  "title": "Catalog: 2BHK floor plan ask stays on Eldorado (unit-typed media path)",
+  "builder_id": "brigade-group",
+  "tags": ["catalog", "media", "floor_plan", "R5"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "send the 2BHK floor plan",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": [
+          "floor",
+          "plan",
+          "2",
+          "bhk",
+          "layout",
+          "don't have",
+          "do not have",
+          "not available",
+          "after"
+        ],
+        "reply_excludes": ["which project", "buena vista"],
+        "expect_media": true
+      }
+    }
+  ]
+}

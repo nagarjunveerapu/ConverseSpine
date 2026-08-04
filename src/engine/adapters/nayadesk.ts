@@ -47,7 +47,13 @@ async function resolveMarketIntel(
   nested: NdMarketIntel | null | undefined,
   microMarket: string,
 ): Promise<ReturnType<typeof gateMarketIntel>> {
-  if (nested) return gateMarketIntel(nested);
+  // Nested may be present but ungated (empty bands / low confidence) — fall
+  // through to the fuzzy corridor lookup so a stale embed can't block a fresh
+  // approved micro_market_intel row (Eldorado / Devanahalli showcase).
+  if (nested) {
+    const gated = gateMarketIntel(nested);
+    if (gated) return gated;
+  }
   const q = microMarket.trim();
   if (!q) return undefined;
   try {
@@ -559,19 +565,21 @@ export function nayadeskData(
       }
     },
 
-    async mediaShare(nd, projectId, assetKind, unitType) {
+    async mediaShare(nd, projectId, assetKind, unitType, phaseId) {
       try {
         const resp = await crm.mediaShare({
           project_id: projectId,
           conversation_id: nd,
           asset_kind: assetKind,
           ...(unitType ? { unit_type_filter: unitType } : {}),
+          ...(phaseId ? { phase_id: phaseId } : {}),
         });
         return {
           allowed: resp.allowed,
           ...(resp.asset?.title ? { title: resp.asset.title } : {}),
           ...(resp.asset?.cdn_url ? { cdnUrl: resp.asset.cdn_url } : {}),
           ...(resp.asset?.asset_kind ? { assetKind: resp.asset.asset_kind } : {}),
+          ...(resp.asset?.mime_type ? { mimeType: resp.asset.mime_type } : {}),
           ...(resp.reason ? { reason: resp.reason } : {}),
           ...(resp.redirect_hint ? { redirectHint: resp.redirect_hint } : {}),
         };

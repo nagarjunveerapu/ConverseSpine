@@ -1,0 +1,33 @@
+{
+  "id": "ADV-CAT-03",
+  "title": "Advisor catalog: Eldorado rental yield with corridor intel",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "catalog", "crm", "yield"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore for investment" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "what is the rental yield?",
+      "assert": {
+        "reply_includes_any": [
+          "eldorado",
+          "devanahalli",
+          "rent",
+          "yield",
+          "%",
+          "roi",
+          "don't have",
+          "do not have",
+          "not on file",
+          "can't quote",
+          "cannot quote"
+        ]
+      }
+    }
+  ]
+}

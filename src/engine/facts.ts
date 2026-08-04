@@ -814,7 +814,9 @@ const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [
   },
   {
     topic: 'media',
-    re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|share (?:the )?(?:brochure|plan)|(?:brochure|floor\s*plan|layout|pdf|photos?)\s*(?:bhejo|bhej|bhejna|bhej\s*do)|(?:bhejo|bhej)\s*(?:brochure|pdf|photos?|floor\s*plan)?)\b/i,
+    // Include price/payment/master plan PDFs when the buyer asks to send/share —
+    // spoken "cost sheet?" stays on the price topic above for GST/stamp.
+    re: /\b(?:brochure|floor plan|layout|video|photos?|images?|pdf|master\s*plan|price\s*sheet|pricing\s*sheet|(?:send|share)\s+(?:the\s+)?(?:cost\s*sheet|payment\s*plan|payment\s*schedule|clp)|share (?:the )?(?:brochure|plan|price\s*sheet|payment\s*plan)|(?:brochure|floor\s*plan|layout|pdf|photos?|price\s*sheet|payment\s*plan)\s*(?:bhejo|bhej|bhejna|bhej\s*do)|(?:bhejo|bhej)\s*(?:brochure|pdf|photos?|floor\s*plan|price\s*sheet|payment\s*plan)?)\b/i,
   },
   {
     // Focused project/builder/USP asks — hold overview so discourse prefixes
@@ -976,14 +978,21 @@ export function parseEmiPrincipal(text: string): number | undefined {
   return inr && inr >= 100_000 ? inr : undefined;
 }
 
-function detectMediaAssetKind(text: string): string | undefined {
+/** Desk asset_kind for media share — exported for CAT / unit probes. */
+export function detectMediaAssetKind(text: string): string | undefined {
   const s = text.toLowerCase();
   // Return Desk AssetKind values (see media-asset.ts) — aliases like "photo"
   // used to 400 /api/media/share and drop media evidence entirely.
   if (/\b(?:floor plan|layout|unit plan)\b/.test(s)) return 'floor_plan';
   if (/\b(?:master\s*plan)\b/.test(s)) return 'master_plan';
+  // Payment-plan PDF / CLP schedule — distinct from FAQ "what is the payment plan?".
+  if (/\b(?:payment\s*plan|payment\s*schedule|clp(?:\s+schedule)?)\b/.test(s)
+    && /\b(?:send|share|bhej|pdf|document|sheet|file)\b/.test(s)) {
+    return 'payment_plan';
+  }
   if (/\b(?:video|walkthrough|tour)\b/.test(s)) return 'video';
-  if (/\b(?:photo|image|gallery|site\s+photos?)\b/.test(s)) return 'site_image';
+  // photos/images (plural) must match — `\bphoto\b` misses "photos".
+  if (/\b(?:photos?|images?|pics?|gallery|site\s+photos?)\b/.test(s)) return 'site_image';
   if (/\b(?:cost\s*sheet|price\s*sheet|pricing\s*sheet|price\s*list)\b/.test(s)) {
     return 'price_sheet';
   }

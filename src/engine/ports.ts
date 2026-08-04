@@ -83,6 +83,7 @@ export interface MediaShareResult {
   title?: string;
   cdnUrl?: string;
   assetKind?: string;
+  mimeType?: string;
   reason?: string;
   redirectHint?: string;
 }
@@ -160,7 +161,13 @@ export interface EngineData {
     display: string;
   }>>;
   listUnits(projectId: string): Promise<UnitConfig[]>;
-  mediaShare(ndConversationId: string, projectId: string, assetKind: string, unitType?: string): Promise<MediaShareResult | null>;
+  mediaShare(
+    ndConversationId: string,
+    projectId: string,
+    assetKind: string,
+    unitType?: string,
+    phaseId?: string,
+  ): Promise<MediaShareResult | null>;
   conversationContext(ndConversationId: string): Promise<import('../crm/nayadesk-client.js').NdContextBundle | null>;
   /** Approved corridor value intel for a micro-market string; null = honest absence. */
   marketIntel(microMarket: string): Promise<import('../crm/nayadesk-client.js').NdMarketIntel | null>;

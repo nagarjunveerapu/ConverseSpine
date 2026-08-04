@@ -1,0 +1,23 @@
+{
+  "id": "CAT-09",
+  "title": "Catalog: send Eldorado master plan PDF (dummy dig seed)",
+  "builder_id": "brigade-group",
+  "tags": ["catalog", "media", "master_plan", "dummy-seed"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "send the master plan",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": ["master", "https://", "cdn", "signed", "pdf", "plan"],
+        "reply_excludes": ["which project", "buena vista"],
+        "expect_media": true
+      }
+    }
+  ]
+}
