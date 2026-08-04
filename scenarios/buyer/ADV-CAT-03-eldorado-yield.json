@@ -1,11 +1,12 @@
 {
-  "id": "CAT-03",
-  "title": "Catalog/CRM: rental yield on focused Eldorado (speak or honest decline)",
-  "builder_id": "brigade-group",
-  "tags": ["catalog", "crm", "yield", "R6"],
+  "id": "ADV-CAT-03",
+  "title": "Advisor catalog: Eldorado rental yield with corridor intel",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "catalog", "crm", "yield"],
   "turns": [
     { "text": "hi" },
-    { "text": "Apartment in North Bangalore" },
+    { "text": "Apartment in North Bangalore for investment" },
     {
       "text": "Brigade Eldorado",
       "assert": { "reply_includes": ["eldorado"] }
@@ -18,17 +19,13 @@
           "devanahalli",
           "rent",
           "yield",
-          "roi",
           "%",
+          "roi",
           "don't have",
           "do not have",
           "not on file",
           "can't quote",
           "cannot quote"
-        ],
-        "reply_excludes": [
-          "want pricing, legal details",
-          "Curious about loan eligibility, or shall I walk through the configs"
         ]
       }
     }

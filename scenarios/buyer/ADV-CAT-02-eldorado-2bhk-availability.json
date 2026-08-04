@@ -1,0 +1,25 @@
+{
+  "id": "ADV-CAT-02",
+  "title": "Advisor catalog: Eldorado 2BHK availability + unit image",
+  "builder_id": "naya-advisor",
+  "channel": "advisor",
+  "tags": ["advisor", "catalog", "availability", "site_image"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "Apartment in Devanahalli under 1 crore"
+    },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "what 2BHK options are available?",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": ["2", "bhk", "sqft", "₹", "rs", "config"],
+        "expect_media": true
+      }
+    }
+  ]
+}

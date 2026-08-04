@@ -47,7 +47,13 @@ async function resolveMarketIntel(
   nested: NdMarketIntel | null | undefined,
   microMarket: string,
 ): Promise<ReturnType<typeof gateMarketIntel>> {
-  if (nested) return gateMarketIntel(nested);
+  // Nested may be present but ungated (empty bands / low confidence) — fall
+  // through to the fuzzy corridor lookup so a stale embed can't block a fresh
+  // approved micro_market_intel row (Eldorado / Devanahalli showcase).
+  if (nested) {
+    const gated = gateMarketIntel(nested);
+    if (gated) return gated;
+  }
   const q = microMarket.trim();
   if (!q) return undefined;
   try {

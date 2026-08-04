@@ -64,6 +64,8 @@ interface BuyerScenario {
   id: string;
   title: string;
   builder_id: string;
+  /** Default chat (/chat). advisor → /api/advisor/turn (NayaAdvisor door). */
+  channel?: 'chat' | 'advisor';
   tags?: string[];
   turns: ScenarioTurn[];
 }
@@ -141,6 +143,48 @@ async function chat(
     conversation_id: body.conversation_id ?? '',
     debug: body.debug,
     whatsapp_actions: body.whatsapp_actions,
+  };
+}
+
+async function advisor(
+  builderId: string,
+  sessionId: string,
+  text: string,
+  convId?: string,
+): Promise<{
+  reply_text: string;
+  conversation_id: string;
+  debug?: Record<string, unknown>;
+  whatsapp_actions?: unknown[];
+  error?: string;
+}> {
+  const r = await fetch(`${SPINE}/api/advisor/turn`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'user-agent': 'converse-spine-buyer-scenarios/1.0',
+    },
+    body: JSON.stringify({
+      builder_id: builderId,
+      session_id: sessionId,
+      text,
+      ...(convId ? { conversation_id: convId } : {}),
+    }),
+  });
+  const body = (await r.json()) as {
+    reply?: string;
+    conversation_id?: string;
+    debug?: Record<string, unknown>;
+    status?: string;
+    error?: string;
+  };
+  if (!r.ok || body.status === 'error') {
+    throw new Error(body.error ?? `HTTP ${r.status}`);
+  }
+  return {
+    reply_text: body.reply ?? '',
+    conversation_id: body.conversation_id ?? '',
+    debug: body.debug,
   };
 }
 
@@ -251,16 +295,21 @@ async function main(): Promise<void> {
 
   for (const sc of scenarios) {
     const phone = `+9199${String(Date.now() % 1e10).padStart(10, '0')}${sc.id.length % 10}`;
+    const channel = sc.channel === 'advisor' ? 'advisor' : 'chat';
+    const sessionId = `adv-scen-${sc.id}-${Date.now().toString(36)}`;
     let convId: string | undefined;
     const turns: TurnRecord[] = [];
     let ok = true;
 
-    console.log(`══ ${sc.id} — ${sc.title} (${sc.builder_id}) ══`);
+    console.log(`══ ${sc.id} — ${sc.title} (${sc.builder_id} / ${channel}) ══`);
 
     for (let i = 0; i < sc.turns.length; i++) {
       const turn = sc.turns[i]!;
       try {
-        const resp = await chat(sc.builder_id, phone, turn.text, convId);
+        const resp =
+          channel === 'advisor'
+            ? await advisor(sc.builder_id, sessionId, turn.text, convId)
+            : await chat(sc.builder_id, phone, turn.text, convId);
         convId = resp.conversation_id || convId;
         const failures = turn.assert
           ? checkAssert(resp.reply_text, resp.debug, turn.assert, resp.whatsapp_actions)

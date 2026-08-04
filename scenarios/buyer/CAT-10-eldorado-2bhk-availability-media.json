@@ -1,0 +1,23 @@
+{
+  "id": "CAT-10",
+  "title": "Catalog: 2BHK availability also shares unit-typed site image",
+  "builder_id": "brigade-group",
+  "tags": ["catalog", "availability", "site_image", "unit_media"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "what 2BHK configurations are available?",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": ["sqft", "₹", "rs", "lakh", "cr"],
+        "reply_excludes": ["which project", "buena vista"],
+        "expect_media": true
+      }
+    }
+  ]
+}

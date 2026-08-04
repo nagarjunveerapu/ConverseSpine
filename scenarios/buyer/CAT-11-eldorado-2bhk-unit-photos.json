@@ -1,0 +1,29 @@
+{
+  "id": "CAT-11",
+  "title": "Catalog: explicit 2BHK unit photos ask (site_image + unit filter)",
+  "builder_id": "brigade-group",
+  "tags": ["catalog", "media", "site_image", "unit_media"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "Brigade Eldorado",
+      "assert": { "reply_includes": ["eldorado"] }
+    },
+    {
+      "text": "send 2BHK unit photos",
+      "assert": {
+        "reply_includes": ["eldorado"],
+        "reply_includes_any": [
+          "unit view",
+          "site",
+          "photo",
+          "image",
+          "2 bhk"
+        ],
+        "reply_excludes": ["brochure", "which project", "buena vista"],
+        "expect_media": true
+      }
+    }
+  ]
+}

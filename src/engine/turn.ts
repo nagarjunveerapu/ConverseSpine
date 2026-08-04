@@ -110,6 +110,7 @@ import { checkGrounding, stripBanned, stripComposerDirectives } from './groundin
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
 import { mediaKindMissingFromInventory, normalizeMediaAssetKind } from './media-asset.js';
+import { gateMarketIntel } from './market-intel.js';
 import { filterUnitsByBhk, resolveAvailabilityBhkFilter } from './unit-config.js';
 import { planSearchRecovery, type RecoveryHint, type SearchRecoveryEnvelope, type AdvisorUiMode, type SuggestedAction } from './recovery-planner.js';
 import {
@@ -3418,7 +3419,13 @@ async function fetchAnswer(
   buyerText?: string,
 ): Promise<EvidenceSet> {
   if (!nd) return { tools: [] };
-  const unitType = s.constraints.bhk;
+  // Prefer turn-local BHK ("send 2BHK unit photos") over a stale constraint —
+  // mediaShare / pricing unit filters need the size the buyer just named.
+  const unitType =
+    resolveAvailabilityBhkFilter({
+      buyerText,
+      constraintBhk: s.constraints.bhk,
+    }) ?? s.constraints.bhk;
   const focusName = s.focus?.projectName ?? '';
   const topics = goal.topics?.length ? goal.topics : [goal.topic];
   let tools: string[] = [];
@@ -3632,6 +3639,31 @@ async function fetchAnswer(
         }
       }
     }
+
+    // Unit-typed showcase media: when availability is scoped to a BHK and Desk
+    // has a matching site_image / floor_plan, attach it so the buyer sees the
+    // unit — not only the config list. Never overwrite an explicit media ask.
+    if (evidence.units?.length && bhkFilter && !evidence.media) {
+      const mediaName =
+        (s.focus?.projectId === goal.projectId ? focusName : '') ||
+        currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
+        focusName;
+      const projectName = mediaName || focusName || 'this project';
+      for (const kind of ['site_image', 'floor_plan'] as const) {
+        const media = await deps.data
+          .mediaShare(nd, goal.projectId, kind, bhkFilter)
+          .catch(() => null);
+        if (media?.allowed && media.cdnUrl) {
+          tools.push('mediaShare');
+          evidence = {
+            ...evidence,
+            tools: [...new Set(tools)],
+            media: { assetKind: kind, ...media, projectName },
+          };
+          break;
+        }
+      }
+    }
   }
 
   // Closed-beta: Desk FAQ corpus — rental_yield, possession, loan, amenities, …
@@ -3749,16 +3781,17 @@ async function fetchAnswer(
     );
   // CRM advisory atoms live on ProjectDetail — hydrate whenever the contract
   // requires them, even if topic routing landed elsewhere.
+  // Do not gate on failureAnswer — we need Desk intel on the detail even when
+  // the contract speaker is off; otherwise yield always declines.
   const advisoryDetailNeeded = Boolean(
-    deps.failureAnswer &&
-      goal.requires?.some(
-        (k) =>
-          k === 'rental_yield' ||
-          k === 'appreciation' ||
-          k === 'growth_drivers' ||
-          k === 'operator_model' ||
-          k === 'visit_logistics',
-      ),
+    goal.requires?.some(
+      (k) =>
+        k === 'rental_yield' ||
+        k === 'appreciation' ||
+        k === 'growth_drivers' ||
+        k === 'operator_model' ||
+        k === 'visit_logistics',
+    ),
   );
   // Loan LTV lives on ProjectDetail.loanEligibility — a FAQ miss for
   // loan_eligibility used to suppress detail hydrate and answer "not on file"
@@ -3785,14 +3818,17 @@ async function fetchAnswer(
     advisoryDetailNeeded ||
     loanEligibilityNeeded;
   if (needsDetail || wantsLocation) {
-    // Overview-focused cache often omits loanEligibility; bust it when the
-    // buyer asks about loan so we re-fetch Desk detail (not a sticky miss).
+    // Overview-focused cache often omits loanEligibility / marketIntel; bust it
+    // when the buyer asks so we re-fetch Desk detail (not a sticky miss).
     let hydrateState = s;
-    if (
-      loanEligibilityNeeded &&
-      s.projectCache?.[goal.projectId] &&
-      !s.projectCache[goal.projectId].loanEligibility
-    ) {
+    const cachedDetail = s.projectCache?.[goal.projectId];
+    const bustLoan = loanEligibilityNeeded && cachedDetail && !cachedDetail.loanEligibility;
+    const bustIntel =
+      advisoryDetailNeeded &&
+      cachedDetail &&
+      !cachedDetail.marketIntel &&
+      !cachedDetail.investment?.expectedRoi;
+    if ((bustLoan || bustIntel) && s.projectCache?.[goal.projectId]) {
       const { [goal.projectId]: _stale, ...restCache } = s.projectCache;
       hydrateState = { ...s, projectCache: restCache };
     }
@@ -3813,6 +3849,35 @@ async function fetchAnswer(
       // the snapshot answers RERA and the FAQ body answers loan.
       const priorFaqs = evidence.detail?.faqs;
       let nextDetail = priorFaqs?.length ? { ...detail, faqs: priorFaqs } : detail;
+      // Advisory atoms: if the hydrated/cached detail still lacks rent bands /
+      // ROI, fetch corridor intel by micro_market directly (Desk GET
+      // /api/market-intel?q=…). Covers sticky overview cache + nested miss.
+      if (
+        advisoryDetailNeeded &&
+        !nextDetail.marketIntel?.rentBands?.length &&
+        !nextDetail.investment?.expectedRoi?.trim()
+      ) {
+        // Focus/identity-only cards often omit microMarket — borrow from the
+        // shortlist hit so corridor intel can still resolve (Eldorado yield).
+        const mm = (
+          nextDetail.microMarket ||
+          currentShortlist(s).find((o) => o.projectId === goal.projectId)?.microMarket ||
+          discussedList(s).find((o) => o.projectId === goal.projectId)?.microMarket ||
+          ''
+        ).trim();
+        if (mm) {
+          const raw = await deps.data.marketIntel(mm).catch(() => null);
+          const gated = gateMarketIntel(raw ?? undefined);
+          if (gated) {
+            tools.push('marketIntel');
+            nextDetail = {
+              ...nextDetail,
+              ...(nextDetail.microMarket ? {} : { microMarket: mm }),
+              marketIntel: gated,
+            };
+          }
+        }
+      }
       // Desk often stores LTV as a pricing "Loan LTV" info row, not
       // projects.loan_eligibility — lift it when the buyer asked about loan.
       if (loanEligibilityNeeded && !nextDetail.loanEligibility) {
@@ -3842,6 +3907,26 @@ async function fetchAnswer(
         const left = evidence.faqMiss.keys.filter((k) => !/loan|banks/i.test(k));
         if (left.length === 0) {
           const { faqMiss: _dropLoanMiss, ...rest } = evidence;
+          evidence = rest;
+        } else {
+          evidence = {
+            ...evidence,
+            faqMiss: { ...evidence.faqMiss, keys: left },
+          };
+        }
+      }
+      // Corridor intel / project ROI owns yield — drop rental_yield FAQ miss so
+      // compose speaks advisoryFactLines instead of "not on file".
+      if (
+        (nextDetail.marketIntel?.rentBands?.length ||
+          nextDetail.investment?.expectedRoi?.trim()) &&
+        evidence.faqMiss?.keys.length
+      ) {
+        const left = evidence.faqMiss.keys.filter(
+          (k) => !/^(?:rental_yield|resale_value)$/i.test(k),
+        );
+        if (left.length === 0) {
+          const { faqMiss: _dropYieldMiss, ...rest } = evidence;
           evidence = rest;
         } else {
           evidence = {

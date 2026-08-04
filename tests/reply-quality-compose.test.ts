@@ -32,6 +32,61 @@ function answer(
   });
 }
 
+describe('availability + unit media', () => {
+  it('appends unit site image URL on BHK-scoped availability', () => {
+    const reply = answer(
+      'availability',
+      {
+        tools: ['listUnits', 'mediaShare'],
+        units: [
+          {
+            unitType: '2 BHK',
+            priceDisplay: '₹65 L',
+            sizeDisplay: '740-1043 sqft',
+          },
+        ],
+        media: {
+          projectName: NAME,
+          allowed: true,
+          assetKind: 'site_image',
+          title: '2 BHK Unit View',
+          cdnUrl: 'https://cdn.example/eldorado-2bhk.png',
+        },
+      },
+      'what 2BHK configurations are available?',
+    );
+    expect(reply).toMatch(/740|₹65|65\s*L/i);
+    expect(reply).toContain('https://cdn.example/eldorado-2bhk.png');
+  });
+
+  it('keeps config summary when availability + media are multi-topic', () => {
+    const reply = answer(
+      'availability',
+      {
+        tools: ['listUnits', 'mediaShare'],
+        units: [
+          {
+            unitType: '2 BHK',
+            priceDisplay: '₹65 L',
+            sizeDisplay: '740-1043 sqft',
+          },
+        ],
+        media: {
+          projectName: NAME,
+          allowed: true,
+          assetKind: 'site_image',
+          title: '2 BHK Unit View',
+          cdnUrl: 'https://cdn.example/eldorado-2bhk.png',
+        },
+      },
+      'what 2BHK configurations are available?',
+      ['availability', 'media'],
+    );
+    expect(reply).toMatch(/740|₹65|65\s*L/i);
+    expect(reply).toContain('https://cdn.example/eldorado-2bhk.png');
+  });
+});
+
 describe('CTA variation', () => {
   it('does not always end with Want anything else / site visit', () => {
     const a = answer(

@@ -4,6 +4,7 @@ import {
   normalizeMediaAssetKind,
   uniqueMediaKinds,
 } from '../src/engine/media-asset.js';
+import { detectMediaAssetKind, detectTopics } from '../src/engine/facts.js';
 import { mapPhasesFromJourneys } from '../src/engine/adapters/nayadesk.js';
 import { fallbackReply, buildComposeRequest } from '../src/engine/compose.js';
 import {
@@ -27,6 +28,22 @@ describe('media asset kind normalization', () => {
     expect(normalizeMediaAssetKind('cost_sheet')).toBe('price_sheet');
     expect(normalizeMediaAssetKind('floor_plan')).toBe('floor_plan');
     expect(normalizeMediaAssetKind('brochure')).toBe('brochure');
+  });
+
+  it('detects price/payment/master plan share phrasing (CAT-07/08/09)', () => {
+    expect(detectMediaAssetKind('send the price sheet')).toBe('price_sheet');
+    expect(detectMediaAssetKind('send the payment plan PDF')).toBe('payment_plan');
+    expect(detectMediaAssetKind('send the master plan')).toBe('master_plan');
+    // Spoken FAQ ask must NOT become a PDF share kind.
+    expect(detectMediaAssetKind('what is the payment plan?')).toBeUndefined();
+    expect(detectTopics('send the payment plan PDF')).toContain('media');
+    expect(detectTopics('send the price sheet')).toContain('media');
+  });
+
+  it('detects plural unit photos/images as site_image (CAT-11)', () => {
+    expect(detectMediaAssetKind('send 2BHK unit photos')).toBe('site_image');
+    expect(detectMediaAssetKind('show me the images')).toBe('site_image');
+    expect(detectMediaAssetKind('send a photo of the site')).toBe('site_image');
   });
 
   it('gates when inventory is known and kind is absent', () => {

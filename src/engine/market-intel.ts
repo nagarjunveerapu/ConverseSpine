@@ -35,11 +35,15 @@ export function gateMarketIntel(raw: NdMarketIntel | null | undefined): ProjectM
   const confidence = Number(raw.provenance?.confidence ?? 0);
   if (!(confidence >= MARKET_INTEL_MIN_CONFIDENCE)) return undefined;
   const rentBands = (raw.rent_bands ?? [])
-    .map((b) => ({
-      ...(b.unit_type ? { unitType: String(b.unit_type) } : {}),
-      ...(typeof b.rent_min_inr === 'number' ? { rentMinInr: b.rent_min_inr } : {}),
-      ...(typeof b.rent_max_inr === 'number' ? { rentMaxInr: b.rent_max_inr } : {}),
-    }))
+    .map((b) => {
+      const min = Number((b as { rent_min_inr?: unknown }).rent_min_inr);
+      const max = Number((b as { rent_max_inr?: unknown }).rent_max_inr);
+      return {
+        ...(b.unit_type ? { unitType: String(b.unit_type) } : {}),
+        ...(Number.isFinite(min) && min > 0 ? { rentMinInr: min } : {}),
+        ...(Number.isFinite(max) && max > 0 ? { rentMaxInr: max } : {}),
+      };
+    })
     .filter((b) => b.rentMinInr !== undefined || b.rentMaxInr !== undefined || b.unitType);
   const drivers = (raw.drivers ?? [])
     .map((d) => ({
@@ -194,9 +198,11 @@ export function advisoryFactLines(
         .filter(Boolean)
         .join('; ');
       if (bands) {
-        parts.push(
-          `Typical rents in *${mi.displayName}* run about ${bands} ${mi.provenanceLabel}`,
-        );
+        const project = detail.name?.trim();
+        const where = project
+          ? `*${project}* (${mi.displayName})`
+          : `*${mi.displayName}*`;
+        parts.push(`Typical rents near ${where} run about ${bands} ${mi.provenanceLabel}`);
       }
     }
     if (inv?.expectedRoi?.trim()) {

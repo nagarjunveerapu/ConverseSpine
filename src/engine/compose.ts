@@ -775,7 +775,13 @@ export function fallbackReply(req: ComposeRequest): string {
       // AB-8 — media must join the multi-topic chunk path. Primary topic is often
       // price (TOPIC_ORDER), so the single-topic `goal.topic === 'media'` branch
       // never runs for "brochure and starting price" even when mediaShare succeeded.
-      if (topics.includes('media') && ev.media) {
+      // Explicit media topic, or multi-topic availability that co-fetched unit media.
+      // Do NOT push media into chunks on single-topic availability — that short-circuits
+      // the richer units handler below (CAT-10 regression: media-only reply).
+      if (
+        ev.media &&
+        (topics.includes('media') || (multiTopic && topics.includes('availability')))
+      ) {
         chunks.push(mediaShareLine(ev.media, context.focusProjectName, { omitProjectName: multiTopic }));
       }
       // AB-8 — in a MULTI-topic ask the FAQ body carries the OTHER atom(s), so the
@@ -819,13 +825,15 @@ export function fallbackReply(req: ComposeRequest): string {
       if (topics.includes('location') && ev.location) {
         chunks.push(locationSnapshotLine(ev.location, { omitProjectName: multiTopic }));
       }
-      // AB-8b — a structural atom the buyer explicitly named (configs → units,
-      // EMI → schedule) must render as its OWN chunk when a FAQ body is also present,
-      // or the FAQ shadows it. "configs and possession?" returned only the possession
-      // FAQ; "2 BHK price and the EMI" only the loan FAQ. The FAQ is a DIFFERENT atom
-      // and stays additive below. When no FAQ is present the richer single-topic
-      // handlers further down own these — unchanged.
-      if (faqPresent && topics.includes('availability') && ev.units?.length) {
+      // AB-8b — structural atoms (configs / EMI) must render as their OWN chunk when
+      // a FAQ would shadow them, OR when multi-topic already owns the reply (media +
+      // availability). Without this, "2BHK configs" that also co-fetches a unit image
+      // collapsed to media-only because multi-topic returns before single-topic handlers.
+      if (
+        topics.includes('availability') &&
+        ev.units?.length &&
+        (faqPresent || multiTopic)
+      ) {
         chunks.push(
           summarizeUnitConfigs(ev.units, multiTopic ? undefined : context.focusProjectName),
         );
@@ -942,6 +950,7 @@ export function fallbackReply(req: ComposeRequest): string {
         const pname = ev.detail?.name ?? context.focusProjectName;
         // AB-1 — an inventory ask ("is there any inventory left?") wants the
         // availability FACT. A config card list without it is a non-answer.
+        let body: string;
         if (isInventoryAsk(context.buyerText ?? '')) {
           const tracked = ev.units.filter((u) => (u.holdableUnits ?? 0) > 0);
           if (tracked.length) {
@@ -949,15 +958,25 @@ export function fallbackReply(req: ComposeRequest): string {
               .slice(0, 4)
               .map((u) => `${u.holdableUnits} × ${u.unitType}`)
               .join(', ');
-            return `Yes — still open${pname ? ` at *${pname}*` : ''}: ${lines}.${cta({ projectName: pname })}`;
+            body = `Yes — still open${pname ? ` at *${pname}*` : ''}: ${lines}.${cta({ projectName: pname })}`;
+          } else {
+            // All-zero counts can mean "not tracked" as much as "sold out" — Desk
+            // sends 0 for every config when a project has no unit rows at all.
+            // Never claim sold out without positive evidence; route the exact
+            // count to the team instead.
+            body = `${summarizeUnitConfigs(ev.units, pname)} Exact unit-level counts are confirmed by our team.${cta({ projectName: pname })}`;
           }
-          // All-zero counts can mean "not tracked" as much as "sold out" — Desk
-          // sends 0 for every config when a project has no unit rows at all.
-          // Never claim sold out without positive evidence; route the exact
-          // count to the team instead.
-          return `${summarizeUnitConfigs(ev.units, pname)} Exact unit-level counts are confirmed by our team.${cta({ projectName: pname })}`;
+        } else {
+          body = `${summarizeUnitConfigs(ev.units, pname)}.${cta({ projectName: pname })}`;
         }
-        return `${summarizeUnitConfigs(ev.units, pname)}.${cta({ projectName: pname })}`;
+        // Unit-typed site image / floor plan co-fetched with BHK-scoped availability.
+        if (ev.media?.allowed && ev.media.cdnUrl) {
+          const mediaBit = mediaShareLine(ev.media, context.focusProjectName, {
+            omitProjectName: true,
+          });
+          body = `${body.replace(/\s*$/, '')} ${mediaBit}`;
+        }
+        return body;
       }
       // SA-3: availability with empty units — honest empty, not generic overview.
       if (goal.topic === 'availability') {
