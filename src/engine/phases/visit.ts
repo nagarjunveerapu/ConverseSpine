@@ -140,10 +140,11 @@ export function shouldExitVisitForIntent(
   ) {
     return false;
   }
-  // After "OK, or force all same day?" — natural same-day / split answers must
-  // stay in visit even if NLU falsely stamps compare ("both") or wantsMore.
-  if (visit?.lastAsk === 'split_day' && visit.splitOffered && text) {
-    if (isSplitDayForcePhrase(text) || isSplitDayAcceptPhrase(text)) {
+  // Same-day / force / don't-split answers on a live draft must stay in visit —
+  // even when NLU stamps compare ("both") or SIL binds get_brochure (VIS-ADX-09 dig).
+  if (visit && text && hasResumableVisitDraft(visit)) {
+    if (isSplitDayForcePhrase(text)) return false;
+    if (visit.lastAsk === 'split_day' && visit.splitOffered && isSplitDayAcceptPhrase(text)) {
       return false;
     }
   }
@@ -774,6 +775,16 @@ function step(input: {
     ) {
       prior = { ...prior, preferredDayHint: 'other', splitOffered: false };
     }
+  } else if (
+    queued.length > 0 &&
+    (prior.lastAsk === 'day' ||
+      prior.lastAsk === 'time' ||
+      prior.lastAsk === 'window' ||
+      prior.lastAsk === 'same_day_choice') &&
+    isSplitDayForcePhrase(input.text, input.ctx.embedderIntentKind, input.ctx.embedActsOnly)
+  ) {
+    // Multi-stop day ask without a prior split offer (geo miss) — still force same-day pack.
+    prior = { ...prior, preferredDayHint: 'same_forced' };
   } else if (wantsForceSameDay(input.text, input.ctx.embedderIntentKind, input.ctx.embedActsOnly)) {
     prior = { ...prior, preferredDayHint: 'same_forced' };
   } else if (

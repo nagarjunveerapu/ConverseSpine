@@ -1,6 +1,6 @@
 {
   "id": "VIS-ADX-09",
-  "title": "BREAK: split_day offer → natural both-same-day must force route (not brochure digression)",
+  "title": "BREAK: multi-stop + Anantapur → natural both-same-day must stay in visit (not brochure/no_fit)",
   "builder_id": "brigade-group",
   "tags": ["visit", "adversarial", "split_day", "same_day", "advisor"],
   "turns": [
@@ -26,17 +26,21 @@
       "text": "I start from Anantapur",
       "assert": {
         "goal_kind": "visit_ask",
-        "reply_includes_any": ["same day", "next day", "force", "day 1", "split", "which day"],
-        "reply_excludes": ["brochure"]
+        "phase": "visit",
+        "reply_includes_any": ["same day", "next day", "force", "day 1", "split", "which day", "Orchards"],
+        "reply_excludes": ["brochure", "Nothing in"]
       }
     },
     {
       "text": "I want to plan for both on the same day",
       "assert": {
-        "goal_kind_not": "answer",
+        "phase": "visit",
+        "goal_kind_not": "no_fit",
         "reply_excludes": [
           "brochure",
           "Here's the brochure",
+          "Nothing in",
+          "within ₹2",
           "rephrase",
           "don't see a confirmed visit"
         ],
@@ -49,7 +53,9 @@
           "morning",
           "afternoon",
           "force",
-          "request"
+          "request",
+          "Orchards",
+          "Cornerstone"
         ]
       }
     }
