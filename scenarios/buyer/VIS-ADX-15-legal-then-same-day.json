@@ -1,0 +1,48 @@
+{
+  "id": "VIS-ADX-15",
+  "title": "BREAK: day ask → legal digression → both same day must resume visit (not stay on legal/media)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "digression", "same_day"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    { "text": "both" },
+    {
+      "text": "from Indiranagar",
+      "assert": {
+        "goal_kind": "visit_ask"
+      }
+    },
+    {
+      "text": "btw what's the legal status for Ayana?",
+      "assert": {
+        "goal_kind_not": "visit_booked",
+        "reply_excludes": ["I've booked"]
+      }
+    },
+    {
+      "text": "I want both on the same day",
+      "assert": {
+        "phase": "visit",
+        "goal_kind_not": "answer",
+        "reply_excludes": ["brochure", "Here's the brochure", "Nothing in", "within ₹"],
+        "reply_includes_any": [
+          "team",
+          "same day",
+          "which day",
+          "Monday",
+          "Saturday",
+          "morning",
+          "afternoon",
+          "force",
+          "request",
+          "Ayana",
+          "Krishnaja"
+        ]
+      }
+    }
+  ]
+}

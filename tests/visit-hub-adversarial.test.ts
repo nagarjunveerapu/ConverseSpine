@@ -102,6 +102,8 @@ describe('ADX: decide force path — never digress to answer/media', () => {
     'same day',
     'force all same day',
     'lets do both same day',
+    'dono same day please',
+    'donon same day',
   ];
 
   for (const text of forcePhrases) {
@@ -147,6 +149,8 @@ describe('ADX: hardened natural force after split offer', () => {
     'force it',
     'squeeze both in',
     'back to back same trip',
+    'dono same day please',
+    "don't split — I want both same day",
   ];
 
   for (const text of force) {

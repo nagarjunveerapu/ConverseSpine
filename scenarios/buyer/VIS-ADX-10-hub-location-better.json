@@ -1,46 +1,24 @@
 {
   "id": "VIS-ADX-10",
-  "title": "BREAK: focused pack open → which location is better must compare hub (not focused overview)",
+  "title": "BREAK: focused pack → which location is better must compare hub (chat)",
   "builder_id": "brigade-group",
-  "channel": "advisor",
-  "tags": ["visit", "adversarial", "compare", "hub", "advisor"],
+  "tags": ["compare", "adversarial", "hub"],
   "turns": [
+    { "text": "hi" },
+    { "text": "2 bhk in Devanahalli under 70L" },
     {
-      "text": "Self-use",
-      "preferences": {
-        "purpose": "Self-use",
-        "budget": "₹50–70L",
-        "propertyType": "Apartment",
-        "bhk": "2 BHK, 3 BHK",
-        "location": "Aerospace Park / Devanahalli Corridor",
-        "worries": "Overpaying, Resale value",
-        "schools": "Yes",
-        "workLocation": "Whitefield / ITPL"
-      }
-    },
-    {
-      "text": "show matches",
+      "text": "tell me about Brigade Cornerstone",
       "assert": {
-        "projects_min": 1
-      }
-    },
-    {
-      "text": "Tell me about Brigade Cornerstone",
-      "assert": {
-        "reply_includes_any": ["Cornerstone", "Devanahalli"]
+        "reply_includes_any": ["Cornerstone"]
       }
     },
     {
       "text": "which location is better?",
       "assert": {
         "goal_topic": "compare",
+        "reply_includes_any": ["Side-by-side", "Location", "vs", "compare"],
         "reply_excludes": [
           "Curious about loan eligibility, or shall I walk through the configs"
-        ],
-        "reply_includes_any": [
-          "Side-by-side",
-          "Location",
-          "vs"
         ]
       }
     }

@@ -527,7 +527,7 @@ const REJECT_SPLIT_RE =
  * Covers dig transcript + adversarial probes: both today, one day, back-to-back.
  */
 const NATURAL_FORCE_SAME_AFTER_SPLIT_RE =
-  /\b(?:both|all)\b[\s\S]{0,48}\bsame\s+day\b|\bsame\s+day\b[\s\S]{0,48}\b(?:both|all)\b|\b(?:both|all)\b[\s\S]{0,28}\btoday\b|\btoday\b[\s\S]{0,28}\b(?:both|all)\b|\bone\s+day\b[\s\S]{0,36}\b(?:both|all)\b|\b(?:both|all)\b[\s\S]{0,36}\bone\s+day\b|\bback\s+to\s+back\b|\bsqueeze\s+(?:both|all|them)\s+in\b/i;
+  /\b(?:both|all|dono|donon)\b[\s\S]{0,48}\bsame\s+day\b|\bsame\s+day\b[\s\S]{0,48}\b(?:both|all|dono|donon)\b|\b(?:both|all|dono|donon)\b[\s\S]{0,28}\btoday\b|\btoday\b[\s\S]{0,28}\b(?:both|all|dono|donon)\b|\bone\s+day\b[\s\S]{0,36}\b(?:both|all|dono|donon)\b|\b(?:both|all|dono|donon)\b[\s\S]{0,36}\bone\s+day\b|\bback\s+to\s+back\b|\bsqueeze\s+(?:both|all|them|dono)\s+in\b/i;
 
 function isSplitDayForcePhrase(text: string, embedKind?: string, embedActsOnly?: boolean): boolean {
   if (REJECT_SPLIT_RE.test(text)) return true;
