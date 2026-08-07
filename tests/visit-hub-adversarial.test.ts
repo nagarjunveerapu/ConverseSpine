@@ -195,6 +195,24 @@ describe('ADX: hardened natural force after split offer', () => {
     }
   });
 
+  it('day ask + false media/brochure stamp must NOT defer to brochure', () => {
+    const goal = decide(
+      splitVisit({ lastAsk: 'day', splitOffered: false, tripOrdered: true }),
+      { constraints: {}, askTopic: 'media', askTopics: ['media'], transition: 'none' },
+      {
+        text: 'I want to plan for both on the same day',
+        now,
+        siteVisitHours: 'Mon–Sun, 9am–7pm',
+        embedActsOnly: true,
+        embedderIntentKind: 'get_brochure',
+      },
+    );
+    expect(goal.kind).not.toBe('answer');
+    if (goal.kind === 'visit_propose' || goal.kind === 'visit_ask' || goal.kind === 'visit_booked') {
+      expect(goal.state.preferredDayHint).toBe('same_forced');
+    }
+  });
+
   it('day ask (no split offer / geo miss): both-same-day stays + forces, no soft-exit', () => {
     const visit = splitVisit({
       lastAsk: 'day',

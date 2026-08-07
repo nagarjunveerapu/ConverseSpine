@@ -1,0 +1,53 @@
+{
+  "id": "VIS-ADX-10",
+  "title": "BREAK: focused pack open → which location is better must compare hub (not focused overview)",
+  "builder_id": "brigade-group",
+  "channel": "advisor",
+  "tags": ["visit", "adversarial", "compare", "hub", "advisor"],
+  "turns": [
+    {
+      "text": "Self-use",
+      "preferences": {
+        "purpose": "Self-use",
+        "budget": "₹50–70L",
+        "propertyType": "Apartment",
+        "bhk": "2 BHK, 3 BHK",
+        "location": "Aerospace Park / Devanahalli Corridor",
+        "worries": "Overpaying, Resale value",
+        "schools": "Yes",
+        "workLocation": "Whitefield / ITPL"
+      }
+    },
+    {
+      "text": "show matches",
+      "assert": {
+        "projects_min": 1
+      }
+    },
+    {
+      "text": "Tell me about Brigade Cornerstone",
+      "assert": {
+        "reply_includes_any": ["Cornerstone", "Devanahalli"]
+      }
+    },
+    {
+      "text": "which location is better?",
+      "assert": {
+        "reply_excludes": [
+          "47-acre integrated township at Varthur",
+          "Curious about loan eligibility, or shall I walk through the configs"
+        ],
+        "reply_includes_any": [
+          "Side-by-side",
+          "compare",
+          "board",
+          "Location",
+          "Eldorado",
+          "Orchards",
+          "Cornerstone",
+          "vs"
+        ]
+      }
+    }
+  ]
+}

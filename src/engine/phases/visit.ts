@@ -267,6 +267,9 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
     !parseDayAnchor(ctx.text, now) &&
     !wantsSameDay(ctx.text, ctx.embedderIntentKind, ctx.embedActsOnly) &&
     !wantsOtherDay(ctx.text, ctx.embedderIntentKind, ctx.embedActsOnly) &&
+    // Closed same-day / force phrases must not defer to media when SIL nearest-
+    // neighbours get_brochure (VIS-ADX-09 dig: brochure mid day-ask).
+    !isSplitDayForcePhrase(ctx.text, ctx.embedderIntentKind, ctx.embedActsOnly) &&
     !visitRouteExpand
   ) {
     const answerGoal = deferToProjectAnswer(
