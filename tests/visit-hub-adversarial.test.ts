@@ -180,4 +180,18 @@ describe('ADX: hardened natural force after split offer', () => {
       expect(goal.state.preferredDayHint).toBe('next');
     }
   });
+
+  it('VISIT_EMBED_ACTS_ONLY must not block closed split_day force phrases', () => {
+    const goal = decide(splitVisit(), { constraints: {}, transition: 'none' }, {
+      text: 'I want to plan for both on the same day',
+      now,
+      siteVisitHours: 'Mon–Sun, 9am–7pm',
+      driveFromPriorMin: 180,
+      embedActsOnly: true,
+    });
+    expect(goal.kind).not.toBe('answer');
+    if (goal.kind === 'visit_propose' || goal.kind === 'visit_ask' || goal.kind === 'visit_booked') {
+      expect(goal.state.preferredDayHint).toBe('same_forced');
+    }
+  });
 });

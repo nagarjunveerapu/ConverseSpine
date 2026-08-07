@@ -528,7 +528,9 @@ const NATURAL_FORCE_SAME_AFTER_SPLIT_RE =
 function isSplitDayForcePhrase(text: string, embedKind?: string, embedActsOnly?: boolean): boolean {
   if (REJECT_SPLIT_RE.test(text)) return true;
   if (wantsForceSameDay(text, embedKind, embedActsOnly)) return true;
-  if (embedActsOnly) return false;
+  // Closed answers to OUR split_day prompt ("OK, or force all same day?").
+  // Always allow phrase fallback — VISIT_EMBED_ACTS_ONLY must not break this
+  // multiple-choice turn (live dig: natural "both same day" → brochure).
   return isSameDayPhrase(text) || NATURAL_FORCE_SAME_AFTER_SPLIT_RE.test(text);
 }
 
