@@ -217,6 +217,51 @@ describe('ADX: hardened natural force after split offer', () => {
     }
   });
 
+  it('split_day accept "OK next day is fine" must NOT defer to legal', () => {
+    const goal = decide(
+      splitVisit(),
+      { constraints: {}, askTopic: 'legal', askTopics: ['legal'], transition: 'none' },
+      {
+        text: 'OK next day is fine',
+        now,
+        siteVisitHours: 'Mon–Sun, 9am–7pm',
+        driveFromPriorMin: 180,
+        embedActsOnly: true,
+        embedderIntentKind: 'get_legal_info',
+      },
+    );
+    expect(goal.kind).not.toBe('answer');
+    if (goal.kind === 'visit_propose' || goal.kind === 'visit_ask' || goal.kind === 'visit_booked') {
+      expect(goal.state.preferredDayHint).toBe('next');
+    }
+  });
+
+  it('origin ask "from Indiranagar" must NOT defer to location FAQ', () => {
+    const goal = decide(
+      {
+        ...initState('t', 'lokations'),
+        phase: 'visit' as const,
+        visit: {
+          projectId: 'ayana',
+          projectName: 'Ayana',
+          queued: [{ projectId: 'krishnaja', projectName: 'Krishnaja Greens' }],
+          lastAsk: 'origin' as const,
+          originAsked: true,
+        },
+      },
+      { constraints: {}, askTopic: 'location', askTopics: ['location'], transition: 'none' },
+      {
+        text: 'from Indiranagar',
+        now,
+        siteVisitHours: 'Mon–Sun, 9am–7pm',
+        embedActsOnly: true,
+        embedderIntentKind: 'get_location_info',
+      },
+    );
+    expect(goal.kind).not.toBe('answer');
+    expect(['visit_ask', 'visit_propose', 'visit_booked']).toContain(goal.kind);
+  });
+
   it('day ask + false media/brochure stamp must NOT defer to brochure', () => {
     const goal = decide(
       splitVisit({ lastAsk: 'day', splitOffered: false, tripOrdered: true }),

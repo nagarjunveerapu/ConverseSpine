@@ -270,6 +270,9 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
     // Closed same-day / force phrases must not defer to media when SIL nearest-
     // neighbours get_brochure (VIS-ADX-09 dig: brochure mid day-ask).
     !isSplitDayForcePhrase(ctx.text, ctx.embedderIntentKind, ctx.embedActsOnly) &&
+    // Closed answers to OUR split/origin prompts — SIL may stamp legal/location.
+    !(prior.lastAsk === 'split_day' && prior.splitOffered && isSplitDayAcceptPhrase(ctx.text)) &&
+    !looksLikeOriginAnswer(ctx.text, prior, ex.namedProjects?.length ?? 0) &&
     !visitRouteExpand
   ) {
     const answerGoal = deferToProjectAnswer(
