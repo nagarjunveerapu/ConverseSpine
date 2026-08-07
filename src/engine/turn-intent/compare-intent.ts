@@ -29,6 +29,18 @@ export function isCompareAmongOfferedTurn(text: string): boolean {
   if (/^(?:also[,:]?\s+|hey[,:]?\s+|quick\s+q\s*[—–-]?\s*|one\s+thing[:\s]+)?(?:need\s+a\s+)?(?:trade-?off|difference|which\s+is\s+better)\b/i.test(t)) {
     return true;
   }
+  // "which location/area is better?" among the shortlist — not a focused overview.
+  if (/\bwhich\s+(?:location|area|side|micro-?market)\s+is\s+better\b/i.test(t)) return true;
+  if (/\b(?:location|area)\s+(?:is\s+)?better\b/i.test(t) && /\b(?:which|what)\b/i.test(t)) {
+    return true;
+  }
+  // "which is better Cornerstone or Eldorado" / "Cornerstone or Eldorado — which better"
+  if (
+    /\bwhich\s+is\s+better\b/i.test(t) ||
+    (/\bbetter\b/i.test(t) && /\bor\b/i.test(t) && /\b(?:which|what)\b/i.test(t))
+  ) {
+    return true;
+  }
   // P1 residual: Hindi तुलना / Tamil எது better among shortlist.
   if (/तुलना/.test(t)) return true;
   if (/எது\s*better/i.test(t)) return true;

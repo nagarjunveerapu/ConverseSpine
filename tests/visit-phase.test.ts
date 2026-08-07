@@ -305,6 +305,38 @@ describe('visit phase', () => {
     }
   });
 
+  it('MV-04b: natural "both on the same day" after split offer forces same day (not digression)', () => {
+    const s = {
+      ...initState('t', 'brigade-group'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'orchards',
+        projectName: 'Brigade Orchards',
+        queued: [{ projectId: 'cornerstone-utopia', projectName: 'Brigade Cornerstone Utopia' }],
+        lastAsk: 'split_day' as const,
+        splitOffered: true,
+        originText: 'Anantapur',
+        originAsked: true,
+        tripOrdered: true,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      {
+        text: 'I want to plan for both on the same day',
+        now,
+        siteVisitHours: 'Mon–Sun, 9am–7pm',
+        driveFromPriorMin: 180,
+      },
+    );
+    expect(['visit_propose', 'visit_ask', 'visit_booked']).toContain(goal.kind);
+    expect(goal.kind).not.toBe('answer');
+    if (goal.kind === 'visit_propose' || goal.kind === 'visit_ask' || goal.kind === 'visit_booked') {
+      expect(goal.state.preferredDayHint === 'same_forced' || goal.state.splitOffered === false).toBe(true);
+    }
+  });
+
   it('MV-04: force same day Monday proposes with team overflow, skips window dead-end', () => {
     const s = {
       ...initState('t', 'brigade-group'),

@@ -140,6 +140,13 @@ export function shouldExitVisitForIntent(
   ) {
     return false;
   }
+  // After "OK, or force all same day?" — natural same-day / split answers must
+  // stay in visit even if NLU falsely stamps compare ("both") or wantsMore.
+  if (visit?.lastAsk === 'split_day' && visit.splitOffered && text) {
+    if (isSplitDayForcePhrase(text) || isSplitDayAcceptPhrase(text)) {
+      return false;
+    }
+  }
   if (ex.transition === 'want_visit') return false;
   if (ex.askTopic === 'compare') return true;
   if ((ex.compareProjectIds?.length ?? 0) >= 2) return true;
@@ -507,6 +514,29 @@ function wantsForceSameDay(text: string, embedKind?: string, embedActsOnly?: boo
   return FORCE_SAME_DAY_RE.test(text) || /\ball\s+same\s+day\b/i.test(text);
 }
 
+/** "don't split" / "no need to split" — must NOT match bare ACCEPT_SPLIT `\bsplit\b`. */
+const REJECT_SPLIT_RE =
+  /\b(?:don'?t|do\s+not|no(?:t)?(?:\s+need\s+to)?)\s+split\b|\bwithout\s+(?:a\s+)?split\b/i;
+
+/**
+ * Natural force-same-day after we offered the split (closed, split_day-gated only).
+ * Covers dig transcript + adversarial probes: both today, one day, back-to-back.
+ */
+const NATURAL_FORCE_SAME_AFTER_SPLIT_RE =
+  /\b(?:both|all)\b[\s\S]{0,48}\bsame\s+day\b|\bsame\s+day\b[\s\S]{0,48}\b(?:both|all)\b|\b(?:both|all)\b[\s\S]{0,28}\btoday\b|\btoday\b[\s\S]{0,28}\b(?:both|all)\b|\bone\s+day\b[\s\S]{0,36}\b(?:both|all)\b|\b(?:both|all)\b[\s\S]{0,36}\bone\s+day\b|\bback\s+to\s+back\b|\bsqueeze\s+(?:both|all|them)\s+in\b/i;
+
+function isSplitDayForcePhrase(text: string, embedKind?: string, embedActsOnly?: boolean): boolean {
+  if (REJECT_SPLIT_RE.test(text)) return true;
+  if (wantsForceSameDay(text, embedKind, embedActsOnly)) return true;
+  if (embedActsOnly) return false;
+  return isSameDayPhrase(text) || NATURAL_FORCE_SAME_AFTER_SPLIT_RE.test(text);
+}
+
+function isSplitDayAcceptPhrase(text: string): boolean {
+  if (REJECT_SPLIT_RE.test(text) || isSplitDayForcePhrase(text)) return false;
+  return ACCEPT_SPLIT_RE.test(text) || BARE_AFFIRM.test(text.trim());
+}
+
 /** Teach-first itinerary act; closed same-day phrase is abstain fallback unless embedActsOnly. */
 function wantsSameDay(text: string, embedKind?: string, embedActsOnly?: boolean): boolean {
   if (embedKind === 'visit_same_day') return true;
@@ -722,11 +752,18 @@ function step(input: {
     }
   }
 
-  // Split-day accept / force (embedder visit_force_same_day or closed fallback)
+  // Split-day accept / force (embedder visit_force_same_day or closed fallback).
+  // After we offered "OK, or force all same day?", natural "same day" /
+  // "both on the same day" means force — not a digression into focused media.
   if (prior.lastAsk === 'split_day' && prior.splitOffered) {
-    if (wantsForceSameDay(input.text, input.ctx.embedderIntentKind, input.ctx.embedActsOnly)) {
+    const forceSame = isSplitDayForcePhrase(
+      input.text,
+      input.ctx.embedderIntentKind,
+      input.ctx.embedActsOnly,
+    );
+    if (forceSame) {
       prior = { ...prior, preferredDayHint: 'same_forced', splitOffered: false };
-    } else if (ACCEPT_SPLIT_RE.test(input.text) || BARE_AFFIRM.test(input.text.trim())) {
+    } else if (isSplitDayAcceptPhrase(input.text)) {
       prior = { ...prior, preferredDayHint: 'next', splitOffered: false };
       // Keep first stop(s) that fit — leave queue; day ask for active
     } else if (

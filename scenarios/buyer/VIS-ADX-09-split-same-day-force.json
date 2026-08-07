@@ -1,0 +1,57 @@
+{
+  "id": "VIS-ADX-09",
+  "title": "BREAK: split_day offer → natural both-same-day must force route (not brochure digression)",
+  "builder_id": "brigade-group",
+  "tags": ["visit", "adversarial", "split_day", "same_day", "advisor"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "looking in Devanahalli" },
+    { "text": "2 bhk under 70L" },
+    { "text": "show me Brigade Orchards and Brigade Cornerstone Utopia" },
+    {
+      "text": "I want to plan a site visit",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["which should we visit", "1.", "coming from", "where will you"]
+      }
+    },
+    {
+      "text": "1 and 2",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["coming from", "where will you", "start from", "which day"]
+      }
+    },
+    {
+      "text": "I start from Anantapur",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["same day", "next day", "force", "day 1", "split", "which day"],
+        "reply_excludes": ["brochure"]
+      }
+    },
+    {
+      "text": "I want to plan for both on the same day",
+      "assert": {
+        "goal_kind_not": "answer",
+        "reply_excludes": [
+          "brochure",
+          "Here's the brochure",
+          "rephrase",
+          "don't see a confirmed visit"
+        ],
+        "reply_includes_any": [
+          "team",
+          "same day",
+          "which day",
+          "Monday",
+          "Saturday",
+          "morning",
+          "afternoon",
+          "force",
+          "request"
+        ]
+      }
+    }
+  ]
+}
