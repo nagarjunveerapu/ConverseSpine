@@ -269,7 +269,14 @@ export function mapIntentToRouting(
   }
 
   if (kind === 'compare_projects') {
-    return { routing: 'compare_offered', ...base };
+    // Teach owns open hub phrasing; stamp compare so prepareCompareExtracted
+    // can seed shortlist IDs (no open regex in compare-intent).
+    return {
+      routing: 'compare_offered',
+      answer_topic: 'compare',
+      answer_topics: ['compare'],
+      ...base,
+    };
   }
 
   // Phase 2c — bind so the kind is not unmapped_kind; goal resolve is state-conditioned.

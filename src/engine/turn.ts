@@ -1161,6 +1161,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       extractProvenance.fields.askTopics = extractProvenance.fields.askTopics ?? 'intent';
     }
   }
+  // SIL compare_projects → answer_topic compare lands above; seed shortlist IDs
+  // here (prepareCompare earlier only saw closed "compare" text cues).
+  if (hasTeachCompareStamp(ex) || routing.routing === 'compare_offered') {
+    ex = prepareCompareExtracted(trimmedText, state, {
+      ...ex,
+      askTopic: ex.askTopic ?? 'compare',
+      askTopics: ex.askTopics?.includes('compare')
+        ? ex.askTopics
+        : (['compare', ...(ex.askTopics ?? [])] as Extracted['askTopics']),
+    });
+  }
   // Loan FactKey/FAQ owns the turn — never let a brochure embedder leave
   // askTopic=media (that shared the PDF for "can I get the loan?").
   // Wave 3 — keep media when the buyer also explicitly asked for photos/brochure.
