@@ -3,7 +3,11 @@
  * Expand when a new phrasing soft-exits visit or keeps a sticky pack on hub asks.
  */
 import { describe, expect, it } from 'vitest';
-import { isCompareAmongOfferedTurn } from '../src/engine/turn-intent/compare-intent.js';
+import {
+  hasTeachCompareStamp,
+  isCompareAmongOfferedTurn,
+  prepareCompareExtracted,
+} from '../src/engine/turn-intent/compare-intent.js';
 import { decide, shouldExitVisitForIntent } from '../src/engine/phases/visit.js';
 import { initState } from '../src/engine/state.js';
 
@@ -34,23 +38,37 @@ const FALSE_COMPARE = {
   compareProjectIds: ['orchards', 'cornerstone-utopia'],
 };
 
-describe('ADX: hub compare phrasing (must not stay focused overview)', () => {
-  const hub = [
-    'which location is better?',
-    'which area is better?',
-    'which is better Cornerstone or Eldorado?',
-    'Cornerstone or Eldorado which is better',
-    'which side is better for me?',
-    'what location is better?',
-    'compare these two on location',
-  ];
-  for (const text of hub) {
-    it(`compare-among-offered: ${text}`, () => {
-      expect(isCompareAmongOfferedTurn(text)).toBe(true);
-    });
-  }
+describe('ADX: hub compare via SIL stamp (not open regex)', () => {
+  it('location-hub open phrasing is NOT a regex match — SIL teach owns it', () => {
+    expect(isCompareAmongOfferedTurn('which location is better?')).toBe(false);
+    expect(isCompareAmongOfferedTurn('which area is better?')).toBe(false);
+  });
 
-  it('focused facet asks stay out of compare-among-offered', () => {
+  it('closed compare cue still matches', () => {
+    expect(isCompareAmongOfferedTurn('compare these two on location')).toBe(true);
+  });
+
+  it('SIL askTopic=compare seeds shortlist IDs (teach consumer)', () => {
+    const shortlist = [
+      { projectId: 'eldorado', name: 'Brigade Eldorado' },
+      { projectId: 'orchards', name: 'Brigade Orchards' },
+      { projectId: 'cornerstone', name: 'Brigade Cornerstone' },
+    ];
+    const s = {
+      ...initState('t', 'brigade-group'),
+      discover: { ...initState('t', 'brigade-group').discover, lastOffered: shortlist },
+    };
+    const ex = prepareCompareExtracted('which location is better?', s, {
+      constraints: {},
+      askTopic: 'compare',
+      askTopics: ['compare'],
+    });
+    expect(hasTeachCompareStamp(ex)).toBe(true);
+    expect(ex.askTopic).toBe('compare');
+    expect(ex.compareProjectIds?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('focused facet asks stay out of compare-among-offered regex', () => {
     expect(isCompareAmongOfferedTurn('Starting prices for Brigade Cornerstone')).toBe(false);
     expect(isCompareAmongOfferedTurn('Legal status for Brigade Orchards')).toBe(false);
     expect(isCompareAmongOfferedTurn('Tell me about Brigade Orchards')).toBe(false);

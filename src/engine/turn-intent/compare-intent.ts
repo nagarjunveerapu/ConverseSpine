@@ -1,7 +1,11 @@
 import type { ConversationState, Extracted } from '../types.js';
 import { currentShortlist, discussedList } from '../entity-store.js';
 
-/** Compare / shortlist hub turns — must bypass RTI recovery and use lastOffered, not re-search no_fit. */
+/**
+ * Closed text cues for compare-among-offered (explicit compare / shortlist deixis).
+ * Open phrasing ("which location is better?", "which is better A or B?") is owned by
+ * SIL teach → compare_projects → askTopic compare — never grow regex here.
+ */
 export function isCompareAmongOfferedTurn(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
@@ -29,21 +33,17 @@ export function isCompareAmongOfferedTurn(text: string): boolean {
   if (/^(?:also[,:]?\s+|hey[,:]?\s+|quick\s+q\s*[—–-]?\s*|one\s+thing[:\s]+)?(?:need\s+a\s+)?(?:trade-?off|difference|which\s+is\s+better)\b/i.test(t)) {
     return true;
   }
-  // "which location/area is better?" among the shortlist — not a focused overview.
-  if (/\bwhich\s+(?:location|area|side|micro-?market)\s+is\s+better\b/i.test(t)) return true;
-  if (/\b(?:location|area)\s+(?:is\s+)?better\b/i.test(t) && /\b(?:which|what)\b/i.test(t)) {
-    return true;
-  }
-  // "which is better Cornerstone or Eldorado" / "Cornerstone or Eldorado — which better"
-  if (
-    /\bwhich\s+is\s+better\b/i.test(t) ||
-    (/\bbetter\b/i.test(t) && /\bor\b/i.test(t) && /\b(?:which|what)\b/i.test(t))
-  ) {
-    return true;
-  }
   // P1 residual: Hindi तुलना / Tamil எது better among shortlist.
   if (/तुलना/.test(t)) return true;
   if (/எது\s*better/i.test(t)) return true;
+  return false;
+}
+
+/** Teach/SIL already stamped compare — closed consumer, no open-phrasing regex. */
+export function hasTeachCompareStamp(ex: Extracted): boolean {
+  if (ex.askTopic === 'compare') return true;
+  if (ex.askTopics?.includes('compare')) return true;
+  if ((ex.compareProjectIds?.length ?? 0) >= 2) return true;
   return false;
 }
 
@@ -53,7 +53,9 @@ export function prepareCompareExtracted(
   state: ConversationState,
   ex: Extracted,
 ): Extracted {
-  if (!isCompareAmongOfferedTurn(text)) return ex;
+  // Open "which location / which is better …" reaches here via SIL compare_projects
+  // → askTopic compare (teach), not via new regex in isCompareAmongOfferedTurn.
+  if (!hasTeachCompareStamp(ex) && !isCompareAmongOfferedTurn(text)) return ex;
   const offered = currentShortlist(state);
   const discussed = discussedList(state);
   const topics = ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : [];

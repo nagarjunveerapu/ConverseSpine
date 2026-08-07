@@ -29,8 +29,8 @@ describe('RTI-E compare intent (project-agnostic)', () => {
     expect(isCompareAmongOfferedTurn('tradeoff the top ones please')).toBe(true);
     expect(isCompareAmongOfferedTurn('also, need a difference for this one')).toBe(true);
     expect(isCompareAmongOfferedTurn('which is better the top ones')).toBe(true);
-    expect(isCompareAmongOfferedTurn('which location is better?')).toBe(true);
-    expect(isCompareAmongOfferedTurn('which is better Cornerstone or Eldorado?')).toBe(true);
+    // Location-hub open phrasing must not grow regex — SIL teach stamps compare:
+    expect(isCompareAmongOfferedTurn('which location is better?')).toBe(false);
     expect(isCompareAmongOfferedTurn('तुलना करो बताओ')).toBe(true);
     expect(isCompareAmongOfferedTurn('इस पर तुलना करो?')).toBe(true);
     expect(isCompareAmongOfferedTurn('ஒரு கேள்வி: எது better?')).toBe(true);

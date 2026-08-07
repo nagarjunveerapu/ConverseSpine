@@ -76,6 +76,7 @@ import { buyerCuedOtherProject } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
   isCompareAmongOfferedTurn,
+  hasTeachCompareStamp,
   prepareCompareExtracted,
   shouldAllowBudgetGapNoFit,
 } from './turn-intent/compare-intent.js';
@@ -445,6 +446,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       runTurnIntent = false;
       const held = holdsFocusAgainstRelease(routingEarly, true);
       if (held.hold) focusHeldReason = held.reason;
+    }
+    // SIL compare_projects → askTopic compare: among-offered, not RTI pivot.
+    if (hasTeachCompareStamp(extractBundle.extracted)) {
+      runTurnIntent = false;
     }
   } else if (
     runTurnIntent &&
