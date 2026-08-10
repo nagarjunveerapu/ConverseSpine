@@ -217,6 +217,33 @@ describe('visit phase', () => {
     }
   });
 
+  it('VIS-LONG-03: gibberish while confirm open kills one-shot (does not re-propose)', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
+      visit: {
+        projectId: 'ayana',
+        projectName: 'Ayana',
+        awaitingConfirm: true,
+        proposedIso: '2026-07-13T10:00:00+05:30',
+        proposedLabel: 'Monday at 10:00 AM',
+        slotText: 'I want Ayana visit Monday 10am',
+        lastAsk: 'time' as const,
+      },
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'none' },
+      { text: 'kjsdhfkjsdhf', now },
+    );
+    expect(goal.kind).not.toBe('visit_propose');
+    expect(goal.kind).not.toBe('visit_booked');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.state.awaitingConfirm).toBe(false);
+      expect(goal.state.proposedIso).toBe('2026-07-13T10:00:00+05:30');
+    }
+  });
+
   it('MV-06: ask the team after hours reject files pending, not firm book', () => {
     const s = {
       ...initState('t', 'lokations'),

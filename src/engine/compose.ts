@@ -1437,6 +1437,12 @@ function locationCategoryFacts(
   return out;
 }
 
+/**
+ * Closed Answer-map template id for place+connectivity (atoms → LLM slots).
+ * Ops does not edit this skeleton; see answer-homes.ts.
+ */
+export const PLACE_CONNECTIVITY_TEMPLATE_ID = 'connectivity+place.v1';
+
 /** Exported for tests. */
 export function locationSnapshotLine(
   l: import('./types.js').LocationEvidence,
