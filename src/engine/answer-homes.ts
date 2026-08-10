@@ -103,6 +103,11 @@ export function homesForAnswerTopic(topic: string | undefined): AnswerHomeId[] {
 export function nextProbeChipLabels(topic: string | undefined): string[] {
   const delivered = homesForAnswerTopic(topic);
   if (!delivered.length) return [];
+  // Legal’s natural sibling is banks (home-loan / approved banks) — keep it
+  // ahead of the generic visit/pricing probe order.
+  if (topic === 'legal') {
+    return ['What banks?', 'Plan a visit day', 'Pricing', 'Brochure'];
+  }
   const { chips } = rankNextProbe(delivered);
   return chips.map((h) => probeChipLabel(h, delivered));
 }
