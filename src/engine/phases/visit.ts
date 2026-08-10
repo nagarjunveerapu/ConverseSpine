@@ -1223,6 +1223,38 @@ function step(input: {
     return { kind: 'visit_ask', ask: 'day', copy, state: { ...baseState, askCount: askN, lastAsk: 'day' } };
   }
 
+  // VIS-LONG-03: keyboard-smash / filler while confirm is open must NOT
+  // re-emit visit_propose from prior.slotText — that refreshes the one-shot
+  // in turn.ts so the next bare "yes" books. Kill awaitingConfirm; keep
+  // proposedIso so VIS-ADX-04 re-propose still works.
+  if (
+    prior.awaitingConfirm &&
+    prior.proposedIso &&
+    !slot &&
+    !dayAnchor &&
+    !input.affirm &&
+    !declined &&
+    input.named.length === 0 &&
+    isNonPlaceUtterance(input.text)
+  ) {
+    const label = prior.proposedLabel ?? 'that slot';
+    return {
+      kind: 'visit_ask',
+      ask: 'time',
+      copy: visitProposeConfirmCopy({
+        channel: input.ctx.channel,
+        label,
+        projectName: projectName!,
+        justConfirm: true,
+      }),
+      state: {
+        ...baseState,
+        awaitingConfirm: false,
+        lastAsk: 'time',
+      },
+    };
+  }
+
   const parsed =
     slot ??
     (input.prior.slotText
