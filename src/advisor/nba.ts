@@ -8,6 +8,7 @@
  */
 import type { ConversationState, TurnDebug, TurnGoal } from '../engine/types.js';
 import { currentShortlist, discussedList, focusedRef } from '../engine/entity-store.js';
+import { nextProbeChipLabels } from '../engine/answer-homes.js';
 import { rankChips } from '../chips/rank.js';
 import { goalState } from '../chips/shadow.js';
 import { chipActionId, type ChipEvidence } from '../chips/catalogue.js';
@@ -137,21 +138,22 @@ function dimensionAndJourney(
         break;
       }
       if (topic === 'legal') {
-        chips.push('What banks?', 'Is EC clear?', 'Send brochure', 'Plan a visit day');
+        chips.push(...nextProbeChipLabels('legal'));
+        if (!chips.length) chips.push('What banks?', 'Is EC clear?', 'Send brochure', 'Plan a visit day');
       } else if (topic === 'price' || topic === 'emi') {
-        chips.push('Unit configurations', 'Location & connectivity', 'Send brochure', 'Plan a visit day');
+        chips.push(...nextProbeChipLabels(topic === 'emi' ? 'emi' : 'price'));
       } else if (topic === 'availability' || topic === 'property_type') {
-        chips.push('Starting prices', 'Send brochure', 'Plan a visit day');
+        chips.push(...nextProbeChipLabels('availability'));
       } else if (topic === 'location') {
-        chips.push('Starting prices', 'Legal status', 'Plan a visit day');
+        // Singular-home probe vocab (Site visit? / Pricing / …) — not compound FAQ filing.
+        chips.push(...nextProbeChipLabels('location'));
       } else if (topic === 'amenities') {
-        chips.push('Location & connectivity', 'Starting prices', 'Plan a visit day');
+        chips.push(...nextProbeChipLabels('amenities'));
       } else if (topic === 'media') {
-        chips.push('Starting prices', 'Unit configurations', 'Plan a visit day');
+        chips.push(...nextProbeChipLabels('media'));
       } else {
         // overview / default — sibling facets, not the whole tree
-        chips.push('Starting prices', 'Unit configurations', 'Location & connectivity', 'Legal status');
-        chips.push('Plan a visit day');
+        chips.push('Pricing', 'Configurations', 'Connectivity', 'Legal', 'Plan a visit day');
       }
       // compare branch already returned above — topic is narrowed away from 'compare'
       if (offered.length >= 2) {

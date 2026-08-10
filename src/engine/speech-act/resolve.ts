@@ -68,6 +68,12 @@ const FREE_TEXT_RULES: ReadonlyArray<{
     re: /\b(?:prices?|pricing|cost|how much|pricing batao|landed cost|all[- ]in cost|price break[- ]?up|breakdown|component[- ]wise|per\s*(?:sq\.?\s*ft|sqft|sft)|starting\s+prices?|best\s+price|any\s+discount|discounts?|offers?|negotiable)\b/i,
     priority: 60,
   },
+  // Answer-map probe chip — payment plan is overview/FAQ atom, not price sheet.
+  {
+    id: 'chip.answer.overview',
+    re: /^(?:payment\s*plan|clp|construction[- ]link(?:ed)?\s*plan)$/i,
+    priority: 61,
+  },
   {
     id: 'chip.answer.emi',
     re: /\b(?:emi|monthly payment|installment)\b/i,

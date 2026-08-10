@@ -61,8 +61,8 @@ describe('buildAdvisorNba chip taxonomy', () => {
     };
     const nba = buildAdvisorNba(state, debug);
     expect(nba.board).toBe('project');
-    expect(nba.chips).toContain('Starting prices');
-    expect(nba.chips).toContain('Location & connectivity');
+    expect(nba.chips).toContain('Pricing');
+    expect(nba.chips).toContain('Connectivity');
     expect(nba.chips).toContain('Back to my matches');
     expect(nba.chips).toContain('Refine my brief');
     expect(nba.chips.length).toBeLessThanOrEqual(6);
