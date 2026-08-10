@@ -60,6 +60,10 @@ describe('locationCategoriesAsked — buyer phrasing → LI category', () => {
     expect(locationCategoriesAsked('how far is the metro')).toEqual(['metroStations']);
     expect(locationCategoriesAsked('airport distance?')).toEqual(['airports']);
     expect(locationCategoriesAsked('IT parks around?')).toEqual(['itParks']);
+    expect(locationCategoriesAsked("how's connectivity to metro and offices?")).toEqual([
+      'metroStations',
+      'itParks',
+    ]);
   });
 
   it('IT parks never counts as green parks', () => {

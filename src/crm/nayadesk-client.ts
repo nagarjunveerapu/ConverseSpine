@@ -488,6 +488,14 @@ export class NayaDeskClient {
     return this.call('POST', '/api/projects/search', req);
   }
 
+  /** Direct LI row — engine door (bot auth), same D1 as Overview LI card. */
+  getLocationIntelligence(project_id: string): Promise<NdLocationIntelRow | null> {
+    return this.call<{ location: NdLocationIntelRow | null }>(
+      'GET',
+      `/api/engine/location-intel/${encodeURIComponent(project_id)}`,
+    ).then((r) => r.location ?? null);
+  }
+
   getProject(project_id: string): Promise<
     NdProjectSummary & {
       builder_id: string;

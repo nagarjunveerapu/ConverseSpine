@@ -132,30 +132,33 @@ function formatYearMonth(s: string): string {
 }
 
 /** Parse one Desk LI category column: JSON array of {name, distance_km, drive_minutes} (or plain strings). */
-function parsePoiList(s: string | undefined): LocationPoi[] {
-  if (!s) return [];
-  try {
-    const v = JSON.parse(s) as unknown;
-    if (!Array.isArray(v)) return [];
-    const out: LocationPoi[] = [];
-    for (const item of v) {
-      if (typeof item === 'string' && item.trim()) {
-        out.push({ name: item.trim() });
-      } else if (item && typeof item === 'object') {
-        const o = item as { name?: unknown; distance_km?: unknown; drive_minutes?: unknown };
-        if (typeof o.name === 'string' && o.name.trim()) {
-          out.push({
-            name: o.name.trim(),
-            ...(typeof o.distance_km === 'number' ? { distanceKm: o.distance_km } : {}),
-            ...(typeof o.drive_minutes === 'number' ? { driveMinutes: o.drive_minutes } : {}),
-          });
-        }
+function parsePoiList(s: string | unknown[] | undefined | null): LocationPoi[] {
+  if (s == null || s === '') return [];
+  let v: unknown = s;
+  if (typeof s === 'string') {
+    try {
+      v = JSON.parse(s) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(v)) return [];
+  const out: LocationPoi[] = [];
+  for (const item of v) {
+    if (typeof item === 'string' && item.trim()) {
+      out.push({ name: item.trim() });
+    } else if (item && typeof item === 'object') {
+      const o = item as { name?: unknown; distance_km?: unknown; drive_minutes?: unknown };
+      if (typeof o.name === 'string' && o.name.trim()) {
+        out.push({
+          name: o.name.trim(),
+          ...(typeof o.distance_km === 'number' ? { distanceKm: o.distance_km } : {}),
+          ...(typeof o.drive_minutes === 'number' ? { driveMinutes: o.drive_minutes } : {}),
+        });
       }
     }
-    return out;
-  } catch {
-    return [];
   }
+  return out;
 }
 
 function poiDisplay(p: LocationPoi): string {
@@ -286,11 +289,22 @@ export function nayadeskData(
       return resp.matches.map((m) => ({ projectId: m.project_id, name: m.name }));
     },
 
+    async locationIntel(projectId) {
+      const row = await crm.getLocationIntelligence(projectId).catch(() => null);
+      return mapLocationIntel(row);
+    },
+
     async projectDetail(_builderId, nd, projectId) {
       const t0 = Date.now();
       let ctxTransport: unknown | undefined;
       try {
-        const ctx = await crm.conversationContext(nd);
+        // LI: context only when Desk conversation is focused; project GET can omit
+        // the sibling under some bindings — also pull /api/admin/location (Desk truth).
+        const [ctx, fullProject, liRow] = await Promise.all([
+          crm.conversationContext(nd),
+          crm.getProject(projectId).catch(() => null),
+          crm.getLocationIntelligence(projectId).catch(() => null),
+        ]);
         const p = ctx.project;
         if (p && p.project_id === projectId) {
           // STRUCTURAL INVARIANT (over-answer fix): detail.faqs means "the FAQ
@@ -314,11 +328,14 @@ export function nayadeskData(
           const phaseNote = phaseNoteFrom(ctx.phase_journeys);
           const phaseMapped = mapPhasesFromJourneys(ctx.phase_journeys);
           const mediaKinds = uniqueMediaKinds(ctx.media);
-          const location = mapLocationIntel(ctx.location_intelligence);
+          const location =
+            mapLocationIntel(liRow) ??
+            mapLocationIntel(fullProject?.location_intelligence) ??
+            mapLocationIntel(ctx.location_intelligence);
           const marketIntel = await resolveMarketIntel(
             crm,
-            ctx.market_intel,
-            p.micro_market,
+            ctx.market_intel ?? fullProject?.market_intel,
+            p.micro_market || fullProject?.micro_market || '',
           );
           const extras = catalogExtras(p);
           // Project-level RERA wins when set; else first phase with a number.
@@ -327,7 +344,7 @@ export function nayadeskData(
             {
               projectId: p.project_id,
               name: p.name,
-              microMarket: p.micro_market,
+              microMarket: p.micro_market || fullProject?.micro_market || '',
               ...(p.summary ? { summary: p.summary } : {}),
               ...(reraNumber ? { reraNumber } : {}),
               // W4 — free-text possession normalised (no double periods/run-ons).
@@ -358,11 +375,15 @@ export function nayadeskData(
         /* fall through to getProject */
       }
       try {
-        const p = await crm.getProject(projectId);
+        const [p, liRow] = await Promise.all([
+          crm.getProject(projectId),
+          crm.getLocationIntelligence(projectId).catch(() => null),
+        ]);
         // S1 — LI ships on the project GET too, so location answers work even
         // when conversation context is unavailable (e.g. advisor-door sessions
         // whose Desk conversation row differs from the engine's nd).
-        const location = mapLocationIntel(p.location_intelligence);
+        const location =
+          mapLocationIntel(liRow) ?? mapLocationIntel(p.location_intelligence);
         const marketIntel = await resolveMarketIntel(crm, p.market_intel, p.micro_market);
         const extras = catalogExtras(p);
         return dataOk(

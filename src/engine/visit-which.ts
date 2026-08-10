@@ -42,7 +42,22 @@ export function parseNamePicks(text: string, candidates: readonly OfferedProject
   const picks: OfferedProject[] = [];
   for (const c of candidates) {
     const name = c.name.toLowerCase();
-    if (name.length >= 3 && t.includes(name)) picks.push(c);
+    if (name.length >= 3 && t.includes(name)) {
+      picks.push(c);
+      continue;
+    }
+    // Distinctive tokens: "Eldorado" → *Brigade Eldorado* (VIS-ADX-06 packed
+    // chooser reply). Skip tokens that appear in more than one candidate
+    // ("Brigade" across two Brigade projects).
+    const tokens = name.split(/\s+/).filter((w) => w.length >= 4);
+    for (const tok of tokens) {
+      if (!t.includes(tok)) continue;
+      const hits = candidates.filter((o) => o.name.toLowerCase().includes(tok));
+      if (hits.length === 1) {
+        picks.push(c);
+        break;
+      }
+    }
   }
   return picks;
 }

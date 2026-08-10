@@ -233,6 +233,9 @@ export function fakeData(): EngineData & {
       const d = projectDetailFor(id);
       return d ? dataOk(d, 1) : dataAbsent(1);
     },
+    async locationIntel() {
+      return undefined;
+    },
     async pricing(_b, _nd, id) {
       if (fail.pricing === 'absent') return dataAbsent(1);
       if (fail.pricing === 'transport') return dataTransport(1);

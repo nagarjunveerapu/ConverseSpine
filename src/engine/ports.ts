@@ -134,6 +134,8 @@ export interface EngineData {
     ndConversationId: string,
     projectId: string,
   ): Promise<DataResult<ProjectDetail>>;
+  /** Desk location_intelligence POIs for a project (engine door). */
+  locationIntel(projectId: string): Promise<LocationIntel | undefined>;
   pricing(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<DataResult<{
     projectName: string;
     startingDisplay?: string;

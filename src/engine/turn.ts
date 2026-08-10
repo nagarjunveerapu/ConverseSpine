@@ -3891,7 +3891,10 @@ async function fetchAnswer(
       cachedDetail &&
       !cachedDetail.marketIntel &&
       !cachedDetail.investment?.expectedRoi;
-    if ((bustLoan || bustIntel) && s.projectCache?.[goal.projectId]) {
+    // Overview/focus cache often omits LI POIs (or keeps a stale thin location).
+    // Always re-fetch Desk detail for location asks so metro/IT facets hydrate.
+    const bustLocation = Boolean(wantsLocation && cachedDetail);
+    if ((bustLoan || bustIntel || bustLocation) && s.projectCache?.[goal.projectId]) {
       const { [goal.projectId]: _stale, ...restCache } = s.projectCache;
       hydrateState = { ...s, projectCache: restCache };
     }
@@ -3901,6 +3904,11 @@ async function fetchAnswer(
       tools = evidence.tools;
     }
     let detail = hydrated.detail;
+    // LI POIs via dedicated engine door — do not rely on context/projectDetail merge.
+    if (wantsLocation && detail) {
+      const li = await deps.data.locationIntel(goal.projectId).catch(() => undefined);
+      if (li) detail = { ...detail, location: { ...detail.location, ...li } };
+    }
     if (detail && topics.includes('legal')) {
       detail = await enrichDetailLegal(deps, nd, detail);
     }

@@ -67,6 +67,33 @@ describe('Bot lane A3a — named + facet declines definition', () => {
     };
     expect(shouldDeclinePolicyForFocusedFacet(input)).toBe(true);
   });
+
+  it('declines definition for payment plan mid-visit with focus pin', () => {
+    const input: TurnRoutingInput = {
+      text: 'what is the payment plan?',
+      builder_id: 'brigade-group',
+      phase: 'visit',
+      focus: { project_id: 'brigade-eldorado', project_name: 'Brigade Eldorado' },
+      visit: {
+        queued_count: 0,
+        awaiting_confirm: false,
+        booked_count: 0,
+      },
+      named_project_ids: [],
+    };
+    expect(shouldDeclinePolicyForFocusedFacet(input)).toBe(true);
+  });
+
+  it('keeps cold literacy definition when no project pin', () => {
+    const input: TurnRoutingInput = {
+      text: 'what is a payment plan?',
+      builder_id: 'brigade-group',
+      phase: 'discover',
+      named_project_ids: [],
+    };
+    // Catalog cue present but no pin — must not steal bare literacy.
+    expect(shouldDeclinePolicyForFocusedFacet(input)).toBe(false);
+  });
 });
 
 describe('Bot lane B2 — managed farmland + Coorg', () => {
