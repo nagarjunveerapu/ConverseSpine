@@ -2,20 +2,54 @@
   "id": "CAT-08",
   "title": "Catalog: send Eldorado payment plan PDF (dummy dig seed)",
   "builder_id": "brigade-group",
-  "tags": ["catalog", "media", "payment_plan", "dummy-seed"],
+  "tags": [
+    "catalog",
+    "media",
+    "payment_plan",
+    "dummy-seed"
+  ],
   "turns": [
-    { "text": "hi" },
-    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "hi"
+    },
+    {
+      "text": "Apartment in North Bangalore"
+    },
     {
       "text": "Brigade Eldorado",
-      "assert": { "reply_includes": ["eldorado"] }
+      "assert": {
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
     },
     {
       "text": "send the payment plan PDF",
       "assert": {
-        "reply_includes": ["eldorado"],
-        "reply_includes_any": ["payment", "https://", "cdn", "signed", "pdf", "schedule"],
-        "reply_excludes": ["which project", "buena vista", "don't have that detail on file"],
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_includes_any": [
+          "payment",
+          "https://",
+          "cdn",
+          "signed",
+          "pdf",
+          "schedule"
+        ],
+        "reply_excludes": [
+          "which project",
+          "buena vista",
+          "don't have that detail on file"
+        ],
         "expect_media": true
       }
     }

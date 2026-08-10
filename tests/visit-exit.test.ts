@@ -65,6 +65,39 @@ describe('visit exit', () => {
     ).toBe(false);
   });
 
+  it('split_day offer: natural same-day / both same day never soft-exits on false compare', () => {
+    const visit = {
+      lastAsk: 'split_day' as const,
+      splitOffered: true,
+      projectId: 'orchards',
+      projectName: 'Brigade Orchards',
+    };
+    expect(
+      shouldExitVisitForIntent(
+        { constraints: {}, askTopic: 'compare', compareProjectIds: ['a', 'b'] },
+        'I want to plan for both on the same day',
+        undefined,
+        visit,
+      ),
+    ).toBe(false);
+    expect(
+      shouldExitVisitForIntent(
+        { constraints: {}, askTopic: 'compare' },
+        'same day',
+        undefined,
+        visit,
+      ),
+    ).toBe(false);
+    expect(
+      shouldExitVisitForIntent(
+        { constraints: {}, askTopic: 'compare' },
+        'force all same day',
+        undefined,
+        visit,
+      ),
+    ).toBe(false);
+  });
+
   it('closed chooser deixis while which_projects outstanding never soft-exits', () => {
     const visit = { lastAsk: 'which_projects' as const, projectId: 'a', projectName: 'A' };
     expect(

@@ -2,13 +2,34 @@
   "id": "CAT-06",
   "title": "Catalog: payment plan / CLP on focused Eldorado",
   "builder_id": "brigade-group",
-  "tags": ["catalog", "faq", "payment_plan", "R5"],
+  "tags": [
+    "catalog",
+    "faq",
+    "payment_plan",
+    "R5"
+  ],
   "turns": [
-    { "text": "hi" },
-    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "hi"
+    },
+    {
+      "text": "Apartment in North Bangalore"
+    },
     {
       "text": "Brigade Eldorado",
-      "assert": { "reply_includes": ["eldorado"] }
+      "assert": {
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
     },
     {
       "text": "what is the payment plan?",

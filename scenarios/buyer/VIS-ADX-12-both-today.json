@@ -1,0 +1,43 @@
+{
+  "id": "VIS-ADX-12",
+  "title": "BREAK: split offer → do both today (natural force, no digression)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "split_day", "today"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    { "text": "both" },
+    {
+      "text": "starting from Whitefield",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["day 1", "next day", "same day", "force", "far apart", "which day"]
+      }
+    },
+    {
+      "text": "do both today",
+      "assert": {
+        "phase": "visit",
+        "goal_kind_not": "answer",
+        "reply_excludes": ["brochure", "Here's the brochure", "Nothing in", "within ₹"],
+        "reply_includes_any": [
+          "team",
+          "same day",
+          "which day",
+          "Monday",
+          "Saturday",
+          "morning",
+          "afternoon",
+          "force",
+          "request",
+          "Ayana",
+          "Krishnaja",
+          "today"
+        ]
+      }
+    }
+  ]
+}

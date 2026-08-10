@@ -1,7 +1,11 @@
 import type { ConversationState, Extracted } from '../types.js';
 import { currentShortlist, discussedList } from '../entity-store.js';
 
-/** Compare / shortlist hub turns — must bypass RTI recovery and use lastOffered, not re-search no_fit. */
+/**
+ * Closed text cues for compare-among-offered (explicit compare / shortlist deixis).
+ * Open phrasing ("which location is better?", "which is better A or B?") is owned by
+ * SIL teach → compare_projects → askTopic compare — never grow regex here.
+ */
 export function isCompareAmongOfferedTurn(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
@@ -35,13 +39,23 @@ export function isCompareAmongOfferedTurn(text: string): boolean {
   return false;
 }
 
+/** Teach/SIL already stamped compare — closed consumer, no open-phrasing regex. */
+export function hasTeachCompareStamp(ex: Extracted): boolean {
+  if (ex.askTopic === 'compare') return true;
+  if (ex.askTopics?.includes('compare')) return true;
+  if ((ex.compareProjectIds?.length ?? 0) >= 2) return true;
+  return false;
+}
+
 /** Merge compare intent — prefer named pair, then discussed set, then shortlist. */
 export function prepareCompareExtracted(
   text: string,
   state: ConversationState,
   ex: Extracted,
 ): Extracted {
-  if (!isCompareAmongOfferedTurn(text)) return ex;
+  // Open "which location / which is better …" reaches here via SIL compare_projects
+  // → askTopic compare (teach), not via new regex in isCompareAmongOfferedTurn.
+  if (!hasTeachCompareStamp(ex) && !isCompareAmongOfferedTurn(text)) return ex;
   const offered = currentShortlist(state);
   const discussed = discussedList(state);
   const topics = ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : [];

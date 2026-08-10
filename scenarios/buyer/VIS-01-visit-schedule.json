@@ -1,24 +1,60 @@
 {
   "id": "VIS-01",
-  "title": "Visit explore → schedule → confirm slot",
+  "title": "Visit explore \u2192 schedule \u2192 confirm slot",
   "builder_id": "lokations",
-  "tags": ["quality", "visit", "D"],
+  "tags": [
+    "quality",
+    "visit",
+    "D"
+  ],
   "turns": [
-    { "text": "hi" },
-    { "text": "plantation in sakleshpur" },
-    { "text": "Ayana", "assert": { "reply_includes": ["ayana"] } },
+    {
+      "text": "hi"
+    },
+    {
+      "text": "plantation in sakleshpur"
+    },
+    {
+      "text": "Ayana",
+      "assert": {
+        "reply_includes": [
+          "ayana"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
+    },
     {
       "text": "I want to visit",
       "assert": {
-        "reply_includes": ["ayana"],
-        "reply_excludes": ["buena vista", "desire spaces", "Desire Spaces"]
+        "reply_includes": [
+          "ayana"
+        ],
+        "reply_excludes": [
+          "buena vista",
+          "desire spaces",
+          "Desire Spaces"
+        ]
       }
     },
     {
       "text": "Saturday morning",
       "assert": {
-        "reply_includes": ["ayana"],
-        "reply_excludes": ["tap a button", "which project", "desire spaces", "Desire Spaces"]
+        "reply_includes": [
+          "ayana"
+        ],
+        "reply_excludes": [
+          "tap a button",
+          "which project",
+          "desire spaces",
+          "Desire Spaces"
+        ]
       }
     }
   ]

@@ -1,0 +1,22 @@
+{
+  "id": "VIS-ADX-14",
+  "title": "BREAK: focused overview → which is better A or B must compare (chat)",
+  "builder_id": "brigade-group",
+  "tags": ["compare", "adversarial", "hub"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 bhk in Devanahalli under 70L" },
+    { "text": "tell me about Brigade Eldorado" },
+    {
+      "text": "which is better Eldorado or Orchards?",
+      "assert": {
+        "goal_topic": "compare",
+        "reply_includes_any": ["Side-by-side", "vs", "Eldorado", "Orchards"],
+        "reply_excludes": [
+          "Curious about loan eligibility, or shall I walk through the configs",
+          "Want pricing details, unit configurations"
+        ]
+      }
+    }
+  ]
+}

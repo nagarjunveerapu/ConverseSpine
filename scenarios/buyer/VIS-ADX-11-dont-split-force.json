@@ -1,0 +1,42 @@
+{
+  "id": "VIS-ADX-11",
+  "title": "BREAK: split offer → don't split must force same-day (not accept split / not brochure)",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "split_day", "force"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "tell me about ayana" },
+    { "text": "also tell me about krishnaja greens" },
+    { "text": "come for the visit" },
+    { "text": "both" },
+    {
+      "text": "I'll come from Indiranagar",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["day 1", "next day", "same day", "force", "far apart", "which day"]
+      }
+    },
+    {
+      "text": "don't split — I want both same day",
+      "assert": {
+        "phase": "visit",
+        "goal_kind_not": "answer",
+        "reply_excludes": ["brochure", "Here's the brochure", "Nothing in"],
+        "reply_includes_any": [
+          "team",
+          "same day",
+          "which day",
+          "Monday",
+          "Saturday",
+          "morning",
+          "afternoon",
+          "force",
+          "request",
+          "Ayana",
+          "Krishnaja"
+        ]
+      }
+    }
+  ]
+}

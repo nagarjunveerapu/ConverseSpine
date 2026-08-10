@@ -1,0 +1,46 @@
+{
+  "id": "VIS-ADX-16",
+  "title": "BREAK: split/day path → Hinglish dono same day must stay in visit",
+  "builder_id": "lokations",
+  "tags": ["visit", "adversarial", "hinglish", "same_day"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "plantation in sakleshpur" },
+    { "text": "ayana aur krishnaja greens" },
+    { "text": "visit plan karna hai" },
+    {
+      "text": "dono",
+      "assert": {
+        "goal_kind": "visit_ask",
+        "reply_includes_any": ["coming from", "where will you", "which day", "1."]
+      }
+    },
+    {
+      "text": "Indiranagar se",
+      "assert": {
+        "goal_kind": "visit_ask"
+      }
+    },
+    {
+      "text": "dono same day please",
+      "assert": {
+        "phase": "visit",
+        "goal_kind_not": "answer",
+        "reply_excludes": ["brochure", "Here's the brochure", "Nothing in"],
+        "reply_includes_any": [
+          "team",
+          "same day",
+          "which day",
+          "Monday",
+          "Saturday",
+          "morning",
+          "afternoon",
+          "force",
+          "request",
+          "Ayana",
+          "Krishnaja"
+        ]
+      }
+    }
+  ]
+}

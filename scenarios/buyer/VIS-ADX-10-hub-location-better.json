@@ -1,0 +1,26 @@
+{
+  "id": "VIS-ADX-10",
+  "title": "BREAK: focused pack → which location is better must compare hub (chat)",
+  "builder_id": "brigade-group",
+  "tags": ["compare", "adversarial", "hub"],
+  "turns": [
+    { "text": "hi" },
+    { "text": "2 bhk in Devanahalli under 70L" },
+    {
+      "text": "tell me about Brigade Cornerstone",
+      "assert": {
+        "reply_includes_any": ["Cornerstone"]
+      }
+    },
+    {
+      "text": "which location is better?",
+      "assert": {
+        "goal_topic": "compare",
+        "reply_includes_any": ["Side-by-side", "Location", "vs", "compare"],
+        "reply_excludes": [
+          "Curious about loan eligibility, or shall I walk through the configs"
+        ]
+      }
+    }
+  ]
+}

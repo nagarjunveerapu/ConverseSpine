@@ -157,4 +157,100 @@ describe('discover implicit project pick', () => {
       projectIds: ['neo', 'eldorado'],
     });
   });
+
+  it('bare Brigade Orchards after multi shortlist commits (not side-by-side compare)', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      discover: {
+        ...initState('c1', 'brigade-group').discover,
+        lastOffered: [
+          { projectId: 'brigade-northridge-neo', name: 'Brigade Northridge Neo' },
+          { projectId: 'brigade-eldorado', name: 'Brigade Eldorado' },
+          { projectId: 'brigade-orchards', name: 'Brigade Orchards' },
+        ],
+      },
+    };
+    // Invented compare stamp (the live bug): compareProjectIds paired with Neo.
+    const ex: Extracted = {
+      constraints: {},
+      askTopic: 'compare',
+      askTopics: ['compare'],
+      compareProjectIds: ['brigade-orchards', 'brigade-northridge-neo'],
+      namedProjects: [{ projectId: 'brigade-orchards', name: 'Brigade Orchards' }],
+      speechAct: 'answer',
+      transition: 'none',
+    };
+    const goal = discoverDecide(s, ex, 'Brigade Orchards');
+    expect(goal.kind).toBe('commit');
+    expect(goal).toMatchObject({ projectId: 'brigade-orchards' });
+    expect(goal).not.toMatchObject({ topic: 'compare' });
+  });
+
+  it('brochure after prior named pick commits media (not clarify menu)', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      discover: {
+        ...initState('c1', 'brigade-group').discover,
+        lastOffered: [
+          { projectId: 'neo', name: 'Brigade Northridge Neo' },
+          { projectId: 'eldorado', name: 'Brigade Eldorado' },
+          { projectId: 'orchards', name: 'Brigade Orchards' },
+        ],
+        recentMessages: [
+          { role: 'buyer' as const, text: 'Apartment in North Bangalore' },
+          { role: 'bot' as const, text: 'Here are matches…' },
+          { role: 'buyer' as const, text: 'Brigade Eldorado' },
+          { role: 'bot' as const, text: 'Side-by-side…' },
+          { role: 'buyer' as const, text: 'send the brochure' },
+        ],
+      },
+    };
+    const ex: Extracted = {
+      constraints: {},
+      askTopic: 'media',
+      askTopics: ['media'],
+      mediaAssetKind: 'brochure',
+      speechAct: 'answer',
+      // Media chip path often stamps want_details — must not clarify-menu.
+      transition: 'want_details',
+      implicitProjectPick: true,
+    };
+    const goal = discoverDecide(s, ex);
+    expect(goal).toMatchObject({
+      kind: 'commit',
+      projectId: 'eldorado',
+      followUp: 'media',
+    });
+  });
+
+  it('price sheet after prior named pick commits media (not shortlist price)', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      discover: {
+        ...initState('c1', 'brigade-group').discover,
+        lastOffered: [
+          { projectId: 'neo', name: 'Brigade Northridge Neo' },
+          { projectId: 'eldorado', name: 'Brigade Eldorado' },
+        ],
+        recentMessages: [
+          { role: 'buyer' as const, text: 'Brigade Eldorado' },
+          { role: 'bot' as const, text: 'compare…' },
+          { role: 'buyer' as const, text: 'send the price sheet' },
+        ],
+      },
+    };
+    const ex: Extracted = {
+      constraints: {},
+      askTopic: 'price',
+      askTopics: ['price', 'media'],
+      mediaAssetKind: 'price_sheet',
+      speechAct: 'answer',
+    };
+    const goal = discoverDecide(s, ex);
+    expect(goal).toMatchObject({
+      kind: 'commit',
+      projectId: 'eldorado',
+      followUp: 'media',
+    });
+  });
 });

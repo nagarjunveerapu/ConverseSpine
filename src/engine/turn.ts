@@ -76,6 +76,7 @@ import { buyerCuedOtherProject } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
   isCompareAmongOfferedTurn,
+  hasTeachCompareStamp,
   prepareCompareExtracted,
   shouldAllowBudgetGapNoFit,
 } from './turn-intent/compare-intent.js';
@@ -445,6 +446,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       runTurnIntent = false;
       const held = holdsFocusAgainstRelease(routingEarly, true);
       if (held.hold) focusHeldReason = held.reason;
+    }
+    // SIL compare_projects → askTopic compare: among-offered, not RTI pivot.
+    if (hasTeachCompareStamp(extractBundle.extracted)) {
+      runTurnIntent = false;
     }
   } else if (
     runTurnIntent &&
@@ -1155,6 +1160,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     if (after > before && extractProvenance) {
       extractProvenance.fields.askTopics = extractProvenance.fields.askTopics ?? 'intent';
     }
+  }
+  // SIL compare_projects → answer_topic compare lands above; seed shortlist IDs
+  // here (prepareCompare earlier only saw closed "compare" text cues).
+  if (hasTeachCompareStamp(ex) || routing.routing === 'compare_offered') {
+    ex = prepareCompareExtracted(trimmedText, state, {
+      ...ex,
+      askTopic: ex.askTopic ?? 'compare',
+      askTopics: ex.askTopics?.includes('compare')
+        ? ex.askTopics
+        : (['compare', ...(ex.askTopics ?? [])] as Extracted['askTopics']),
+    });
   }
   // Loan FactKey/FAQ owns the turn — never let a brochure embedder leave
   // askTopic=media (that shared the PDF for "can I get the loan?").
