@@ -2,20 +2,52 @@
   "id": "CAT-07",
   "title": "Catalog: send Eldorado price sheet PDF (dummy dig seed)",
   "builder_id": "brigade-group",
-  "tags": ["catalog", "media", "price_sheet", "dummy-seed"],
+  "tags": [
+    "catalog",
+    "media",
+    "price_sheet",
+    "dummy-seed"
+  ],
   "turns": [
-    { "text": "hi" },
-    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "hi"
+    },
+    {
+      "text": "Apartment in North Bangalore"
+    },
     {
       "text": "Brigade Eldorado",
-      "assert": { "reply_includes": ["eldorado"] }
+      "assert": {
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
     },
     {
       "text": "send the price sheet",
       "assert": {
-        "reply_includes": ["eldorado"],
-        "reply_includes_any": ["price sheet", "https://", "cdn", "signed", "pdf"],
-        "reply_excludes": ["which project", "buena vista"],
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_includes_any": [
+          "price sheet",
+          "https://",
+          "cdn",
+          "signed",
+          "pdf"
+        ],
+        "reply_excludes": [
+          "which project",
+          "buena vista"
+        ],
         "expect_media": true
       }
     }

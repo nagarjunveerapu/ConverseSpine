@@ -146,11 +146,15 @@ export function resolveCompareProjectIds(
     return uniqueIds(pool);
   }
 
+  // Single named project + multi shortlist is a PICK, not a compare — unless the
+  // buyer explicitly asked to compare. Auto-pairing with a sibling produced
+  // "Brigade Orchards" → side-by-side vs Northridge (every CAT/SIL/ADV name turn).
   if (fromRefs.length === 1 && pool.length >= 2 && !hasUnboundNames(ex)) {
-    const hasSubstantiveTopic =
-      (ex.askTopics ?? []).some((t) => t !== 'compare') ||
-      (ex.askTopic != null && ex.askTopic !== 'compare');
-    if (hasSubstantiveTopic) return [];
+    const explicitCompare =
+      ex.askTopic === 'compare' ||
+      (ex.askTopics?.includes('compare') ?? false) ||
+      GENERIC_COMPARE_RE.test(buyerText);
+    if (!explicitCompare) return [];
     const other = pool.find((p) => p.project_id !== fromRefs[0]!.project_id);
     if (other) return [fromRefs[0]!.project_id, other.project_id];
   }

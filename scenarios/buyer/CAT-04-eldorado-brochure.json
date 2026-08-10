@@ -2,19 +2,44 @@
   "id": "CAT-04",
   "title": "Catalog: Eldorado brochure share or honest miss",
   "builder_id": "brigade-group",
-  "tags": ["catalog", "media", "R5"],
+  "tags": [
+    "catalog",
+    "media",
+    "R5"
+  ],
   "turns": [
-    { "text": "hi" },
-    { "text": "Apartment in North Bangalore" },
+    {
+      "text": "hi"
+    },
+    {
+      "text": "Apartment in North Bangalore"
+    },
     {
       "text": "Brigade Eldorado",
-      "assert": { "reply_includes": ["eldorado"] }
+      "assert": {
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
     },
     {
       "text": "send the brochure",
       "assert": {
-        "reply_includes": ["eldorado"],
-        "reply_excludes": ["which project", "buena vista"],
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "which project",
+          "buena vista"
+        ],
         "expect_media": true
       }
     }

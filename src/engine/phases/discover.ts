@@ -5,6 +5,7 @@ import { resolvePick } from '../state.js';
 import { formatInr } from '../compose.js';
 import { currentShortlist, discussedList } from '../entity-store.js';
 import { isNonPlaceUtterance } from '../placeability.js';
+import { isCompareAmongOfferedTurn } from '../turn-intent/compare-intent.js';
 
 export function decide(s: ConversationState, ex: Extracted, buyerText?: string): TurnGoal {
   const d = s.discover;
@@ -26,13 +27,20 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // freshSearchBoard), which would otherwise turn "Ayana" after a vague brief
   // ("green near the hills") into a no_fit search. Compare/visit/details and
   // "show me more" keep their own downstream paths.
+  //
+  // Bare "Brigade Orchards" must commit even when compare_resolve wrongly stamped
+  // askTopic=compare by pairing with a shortlist sibling — only an explicit
+  // compare cue (or two named projects) keeps the compare path.
+  const explicitCompareAsk =
+    !!ex.compareAdvice ||
+    (ex.namedProjects?.length ?? 0) >= 2 ||
+    (typeof buyerText === 'string' && isCompareAmongOfferedTurn(buyerText));
   if (
     (ex.namedProjects?.length ?? 0) === 1 &&
     ex.speechAct !== 'search' &&
     ex.transition !== 'want_visit' &&
     ex.transition !== 'want_details' &&
-    ex.askTopic !== 'compare' &&
-    !ex.compareAdvice &&
+    !explicitCompareAsk &&
     !ex.wantsMore &&
     !ex.rejected
   ) {
@@ -80,13 +88,44 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // Details ask: commit only when pick is unambiguous (named/ordinal or singleton).
   // Multi shortlist without a name → answer the facet across the shortlist when
   // one was asked; only a topicless "tell me more" earns the pick-menu.
+  // Media chips ("send the brochure") often set want_details/implicit — recover the
+  // prior named shortlist pick before the clarify menu (CAT-04/07).
   if (ex.implicitProjectPick || ex.transition === 'want_details') {
-    const explicit = resolvePick(ex, currentShortlist(s), s);
-    if (explicit) return commitPickWithFollowUp(explicit, ex);
+    const mediaKind =
+      typeof ex.mediaAssetKind === 'string' ? ex.mediaAssetKind.trim() : '';
+    const explicit =
+      resolvePick(ex, currentShortlist(s), s) ??
+      recentBuyerNamedPick(s, currentShortlist(s)) ??
+      (s.focus ? { projectId: s.focus.projectId, name: s.focus.projectName } : undefined) ??
+      (() => {
+        const discussed = discussedList(s);
+        return discussed.length ? discussed[discussed.length - 1] : undefined;
+      })();
+    if (explicit) {
+      if (mediaKind) {
+        return {
+          kind: 'commit',
+          projectId: explicit.projectId,
+          projectName: explicit.name,
+          followUp: 'media',
+        };
+      }
+      return commitPickWithFollowUp(explicit, ex);
+    }
     if (currentShortlist(s).length === 1) {
-      return commitPickWithFollowUp(currentShortlist(s)[0]!, ex);
+      const only = currentShortlist(s)[0]!;
+      if (mediaKind) {
+        return {
+          kind: 'commit',
+          projectId: only.projectId,
+          projectName: only.name,
+          followUp: 'media',
+        };
+      }
+      return commitPickWithFollowUp(only, ex);
     }
     if (currentShortlist(s).length >= 2) {
+      if (mediaKind) return { kind: 'clarify_project_pick' };
       const across = shortlistAnswerGoal(s, ex);
       if (across) return across;
       return { kind: 'clarify_project_pick' };
@@ -457,8 +496,12 @@ export function buildConstraintGapEvidence(
 function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null {
   if (ex.budgetFitQuestion || ex.budgetPickQuestion) return null;
   const topics = (ex.askTopics ?? []).filter((t) => t !== 'compare');
+  const mediaKind = typeof ex.mediaAssetKind === 'string' ? ex.mediaAssetKind.trim() : '';
   const hasTopic =
-    topics.length > 0 || (ex.askTopic && ex.askTopic !== 'compare') || ex.transition === 'want_details';
+    topics.length > 0 ||
+    (ex.askTopic && ex.askTopic !== 'compare') ||
+    ex.transition === 'want_details' ||
+    !!mediaKind;
   if (!hasTopic) return null;
 
   const pick =
@@ -475,9 +518,11 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
   // sinkhole ate EMI/legal/cost asks with "Which one should I open — 1) 2) 3)?").
   // Topics with no shortlist-wide lane still clarify; a constraint refine
   // without a named pick still re-searches (PIV-03).
+  // Media asset asks (brochure / price_sheet) are per-project — never shortlist price.
   if (!pick) {
     const refine = ex.speechAct === 'search' && hasNarrowingConstraint(s.constraints);
     if (currentShortlist(s).length >= 2 && !refine) {
+      if (mediaKind) return { kind: 'clarify_project_pick' };
       // shortlistAnswerGoal reads askTopic AND askTopics; the clarify fallback
       // keeps its original askTopics-only condition — nothing NEW clarifies.
       const across = shortlistAnswerGoal(s, ex);
@@ -487,6 +532,14 @@ function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null
     return null;
   }
 
+  if (mediaKind) {
+    return {
+      kind: 'commit',
+      projectId: pick.projectId,
+      projectName: pick.name,
+      followUp: 'media',
+    };
+  }
   return commitPickWithFollowUp(pick, ex);
 }
 
@@ -530,6 +583,8 @@ function recentBuyerNamedPick(
 ): import('../types.js').OfferedProject | undefined {
   if (!offered.length) return undefined;
   const msgs = s.discover.recentMessages ?? [];
+  // Scan back across buyer turns. Facet follow-ups ("send the brochure") are not
+  // picks — do not stop at the latest utterance when it has no project name.
   for (let i = msgs.length - 1; i >= 0; i--) {
     const m = msgs[i];
     if (!m || m.role !== 'buyer') continue;
@@ -539,7 +594,6 @@ function recentBuyerNamedPick(
     for (const o of offered) {
       if (nameMentioned(o.name, t) || t.includes(o.name.toLowerCase())) return o;
     }
-    break;
   }
   return undefined;
 }
@@ -555,12 +609,19 @@ export function commitPickWithFollowUp(
     (ex.transition === 'want_details' || ex.implicitProjectPick || ex.pickName || ex.pickOrdinal
       ? 'overview'
       : undefined);
-  if (topic) {
+  // Bare name pick ("Brigade Orchards") → overview follow-up even when the only
+  // askTopic was an invented compare stamp that we filtered out above.
+  const follow =
+    topic ??
+    ((ex.namedProjects?.length ?? 0) === 1 || ex.pickName || ex.pickOrdinal != null
+      ? 'overview'
+      : undefined);
+  if (follow) {
     return {
       kind: 'commit',
       projectId: pick.projectId,
       projectName: pick.name,
-      followUp: topic,
+      followUp: follow,
       ...(topics.length > 1 ? { followUpTopics: topics } : {}),
     };
   }

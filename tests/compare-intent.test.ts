@@ -132,6 +132,52 @@ describe('resolveCompareProjectIds discourse', () => {
     );
     expect(ids).toEqual(['ayana', 'krishnaja']);
   });
+
+  it('bare shortlist name is a pick — does not invent a sibling compare pair', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      discover: {
+        ...initState('c1', 'brigade-group').discover,
+        lastOffered: [
+          { projectId: 'brigade-northridge-neo', name: 'Brigade Northridge Neo' },
+          { projectId: 'brigade-eldorado', name: 'Brigade Eldorado' },
+          { projectId: 'brigade-orchards', name: 'Brigade Orchards' },
+        ],
+      },
+    };
+    const ids = resolveCompareProjectIds(
+      'Brigade Orchards',
+      {
+        constraints: {},
+        namedProjects: [{ projectId: 'brigade-orchards', name: 'Brigade Orchards' }],
+      },
+      s,
+    );
+    expect(ids).toEqual([]);
+  });
+
+  it('explicit compare + one named shortlist project still pairs a sibling', () => {
+    const s = {
+      ...initState('c1', 'brigade-group'),
+      discover: {
+        ...initState('c1', 'brigade-group').discover,
+        lastOffered: [
+          { projectId: 'brigade-northridge-neo', name: 'Brigade Northridge Neo' },
+          { projectId: 'brigade-orchards', name: 'Brigade Orchards' },
+        ],
+      },
+    };
+    const ids = resolveCompareProjectIds(
+      'compare Brigade Orchards',
+      {
+        constraints: {},
+        askTopic: 'compare',
+        namedProjects: [{ projectId: 'brigade-orchards', name: 'Brigade Orchards' }],
+      },
+      s,
+    );
+    expect(ids).toEqual(['brigade-orchards', 'brigade-northridge-neo']);
+  });
 });
 
 describe('anaphoric project vector gate', () => {
