@@ -32,12 +32,16 @@ export function templateIdForHomes(homes: AnswerHomeId[]): string {
   return `${active.join('+')}.v1`;
 }
 
+type ProbeHomeId = Exclude<AnswerHomeId, 'other'>;
+
 /** Deterministic next-probe after delivered homes. */
 export function rankNextProbe(
   delivered: AnswerHomeId[],
-): { primary: AnswerHomeId; chips: AnswerHomeId[] } {
-  const done = new Set(delivered.filter((h) => h !== 'other'));
-  const pool: AnswerHomeId[] = [
+): { primary: ProbeHomeId; chips: ProbeHomeId[] } {
+  const done = new Set<ProbeHomeId>(
+    delivered.filter((h): h is ProbeHomeId => h !== 'other'),
+  );
+  const pool: ProbeHomeId[] = [
     'visit',
     'pricing',
     'payment_plan',
