@@ -1156,7 +1156,8 @@ const LOCATION_CATEGORY_TERMS: ReadonlyArray<[LocationCategoryKey, RegExp]> = [
   ['hospitals', /\b(?:hospitals?|clinics?|medical\s+(?:care|facilit))/i],
   ['metroStations', /\b(?:metro|namma)\b/i],
   ['airports', /\bairport\b/i],
-  ['itParks', /\b(?:it\s+parks?|tech\s+parks?|itpl|office\s+hubs?)\b/i],
+  // Bare "offices" / "office" count as IT connectivity (Desk it_parks), not green parks.
+  ['itParks', /\b(?:it\s+parks?|tech\s+parks?|itpl|office\s+hubs?|offices?)\b/i],
   ['malls', /\b(?:malls?|shopping)\b/i],
   ['universities', /\b(?:universit(?:y|ies)|colleges?)\b/i],
   ['supermarkets', /\b(?:supermarkets?|grocer(?:y|ies))\b/i],

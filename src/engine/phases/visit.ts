@@ -746,7 +746,9 @@ function step(input: {
         projectName = applied.projectName;
         queued = applied.queued;
       }
-    } else {
+    } else if (input.named.length === 0) {
+      // No chooser deixis/name — re-ask. If NER already named a stop, fall
+      // through so singleNamed + packed slot can bind (VIS-ADX-06 t7).
       return {
         kind: 'visit_ask',
         ask: 'which_projects',

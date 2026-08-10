@@ -145,13 +145,25 @@ function extractHasCatalogFacet(input: TurnRoutingInput): boolean {
 /**
  * Catalog-facet ask that must beat definition/discount policy:
  * - focused + pin (existing), or
+ * - mid-visit digression with an open project (focus or visit stop), or
  * - cold discover with a resolved named project + facet (price/possession…).
  * Cold literacy and bare discount asks stay on their policy doors.
+ *
+ * VIS-ADX-06: "what is the payment plan?" mid-chooser matches looksLikeDefinitionAsk
+ * ("what is") and was binding definition_* → education miss before visit FAQ defer.
  */
 export function shouldDeclinePolicyForFocusedFacet(input: TurnRoutingInput): boolean {
   const facet = extractHasCatalogFacet(input) || looksLikeCatalogFacetAsk(input.text);
   if (!facet) return false;
   if (input.phase === 'focused' && input.focus) return true;
+  // Visit phase is not "focused", but the open project is still pinned — same
+  // catalog lookup as focused digression (payment plan / price / RERA…).
+  if (
+    hasVisitRoutingContext(input) &&
+    (!!input.focus || !!input.visit?.project_id)
+  ) {
+    return true;
+  }
   if ((input.named_project_ids?.length ?? 0) >= 1) return true;
   return false;
 }
@@ -166,6 +178,25 @@ export function looksLikeBudgetConstraintTurn(text: string): boolean {
   if (!parseBudgetToInr(text)) return false;
   return /\b(?:budget|under|below|upto|up\s+to|around|about|within|max(?:imum)?|cap)\b/i.test(
     text,
+  );
+}
+
+/**
+ * True discount / negotiate asks — must NOT be swallowed by focused get_price
+ * or payment-plan FAQ. "my budget is tight — any discount?" is negotiate, not BSP.
+ */
+export function looksLikeDiscountNegotiateAsk(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (looksLikeBudgetConstraintTurn(t) && !/\b(?:discount|negotiable|best\s+price)\b/i.test(t)) {
+    return false;
+  }
+  return (
+    /\b(?:any\s+)?discounts?\b/i.test(t) ||
+    /\bbest\s+price\b/i.test(t) ||
+    /\bnegotiable\b/i.test(t) ||
+    /\b(?:reduce|lower|cut)\s+(?:the\s+)?price\b/i.test(t) ||
+    /\bany\s+offer(?:s)?\b/i.test(t)
   );
 }
 
@@ -233,10 +264,13 @@ export function mapIntentToRouting(
       }
       // Focused catalog-facet ask — decline definition + negotiate_price so the
       // candidate walk can bind an answer intent (price/RERA/amenities…).
+      // Keep negotiate_price when the buyer clearly asked for a discount.
       if (
         shouldDeclinePolicyForFocusedFacet(input) &&
         (policyIntent.policy === 'definition' ||
-          (kind === 'negotiate_price' && policyIntent.subject === 'discount'))
+          (kind === 'negotiate_price' &&
+            policyIntent.subject === 'discount' &&
+            !looksLikeDiscountNegotiateAsk(input.text)))
       ) {
         return null;
       }

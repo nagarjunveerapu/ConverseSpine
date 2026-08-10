@@ -42,7 +42,8 @@ export interface RoutingBindTelemetry {
     | 'embed_error'
     | 'embed_declined'
     | 'chip'
-    | 'fair_housing_floor';
+    | 'fair_housing_floor'
+    | 'discount_rule';
   /** When the embedder fired but produced no bind, WHY: distinguishes an empty/stale
    *  index (no_match/query_error), a low-confidence result (below_tau), and an
    *  unroutable intent_kind (unmapped_kind). */

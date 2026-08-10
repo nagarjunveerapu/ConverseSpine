@@ -7,7 +7,9 @@ import {
   DEFINITION_INTENT_KINDS,
   hasVisitRoutingContext,
   looksLikeDefinitionAsk,
+  looksLikeDiscountNegotiateAsk,
   mapIntentToRouting,
+  shouldDeclinePolicyForFocusedFacet,
 } from './embedder-map.js';
 import {
   detectProtectedIdentityFilter,
@@ -196,10 +198,12 @@ export async function embedderRouting(
   // only taught when one FAQ key owns the meaning catalog-wide), so it wins.
   // Class-balanced definition candidates at ≥0.8 outrank denser availability
   // only on literacy asks — not on "N BHK in <place>" search briefs, and not
-  // while focused (state-condition: "what's the price" is a catalog lookup).
+  // while focused / mid-visit with a pinned project + catalog facet
+  // ("what's the price" / "what is the payment plan?" are catalog lookups).
   const definitionBoostOk =
     looksLikeDefinitionAsk(input.text) &&
-    !(input.phase === 'focused' && !!input.focus);
+    !(input.phase === 'focused' && !!input.focus) &&
+    !shouldDeclinePolicyForFocusedFacet(input);
   matches.sort((a, b) => {
     const aBalanced =
       definitionBoostOk &&
@@ -286,6 +290,18 @@ export async function embedderRouting(
  */
 function stateDependentRouting(input: TurnRoutingInput): TurnRoutingResult | null {
   const pid = input.named_project_ids?.[0];
+
+  // Discount / negotiate — closed phrasing, must not answer as BSP or payment plan.
+  if (looksLikeDiscountNegotiateAsk(input.text)) {
+    return {
+      routing: 'unsupported',
+      policy: 'out_of_scope',
+      subject: 'discount',
+      confidence: 'rule',
+      ...(pid ? { project_id: pid } : {}),
+      bind: { bind_source: 'regex', embed_fired: false, embed_gate: 'discount_rule' },
+    };
+  }
 
   if (
     isVisitFollowUpQuestion(input.text, {
