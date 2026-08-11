@@ -2421,7 +2421,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           || evidence.detail?.khata?.trim()
           || evidence.detail?.possession?.trim()
           || evidence.detail?.loanEligibility?.trim()
-          || (goal.requires?.includes('rera') && evidence.detail?.reraNumber?.trim()),
+          || (goal.kind === 'answer'
+            && goal.requires?.includes('rera')
+            && evidence.detail?.reraNumber?.trim()),
       ),
     }).catch(() => {});
   })();
