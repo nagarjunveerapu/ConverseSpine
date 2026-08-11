@@ -96,6 +96,23 @@ describe('overviewCard', () => {
     expect(reply).not.toBe(overviewCard(DETAIL));
   });
 
+  it('faqMiss rera rescues ProjectDetail.reraNumber before honest miss', () => {
+    const reraNumber = 'PRM/KA/RERA/1251/446/2024';
+    const req = buildComposeRequest(
+      { kind: 'answer', topic: 'legal', projectId: 'brigade-eldorado', requires: ['rera'] },
+      {
+        tools: ['faqMiss', 'detail'],
+        detail: { ...DETAIL, reraNumber },
+        faqMiss: { keys: ['rera_number', 'rera_status'] },
+      } as EvidenceSet,
+      { constraints: {}, focusProjectName: 'Brigade Eldorado', buyerText: 'is it RERA approved?' },
+    );
+    const reply = fallbackReply(req);
+    expect(reply).toMatch(/RERA/i);
+    expect(reply).toContain(reraNumber);
+    expect(reply).not.toMatch(/don'?t have that detail on file/i);
+  });
+
   it('a facet ask with a matched FAQ hit still answers that FAQ (single-owner invariant)', () => {
     const req = buildComposeRequest(
       { kind: 'answer', topic: 'legal', projectId: 'brigade-eldorado' },

@@ -1024,6 +1024,20 @@ export function nayadeskCrm(
     async mirrorMemory(conversationId) {
       await crm.mirrorMemory(conversationId);
     },
+    async reportCatalogWatchAsk(p) {
+      await crm.reportCatalogWatchAsk({
+        builder_id: p.builderId,
+        project_id: p.projectId,
+        answer_ok: p.answerOk,
+        truth_present: p.truthPresent,
+        ...(p.slotId ? { slot_id: p.slotId } : {}),
+        ...(p.facetKey ? { facet_key: p.facetKey } : {}),
+        ...(p.phrase ? { phrase: p.phrase } : {}),
+        ...(p.reviewedIntent ? { reviewed_intent: p.reviewedIntent } : {}),
+        ...(p.conversationId ? { conversation_id: p.conversationId } : {}),
+        ...(p.failReason ? { fail_reason: p.failReason } : {}),
+      });
+    },
     ...(opts?.understandingCapture
       ? {
           async enqueueIntentReview(p: {

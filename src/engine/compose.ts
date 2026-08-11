@@ -742,6 +742,21 @@ export function fallbackReply(req: ComposeRequest): string {
             projectName: pname,
           })}`;
         }
+        // RERA/khata live on ProjectDetail atoms — FAQ miss must not honest-miss
+        // when Desk already carries the registration number (Meadows dig).
+        if (
+          ev.faqMiss.keys.some((k) =>
+            /^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(k),
+          ) &&
+          (ev.detail?.reraNumber?.trim() || ev.detail?.khata?.trim())
+        ) {
+          const snap = legalTitleSnapshot(ev.detail, []);
+          return `${snap}.${closingCta({
+            buyerText: context.buyerText,
+            topics: ['legal'],
+            projectName: pname,
+          })}`;
+        }
         return `I don't have that detail on file for *${pname}* yet.${closingCta({
           buyerText: context.buyerText,
           topics,

@@ -356,6 +356,22 @@ export interface EngineCrm {
      *  lets Desk probe taught lessons where the demand actually is. */
     projectFocus: string;
   }): Promise<void>;
+  /**
+   * Catalog Onboarding Watching — live ask grade for Desk catalog_watch.
+   * Optional so eval/CLI without Desk stay green.
+   */
+  reportCatalogWatchAsk?(payload: {
+    builderId: string;
+    projectId: string;
+    slotId?: string;
+    facetKey?: string;
+    phrase?: string;
+    reviewedIntent?: string;
+    conversationId?: string;
+    answerOk: boolean;
+    truthPresent: boolean;
+    failReason?: string;
+  }): Promise<void>;
 }
 
 export interface EngineStore {
