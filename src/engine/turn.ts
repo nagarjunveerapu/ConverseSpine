@@ -2400,6 +2400,30 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       routing,
       failures,
     }).catch(() => {});
+    // Catalog Onboarding Watching — live ask grade (Desk owns fulfill/Problem).
+    // Never block the buyer on ledger I/O; transport errors stay watching.
+    await reportCatalogWatchFromTurn({
+      crm: deps.crm,
+      builderId: state.builderId,
+      projectId: state.focus?.projectId ?? '',
+      conversationId: nd || input.convId,
+      buyerText: trimmedText || input.text,
+      reply,
+      routingBind: (routing?.bind ?? extractProvenance?.routing_bind ?? null) as {
+        top_kind?: string;
+        facet?: string;
+        bind_source?: string;
+      } | null,
+      faqMissKeys: evidence.faqMiss?.keys ?? [],
+      faqHitCount: evidence.detail?.faqs?.length ?? 0,
+      atomTruthPresent: Boolean(
+        evidence.detail?.reraNumber?.trim()
+          || evidence.detail?.khata?.trim()
+          || evidence.detail?.possession?.trim()
+          || evidence.detail?.loanEligibility?.trim()
+          || (goal.requires?.includes('rera') && evidence.detail?.reraNumber?.trim()),
+      ),
+    }).catch(() => {});
   })();
   if (input.waitUntil) input.waitUntil(_tail);
   else await _tail;
@@ -2463,6 +2487,64 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         : undefined),
     ...(mediaAttachments?.length ? { mediaAttachments } : {}),
   };
+}
+
+/** Honest-miss shapes (Desk teach_verify + compose templates). */
+function replyLooksHonestMiss(reply: string): boolean {
+  return /don.?t have (that|the|this) .{0,60}on file/i.test(reply)
+    || /not (yet )?on file/i.test(reply);
+}
+
+/**
+ * Grade a focused fact ask for Desk catalog_watch.
+ * - faqMiss → truth empty → keep Watching (OS Fill book)
+ * - honest miss with FAQ/atom present → Problem (Ops File defect)
+ * - composed answer without honest miss → fulfill
+ */
+async function reportCatalogWatchFromTurn(args: {
+  crm: EngineDeps['crm'];
+  builderId: string;
+  projectId: string;
+  conversationId: string;
+  buyerText: string;
+  reply: string;
+  routingBind: { top_kind?: string; facet?: string; bind_source?: string } | null;
+  faqMissKeys: string[];
+  faqHitCount: number;
+  /** ProjectDetail / atom already carries the asked fact (RERA, possession, …). */
+  atomTruthPresent?: boolean;
+}): Promise<void> {
+  if (!args.crm.reportCatalogWatchAsk) return;
+  if (!args.projectId || !args.builderId) return;
+  // Only grade when SIL/intent bind existed — smalltalk / visit churn is noise.
+  if (!args.routingBind?.top_kind && !args.routingBind?.facet && args.faqMissKeys.length === 0
+      && args.faqHitCount === 0 && !args.atomTruthPresent) {
+    return;
+  }
+
+  const honestMiss = replyLooksHonestMiss(args.reply);
+  // faqMiss keys ⇒ catalogue empty ONLY when no structured atom answers the ask.
+  // Atom-present + faqMiss is a compose/Problem lane, not OS Fill book.
+  const emptyTruth = args.faqMissKeys.length > 0 && !args.atomTruthPresent;
+  const truthPresent = !emptyTruth;
+  const answerOk = !honestMiss && truthPresent && args.reply.trim().length > 0;
+  const facet = (args.routingBind?.facet || args.faqMissKeys[0] || '').trim();
+
+  await args.crm.reportCatalogWatchAsk({
+    builderId: args.builderId,
+    projectId: args.projectId,
+    conversationId: args.conversationId,
+    phrase: args.buyerText.slice(0, 500),
+    answerOk,
+    truthPresent,
+    ...(facet ? { slotId: facet, facetKey: facet } : {}),
+    ...(args.routingBind?.top_kind ? { reviewedIntent: args.routingBind.top_kind } : {}),
+    ...(!answerOk ? {
+      failReason: honestMiss
+        ? (emptyTruth ? 'honest_miss_empty_truth' : 'honest_miss_truth_present')
+        : 'compose_not_ok',
+    } : {}),
+  });
 }
 
 /** W3 — verbatim-repeat comparison: case/whitespace-insensitive. */
@@ -3978,6 +4060,25 @@ async function fetchAnswer(
         const left = evidence.faqMiss.keys.filter((k) => !/loan|banks/i.test(k));
         if (left.length === 0) {
           const { faqMiss: _dropLoanMiss, ...rest } = evidence;
+          evidence = rest;
+        } else {
+          evidence = {
+            ...evidence,
+            faqMiss: { ...evidence.faqMiss, keys: left },
+          };
+        }
+      }
+      // RERA/khata atoms on detail — drop legal FAQ miss so compose + catalog_watch
+      // treat this as truth-present (not empty-catalogue Watching).
+      if (
+        (nextDetail.reraNumber?.trim() || nextDetail.khata?.trim()) &&
+        evidence.faqMiss?.keys.length
+      ) {
+        const left = evidence.faqMiss.keys.filter(
+          (k) => !/^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(k),
+        );
+        if (left.length === 0) {
+          const { faqMiss: _dropLegalMiss, ...rest } = evidence;
           evidence = rest;
         } else {
           evidence = {

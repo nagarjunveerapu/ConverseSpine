@@ -903,4 +903,24 @@ export class NayaDeskClient {
   enqueueIntentReview(payload: Record<string, unknown>): Promise<{ ok: boolean; queue_id: string }> {
     return this.call('POST', '/api/intent-review-queue/internal/enqueue', payload);
   }
+
+  /**
+   * Catalog Onboarding Watching — report a live buyer ask outcome so Desk can
+   * fulfill or Problem a catalog_watch row. Cron probes must NOT call this.
+   * Failures are non-fatal for the buyer turn (Desk owns ledger status).
+   */
+  reportCatalogWatchAsk(payload: {
+    builder_id: string;
+    project_id: string;
+    slot_id?: string;
+    facet_key?: string;
+    phrase?: string;
+    reviewed_intent?: string;
+    conversation_id?: string;
+    answer_ok: boolean;
+    truth_present: boolean;
+    fail_reason?: string;
+  }): Promise<{ ok: boolean; matched?: boolean; status?: string; watch_id?: string }> {
+    return this.call('POST', '/api/onboarding/today/live-ask', payload);
+  }
 }
