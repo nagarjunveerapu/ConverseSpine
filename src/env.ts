@@ -114,6 +114,26 @@ export interface Env {
    * Default: shadow when DEEPSEEK_API_KEY set, else off.
    */
   BAML_EXTRACT_MODE?: string;
+  /**
+   * Intent recovery after regex+embed+BAML abstain: off | shadow | promote.
+   * Default: promote when BAML is promote + API key; else shadow/off.
+   */
+  INTENT_RECOVERY_MODE?: string;
+
+  /**
+   * Hybrid compose: on | off.
+   * When on: prefer voice templates; ≤1 paid DeepSeek/turn; ≤LLM_RATE_TARGET of turns.
+   */
+  HYBRID_COMPOSE?: string;
+  /** Paid LLM hard timeout ms (default 1200). */
+  PAID_LLM_TIMEOUT_MS?: string;
+  /** Soft cap of llm-used turns / turnCount (default 0.2). */
+  LLM_RATE_TARGET?: string;
+  /**
+   * Sync BAML under hybrid: off | shadow | floor | promote.
+   * floor = only when confidence floor fails; default shadow when hybrid on.
+   */
+  SYNC_BAML_MODE?: string;
 
   /** Langfuse observability (optional). */
   LANGFUSE_PUBLIC_KEY?: string;

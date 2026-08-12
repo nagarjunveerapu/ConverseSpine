@@ -4,6 +4,9 @@ import type { Failure, Outcome } from './outcome.js';
 export interface ResolvedLocation {
   value: string;
   authority: 'resolved' | 'unavailable';
+  /** Desk geocode pin when status=resolved — used for outside-served distance gate. */
+  lat?: number;
+  lng?: number;
 }
 
 export function localityFailure(): Failure {
@@ -31,6 +34,8 @@ export async function resolveDurableLocation(
 
   const canonical: string[] = [];
   let unavailable = false;
+  let lat: number | undefined;
+  let lng: number | undefined;
   for (const part of parts) {
     const resolution = await data.resolveLocation(part);
     if (resolution.status === 'unresolved') {
@@ -42,6 +47,10 @@ export async function resolveDurableLocation(
       continue;
     }
     canonical.push(resolution.canonical);
+    if (lat === undefined && typeof resolution.lat === 'number' && typeof resolution.lng === 'number') {
+      lat = resolution.lat;
+      lng = resolution.lng;
+    }
   }
 
   return {
@@ -49,6 +58,7 @@ export async function resolveDurableLocation(
     value: {
       value: [...new Set(canonical)].join(', '),
       authority: unavailable ? 'unavailable' : 'resolved',
+      ...(lat !== undefined && lng !== undefined ? { lat, lng } : {}),
     },
   };
 }

@@ -1,0 +1,48 @@
+{
+  "id": "SIL-98-06",
+  "title": "SIL/media: send brochure after naming Eldorado (not clarify menu)",
+  "builder_id": "brigade-group",
+  "tags": [
+    "sil",
+    "precision",
+    "media"
+  ],
+  "turns": [
+    {
+      "text": "hi"
+    },
+    {
+      "text": "2 BHK apartment in North Bangalore under 1.5 Cr"
+    },
+    {
+      "text": "Brigade Eldorado",
+      "assert": {
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
+    },
+    {
+      "text": "send the brochure",
+      "assert": {
+        "sil_top_kind": "get_brochure",
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "which one should I open",
+          "which project"
+        ],
+        "expect_media": true
+      }
+    }
+  ]
+}

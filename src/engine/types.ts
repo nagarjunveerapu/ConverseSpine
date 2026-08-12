@@ -195,6 +195,8 @@ export interface ConversationState {
   /** W3 — previous outbound reply (repeat guard compares against this). */
   lastReply?: string;
   objectionCount?: number;
+  /** Hybrid — count of sync DeepSeek compose/extract calls this conversation. */
+  llmUsedCount?: number;
   ndConversationId?: string;
   ndBuyerPhone?: string;
   /** After visit_booked — next short ack should not escalate to handoff. */
@@ -243,6 +245,11 @@ export interface ConversationState {
    * Survives within KV even before Desk prior round-trip.
    */
   disclosedFacts?: import('./disclosed-facts.js').DisclosedFact[];
+  /**
+   * Last configuration the bot answered for this focus (e.g. "2 BHK (Ivory)").
+   * Price / all-in / media follow-ups must prefer this unit over bare BHK.
+   */
+  focusUnit?: import('./focus-unit.js').FocusUnit;
 }
 
 export type ObjectionTopic =
@@ -857,6 +864,9 @@ export interface ComposeContext {
   disclosedFacts?: Array<import('./disclosed-facts.js').DisclosedFact | Record<string, unknown>>;
   /** Voice gate — advisor_web gets consultative framing; default WhatsApp. */
   channel?: 'whatsapp' | 'advisor_web';
+  /** Stage 7 — named latch when Desk provides sales contact. */
+  handoffPhone?: string;
+  handoffTeamName?: string;
 }
 
 export interface ComposeRequest {
@@ -890,4 +900,44 @@ export interface TurnDebug {
   last_offered_ids?: string[];
   /** Soft nearby-widen CTA attached this turn (chips / WA buttons). */
   nearby_offer?: { asked: string; nearbyAreas: string[]; label: string };
+  /** Hybrid — wall-clock stage timings (ms). */
+  timings?: {
+    /** Wall before extractT0 (store.load, L2 seed, bootstrap, turnIntent, catalog, …). */
+    pre_extract_ms?: number;
+    extract_ms?: number;
+    /** Extract end → goalT0 (routing / catalog name / location / phase prep). */
+    mid_pre_goal_ms?: number;
+    /** Desk catalog-name resolve wall inside mid (0 when catalog.projectNames reused). */
+    mid_catalog_ms?: number;
+    /** Location validate / outside-served Desk wall inside mid. */
+    mid_location_ms?: number;
+    /** Visit phase Desk prep wall inside mid (coords/geo/builder/itinerary). */
+    mid_phase_prep_ms?: number;
+    /** Awaited classifyTurnRouting wall inside mid_pre_goal (0 when early reuse). */
+    routing_ms?: number;
+    evidence_ms?: number;
+    compose_ms?: number;
+    goal_ms?: number;
+    /** After compose until store.save starts (L2 write, prefetch, RTI/transcript, setStage, …). */
+    post_compose_ms?: number;
+    store_save_ms?: number;
+    /** Sync CRM before waitUntil (ensureLead / setStage) — nests inside pre/post. */
+    crm_pre_ms?: number;
+    total_ms?: number;
+    embed_ms?: number;
+    desk_ms?: number;
+  };
+  /** L1–L4 TURN_CACHE hit/miss. */
+  cache?: {
+    seg?: 'hit' | 'miss' | 'skip';
+    proj?: 'hit' | 'miss' | 'skip';
+    emb?: 'hit' | 'miss' | 'skip';
+    search?: 'hit' | 'miss' | 'skip';
+  };
+  /** Hybrid — sync DeepSeek used this turn. */
+  llm_used?: boolean;
+  /** Hybrid — paid call timed out or rate-capped → template. */
+  llm_shed?: boolean;
+  /** Hybrid — compose path used voice template (not LLM). */
+  compose_template?: boolean;
 }

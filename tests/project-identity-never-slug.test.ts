@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { hydrateProjectDetail } from '../src/engine/project-cache.js';
+import {
+  hydrateProjectDetail,
+  promoteDurableProjectDetail,
+  seedProjectCacheFromL2,
+  writeProjectCardFromDetail,
+} from '../src/engine/project-cache.js';
+import { getProjectCard, putProjectCard } from '../src/cache/turn-cache.js';
 import { fallbackReply } from '../src/engine/compose.js';
 import type {
   ConversationState,
@@ -112,6 +118,92 @@ describe('a project is never named after its id', () => {
       PID,
     );
     expect(detail!.summary).toBe('cached');
+  });
+
+  it('promotes enriched identity-only shells so L2 can learn them', () => {
+    const thin: ProjectDetail = {
+      projectId: PID,
+      name: 'Brigade Eldorado',
+      microMarket: '',
+      identityOnly: true,
+      configurations: [{ unitType: '2 BHK', priceDisplay: '₹57.5 L', priceMinInr: 5750000 }],
+      reraNumber: 'PRM/KA/RERA/1251/309/PR/190722/005089',
+    };
+    const promoted = promoteDurableProjectDetail(thin);
+    expect(promoted.identityOnly).toBeUndefined();
+    expect(promoted.reraNumber).toContain('RERA');
+  });
+
+  it('seeds L2 over a poisoned identity-only projectCache entry', async () => {
+    const kv = new Map<string, string>();
+    const fakeKv = {
+      get: async (key: string, type?: string) => {
+        const raw = kv.get(key);
+        if (raw == null) return null;
+        return type === 'json' ? JSON.parse(raw) : raw;
+      },
+      put: async (key: string, value: string) => {
+        kv.set(key, value);
+      },
+      delete: async (key: string) => {
+        kv.delete(key);
+      },
+    } as unknown as KVNamespace;
+
+    await putProjectCard(fakeKv, PID, 'etag-1', {
+      projectId: PID,
+      name: 'Brigade Eldorado',
+      microMarket: 'Devanahalli',
+      summary: 'from L2',
+    });
+
+    const poisoned = stateWith({
+      focus: { projectId: PID, projectName: 'Brigade Eldorado' },
+      projectCache: {
+        [PID]: {
+          projectId: PID,
+          name: 'Brigade Eldorado',
+          microMarket: '',
+          identityOnly: true,
+          configurations: [{ unitType: '2 BHK', priceDisplay: '₹57.5 L', priceMinInr: 5750000 }],
+        },
+      },
+    });
+
+    const seeded = await seedProjectCacheFromL2({ turnCache: fakeKv } as never, poisoned);
+    expect(seeded.projectCache?.[PID]?.summary).toBe('from L2');
+    expect(seeded.projectCache?.[PID]?.identityOnly).toBeUndefined();
+    expect((await getProjectCard(fakeKv, PID))?.detail.summary).toBe('from L2');
+  });
+
+  it('writeProjectCardFromDetail persists promoted shells', async () => {
+    const kv = new Map<string, string>();
+    const fakeKv = {
+      get: async (key: string, type?: string) => {
+        const raw = kv.get(key);
+        if (raw == null) return null;
+        return type === 'json' ? JSON.parse(raw) : raw;
+      },
+      put: async (key: string, value: string) => {
+        kv.set(key, value);
+      },
+      delete: async (key: string) => {
+        kv.delete(key);
+      },
+    } as unknown as KVNamespace;
+
+    await writeProjectCardFromDetail({ turnCache: fakeKv, projectCardMemo: new Map() } as never, PID, {
+      projectId: PID,
+      name: 'Brigade Eldorado',
+      microMarket: '',
+      identityOnly: true,
+      configurations: [{ unitType: '2 BHK', priceDisplay: '₹57.5 L', priceMinInr: 5750000 }],
+      reraNumber: 'PRM/KA/RERA/x',
+    });
+
+    const card = await getProjectCard(fakeKv, PID);
+    expect(card?.detail.identityOnly).toBeUndefined();
+    expect(card?.detail.reraNumber).toBe('PRM/KA/RERA/x');
   });
 });
 

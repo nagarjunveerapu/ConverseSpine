@@ -12,6 +12,11 @@ import { answerRequirements } from './answer-contract.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
 import { discourseOffered, currentShortlist, discussedList } from './entity-store.js';
 import { isPlausiblePlaceLabel } from './placeability.js';
+import {
+  hasCostStanceAct,
+  hasPriceObjectionCue,
+  PRICE_OBJECTION_NEGATIVE_RE as OBJECTION_NEGATIVE_RE,
+} from './price-objection.js';
 
 /** Keep aligned with turn-intent AFFIRM_ONLY (dialogue acts, not localities). */
 const AFFIRM =
@@ -40,9 +45,9 @@ const STOP_RE =
 const SMALLTALK_RE = /\b(?:how are you|how'?s it going|how do you do|what'?s up)\b/i;
 const POST_VISIT_ACK_RE =
   /^(?:ok(?:ay)?|thanks?(?: you)?|thank you|cool|great|got it|noted|perfect|sounds good|cheers)\.?!?\s*$/i;
-const OBJECTION_NEGATIVE_RE = /\b(?:any\s+discount|best\s+price|negotiable)\b/i;
-const OBJECTION_EN_RE =
-  /\b(?:too\s+(?:expensive|far|risky|high|costly)|(?:feels|seems|looks|is|bit)\s+(?:too\s+)?(?:expensive|pricey|high|overpriced)|on\s+the\s+(?:higher|expensive)\s+side|out\s+of\s+(?:budget|range)|over\s+budget|not\s+convinced|not\s+sure(?:\s+about\s+(?:this|the\s+project))?|seems\s+too\s+far|too\s+old)\b/i;
+/** Non-price objections still closed-set (timeline/trust/location feel). */
+const OBJECTION_OTHER_RE =
+  /\b(?:not\s+sure(?:\s+about\s+(?:this|the\s+project))?|seems\s+too\s+far|too\s+old|too\s+(?:far|risky))\b/i;
 const HINGLISH_LOC_BUDGET_RE =
   /\b([A-Za-z][A-Za-z\s]{2,20}?)\s+mein\s+(\d+(?:\.\d+)?)\s*( lakh| lakhs| l| cr| crore| crores)\s+budget\s+hai\b/i;
 const HINGLISH_LOC_BHK_BUDGET_RE =
@@ -131,7 +136,10 @@ export async function extractFacts(
   const wantsMore = WANTS_MORE_RE.test(text);
   const compareAdvice = COMPARE_ADVICE_RE.test(text);
   const objection =
-    !budget && !isQuestion && !OBJECTION_NEGATIVE_RE.test(text) && OBJECTION_EN_RE.test(text);
+    !budget &&
+    !isQuestion &&
+    !OBJECTION_NEGATIVE_RE.test(text) &&
+    (hasCostStanceAct(text) || OBJECTION_OTHER_RE.test(text));
   const namedProjects = resolveNamed(text, s);
   const emiRate = parseEmiRate(text);
   const emiTenure = parseEmiTenure(text);
@@ -541,7 +549,9 @@ function resolveNamed(text: string, s: ConversationState): OfferedProject[] {
 
 function mapObjectionTopic(text: string): ObjectionTopic {
   const s = text.toLowerCase();
-  if (/\b(?:expensive|costly|budget|over budget|price)\b/.test(s)) return 'price';
+  if (hasCostStanceAct(text) || /\b(?:expensive|costly|budget|over budget|pricey|overpriced)\b/.test(s)) {
+    return 'price';
+  }
   if (/\b(?:possession|timeline|late|too long)\b/.test(s)) return 'timeline';
   if (/\b(?:rera|legal|title|khata)\b/.test(s)) return 'legal';
   if (/\b(?:far|location|connectivity|distance)\b/.test(s)) return 'location';
@@ -1030,7 +1040,7 @@ export function wantsImplicitProjectPick(
 
 /** Buyer asking for component-wise / all-in pricing — fetch landed-cost evidence. */
 export function wantsCostBreakdown(text: string): boolean {
-  return /\b(?:breakdown|break[- ]?up|landed cost|all[- ]in(?:\s+cost)?|component[- ]wise|cost break)\b/i.test(
+  return /\b(?:breakdown|break[- ]?up|landed cost|all[- ]in(?:\s+cost)?|component[- ]wise|cost break|full\s+price|all\s+charges|not\s+just\s+(?:bsp|base)|with\s+all\s+charges)\b/i.test(
     text,
   );
 }

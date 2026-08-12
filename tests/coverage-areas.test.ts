@@ -3,6 +3,7 @@ import {
   collapseCoverageMarkets,
   coverageCityCoverBit,
   coverageCoverBit,
+  isOutsideServedInventory,
   matchServedMarket,
   orderCoverageMarkets,
   outsideServedReply,
@@ -108,6 +109,22 @@ describe('orderCoverageMarkets', () => {
     const bit = coverageCoverBit(markets, { anchors });
     expect(bit).toMatch(/^I currently cover North Bangalore, Devanahalli/);
     expect(bit).not.toMatch(/^I currently cover Sakleshpur/);
+  });
+});
+
+describe('isOutsideServedInventory', () => {
+  // Approx pins: Bangalore inventory vs Mumbai/Andheri asks.
+  const blr = [{ lat: 13.2, lng: 77.7 }];
+  it('flags Mumbai-class asks far from Bangalore stock', () => {
+    expect(isOutsideServedInventory({ lat: 19.076, lng: 72.877 }, blr)).toBe(true);
+    expect(isOutsideServedInventory({ lat: 19.119, lng: 72.846 }, blr)).toBe(true);
+  });
+  it('keeps Devanahalli-class asks inside inventory', () => {
+    expect(isOutsideServedInventory({ lat: 13.25, lng: 77.71 }, blr)).toBe(false);
+  });
+  it('fails open when ask or coords missing', () => {
+    expect(isOutsideServedInventory(null, blr)).toBe(false);
+    expect(isOutsideServedInventory({ lat: 19.076, lng: 72.877 }, [])).toBe(false);
   });
 });
 

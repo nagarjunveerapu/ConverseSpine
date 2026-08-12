@@ -31,6 +31,7 @@ import {
   coverageCoverBit,
   coverageOrderOptsFrom,
   inventoryNoun,
+  isOutsideServedInventory,
   matchServedMarket,
   orderCoverageMarkets,
   outsideServedReply,
@@ -109,11 +110,26 @@ import {
 import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply } from './compose.js';
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
-import { hydrateProjectDetail, prefetchProjects, projectIdsFromMatches } from './project-cache.js';
+import {
+  hydrateProjectDetail,
+  prefetchProjects,
+  projectIdsFromMatches,
+  promoteDurableProjectDetail,
+  seedProjectCacheFromL2,
+  writeProjectCardFromDetail,
+} from './project-cache.js';
 import { mediaKindMissingFromInventory, normalizeMediaAssetKind } from './media-asset.js';
 import { attachmentFromMediaEvidence, type MediaAttachment } from './media-attachment.js';
 import { gateMarketIntel } from './market-intel.js';
+import { mergeEvidencePatches } from './merge-evidence-patches.js';
 import { filterUnitsByBhk, resolveAvailabilityBhkFilter } from './unit-config.js';
+import { focusUnitTypeForProject, pickFocusUnit } from './focus-unit.js';
+import {
+  hybridPreferTemplate,
+  llmRateExceeded,
+  needsPaidLlmFloor,
+} from './hybrid.js';
+import { hasPriceObjectionCue } from './price-objection.js';
 import { planSearchRecovery, type RecoveryHint, type SearchRecoveryEnvelope, type AdvisorUiMode, type SuggestedAction } from './recovery-planner.js';
 import {
   applyTurnIntentResult,
@@ -199,10 +215,54 @@ export interface EngineTurnOutput {
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
+  const turnStartedMs = deps.clock.nowMs();
+  if (input.waitUntil && !deps.waitUntil) {
+    deps = { ...deps, waitUntil: input.waitUntil };
+  }
+  const catalogMemo = new Map<string, Awaited<ReturnType<EngineDeps['data']['catalog']>>>();
+  const baseCatalog = deps.data.catalog.bind(deps.data);
+  deps = {
+    ...deps,
+    data: {
+      ...deps.data,
+      catalog: async (builderId: string) => {
+        const hit = catalogMemo.get(builderId);
+        if (hit !== undefined) return hit;
+        const row = await baseCatalog(builderId);
+        catalogMemo.set(builderId, row);
+        return row;
+      },
+    },
+  };
   let state = hydrateLegacyDiscourse(
     (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId),
   );
+  // L2 → conversation cache when focus is cold (survives KV lag / thin saves).
+  state = await seedProjectCacheFromL2(deps, state);
+  if (!deps.projectCardMemo) deps.projectCardMemo = new Map();
   const inputSource = resolveInputSource(input.action_id);
+  let preExtractMs: number | undefined;
+  let extractMs: number | undefined;
+  /** Extract end → goalT0 (routing / catalog name / location / phase prep). */
+  let midPreGoalMs: number | undefined;
+  /** Desk projectNames / catalog-name resolve wall inside mid (0 when reused). */
+  let midCatalogMs: number | undefined;
+  /** resolveDurableLocation + outside-served Desk wall inside mid. */
+  let midLocationMs: number | undefined;
+  /** Visit/phase Desk prep wall inside mid (coords/geo/builder/itinerary). */
+  let midPhasePrepMs: number | undefined;
+  /** Awaited classifyTurnRouting wall inside mid_pre_goal (0 when early reuse). */
+  let routingMs: number | undefined;
+  let evidenceMs: number | undefined;
+  let composeMs: number | undefined;
+  let goalMs: number | undefined;
+  let postComposeMs: number | undefined;
+  let storeSaveMs: number | undefined;
+  /** Sync CRM on the buyer path before waitUntil (ensureLead / setStage). */
+  let crmPreMs = 0;
+  let llmUsed = false;
+  let llmShed = false;
+  let composeTemplate = false;
 
   const trimmedText = input.text.trim();
   if (!trimmedText) {
@@ -220,12 +280,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   if (!state.ndConversationId) {
+    const crmT0 = deps.clock.nowMs();
     const lead = await deps.crm.ensureLead(input.builderId, input.buyerPhone).catch(() => null);
+    crmPreMs += deps.clock.nowMs() - crmT0;
     if (lead) state = withNdConversation(state, lead.conversationId, input.buyerPhone);
   }
   const nd = state.ndConversationId ?? '';
 
-  if (nd) {
+  // Desk bootstrap is expensive — only on cold conversations (first turn).
+  // Later turns use Spine state + L1–L4; CRM sync rides waitUntil.
+  if (nd && state.turnCount === 0) {
     const boot = await deps.data.bootstrapContext(nd).catch(() => null);
     if (boot) {
       if (boot.returningBuyer && !state.returningBuyer) {
@@ -388,68 +452,98 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let runTurnIntent = Boolean(
     deps.turnIntent && shouldRunTurnIntent(state, input.action_id, trimmedText),
   );
-  // Phase 0d — join extract ∥ routing BEFORE turn-intent may release focus.
+  // Phase 0d / GO H — join extract ∥ routing on focused free-text.
+  // UBM previously gated this on runTurnIntent; facet asks skip RTI so the
+  // parallel never started and mid paid serial routing (~200–450ms) after
+  // extract (~650ms). Same empty-Extracted routing inputs as UBM already used
+  // (SIL_EMBED_FIRST is text+state first; post-join applyIntentAuthority +
+  // mergeRoutingTopicsIntoExtract still see the full extract).
   // Reused later as the main extract / precomputedRouting (no double work).
   let earlyExtractBundle:
     | Awaited<ReturnType<typeof extractTurnAuthority>>
     | undefined;
   let earlyPrecomputedRouting: TurnRoutingResult | undefined;
   let pivotArbiterReason: string | undefined;
+  /** Routing component wall from early Promise.all (overlapped under extract join). */
+  let earlyRoutingComponentMs: number | undefined;
+  /** Promise.all join wall = max(extract, routing). */
+  let earlyJoinMs: number | undefined;
+  /** Catalog row for this turn — early path + mid name resolve (avoid bare projectNames). */
+  let catalogForTurn: Awaited<ReturnType<EngineDeps['data']['catalog']>> | null = null;
 
-  if (
-    runTurnIntent &&
-    deps.understandingBeforeMutation &&
-    deps.routingEnv &&
+  const wantEarlyExtractRouting =
     !input.action_id &&
-    state.phase === 'focused'
-  ) {
+    state.phase === 'focused' &&
+    !!deps.routingEnv &&
+    !!(deps.understandingBeforeMutation || deps.failureSearch);
+
+  if (wantEarlyExtractRouting) {
+    // Attribute understand work to extract/routing — not pre_extract.
+    preExtractMs = deps.clock.nowMs() - turnStartedMs;
     const priorConstraints = { ...state.constraints };
-    const catalogForEarly = await deps.data.catalog(state.builderId).catch(() => null);
-    const [extractBundle, routingEarly] = await Promise.all([
-      extractTurnAuthority(
-        trimmedText,
-        state,
-        state.builderId,
-        {
-          llm: deps.llm,
-          semantic: deps.semantic,
-          microMarkets: catalogForEarly?.microMarkets ?? [],
-          catalogNames: catalogForEarly?.projectNames ?? [],
-          ...(deps.failureTools ? { failureTools: true } : {}),
-          ...(deps.bamlExtract
-            ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' }
-            : {}),
-          ...(deps.topicUnion ? { topicUnion: true } : {}),
-        },
-        {
-          inputSource,
-          ingressFilledSlots: ingressFilled,
-          actionId: input.action_id,
-        },
-      ),
-      classifyTurnRouting(
-        deps.routingEnv,
-        buildTurnRoutingInput(state, {} as Extracted, trimmedText, inputSource),
-      ).catch(() => undefined),
-    ]);
+    catalogForTurn = await deps.data.catalog(state.builderId).catch(() => null);
+    const earlyT0 = deps.clock.nowMs();
+    const extractP = extractTurnAuthority(
+      trimmedText,
+      state,
+      state.builderId,
+      {
+        llm: deps.llm,
+        semantic: deps.semantic,
+        microMarkets: catalogForTurn?.microMarkets ?? [],
+        catalogNames: catalogForTurn?.projectNames ?? [],
+        ...(deps.failureTools ? { failureTools: true } : {}),
+        ...(deps.bamlExtract
+          ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' }
+          : {}),
+        ...(deps.intentRecover
+          ? {
+              intentRecover: deps.intentRecover,
+              intentRecoveryMode: deps.intentRecoveryMode ?? 'off',
+            }
+          : {}),
+        ...(deps.topicUnion ? { topicUnion: true } : {}),
+        ...(deps.waitUntil ? { waitUntil: deps.waitUntil } : {}),
+      },
+      {
+        inputSource,
+        ingressFilledSlots: ingressFilled,
+        actionId: input.action_id,
+      },
+    );
+    const routingP = classifyTurnRouting(
+      deps.routingEnv,
+      buildTurnRoutingInput(state, {} as Extracted, trimmedText, inputSource),
+    )
+      .then((r) => {
+        earlyRoutingComponentMs = deps.clock.nowMs() - earlyT0;
+        return r;
+      })
+      .catch(() => undefined);
+    const [extractBundle, routingEarly] = await Promise.all([extractP, routingP]);
+    earlyJoinMs = deps.clock.nowMs() - earlyT0;
     earlyExtractBundle = extractBundle;
     earlyPrecomputedRouting = routingEarly;
-    const decision = arbitrateFocusPivot({
-      text: trimmedText,
-      priorConstraints,
-      ex: extractBundle.extracted,
-      routing: routingEarly,
-      enabled: true,
-    });
-    pivotArbiterReason = decision.reason;
-    if (decision.action === 'hold_focus') {
-      runTurnIntent = false;
-      const held = holdsFocusAgainstRelease(routingEarly, true);
-      if (held.hold) focusHeldReason = held.reason;
-    }
-    // SIL compare_projects → askTopic compare: among-offered, not RTI pivot.
-    if (hasTeachCompareStamp(extractBundle.extracted)) {
-      runTurnIntent = false;
+    // Pivot arbiter only when RTI might release focus (UBM). Latency parallel
+    // still runs when runTurnIntent is false (common focused facet path).
+    if (runTurnIntent && deps.understandingBeforeMutation) {
+      const decision = arbitrateFocusPivot({
+        text: trimmedText,
+        priorConstraints,
+        ex: extractBundle.extracted,
+        routing: routingEarly,
+        enabled: true,
+      });
+      pivotArbiterReason = decision.reason;
+      if (decision.action === 'hold_focus') {
+        runTurnIntent = false;
+        const held = holdsFocusAgainstRelease(routingEarly, true);
+        if (held.hold) focusHeldReason = held.reason;
+      }
+      // SIL compare_projects → askTopic compare: among-offered, not RTI pivot.
+      if (hasTeachCompareStamp(extractBundle.extracted)) {
+        runTurnIntent = false;
+      }
     }
   } else if (
     runTurnIntent &&
@@ -567,7 +661,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     return completeRtiFocusCommit(state, rtiFocusCommitted, input, deps, nd, trimmedText);
   }
 
-  const catalogForNlu = await deps.data.catalog(state.builderId).catch(() => null);
+  // Prefer catalog already loaded on the early extract∥routing path so mid
+  // name-resolve and compare seeding do not pay a second Desk search.
+  const catalogForNlu =
+    catalogForTurn ??
+    (await deps.data.catalog(state.builderId).catch(() => null));
+  if (!catalogForTurn) catalogForTurn = catalogForNlu;
+  const extractT0 = deps.clock.nowMs();
+  if (preExtractMs === undefined) {
+    preExtractMs = extractT0 - turnStartedMs;
+  }
   const extractResult =
     earlyExtractBundle ??
     (await extractTurnAuthority(
@@ -583,7 +686,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         ...(deps.bamlExtract
           ? { bamlExtract: deps.bamlExtract, bamlMode: deps.bamlMode ?? 'off' }
           : {}),
+        ...(deps.intentRecover
+          ? {
+              intentRecover: deps.intentRecover,
+              intentRecoveryMode: deps.intentRecoveryMode ?? 'off',
+            }
+          : {}),
         ...(deps.topicUnion ? { topicUnion: true } : {}),
+        ...(deps.waitUntil ? { waitUntil: deps.waitUntil } : {}),
       },
       {
         inputSource,
@@ -591,8 +701,49 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         actionId: input.action_id,
       },
     ));
+  // Early parallel: extract_ms = join wall (max); routing_ms = overlapped
+  // component (not nested in mid — probe residual must not subtract twice).
+  extractMs =
+    earlyExtractBundle && earlyJoinMs !== undefined
+      ? earlyJoinMs
+      : deps.clock.nowMs() - extractT0;
+  const midPreGoalT0 = deps.clock.nowMs();
+  // Early reuse: stamp routing component for visibility; mid awaits add 0.
+  let routingMsAcc =
+    earlyPrecomputedRouting && earlyRoutingComponentMs !== undefined
+      ? earlyRoutingComponentMs
+      : 0;
   let ex: Extracted = extractResult.extracted;
   const extractProvenance = extractResult.provenance;
+  // Soft visit-slot answer while focused (saturday + coming from) — bind visit
+  // before discover clarify, even if recovery/embed missed.
+  if (
+    state.focus &&
+    !(ex.transition && ex.transition !== 'none') &&
+    /\b(?:saturday|sunday|monday|tuesday|wednesday|thursday|friday|weekend)\b/i.test(
+      trimmedText,
+    ) &&
+    /\b(?:coming from|starting from|from)\b/i.test(trimmedText)
+  ) {
+    ex = { ...ex, transition: 'want_visit', speechAct: 'visit_book' };
+    if (extractProvenance) {
+      extractProvenance.fields.transition = extractProvenance.fields.transition ?? 'bridge';
+    }
+  }
+  // Outstanding latch: after price disclosure / focused, evaluative cost cues → objection.
+  if (state.focus && !ex.objection && hasPriceObjectionCue(trimmedText)) {
+    ex = {
+      ...ex,
+      objection: true,
+      objectionTopic: 'price',
+      speechAct: ex.speechAct === 'unknown' || !ex.speechAct ? 'object' : ex.speechAct,
+      askTopic: undefined,
+      askTopics: undefined,
+    };
+    if (extractProvenance) {
+      extractProvenance.fields.objection = 'bridge';
+    }
+  }
   if (focusHeldReason && extractProvenance) extractProvenance.focus_held = focusHeldReason;
   if (pivotArbiterReason && extractProvenance) {
     extractProvenance.pivot_arbiter = pivotArbiterReason;
@@ -798,25 +949,34 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Cold catalog name resolve BEFORE routing/unsupported — so "Brigade Eldorado
   // what's the price?" stamps namedProjects and declines definition→education.
   // Not gated on location (that wrongly skipped pure named+facet asks).
+  // GO I — reuse catalog.projectNames when already in hand (same rows as
+  // projectNames(); avoids a second uncached searchProjects on warm mid).
   let prevalidatedCatalogHit:
     | { projectId: string; name: string }
     | undefined;
-  if (
-    deps.failureSearch &&
-    !state.stopConfirmPending &&
-    !(ex.namedProjects?.length)
-  ) {
-    const names = await deps.data
-      .projectNames(state.builderId)
-      .catch(() => [] as Array<{ projectId: string; name: string }>);
-    prevalidatedCatalogHit =
-      resolveCatalogNameHit(trimmedText, names) ?? undefined;
-    if (prevalidatedCatalogHit) {
-      ex = {
-        ...ex,
-        namedProjects: [prevalidatedCatalogHit],
-      };
+  {
+    const catalogT0 = deps.clock.nowMs();
+    if (
+      deps.failureSearch &&
+      !state.stopConfirmPending &&
+      !(ex.namedProjects?.length)
+    ) {
+      const names =
+        catalogForTurn?.projectNames?.length
+          ? catalogForTurn.projectNames
+          : await deps.data
+              .projectNames(state.builderId)
+              .catch(() => [] as Array<{ projectId: string; name: string }>);
+      prevalidatedCatalogHit =
+        resolveCatalogNameHit(trimmedText, names) ?? undefined;
+      if (prevalidatedCatalogHit) {
+        ex = {
+          ...ex,
+          namedProjects: [prevalidatedCatalogHit],
+        };
+      }
     }
+    midCatalogMs = deps.clock.nowMs() - catalogT0;
   }
 
   // Route the final extracted turn before geography persistence when Phase 3
@@ -825,10 +985,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let precomputedRouting: TurnRoutingResult | undefined = earlyPrecomputedRouting;
   let authorityClaimed = false;
   if (deps.failureSearch && !precomputedRouting) {
+    const routingT0 = deps.clock.nowMs();
     precomputedRouting = await classifyTurnRouting(
       deps.routingEnv,
       buildTurnRoutingInput(state, ex, trimmedText, inputSource),
     );
+    routingMsAcc += deps.clock.nowMs() - routingT0;
     if (deps.routingEnv?.SIL_EMBED_FIRST === 'true') {
       const claimed = applyIntentAuthority(ex, precomputedRouting, trimmedText);
       authorityClaimed = claimed.wrote.length > 0;
@@ -858,7 +1020,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   let locationValidated = false;
-  if (deps.failureSearch) {
+  {
+    const locationT0 = deps.clock.nowMs();
+    if (deps.failureSearch) {
     const locationCandidate =
       ex.constraints.location ??
       (state.constraints.location !== durableConstraintsBeforeTurn.location
@@ -1026,6 +1190,87 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           }
         }
       } else {
+        // Stage 6 — Desk geocode can resolve Mumbai/Andheri while inventory is
+        // Bangalore-only. Distance to nearest project pin beats "place exists".
+        const askPoint =
+          typeof resolved.value.lat === 'number' && typeof resolved.value.lng === 'number'
+            ? { lat: resolved.value.lat, lng: resolved.value.lng }
+            : null;
+        const coordRows = await deps.data.projectCoords(state.builderId).catch(() => []);
+        if (
+          askPoint &&
+          looksLikePlaceFramedAsk(input.text) &&
+          isOutsideServedInventory(askPoint, coordRows)
+        ) {
+          const asked = locationCandidate.trim();
+          const failure: Failure = {
+            kind: 'no_match',
+            stage: 'search',
+            subject: 'area',
+          };
+          const cat = await deps.data.catalog(state.builderId).catch(() => null);
+          const markets = cat?.microMarkets ?? [];
+          const orderOpts = coverageOrderOptsFrom({
+            ask: askPoint,
+            projectCoords: coordRows,
+          });
+          const reply = outsideServedReply(asked, markets, {
+            ...orderOpts,
+            servedCities: cat?.servedCities ?? [],
+            propertyType:
+              ex.constraints.propertyType ?? state.constraints.propertyType,
+            bhk: ex.constraints.bhk ?? state.constraints.bhk,
+          });
+          state = {
+            ...state,
+            constraints: {
+              ...state.constraints,
+              ...(durableConstraintsBeforeTurn.location
+                ? { location: durableConstraintsBeforeTurn.location }
+                : {}),
+            },
+            turnCount: state.turnCount + 1,
+          };
+          if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
+          if (ex.constraints.location) {
+            const { location: _drop, ...constraints } = ex.constraints;
+            ex = { ...ex, constraints };
+          }
+          await deps.store.save(state);
+          await deps.crm
+            .appendMessage(nd || input.convId, 'inbound', input.text)
+            .catch(() => {});
+          await deps.crm
+            .appendMessage(nd || input.convId, 'outbound', reply, {
+              replyKey: 'failure:outside_served',
+            })
+            .catch(() => {});
+          await appendEarlyFailureLedger({
+            deps,
+            nd: nd || input.convId,
+            input,
+            state,
+            ex,
+            extractProvenance,
+            inputSource,
+            reply,
+            failure,
+          });
+          return {
+            reply,
+            state,
+            debug: withIngressDebug(
+              {
+                phase: state.phase,
+                goal: { kind: 'no_fit' },
+                tools: ['catalog'],
+                grounding: 'pass',
+              },
+              inputSource,
+            ),
+          };
+        }
+
         locationValidated = true;
         // Validity gate only — keep the buyer/chip label. Desk maps regional
         // asks ("North Bangalore") onto coverage pin names ("Aerospace Park");
@@ -1055,6 +1300,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         }
       }
     }
+    }
+    midLocationMs = deps.clock.nowMs() - locationT0;
   }
 
   const prevConstraints = state.constraints;
@@ -1123,12 +1370,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   }
 
-  let routing =
-    precomputedRouting ??
-    (await classifyTurnRouting(
+  let routing: TurnRoutingResult;
+  if (precomputedRouting) {
+    routing = precomputedRouting;
+  } else {
+    const routingT0 = deps.clock.nowMs();
+    routing = await classifyTurnRouting(
       deps.routingEnv,
       buildTurnRoutingInput(state, ex, trimmedText, inputSource),
-    ));
+    );
+    routingMsAcc += deps.clock.nowMs() - routingT0;
+  }
   // SIL Phase 0 — surface the semantic-layer verdict per turn in the debug
   // channel that survives the /chat route re-shape (LLD §3.3).
   if (extractProvenance && routing.bind) {
@@ -1601,12 +1853,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // set that transition). holdIntent already excludes visit words, so holdAsk
   // is an unambiguous "hold, not visit".
   if (ex.transition === 'want_visit' && !ex.holdAsk) {
-    const freshSearchBrief =
-      (discover.hasNarrowingConstraint(state.constraints) ||
-        discover.hasNarrowingConstraint(ex.constraints)) &&
-      !state.focus &&
-      currentShortlist(state).length === 0;
-    if (!freshSearchBrief) {
+    // Empty board: stay in discover (recommend if brief-ready, else probe).
+    // Do not enter visit on embedder visit noise before a shortlist/focus exists.
+    const emptyBoard = !state.focus && currentShortlist(state).length === 0;
+    if (!emptyBoard) {
       state = { ...state, phase: 'visit' };
     }
   }
@@ -1691,7 +1941,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const now = new Date(deps.clock.nowMs());
   let visitCtx: visit.VisitCtx | null = null;
-  if (state.phase === 'visit') {
+  {
+    const phasePrepT0 = deps.clock.nowMs();
+    if (state.phase === 'visit') {
     let visitState = state.visit;
     const coordRows = await deps.data.projectCoords(state.builderId).catch(() => []);
     const projectGeoCatalog = catalogFromProjectCoords(coordRows);
@@ -1780,6 +2032,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           })),
       };
     }
+    }
+    midPhasePrepMs = deps.clock.nowMs() - phasePrepT0;
   }
   // AB-6 / W8 — a project NAMED from a cold start ("is Brigade Oasis a plotted
   // development?", "what plot sizes does Desire Spaces have?") must commit to that
@@ -1788,6 +2042,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // interrogative ask so an area name in a pure search never false-commits, and
   // resolveCatalogNameHit requires a single unambiguous match.
   let goal: TurnGoal;
+  midPreGoalMs = deps.clock.nowMs() - midPreGoalT0;
+  routingMs = routingMsAcc;
+  const goalT0 = deps.clock.nowMs();
   // Run regardless of an embedder-resolved namedProjects: resolveCatalogNameHit is a
   // DETERMINISTIC text match against real catalog names, so it both (a) rescues a
   // cold name the embedder missed and (b) safely confirms one the embedder found on a
@@ -1804,9 +2061,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       prevalidatedCatalogHit ??
       resolveCatalogNameHit(
         trimmedText,
-        await deps.data
-          .projectNames(state.builderId)
-          .catch(() => [] as Array<{ projectId: string; name: string }>),
+        catalogForTurn?.projectNames?.length
+          ? catalogForTurn.projectNames
+          : await deps.data
+              .projectNames(state.builderId)
+              .catch(() => [] as Array<{ projectId: string; name: string }>),
       );
     goal = hit
       ? discover.commitPickWithFollowUp(hit, ex)
@@ -1838,9 +2097,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (deps.failureAnswer && goal.kind === 'answer') {
     goal = withAnswerRequirements(goal, trimmedText);
   }
+  goalMs = deps.clock.nowMs() - goalT0;
 
   let evidence: EvidenceSet = { tools: [] };
   let droppedLocation = false;
+  const evidenceT0 = deps.clock.nowMs();
   if (goal.kind === 'hold_propose' && nd) {
     // W7 — pre-check live per-type availability (Desk #203 counts, KV-cached
     // context) BEFORE proposing: a sold-out type gets the waitlist offer up
@@ -1951,6 +2212,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   } else {
     evidence = await fetchEvidence(goal, state, deps);
   }
+  evidenceMs = deps.clock.nowMs() - evidenceT0;
   // C9 resilience — a focused answer whose live Desk fetch flaked (a transient
   // conversationContext + getProject miss returns null detail) must NOT
   // false-decline facts the project HAS ("I don't have price on file" when it
@@ -1987,6 +2249,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ...(ff?.priorTopics?.length ? { priorTopics: ff.priorTopics } : {}),
     ...(ff?.priorReplyExcerpt ? { priorReplyExcerpt: ff.priorReplyExcerpt } : {}),
     ...(disclosedForCompose.length ? { disclosedFacts: disclosedForCompose } : {}),
+    // Stage 7 — named latch when Desk provides escalation_phone on builder/objection ctx.
+    ...(evidence.escalationPhone?.trim()
+      ? { handoffPhone: evidence.escalationPhone.trim(), handoffTeamName: friendlyBuilder(state.builderId) }
+      : {}),
   });
   // Phase 3 no_fit may carry both a Failure (ledger) and rich compose evidence
   // (budgetGap / noMatch / …). Prefer the existing compose templates over the
@@ -2061,7 +2327,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   // Template-locked goals: commitments and structured facts that must never be
   // LLM-paraphrased — and (W3) must never be "varied" by the repeat guard.
-  const templateLocked =
+  const templateLockedBase =
     !!terminalFailure ||
     noFitDeterministic ||
     localityWidenDeterministic ||
@@ -2090,8 +2356,21 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     overviewDeterministic ||
     emiCalculateDeterministic;
 
+  const hybridOn = deps.hybridMode === 'on';
+  const rateTarget = deps.llmRateTarget ?? 0.2;
+  const rateCapped = hybridOn && llmRateExceeded(state, rateTarget);
+  const hybridTemplate =
+    hybridOn &&
+    (templateLockedBase ||
+      hybridPreferTemplate(goal, evidence, ex) ||
+      rateCapped ||
+      !needsPaidLlmFloor(ex, goal));
+  const templateLocked = templateLockedBase || hybridTemplate;
+
+  const composeT0 = deps.clock.nowMs();
   let draft: string;
   if (terminalFailure) {
+    composeTemplate = true;
     draft = speakFailure(terminalFailure, {
       ...(terminalFailure.subject === 'emi.principal'
         ? { subjectLabel: 'a loan amount (for example, ₹85 lakh)' }
@@ -2104,18 +2383,31 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       alternatives: failureAlternatives(terminalFailure, evidence),
     });
   } else if (templateLocked) {
+    composeTemplate = true;
+    if (rateCapped) llmShed = true;
     draft = fallbackReply(req);
   } else {
     try {
       draft = (await deps.llm.compose(req)).trim();
-      if (!draft) draft = fallbackReply(req);
+      if (!draft) {
+        draft = fallbackReply(req);
+        composeTemplate = true;
+        llmShed = true;
+      } else {
+        llmUsed = true;
+      }
     } catch {
       draft = fallbackReply(req);
+      composeTemplate = true;
+      llmShed = true;
     }
   }
+  composeMs = deps.clock.nowMs() - composeT0;
+  // post_compose wall starts after the compose slice; closed just before store.save.
+  const postComposeT0 = deps.clock.nowMs();
 
-  // W1+W3 share ONE bounded LLM retry per turn (review: no repair forest).
-  let retryUsed = false;
+  // W1+W3 share ONE bounded LLM retry per turn — disabled under hybrid (≤1 paid call).
+  let retryUsed = hybridOn;
 
   // AB-10 — a pure-directive draft strips to '' (nothing but the leaked
   // instruction). Never re-emit it: fall to the grounded template floor.
@@ -2134,9 +2426,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // W1 — repair without killing the thread: feed the checker's exact
     // rejections back for ONE re-compose before the template floor. This is
     // the 49%-of-answer-turns problem measured in Week 0. Template-locked
-    // goals never reach here (they never compose).
+    // goals never reach here (they never compose). Hybrid: no second paid call.
     let repaired = '';
-    if (!templateLocked && !retryUsed) {
+    if (!templateLocked && !retryUsed && !hybridOn) {
       retryUsed = true;
       try {
         repaired = stripBanned(
@@ -2150,6 +2442,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
             },
           })).trim(),
         );
+        if (repaired) llmUsed = true;
       } catch { /* template floor below */ }
     }
     if (
@@ -2163,6 +2456,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     } else {
       reply = fallbackReply(req); // the floor never moves
       grounding = 'repaired';
+      composeTemplate = true;
+      if (hybridOn && llmUsed) llmShed = true;
     }
   } else if (
     !terminalFailure &&
@@ -2181,7 +2476,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // matches, keep it (deterministic content is allowed to repeat; only LLM
   // drafts are guarded).
   let repeat_guard: TurnDebug['repeat_guard'];
-  if (!templateLocked && !retryUsed && state.lastReply && sameLine(reply, state.lastReply)) {
+  if (!hybridOn && !templateLocked && !retryUsed && state.lastReply && sameLine(reply, state.lastReply)) {
     retryUsed = true;
     let varied = '';
     try {
@@ -2192,6 +2487,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
           context: { ...req.context, priorReplyExcerpt: state.lastReply.slice(0, 220) },
         })).trim(),
       );
+      if (varied) llmUsed = true;
     } catch { /* fall through to template */ }
     if (
       varied &&
@@ -2268,11 +2564,22 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // them made the NEXT turn replay the previous answer — "compare X and Y"
     // spoke the earlier legal reply verbatim, because compose pushes a present
     // faqs body into its chunks before it ever reaches the compare branch.
-    const { faqs: _questionScoped, ...durable } = evidence.detail;
+    const { faqs: _questionScoped, ...rawDurable } = evidence.detail;
+    // Promote enriched identity-only shells (RERA/phases bolted on after a
+    // focus-scoped miss) so they do not poison projectCache + block L2 forever.
+    const durable = promoteDurableProjectDetail(rawDurable);
     state = {
       ...state,
       projectCache: { ...(state.projectCache ?? {}), [goal.projectId]: durable },
     };
+    // Dual-write L2 for cross-isolate / next chat. Same-conv durability is
+    // projectCache → awaited store.save below — do not waitUntil that save.
+    // memoSet inside writeProjectCardFromDetail runs sync before the KV put.
+    const l2Write = writeProjectCardFromDetail(deps, goal.projectId, durable).catch(
+      () => {},
+    );
+    if (deps.waitUntil) deps.waitUntil(l2Write);
+    else await l2Write;
   }
   const newlyDisclosed = extractDisclosedFacts({ goal, evidence });
   if (newlyDisclosed.length) {
@@ -2280,6 +2587,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       ...state,
       disclosedFacts: mergeDisclosedFacts(state.disclosedFacts, newlyDisclosed),
     };
+  }
+  // Remember Ivory / unit the buyer just asked about (availability evidence).
+  if (goal.kind === 'answer' && evidence.units?.length && goal.projectId) {
+    const pinned = pickFocusUnit(
+      goal.projectId,
+      evidence.units,
+      trimmedText,
+      state.focusUnit,
+    );
+    if (pinned) state = { ...state, focusUnit: pinned };
   }
   // W5 — stage truth: climb Desk's funnel ladder as the conversation earns it.
   // engaged = focused AND (a facet answer OR a second focused turn);
@@ -2294,7 +2611,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const rung = decideStageRung(state, goal);
     if (rung) {
       state = { ...state, stageWritten: rung };
+      const crmT0 = deps.clock.nowMs();
       await deps.crm.setStage(nd, rung, { onlyForward: true }).catch(() => {});
+      crmPreMs += deps.clock.nowMs() - crmT0;
     }
   }
   if (nd) {
@@ -2369,8 +2688,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ? deriveShadowFailures({ goal, evidence, droppedLocation })
     : [];
 
+  if (llmUsed) {
+    state = { ...state, llmUsedCount: (state.llmUsedCount ?? 0) + 1 };
+  }
+
   // store.save stays AWAITED — it is the KV state the next turn reads (store.load).
+  const storeSaveT0 = deps.clock.nowMs();
+  postComposeMs = storeSaveT0 - postComposeT0;
   await deps.store.save(state);
+  storeSaveMs = deps.clock.nowMs() - storeSaveT0;
 
   // The post-reply tail (turn ledger, transcript append, CRM facts, telemetry)
   // is read by an agent later, NEVER by the next turn, and mutates no state the
@@ -2450,6 +2776,28 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
             },
           }
         : {}),
+      timings: {
+        ...(preExtractMs !== undefined ? { pre_extract_ms: preExtractMs } : {}),
+        ...(extractMs !== undefined ? { extract_ms: extractMs } : {}),
+        ...(midPreGoalMs !== undefined ? { mid_pre_goal_ms: midPreGoalMs } : {}),
+        ...(midCatalogMs !== undefined ? { mid_catalog_ms: midCatalogMs } : {}),
+        ...(midLocationMs !== undefined ? { mid_location_ms: midLocationMs } : {}),
+        ...(midPhasePrepMs !== undefined ? { mid_phase_prep_ms: midPhasePrepMs } : {}),
+        ...(routingMs !== undefined ? { routing_ms: routingMs } : {}),
+        ...(evidenceMs !== undefined ? { evidence_ms: evidenceMs } : {}),
+        ...(composeMs !== undefined ? { compose_ms: composeMs } : {}),
+        ...(goalMs !== undefined ? { goal_ms: goalMs } : {}),
+        ...(postComposeMs !== undefined ? { post_compose_ms: postComposeMs } : {}),
+        ...(storeSaveMs !== undefined ? { store_save_ms: storeSaveMs } : {}),
+        ...(crmPreMs > 0 ? { crm_pre_ms: crmPreMs } : {}),
+        total_ms: deps.clock.nowMs() - turnStartedMs,
+      },
+      ...(deps.cacheStats && Object.keys(deps.cacheStats).length
+        ? { cache: { ...deps.cacheStats } }
+        : {}),
+      llm_used: llmUsed,
+      ...(llmShed ? { llm_shed: true } : {}),
+      ...(composeTemplate ? { compose_template: true } : {}),
     },
     inputSource,
     extractProvenance,
@@ -3365,23 +3713,39 @@ async function fetchObjection(
 ): Promise<{ goal: TurnGoal; evidence: EvidenceSet }> {
   const ctx = nd ? await deps.data.objectionContext(nd).catch(() => null) : null;
   const count = (s.objectionCount ?? 0) + 1;
-  const match = ctx?.playbooks.find((p) => p.topic === goal.topic);
+  // Stage 7 — Desk topics may be "pricing"/"budget" while extract maps "price".
+  const match = ctx?.playbooks.find((p) => {
+    const t = (p.topic ?? '').toLowerCase();
+    const want = (goal.topic ?? '').toLowerCase();
+    return t === want || t.includes(want) || want.includes(t);
+  });
   const threshold = match?.escalateAfter ?? 3;
+  const phone = ctx?.escalationPhone?.trim();
   if (count >= threshold) {
-    return { goal: { kind: 'handoff' }, evidence: { tools: ['objectionContext'] } };
+    return {
+      goal: { kind: 'handoff' },
+      evidence: {
+        tools: ['objectionContext'],
+        ...(phone ? { escalationPhone: phone } : {}),
+      },
+    };
   }
   if (!(match?.reframeAngles?.length)) {
-    // No playbook for this topic. The objection contract is "reframe using
-    // EVIDENCE angles only", so reaching compose with ZERO angles leaves the
-    // model nothing to reframe from and it invents — "something green near the
-    // hills" was read as a location objection and answered with "the hills
-    // offer better views and natural cooling". Ask instead of generate.
-    return { goal: { kind: 'clarify_intent' }, evidence: { tools: ['objectionContext'] } };
+    // Quality-factory Stage 7: no playbook → honest escalate (named latch when
+    // Desk has escalation_phone). Never invent reframe angles from the model.
+    return {
+      goal: { kind: 'handoff' },
+      evidence: {
+        tools: ['objectionContext'],
+        ...(phone ? { escalationPhone: phone } : {}),
+      },
+    };
   }
   return {
     goal,
     evidence: {
       tools: ['objectionContext'],
+      ...(phone ? { escalationPhone: phone } : {}),
       objection: {
         topic: goal.topic,
         acknowledged: ackFor(goal.topic),
@@ -3552,6 +3916,300 @@ function failureAlternatives(
   return [];
 }
 
+async function gatherPriceEvidencePatch(args: {
+  deps: EngineDeps;
+  s: ConversationState;
+  nd: string;
+  projectId: string;
+  unitType: string | undefined;
+  focusName: string;
+  buyerText?: string;
+}): Promise<EvidenceSet> {
+  const { deps, s, nd, projectId, unitType, focusName, buyerText } = args;
+  let evidence: EvidenceSet = { tools: [] };
+  const breakdownAsk = buyerText ? wantsCostBreakdown(buyerText) : false;
+  if (breakdownAsk && unitType) {
+    const landedRes = await deps.data
+      .landedCost(s.builderId, nd, projectId, unitType)
+      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+    evidence = stampToolRun(evidence, 'landedCost', landedRes);
+    if (landedRes.ok) {
+      evidence = { ...evidence, landedCost: landedRes.value };
+    }
+  }
+  if (!evidence.landedCost) {
+    const pricingRes = await deps.data
+      .pricing(s.builderId, nd, projectId, unitType)
+      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+    evidence = stampToolRun(evidence, 'pricing', pricingRes);
+    if (pricingRes.ok) {
+      const pricing = pricingRes.value;
+      const asked =
+        buyerText && isCostComponentAsk(buyerText)
+          ? componentsForAsk(buyerText, pricing.components)
+          : [];
+      const components = asked.length ? asked : pricing.components;
+      evidence = {
+        ...evidence,
+        pricing: { ...pricing, components, projectName: pricing.projectName || focusName },
+      };
+    }
+  }
+  return evidence;
+}
+
+async function gatherEmiEvidencePatch(args: {
+  deps: EngineDeps;
+  s: ConversationState;
+  nd: string;
+  projectId: string;
+  unitType: string | undefined;
+  ex: Extracted;
+}): Promise<EvidenceSet> {
+  const { deps, s, nd, projectId, unitType, ex } = args;
+  let evidence: EvidenceSet = { tools: [] };
+  const basisRes = await deps.data
+    .priceBasis(s.builderId, nd, projectId, unitType)
+    .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+  evidence = stampToolRun(evidence, 'priceBasis', basisRes);
+  const basis = basisRes.ok ? basisRes.value : null;
+  const outcome = computeEmi({
+    ...(basis ? { projectPriceInr: basis.priceInr } : {}),
+    ratePercent: ex.emiRatePercent ?? DEFAULT_RATE_PERCENT,
+    tenureYears: ex.emiTenureYears ?? DEFAULT_TENURE_YEARS,
+  });
+  if (outcome.ok) {
+    evidence = {
+      ...evidence,
+      tools: [...new Set([...evidence.tools, 'emi'])],
+      emi: {
+        ...outcome.value,
+        ...(deps.failureTools ? { discloseInputs: true } : {}),
+      },
+    };
+  } else if (deps.failureTools) {
+    evidence = { ...evidence, failure: outcome.failure };
+  }
+  return evidence;
+}
+
+async function gatherMediaEvidencePatch(args: {
+  deps: EngineDeps;
+  s: ConversationState;
+  nd: string;
+  projectId: string;
+  unitType: string | undefined;
+  focusName: string;
+  buyerText?: string;
+  mediaAssetKind?: string;
+}): Promise<EvidenceSet> {
+  const { deps, s, nd, projectId, unitType, focusName, buyerText, mediaAssetKind } = args;
+  let evidence: EvidenceSet = { tools: [] };
+  // Loan asks must never fetch/share a brochure — unless the buyer also
+  // explicitly co-asked for photos/brochure (Wave 3 media+loan).
+  const loanOwnsMedia =
+    (answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
+      resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
+      resolveFaqQuestionKeys(buyerText ?? '').includes('banks')) &&
+    !/\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(
+      buyerText ?? '',
+    );
+  if (loanOwnsMedia) return evidence;
+
+  const rawKind = mediaAssetKind ?? 'brochure';
+  const assetKind = normalizeMediaAssetKind(rawKind) ?? rawKind;
+  const mediaName =
+    (s.focus?.projectId === projectId ? focusName : '') ||
+    currentShortlist(s).find((o) => o.projectId === projectId)?.name ||
+    focusName;
+  const projectName = mediaName || focusName || 'this project';
+  const cachedKinds = s.projectCache?.[projectId]?.mediaKinds;
+  let inventoryKinds = cachedKinds;
+  if (inventoryKinds === undefined) {
+    const hydratedMedia = await hydrateProjectDetail(deps, s, projectId).catch(() => null);
+    if (hydratedMedia?.fetch) {
+      evidence = stampToolRun(evidence, 'detail', hydratedMedia.fetch);
+    }
+    if (hydratedMedia?.detail) {
+      inventoryKinds = hydratedMedia.detail.mediaKinds;
+      evidence = { ...evidence, detail: hydratedMedia.detail };
+    }
+  }
+  if (mediaKindMissingFromInventory(assetKind, inventoryKinds)) {
+    return {
+      ...evidence,
+      tools: [...new Set([...evidence.tools, 'mediaShare'])],
+      media: {
+        assetKind,
+        allowed: false,
+        reason: 'no_matching_asset',
+        projectName,
+      },
+    };
+  }
+  const phaseId = evidence.detail?.phases?.[0]?.phaseId;
+  const media = await deps.data
+    .mediaShare(nd, projectId, assetKind, unitType, phaseId)
+    .catch(() => null);
+  if (media) {
+    return {
+      ...evidence,
+      tools: [...new Set([...evidence.tools, 'mediaShare'])],
+      media: { assetKind, ...media, projectName },
+    };
+  }
+  return {
+    ...evidence,
+    tools: [...new Set([...evidence.tools, 'mediaShare'])],
+    media: {
+      assetKind,
+      allowed: false,
+      reason: 'share_unavailable',
+      projectName,
+    },
+  };
+}
+
+async function gatherAvailabilityEvidencePatch(args: {
+  deps: EngineDeps;
+  s: ConversationState;
+  nd: string;
+  projectId: string;
+  focusName: string;
+  buyerText?: string;
+  skipShowcaseMedia: boolean;
+}): Promise<EvidenceSet> {
+  const { deps, s, nd, projectId, focusName, buyerText, skipShowcaseMedia } = args;
+  let evidence: EvidenceSet = { tools: [] };
+  const bhkFilter = resolveAvailabilityBhkFilter({
+    buyerText,
+    constraintBhk: s.constraints.bhk,
+  });
+  const toEvidenceUnits = (
+    rows: Array<{
+      unitType: string;
+      priceDisplay: string;
+      sizeDisplay?: string;
+      holdableUnits?: number;
+    }>,
+  ) =>
+    filterUnitsByBhk(rows, bhkFilter).map((c) => ({
+      unitType: c.unitType,
+      priceDisplay: c.priceDisplay,
+      ...(c.sizeDisplay ? { sizeDisplay: c.sizeDisplay } : {}),
+      ...(typeof c.holdableUnits === 'number' ? { holdableUnits: c.holdableUnits } : {}),
+    }));
+
+  const cachedConfigs = s.projectCache?.[projectId]?.configurations;
+  if (cachedConfigs?.length) {
+    const units = toEvidenceUnits(cachedConfigs);
+    if (units.length) {
+      evidence = {
+        ...evidence,
+        tools: [...new Set([...evidence.tools, 'listUnits'])],
+        units,
+      };
+    }
+  } else {
+    const listed = await deps.data.listUnits(projectId).catch(() => []);
+    if (listed.length) {
+      const units = toEvidenceUnits(listed);
+      if (units.length) {
+        evidence = {
+          ...evidence,
+          tools: [...new Set([...evidence.tools, 'listUnits'])],
+          units,
+        };
+      }
+    }
+  }
+
+  // Unit-typed showcase media — never race an explicit media ask (caller sets skip).
+  if (evidence.units?.length && bhkFilter && !skipShowcaseMedia && !evidence.media) {
+    const mediaName =
+      (s.focus?.projectId === projectId ? focusName : '') ||
+      currentShortlist(s).find((o) => o.projectId === projectId)?.name ||
+      focusName;
+    const projectName = mediaName || focusName || 'this project';
+    for (const kind of ['site_image', 'floor_plan'] as const) {
+      const phaseId = evidence.detail?.phases?.[0]?.phaseId;
+      const media = await deps.data
+        .mediaShare(nd, projectId, kind, bhkFilter, phaseId)
+        .catch(() => null);
+      if (media?.allowed && media.cdnUrl) {
+        evidence = {
+          ...evidence,
+          tools: [...new Set([...evidence.tools, 'mediaShare'])],
+          media: { assetKind: kind, ...media, projectName },
+        };
+        break;
+      }
+    }
+  }
+  return evidence;
+}
+
+async function gatherFaqEvidencePatch(args: {
+  deps: EngineDeps;
+  s: ConversationState;
+  projectId: string;
+  focusName: string;
+  buyerText?: string;
+  faqKeys: string[];
+  taughtKey?: string;
+}): Promise<EvidenceSet> {
+  const { deps, s, projectId, focusName, buyerText, faqKeys, taughtKey } = args;
+  let evidence: EvidenceSet = { tools: [] };
+  const faqHits: Array<{ questionKey: string; question: string; answer: string }> = [];
+  // CRM activation / C1: yield + appreciation are owned by gated market intel.
+  const faqBlockedForIntel = new Set(['rental_yield', 'resale_value']);
+  const keysToFetch = faqKeys.filter(
+    (key) => !(deps.failureAnswer && faqBlockedForIntel.has(key)),
+  );
+  const faqResults = await Promise.all(
+    keysToFetch.map(async (key) => {
+      const faqRes = await deps.data
+        .faqLookup(projectId, key)
+        .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
+      return { key, faqRes };
+    }),
+  );
+  // Preserve key order (serial semantics) when attaching hits / stamping latency.
+  for (const { key, faqRes } of faqResults) {
+    evidence = stampToolRun(evidence, 'faqLookup', faqRes);
+    if (faqRes.ok && faqRes.value.answer) {
+      faqHits.push({
+        questionKey: key,
+        question: faqRes.value.question,
+        answer: faqRes.value.answer,
+      });
+    }
+  }
+  if (faqHits.length) {
+    const stubName =
+      (s.focus?.projectId === projectId ? focusName : '') ||
+      currentShortlist(s).find((o) => o.projectId === projectId)?.name ||
+      'this project';
+    evidence = {
+      ...evidence,
+      detail: {
+        projectId,
+        name: stubName,
+        microMarket: '',
+        faqs: faqHits,
+      },
+    };
+  } else if (faqKeys.length > 0 && buyerText && (isFaqShapedAsk(buyerText) || taughtKey)) {
+    // Cost-sheet ownership is applied after parallel merge (needs pricing).
+    evidence = {
+      ...evidence,
+      tools: [...new Set([...evidence.tools, 'faqMiss'])],
+      faqMiss: { keys: faqKeys, ...(taughtKey ? { taught: true } : {}) },
+    };
+  }
+  return evidence;
+}
+
 async function fetchAnswer(
   goal: Extract<TurnGoal, { kind: 'answer' }>,
   s: ConversationState,
@@ -3561,13 +4219,14 @@ async function fetchAnswer(
   buyerText?: string,
 ): Promise<EvidenceSet> {
   if (!nd) return { tools: [] };
-  // Prefer turn-local BHK ("send 2BHK unit photos") over a stale constraint —
-  // mediaShare / pricing unit filters need the size the buyer just named.
+  // Prefer pinned Ivory/config from prior availability answer, then turn-local BHK.
   const unitType =
+    focusUnitTypeForProject(s.focusUnit, goal.projectId) ??
     resolveAvailabilityBhkFilter({
       buyerText,
       constraintBhk: s.constraints.bhk,
-    }) ?? s.constraints.bhk;
+    }) ??
+    s.constraints.bhk;
   const focusName = s.focus?.projectName ?? '';
   const topics = goal.topics?.length ? goal.topics : [goal.topic];
   let tools: string[] = [];
@@ -3591,237 +4250,10 @@ async function fetchAnswer(
     };
   }
 
-  if (topics.includes('price')) {
-    const breakdownAsk = buyerText ? wantsCostBreakdown(buyerText) : false;
-    if (breakdownAsk && unitType) {
-      const landedRes = await deps.data
-        .landedCost(s.builderId, nd, goal.projectId, unitType)
-        .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
-      evidence = stampToolRun(evidence, 'landedCost', landedRes);
-      tools = evidence.tools;
-      if (landedRes.ok) {
-        evidence = { ...evidence, landedCost: landedRes.value };
-      }
-    }
-    if (!evidence.landedCost) {
-      const pricingRes = await deps.data
-        .pricing(s.builderId, nd, goal.projectId, unitType)
-        .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
-      evidence = stampToolRun(evidence, 'pricing', pricingRes);
-      tools = evidence.tools;
-      if (pricingRes.ok) {
-        const pricing = pricingRes.value;
-        // AB-1 — a cost-component ask gets THE component(s), filtered at the
-        // EVIDENCE level so both the LLM composer and the template floor see
-        // only the asked rows ("club membership fee?" led with base price when
-        // the full card reached the composer). No match → full card unchanged.
-        const asked =
-          buyerText && isCostComponentAsk(buyerText)
-            ? componentsForAsk(buyerText, pricing.components)
-            : [];
-        const components = asked.length ? asked : pricing.components;
-        evidence = {
-          ...evidence,
-          pricing: { ...pricing, components, projectName: pricing.projectName || focusName },
-        };
-      }
-    }
-  }
-
-  if (topics.includes('emi')) {
-    const basisRes = await deps.data
-      .priceBasis(s.builderId, nd, goal.projectId, unitType)
-      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
-    evidence = stampToolRun(evidence, 'priceBasis', basisRes);
-    tools = evidence.tools;
-    const basis = basisRes.ok ? basisRes.value : null;
-    const outcome = computeEmi({
-      ...(basis ? { projectPriceInr: basis.priceInr } : {}),
-      ratePercent: ex.emiRatePercent ?? DEFAULT_RATE_PERCENT,
-      tenureYears: ex.emiTenureYears ?? DEFAULT_TENURE_YEARS,
-    });
-    if (outcome.ok) {
-      tools.push('emi');
-      evidence = {
-        ...evidence,
-        tools: [...new Set(tools)],
-        emi: {
-          ...outcome.value,
-          ...(deps.failureTools ? { discloseInputs: true } : {}),
-        },
-      };
-    } else if (deps.failureTools) {
-      evidence = { ...evidence, failure: outcome.failure };
-    }
-  }
-
-  if (topics.includes('media') || ex.mediaAssetKind) {
-    // Loan asks must never fetch/share a brochure — unless the buyer also
-    // explicitly co-asked for photos/brochure (Wave 3 media+loan).
-    const loanOwnsMedia =
-      (answerRequirements(buyerText ?? '').includes('loan_eligibility') ||
-        resolveFaqQuestionKeys(buyerText ?? '').includes('loan_eligibility') ||
-        resolveFaqQuestionKeys(buyerText ?? '').includes('banks')) &&
-      !/\b(?:photos?|images?|pics?|gallery|brochure|floor\s*plans?|layout|video|pdf)\b/i.test(
-        buyerText ?? '',
-      );
-    if (loanOwnsMedia) {
-      // fall through — legal/detail path below answers LTV / honest miss
-    } else {
-    const rawKind = ex.mediaAssetKind ?? 'brochure';
-    const assetKind = normalizeMediaAssetKind(rawKind) ?? rawKind;
-    const mediaName =
-      (s.focus?.projectId === goal.projectId ? focusName : '') ||
-      currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
-      focusName;
-    const projectName = mediaName || focusName || 'this project';
-    // Inventory gate: when focused detail lists media kinds and the requested
-    // kind is absent, honest miss — do not call share (avoids facet bleed when
-    // Desk would 400 an alias or return a different asset).
-    const cachedKinds =
-      evidence.detail?.projectId === goal.projectId
-        ? evidence.detail.mediaKinds
-        : s.projectCache?.[goal.projectId]?.mediaKinds;
-    let inventoryKinds = cachedKinds;
-    if (inventoryKinds === undefined) {
-      const hydratedMedia = await hydrateProjectDetail(deps, s, goal.projectId).catch(() => null);
-      if (hydratedMedia?.fetch) {
-        evidence = stampToolRun(evidence, 'detail', hydratedMedia.fetch);
-        tools = evidence.tools;
-      }
-      if (hydratedMedia?.detail) {
-        inventoryKinds = hydratedMedia.detail.mediaKinds;
-        if (!evidence.detail) {
-          evidence = { ...evidence, detail: hydratedMedia.detail };
-        }
-      }
-    }
-    if (mediaKindMissingFromInventory(assetKind, inventoryKinds)) {
-      tools.push('mediaShare');
-      evidence = {
-        ...evidence,
-        tools: [...new Set(tools)],
-        media: {
-          assetKind,
-          allowed: false,
-          reason: 'no_matching_asset',
-          projectName,
-        },
-      };
-    } else {
-      // R4 — prefer first active phase when Desk has phase-scoped media.
-      const phaseId = evidence.detail?.phases?.[0]?.phaseId;
-      const media = await deps.data
-        .mediaShare(nd, goal.projectId, assetKind, unitType, phaseId)
-        .catch(() => null);
-      if (media) {
-        tools.push('mediaShare');
-        // Requested `assetKind` first so an honest miss can name it ("floor plan");
-        // a successful share carries its own asset_kind in `...media`, which wins.
-        evidence = {
-          ...evidence,
-          tools: [...new Set(tools)],
-          media: { assetKind, ...media, projectName },
-        };
-      } else {
-        // API validation/network miss — still attach a media miss so compose
-        // does not fall through to legal/FAQ for a photos/brochure ask.
-        tools.push('mediaShare');
-        evidence = {
-          ...evidence,
-          tools: [...new Set(tools)],
-          media: {
-            assetKind,
-            allowed: false,
-            reason: 'share_unavailable',
-            projectName,
-          },
-        };
-      }
-    }
-    }
-  }
-
-  if (topics.includes('availability')) {
-    const bhkFilter = resolveAvailabilityBhkFilter({
-      buyerText,
-      constraintBhk: s.constraints.bhk,
-    });
-    const toEvidenceUnits = (
-      rows: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string; holdableUnits?: number }>,
-    ) =>
-      filterUnitsByBhk(rows, bhkFilter).map((c) => ({
-        unitType: c.unitType,
-        priceDisplay: c.priceDisplay,
-        ...(c.sizeDisplay ? { sizeDisplay: c.sizeDisplay } : {}),
-        // AB-1 — the live holdable count is the FACT an inventory ask needs;
-        // dropping it here was why "is there any inventory left?" answered
-        // with a config card list.
-        ...(typeof c.holdableUnits === 'number' ? { holdableUnits: c.holdableUnits } : {}),
-      }));
-
-    const cachedConfigs = s.projectCache?.[goal.projectId]?.configurations;
-    if (cachedConfigs?.length) {
-      const units = toEvidenceUnits(cachedConfigs);
-      if (units.length) {
-        tools.push('listUnits');
-        evidence = {
-          ...evidence,
-          tools: [...new Set(tools)],
-          units,
-        };
-      }
-    } else {
-      const listed = await deps.data.listUnits(goal.projectId).catch(() => []);
-      if (listed.length) {
-        const units = toEvidenceUnits(listed);
-        if (units.length) {
-          tools.push('listUnits');
-          evidence = {
-            ...evidence,
-            tools: [...new Set(tools)],
-            units,
-          };
-        }
-      }
-    }
-
-    // Unit-typed showcase media: when availability is scoped to a BHK and Desk
-    // has a matching site_image / floor_plan, attach it so the buyer sees the
-    // unit — not only the config list. Never overwrite an explicit media ask.
-    if (evidence.units?.length && bhkFilter && !evidence.media) {
-      const mediaName =
-        (s.focus?.projectId === goal.projectId ? focusName : '') ||
-        currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
-        focusName;
-      const projectName = mediaName || focusName || 'this project';
-      for (const kind of ['site_image', 'floor_plan'] as const) {
-        const phaseId = evidence.detail?.phases?.[0]?.phaseId;
-        const media = await deps.data
-          .mediaShare(nd, goal.projectId, kind, bhkFilter, phaseId)
-          .catch(() => null);
-        if (media?.allowed && media.cdnUrl) {
-          tools.push('mediaShare');
-          evidence = {
-            ...evidence,
-            tools: [...new Set(tools)],
-            media: { assetKind: kind, ...media, projectName },
-          };
-          break;
-        }
-      }
-    }
-  }
-
-  // Closed-beta: Desk FAQ corpus — rental_yield, possession, loan, amenities, …
-  // Taught facet first (Understanding board): a ≥τ embed bind whose vector
-  // carries a human-taught FAQ key pins that row ahead of topic hints.
-  // lastRouting is re-stamped every turn before goal selection, so this is
-  // always THIS turn's bind; text-bound keys win inside taughtFaqKey.
+  // Independent Desk topic tools — run in parallel; merge in fixed order so
+  // Promise settlement order cannot change EvidenceSet field winners.
+  // Closed-beta FAQ prep (keys) is pure; lookups fan out inside the FAQ patch.
   const taughtKey = buyerText ? taughtFaqKey(s.rti?.lastRouting, buyerText) : undefined;
-  // P1 — availability/price already have structured atoms (units / cost sheet).
-  // Topic-hint FAQ fan-out (availability→possession) piggybacked essays onto
-  // config asks. Only fetch FAQ when text/taught binds a key for this turn.
   const primaryTopic = topics[0] ?? goal.topic;
   const structuredPrimary =
     primaryTopic === 'availability' || primaryTopic === 'price';
@@ -3837,66 +4269,107 @@ async function fetchAnswer(
         goal.parkedTopics,
       )
     : resolvedKeys;
-  const faqHits: Array<{ questionKey: string; question: string; answer: string }> = [];
-  // CRM activation / C1: yield + appreciation are owned by gated market intel
-  // (or honest decline) — never by a project FAQ that can invent a %.
-  const faqBlockedForIntel = new Set(['rental_yield', 'resale_value']);
-  for (const key of faqKeys) {
-    if (deps.failureAnswer && faqBlockedForIntel.has(key)) continue;
-    const faqRes = await deps.data
-      .faqLookup(goal.projectId, key)
-      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
-    evidence = stampToolRun(evidence, 'faqLookup', faqRes);
-    tools = evidence.tools;
-    if (faqRes.ok && faqRes.value.answer) {
-      faqHits.push({
-        questionKey: key,
-        question: faqRes.value.question,
-        answer: faqRes.value.answer,
-      });
-    }
-  }
-  if (faqHits.length) {
-    // Stub name must follow goal.projectId — lagging focus used to print
-    // "Regulatory snapshot for Sanctuary" on an Eldorado FAQ hit.
+
+  const wantPrice = topics.includes('price');
+  const wantEmi = topics.includes('emi');
+  const wantMedia = topics.includes('media') || Boolean(ex.mediaAssetKind);
+  const wantAvail = topics.includes('availability');
+
+  const [pricePatch, emiPatch, mediaPatch, availPatch, faqPatch] = await Promise.all([
+    wantPrice
+      ? gatherPriceEvidencePatch({
+          deps,
+          s,
+          nd,
+          projectId: goal.projectId,
+          unitType,
+          focusName,
+          buyerText,
+        })
+      : Promise.resolve({ tools: [] } satisfies EvidenceSet),
+    wantEmi
+      ? gatherEmiEvidencePatch({
+          deps,
+          s,
+          nd,
+          projectId: goal.projectId,
+          unitType,
+          ex,
+        })
+      : Promise.resolve({ tools: [] } satisfies EvidenceSet),
+    wantMedia
+      ? gatherMediaEvidencePatch({
+          deps,
+          s,
+          nd,
+          projectId: goal.projectId,
+          unitType,
+          focusName,
+          buyerText,
+          mediaAssetKind: ex.mediaAssetKind,
+        })
+      : Promise.resolve({ tools: [] } satisfies EvidenceSet),
+    wantAvail
+      ? gatherAvailabilityEvidencePatch({
+          deps,
+          s,
+          nd,
+          projectId: goal.projectId,
+          focusName,
+          buyerText,
+          // Explicit media ask owns media — availability showcase must not race it.
+          skipShowcaseMedia: wantMedia,
+        })
+      : Promise.resolve({ tools: [] } satisfies EvidenceSet),
+    gatherFaqEvidencePatch({
+      deps,
+      s,
+      projectId: goal.projectId,
+      focusName,
+      buyerText,
+      faqKeys,
+      taughtKey,
+    }),
+  ]);
+
+  evidence = mergeEvidencePatches(
+    { tools: [] },
+    [pricePatch, emiPatch, mediaPatch, availPatch, { ...faqPatch, detail: undefined }],
+  );
+  // Preserve hydrated detail from media/avail; only attach FAQ rows (serial semantics).
+  if (faqPatch.detail?.faqs?.length) {
     const stubName =
       (s.focus?.projectId === goal.projectId ? focusName : '') ||
       currentShortlist(s).find((o) => o.projectId === goal.projectId)?.name ||
       'this project';
     evidence = {
       ...evidence,
-      tools: [...new Set(tools)],
       detail: {
         ...(evidence.detail ?? {
           projectId: goal.projectId,
           name: stubName,
           microMarket: '',
         }),
-        faqs: faqHits,
+        faqs: faqPatch.detail.faqs,
       },
     };
-  } else if (faqKeys.length > 0 && buyerText && (isFaqShapedAsk(buyerText) || taughtKey)) {
-    // taughtKey: a taught facet that MISSED (project has no such FAQ row) earns
-    // the honest miss too — the bind read the ask's meaning (≥τ, human-taught),
-    // so the overview card would be the exact wrong answer this lane kills.
-    // Data-aware by construction: this branch runs only after the real lookup.
-    // AB-1 — the cost sheet owns cost-component asks. "what are the parking
-    // charges?" binds the `parking` FAQ key; when the project has no such FAQ
-    // row but its pricing components DO carry the answer (Car Parking ₹5,00,000),
-    // a faqMiss here made the composer decline a question it had the data for.
-    const costSheetOwns =
-      isCostComponentAsk(buyerText) && Boolean(evidence.pricing ?? evidence.landedCost);
-    if (!costSheetOwns) {
-      // Extractor bound a FAQ key but Desk has no row — honest miss, no overview invent.
-      tools.push('faqMiss');
-      evidence = {
-        ...evidence,
-        tools: [...new Set(tools)],
-        faqMiss: { keys: faqKeys, ...(taughtKey ? { taught: true } : {}) },
-      };
-    }
   }
+  // FAQ miss for cost-component asks is deferred until pricing is merged.
+  if (
+    faqPatch.faqMiss &&
+    buyerText &&
+    isCostComponentAsk(buyerText) &&
+    Boolean(evidence.pricing ?? evidence.landedCost)
+  ) {
+    const { faqMiss: _dropCostMiss, ...rest } = evidence;
+    evidence = {
+      ...rest,
+      tools: (rest.tools ?? []).filter((t) => t !== 'faqMiss'),
+    };
+  }
+  tools = evidence.tools;
 
+  const faqHits = evidence.detail?.faqs ?? [];
   const faqShapedHit = Boolean(buyerText && isFaqShapedAsk(buyerText) && faqHits.length > 0);
   const faqShapedMiss = Boolean(evidence.faqMiss?.keys.length);
   // S1 — LI-backed POI asks. Location-family FAQ keys and category mentions
@@ -3975,12 +4448,13 @@ async function fetchAnswer(
       cachedDetail &&
       !cachedDetail.marketIntel &&
       !cachedDetail.investment?.expectedRoi;
-    // Overview/focus cache often omits LI POIs (or keeps a stale thin location).
-    // Always re-fetch Desk detail for location asks so metro/IT facets hydrate.
-    const bustLocation = Boolean(wantsLocation && cachedDetail);
-    if ((bustLoan || bustIntel || bustLocation) && s.projectCache?.[goal.projectId]) {
+    // Loan / market-intel gaps: re-fetch Desk. Location asks keep the card and
+    // overlay LI via locationIntel below — do NOT wipe projectCache (that forced
+    // a full projectDetail RTT on every schools/metro packed turn).
+    if ((bustLoan || bustIntel) && s.projectCache?.[goal.projectId]) {
       const { [goal.projectId]: _stale, ...restCache } = s.projectCache;
       hydrateState = { ...s, projectCache: restCache };
+      deps.projectCardMemo?.delete(goal.projectId);
     }
     const hydrated = await hydrateProjectDetail(deps, hydrateState, goal.projectId);
     if (hydrated.fetch) {
@@ -4101,6 +4575,20 @@ async function fetchAnswer(
         );
         if (left.length === 0) {
           const { faqMiss: _dropYieldMiss, ...rest } = evidence;
+          evidence = rest;
+        } else {
+          evidence = {
+            ...evidence,
+            faqMiss: { ...evidence.faqMiss, keys: left },
+          };
+        }
+      }
+      // Project possession_date atom — drop possession FAQ miss so compose speaks
+      // the structured date (Ayana "Ready to register") instead of "not on file".
+      if (nextDetail.possession?.trim() && evidence.faqMiss?.keys.length) {
+        const left = evidence.faqMiss.keys.filter((k) => !/^possession$/i.test(k));
+        if (left.length === 0) {
+          const { faqMiss: _dropPossessionMiss, ...rest } = evidence;
           evidence = rest;
         } else {
           evidence = {
@@ -4298,6 +4786,14 @@ async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineD
       };
     }
   }
+  // Stage 7 — handoff compose reads escalation_phone from Desk builder row.
+  if (goal.kind === 'handoff') {
+    const b = await deps.data.builder(s.builderId).catch(() => null);
+    return {
+      tools: ['builder'],
+      ...(b?.escalationPhone?.trim() ? { escalationPhone: b.escalationPhone.trim() } : {}),
+    };
+  }
   return { tools: [] };
 }
 
@@ -4348,6 +4844,19 @@ function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet)
       // asks are not trapped in handoff.decide forever.
       if (next.phase === 'handoff' && next.focus) {
         next = { ...next, phase: 'focused' };
+      }
+      // Pin listed config (Ivory) so the next price/all-in ask stays on that unit.
+      const topics = goal.topics?.length ? goal.topics : [goal.topic];
+      if (ev.units?.length && goal.projectId) {
+        const pinned = pickFocusUnit(goal.projectId, ev.units, undefined, next.focusUnit);
+        if (pinned) next = { ...next, focusUnit: pinned };
+      } else if (
+        topics.includes('price') &&
+        next.focusUnit &&
+        next.focusUnit.projectId !== goal.projectId
+      ) {
+        const { focusUnit: _drop, ...rest } = next;
+        next = rest;
       }
       return next;
     }

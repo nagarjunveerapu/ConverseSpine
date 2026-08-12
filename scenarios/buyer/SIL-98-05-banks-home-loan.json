@@ -1,0 +1,48 @@
+{
+  "id": "SIL-98-05",
+  "title": "SIL/FAQ: what banks approved? \u2192 banks home loan (not khata dump)",
+  "builder_id": "brigade-group",
+  "tags": [
+    "sil",
+    "precision",
+    "banks",
+    "faq"
+  ],
+  "turns": [
+    {
+      "text": "hi"
+    },
+    {
+      "text": "2 BHK apartment in North Bangalore under 1.5 Cr"
+    },
+    {
+      "text": "Brigade Orchards",
+      "assert": {
+        "reply_includes": [
+          "orchards"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
+    },
+    {
+      "text": "what banks approved?",
+      "assert": {
+        "goal_topic": "legal",
+        "reply_includes": [
+          "home loan"
+        ],
+        "reply_excludes": [
+          "khata:",
+          "which one should I open"
+        ]
+      }
+    }
+  ]
+}

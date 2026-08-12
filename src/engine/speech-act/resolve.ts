@@ -2,6 +2,7 @@
  * Free text → chip path(s) → speech act.
  * Chip tap (action_id) wins; free text resolves into the same closed menu.
  */
+import { hasCostStanceAct } from '../price-objection.js';
 import { catalogEntry, catalogEntryByActionId } from './catalog.js';
 import type {
   ChipPathId,
@@ -51,13 +52,8 @@ const FREE_TEXT_RULES: ReadonlyArray<{
     re: /\b(?:compare|vs\.?|versus|side[\s-]by[\s-]side|difference between|dono\s+farq|farq\s+kya|kaun\s+better|trade-?offs?|(?:project|projects|inmein|inme|dono(?:\s+mein)?)\s+se\s+kaun)\b|\bcompare (?:the |both |all )?(?:projects?|options?|them|these|both)\b|\b(?:can you |could you |please )?compare\b/i,
     priority: 75,
   },
-  {
-    // True objections only — "best price" / "any discount" are price asks
-    // (chip.answer.price), not playbook objections (no-playbook → clarify).
-    id: 'chip.object',
-    re: /\b(?:too\s+(?:expensive|far|risky|high|costly)|(?:feels|seems|looks|is|bit)\s+(?:too\s+)?(?:expensive|pricey|high|overpriced)|on\s+the\s+(?:higher|expensive)\s+side|out\s+of\s+(?:budget|range)|over\s+budget|not\s+convinced)\b/i,
-    priority: 70,
-  },
+  // chip.object — resolved via hasCostStanceAct() in resolveFreeTextToChipPaths
+  // (compositional stance×cost), not a phrase list here.
   {
     id: 'chip.answer.legal',
     re: /\b(?:rera|legal(?:\s+issues?)?|khata|title|approval|documents?|paperwork|paper\s*work|legal status|legal details|clear title|title clear|\bec\b|encumbrance(?: certificate)?|(?:which|what)\s+banks?|banks?\s+(?:approved|approv)|approved\s+banks?|home\s+loan\s+approv|is\s+(?:the\s+)?ec\s+clear)\b/i,
@@ -152,6 +148,10 @@ export function resolveFreeTextToChipPaths(text: string): ChipResolution {
   const hits: Array<{ id: ChipPathId; priority: number }> = [];
   for (const rule of FREE_TEXT_RULES) {
     if (rule.re.test(t)) hits.push({ id: rule.id, priority: rule.priority });
+  }
+  // Evaluative cost stance beats price FAQ chip (priority 70 > 60).
+  if (hasCostStanceAct(t)) {
+    hits.push({ id: 'chip.object', priority: 70 });
   }
 
   if (hits.length === 0) {

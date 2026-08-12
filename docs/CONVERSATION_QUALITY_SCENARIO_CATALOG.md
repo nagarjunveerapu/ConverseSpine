@@ -155,3 +155,24 @@ Channel: run **chat** first (`/chat` on Dev), then **Advisor** for rows marked a
 - Gaps you listed (media emit, pivots, switch spam, multi-visit depth, styles, Hinglish breadth) are in the matrix above as **NEED** / re-soak.
 
 Say **go** (or pick a section A–G) and we implement missing JSON + run against Dev.
+
+
+---
+
+## Catalog-stress dual gate (2026-08-12)
+
+**Artifacts:** [`docs/reports/catalog-stress-2026-08-12/`](./reports/catalog-stress-2026-08-12/) — `matrix.html` (dig HAVE/FAQ/MISS), `parameter-scorecard.html` (11 buyer-facing params).
+
+**Discover rule shipped:** board only when brief-ready = `location` + `budgetMaxInr` + (`bhk` OR `purpose=investment`). Bare `apartment` / `2 BHK` must not list (`DISC-01`…`05`).
+
+| Pack | Status | Notes |
+|------|--------|-------|
+| **DISC-01…06** | HAVE | Generated `scenarios/buyer/generated/DISC-pack.json` — probe/orient until brief-ready; packed brief → recommend |
+| **DATA-HAVE / DATA-MISS** | HAVE | Generated from dig matrix (`DATA-catalog-stress.json`, 121 cases). Sample stress on Eldorado/Orchards/Ayana/Earth Aroma/Hillside: **75/75 assert** after soft facet asserts |
+| **BUYER-BRG / BUYER-LOK / CAT / FAQ setup** | UPDATED | Setup turns use packed briefs (not bare apartment) |
+| **Parameter scorecard** | HAVE | Dual gate: assert + 11 params (first impression, intent, recommendations, geo, pricing grounding, trust, objection, handoff, memory, tone, adversarial) |
+
+**Merged run:** `scenarios/runs/catalog-stress-merged-2026-08-12` (75 scenarios, 0 structural fails). Quality gate: read `parameter-scorecard.html` — assert green alone is not enough.
+
+**Regenerate:** `npx tsx scripts/gen-catalog-stress-scenarios.ts` then `npx tsx scripts/score-catalog-stress-params.ts scenarios/runs/<stamp>`.
+

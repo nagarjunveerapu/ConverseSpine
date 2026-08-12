@@ -1,4 +1,5 @@
 import type { Env } from '../../env.js';
+import { paidLlmTimeoutMs, resolveHybridMode } from '../hybrid.js';
 import type { EngineLlm, ExtractSignal, SignalKind } from '../ports.js';
 import type { ComposeRequest } from '../types.js';
 import { fallbackReply, renderComposePrompt } from '../compose.js';
@@ -7,29 +8,41 @@ export function makeEngineLlm(env: Env): EngineLlm {
   const base = env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com';
   const model = env.DEEPSEEK_MODEL ?? 'deepseek-chat';
   const apiKey = env.DEEPSEEK_API_KEY;
+  const hybrid = resolveHybridMode(env);
+  const timeoutMs = paidLlmTimeoutMs(env);
+  const composeMaxTokens = hybrid === 'on' ? 220 : 320;
 
   async function chat(system: string, user: string, jsonMode = false): Promise<string> {
     if (!apiKey) return '';
-    const resp = await fetch(`${base}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: jsonMode ? 0.1 : 0.35,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        max_tokens: jsonMode ? 120 : 320,
-        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-      }),
-    });
-    if (!resp.ok) return '';
-    const data = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    return data.choices?.[0]?.message?.content?.trim() ?? '';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const resp = await fetch(`${base}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: jsonMode ? 0.1 : 0.35,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ],
+          max_tokens: jsonMode ? 120 : composeMaxTokens,
+          ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+        }),
+        signal: controller.signal,
+      });
+      if (!resp.ok) return '';
+      const data = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      return data.choices?.[0]?.message?.content?.trim() ?? '';
+    } catch {
+      return '';
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   return {
@@ -38,7 +51,7 @@ export function makeEngineLlm(env: Env): EngineLlm {
       const user = renderComposePrompt(req);
       try {
         const draft = await chat(
-          'You are a warm WhatsApp property advisor. Follow instructions exactly. Never invent prices or facts.',
+          'You are a warm WhatsApp property advisor. Short human lines. Follow instructions exactly. Never invent prices or facts.',
           user,
         );
         return draft || fallbackReply(req);
@@ -49,6 +62,8 @@ export function makeEngineLlm(env: Env): EngineLlm {
 
     async extractSignals(text: string, need: readonly SignalKind[]): Promise<readonly ExtractSignal[]> {
       if (!apiKey || need.length === 0) return [];
+      // Hybrid: avoid stacking extractSignals with compose on the hot path.
+      if (hybrid === 'on') return [];
       const sys = 'Extract fields from a real-estate buyer message. Return STRICT JSON only.';
       const user =
         `Message: ${JSON.stringify(text)}\n` +

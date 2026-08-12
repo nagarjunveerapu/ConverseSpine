@@ -162,6 +162,7 @@ describe('ConverseEngine facts', () => {
         budgetMaxInr: 2_000_000,
         location: 'Devanahalli',
         propertyType: 'apartment',
+        bhk: '2 BHK',
       },
     };
     const ex = extractFactsSync('so do they come in 20L?', s);

@@ -132,13 +132,20 @@ SIL_EMBED_FIRST = "true"
 # Visit open acts: teach-only on dig (no ask-team / force regex fallback).
 # Ablation gate after visit-mv upsert — grow corpus if VIS-MV-04/06 fail.
 VISIT_EMBED_ACTS_ONLY = "true"
+BAML_EXTRACT_MODE = "promote"
+# Hybrid: voice templates for ~80%; ≤1 paid DeepSeek/turn; BAML shadow on sync.
+# (Must live under [env.dev.vars] — not under [env.dev.triggers].)
+HYBRID_COMPOSE = "on"
+SYNC_BAML_MODE = "shadow"
+PAID_LLM_TIMEOUT_MS = "1200"
+LLM_RATE_TARGET = "0.2"
+INTENT_RECOVERY_MODE = "promote"
 
 # Weekly rebuild — Mondays 03:30 UTC. Nightly 22:30 UTC (04:00 IST) = Wave C
 # auto-teach (runs after Desk's 18:00 UTC sweep+teacher; no-op unless
 # UNDERSTANDING_AUTO_TEACH=true).
 [env.dev.triggers]
 crons = ["30 3 * * 1", "30 22 * * *"]
-BAML_EXTRACT_MODE = "promote"
 
 [[env.dev.durable_objects.bindings]]
 name = "TURN_DEBOUNCER"

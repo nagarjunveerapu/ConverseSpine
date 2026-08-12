@@ -5,7 +5,14 @@ import { handleAdvisorPreview } from './advisor/handle-preview.js';
 import { handleAdvisorReveal } from './advisor/handle-reveal.js';
 import { handleAdvisorTurn } from './advisor/handle-turn.js';
 import { createWorkerRuntime } from './runtime/deps.js';
-import { handleAgentSend, handleChat, health, json, toDeskChatResponse } from './worker/routes.js';
+import {
+  handleAgentSend,
+  handleCacheInvalidate,
+  handleChat,
+  health,
+  json,
+  toDeskChatResponse,
+} from './worker/routes.js';
 import { overRateLimit } from './channel/ingress-guard.js';
 import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
@@ -48,6 +55,20 @@ export default {
           return json({ error: 'invalid_json' }, 400);
         }
         return handleAgentSend(env, body as Parameters<typeof handleAgentSend>[1]);
+      }
+
+      if (path === '/internal/cache-invalidate' && method === 'POST') {
+        const secret = request.headers.get('x-bot-secret');
+        if (env.BOT_SHARED_SECRET && secret !== env.BOT_SHARED_SECRET) {
+          return json({ error: 'forbidden' }, 403);
+        }
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ error: 'invalid_json' }, 400);
+        }
+        return handleCacheInvalidate(env, body);
       }
 
       if (path === '/webhook' && method === 'GET') {

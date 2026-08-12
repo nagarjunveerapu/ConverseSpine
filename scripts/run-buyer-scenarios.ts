@@ -125,13 +125,30 @@ interface ScenarioRecord {
   turns: TurnRecord[];
 }
 
+function listScenarioFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const out: string[] = [];
+  for (const f of readdirSync(dir).sort()) {
+    const p = join(dir, f);
+    if (f.endsWith('.json') && f !== 'manifest.json') out.push(p);
+    else if (!f.includes('.') && existsSync(p)) {
+      // one-level: scenarios/buyer/generated/*.json
+      for (const g of readdirSync(p).sort()) {
+        if (g.endsWith('.json') && g !== 'manifest.json') out.push(join(p, g));
+      }
+    }
+  }
+  return out;
+}
+
 function loadScenarios(only?: Set<string>): BuyerScenario[] {
-  const files = readdirSync(SCENARIO_DIR).filter((f) => f.endsWith('.json')).sort();
+  const files = listScenarioFiles(SCENARIO_DIR);
   const out: BuyerScenario[] = [];
-  for (const f of files) {
-    const raw = JSON.parse(readFileSync(join(SCENARIO_DIR, f), 'utf8')) as BuyerScenario | BuyerScenario[];
+  for (const path of files) {
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as BuyerScenario | BuyerScenario[];
     const list = Array.isArray(raw) ? raw : [raw];
     for (const s of list) {
+      if (!s?.id) continue;
       if (only && !only.has(s.id)) continue;
       out.push(s);
     }

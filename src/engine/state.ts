@@ -349,8 +349,10 @@ export function recordDiscussed(
 }
 
 export function commitTo(s: ConversationState, projectId: string, projectName: string): ConversationState {
+  const clearUnit = s.focusUnit && s.focusUnit.projectId !== projectId;
+  const base = clearUnit ? (({ focusUnit: _u, ...rest }) => rest)(s) : s;
   const discussed = recordDiscussed(
-    { ...s, phase: 'focused', focus: { projectId, projectName } },
+    { ...base, phase: 'focused', focus: { projectId, projectName } },
     [{ projectId, name: projectName }],
   );
   // Phase 1a dual-write: focus becomes a STACK entry, so a later turn can pop

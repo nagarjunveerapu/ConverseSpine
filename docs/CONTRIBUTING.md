@@ -68,6 +68,14 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=llama3.1:8b-instruct
 ```
 
+## Dual-gate (dialogue PRs)
+
+Every PR that touches `src/engine/**`, buyer scenarios, or Desk fact shapes consumed by the bot:
+
+1. **Structural:** `npx tsx scripts/run-buyer-scenarios.ts --only <touched-ids>`
+2. **Quality:** founder/agent read of replies — reject `assert✓ quality✗` on exercised scorecard params
+3. Living plan: [`docs/QUALITY_FACTORY_PLAN.md`](./QUALITY_FACTORY_PLAN.md) · ops freeze: [`docs/reports/quality-factory-2026-08-12/DUAL_GATE.md`](./reports/quality-factory-2026-08-12/DUAL_GATE.md)
+
 ## Verify deploy
 
 ```bash

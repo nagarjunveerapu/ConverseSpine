@@ -162,5 +162,32 @@ export interface TurnResult {
     extract_provenance?: unknown;
     last_offered_count?: number;
     last_offered_ids?: string[];
+    timings?: {
+      pre_extract_ms?: number;
+      extract_ms?: number;
+      mid_pre_goal_ms?: number;
+      mid_catalog_ms?: number;
+      mid_location_ms?: number;
+      mid_phase_prep_ms?: number;
+      routing_ms?: number;
+      evidence_ms?: number;
+      compose_ms?: number;
+      goal_ms?: number;
+      post_compose_ms?: number;
+      store_save_ms?: number;
+      crm_pre_ms?: number;
+      total_ms?: number;
+      embed_ms?: number;
+      desk_ms?: number;
+    };
+    cache?: {
+      seg?: 'hit' | 'miss' | 'skip';
+      proj?: 'hit' | 'miss' | 'skip';
+      emb?: 'hit' | 'miss' | 'skip';
+      search?: 'hit' | 'miss' | 'skip';
+    };
+    llm_used?: boolean;
+    llm_shed?: boolean;
+    compose_template?: boolean;
   };
 }

@@ -6,7 +6,7 @@
   "turns": [
     { "text": "hi" },
     {
-      "text": "Apartment in North Bangalore",
+      "text": "2 BHK apartment in North Bangalore under 1.5 Cr",
       "assert": {
         "reply_includes": ["eldorado"],
         "reply_excludes": ["tap a button"]

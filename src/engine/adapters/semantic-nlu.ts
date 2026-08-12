@@ -79,8 +79,19 @@ async function embedTexts(
   ai: Env['AI'],
   texts: string[],
   model?: string,
+  /** Optional L3 cache for single-text embeds (enrich + routing share). */
+  cacheEnv?: Pick<Env, 'TURN_CACHE' | 'SIL_INTENT_PROJECTION'>,
 ): Promise<number[][]> {
   if (!ai || texts.length === 0) return [];
+  // Single-query path — reuse L3 when present (batch location embeds skip cache).
+  if (texts.length === 1 && cacheEnv?.TURN_CACHE) {
+    const { cachedEmbedOne } = await import('../../cache/embed.js');
+    const { vector } = await cachedEmbedOne(
+      { AI: ai, TURN_CACHE: cacheEnv.TURN_CACHE, SIL_EMBED_MODEL: model, SIL_INTENT_PROJECTION: cacheEnv.SIL_INTENT_PROJECTION },
+      texts[0]!,
+    );
+    return vector ? [vector] : [];
+  }
   const resp = (await ai.run((model || DEFAULT_EMBED_MODEL) as never, { text: texts })) as { data?: number[][] };
   return resp.data ?? [];
 }
@@ -314,7 +325,7 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
         const queryText = env.SIL_CANONICAL_EMBED === 'true'
           ? (await getQueryCanonicalizer(env))(text)
           : text;
-        const vectors = await embedTexts(env.AI, [queryText], env.SIL_EMBED_MODEL);
+        const vectors = await embedTexts(env.AI, [queryText], env.SIL_EMBED_MODEL, env);
         const query = vectors[0] ? projectIntentVector(env, vectors[0]) : undefined;
         const topicTau = gapFillTau(env);
         if (query) {

@@ -1,4 +1,5 @@
 import type { Env } from '../env.js';
+import type { ConversationState } from '../engine/types.js';
 import { sendText, sendTyping, sendInteractiveButtons, appendNumberedMenu } from '../channel/whatsapp-client.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
 import { handleChat } from '../worker/routes.js';
@@ -10,7 +11,13 @@ interface InboxEntry {
 }
 
 const DEBOUNCE_MS = 2000;
+const L0_STATE_KEY = 'l0_state';
 
+/**
+ * Conversation DO — WhatsApp debounce + L0 hot conversation state.
+ * State routes use DO name `state:{convId}` from store-kv; enqueue uses
+ * `builderId:phone` from the WhatsApp webhook.
+ */
 export class TurnDebouncer implements DurableObject {
   constructor(
     private readonly state: DurableObjectState,
@@ -18,8 +25,28 @@ export class TurnDebouncer implements DurableObject {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
-    if (request.method === 'POST' && new URL(request.url).pathname.endsWith('/enqueue')) {
+    const path = new URL(request.url).pathname;
+    if (request.method === 'POST' && path.endsWith('/enqueue')) {
       return this.enqueue(request);
+    }
+    if (path.endsWith('/state') || path.endsWith('/state/')) {
+      if (request.method === 'GET') {
+        const state = (await this.state.storage.get<ConversationState>(L0_STATE_KEY)) ?? null;
+        return Response.json({ state });
+      }
+      if (request.method === 'PUT') {
+        let body: { state?: ConversationState };
+        try {
+          body = (await request.json()) as { state?: ConversationState };
+        } catch {
+          return Response.json({ error: 'invalid_json' }, { status: 400 });
+        }
+        if (!body.state?.convId) {
+          return Response.json({ error: 'state_required' }, { status: 400 });
+        }
+        await this.state.storage.put(L0_STATE_KEY, body.state);
+        return Response.json({ ok: true });
+      }
     }
     return Response.json({ error: 'not_found' }, { status: 404 });
   }

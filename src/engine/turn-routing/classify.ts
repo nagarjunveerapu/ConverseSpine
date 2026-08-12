@@ -114,6 +114,7 @@ export async function embedderRouting(
     | 'SIL_ROUTING_TAU'
     | 'FAILURE_ROUTING'
     | 'SIL_STATE_TOKENS'
+    | 'TURN_CACHE'
   >,
   input: TurnRoutingInput,
 ): Promise<EmbedderOutcome> {
@@ -121,63 +122,73 @@ export async function embedderRouting(
 
   const queryText = buildRoutingQuery(input, env);
   const model = env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
-  const embed = (await env.AI.run(model as never, { text: [queryText] })) as { data?: number[][] };
-  const raw = embed.data?.[0];
+  const tau = routingTau(env);
+  const projectionId = env.SIL_INTENT_PROJECTION || 'raw';
+  const statsEnv = env as typeof env & { cacheStats?: { emb?: 'hit' | 'miss' | 'skip' } };
+
+  // SIL Phase 0 — keep every match (deduped by id: the global query re-returns
+  // scoped rows) so the top-1/top-2 margin is measurable, not just the winner.
+  const matches: { id?: string; kind: string; score: number; facet: string }[] = [];
+  let queryOk = false;
+
+  // L3q first — identical routing query skips Workers AI + Vectorize (same bind).
+  let fromIntentQueryCache = false;
+  if (env.TURN_CACHE) {
+    const { getIntentQueryMatches } = await import('../../cache/turn-cache.js');
+    const cachedMatches = await getIntentQueryMatches(
+      env.TURN_CACHE,
+      projectionId,
+      queryText,
+      input.builder_id,
+    );
+    if (cachedMatches?.length) {
+      matches.push(...cachedMatches);
+      queryOk = true;
+      fromIntentQueryCache = true;
+      if (statsEnv.cacheStats) statsEnv.cacheStats.emb = 'hit';
+    }
+  }
+
+  if (!fromIntentQueryCache) {
+  // L3 — share embed with semantic.enrich for the same utterance.
+  let raw: number[] | undefined;
+  if (env.TURN_CACHE) {
+    const { cachedEmbedOne } = await import('../../cache/embed.js');
+    const cached = await cachedEmbedOne(
+      {
+        AI: env.AI,
+        TURN_CACHE: env.TURN_CACHE,
+        SIL_EMBED_MODEL: model,
+        SIL_INTENT_PROJECTION: env.SIL_INTENT_PROJECTION,
+      },
+      queryText,
+    );
+    raw = cached.vector ?? undefined;
+    if (statsEnv.cacheStats) statsEnv.cacheStats.emb = cached.cache;
+  } else {
+    const embed = (await env.AI.run(model as never, { text: [queryText] })) as { data?: number[][] };
+    raw = embed.data?.[0];
+  }
   if (!raw) return { result: null, fired: false };
   // Into the learned metric — the index was built the same way, or the
   // projection is off and this is the identity.
   const vector = projectIntentVector(env, raw);
-  const tau = routingTau(env);
+    const scopes = [input.builder_id, ''].filter((s, i, a) => a.indexOf(s) === i);
+    const seen = new Set<string>();
 
-  const scopes = [input.builder_id, ''].filter((s, i, a) => a.indexOf(s) === i);
-  // SIL Phase 0 — keep every match (deduped by id: the global query re-returns
-  // scoped rows) so the top-1/top-2 margin is measurable, not just the winner.
-  const seen = new Set<string>();
-  const matches: { id?: string; kind: string; score: number; facet: string }[] = [];
-  let queryOk = false;
-
-  for (const scope of scopes) {
-    const filter = scope ? { builder_scope: scope } : undefined;
-    const results = await env.INTENT_VECTORS.query(vector, {
-      topK: 5,
-      returnMetadata: 'all',
-      ...(filter ? { filter } : {}),
-    }).catch(() => null);
-    if (results) queryOk = true;
-    for (const m of results?.matches ?? []) {
-      if (m.id && seen.has(m.id)) continue;
-      if (m.id) seen.add(m.id);
-      matches.push({
-        ...(m.id ? { id: m.id } : {}),
-        kind:
-          m.metadata && typeof m.metadata.intent_kind === 'string'
-            ? (m.metadata.intent_kind as string)
-            : '',
-        score: m.score ?? 0,
-        facet:
-          m.metadata && typeof m.metadata.facet === 'string'
-            ? (m.metadata.facet as string)
-            : '',
-      });
-    }
-  }
-
-  // Definition asks are outnumbered by availability/search rows. Class-balanced
-  // retrieval keeps Wave-1 definition doors in the candidate set; score still wins.
-  if (env.FAILURE_ROUTING === 'true' && looksLikeDefinitionAsk(input.text)) {
-    const kinds = /\bbhk\b/i.test(input.text)
-      ? DEFINITION_INTENT_KINDS
-      : DEFINITION_INTENT_KINDS.filter((k) => k !== 'definition_bhk');
-    for (const kind of kinds) {
-      const definition = await env.INTENT_VECTORS.query(vector, {
-        topK: 1,
-        returnMetadata: 'all',
-        filter: { intent_kind: kind },
-      }).catch((error) => {
-        console.error('[intent-class-filter]', kind, error);
-        return null;
-      });
-      for (const m of definition?.matches ?? []) {
+    // Parallel scope queries — same merge semantics as the sequential loop.
+    const scopeResults = await Promise.all(
+      scopes.map((scope) =>
+        env.INTENT_VECTORS!.query(vector, {
+          topK: 5,
+          returnMetadata: 'all',
+          ...(scope ? { filter: { builder_scope: scope } } : {}),
+        }).catch(() => null),
+      ),
+    );
+    for (const results of scopeResults) {
+      if (results) queryOk = true;
+      for (const m of results?.matches ?? []) {
         if (m.id && seen.has(m.id)) continue;
         if (m.id) seen.add(m.id);
         matches.push({
@@ -185,11 +196,61 @@ export async function embedderRouting(
           kind:
             m.metadata && typeof m.metadata.intent_kind === 'string'
               ? (m.metadata.intent_kind as string)
-              : kind,
+              : '',
           score: m.score ?? 0,
-          facet: '',
+          facet:
+            m.metadata && typeof m.metadata.facet === 'string'
+              ? (m.metadata.facet as string)
+              : '',
         });
       }
+    }
+
+    // Definition asks are outnumbered by availability/search rows. Class-balanced
+    // retrieval keeps Wave-1 definition doors in the candidate set; score still wins.
+    if (env.FAILURE_ROUTING === 'true' && looksLikeDefinitionAsk(input.text)) {
+      const kinds = /\bbhk\b/i.test(input.text)
+        ? DEFINITION_INTENT_KINDS
+        : DEFINITION_INTENT_KINDS.filter((k) => k !== 'definition_bhk');
+      const defResults = await Promise.all(
+        kinds.map((kind) =>
+          env.INTENT_VECTORS!.query(vector, {
+            topK: 1,
+            returnMetadata: 'all',
+            filter: { intent_kind: kind },
+          }).catch((error) => {
+            console.error('[intent-class-filter]', kind, error);
+            return null;
+          }),
+        ),
+      );
+      for (let i = 0; i < kinds.length; i++) {
+        const kind = kinds[i]!;
+        for (const m of defResults[i]?.matches ?? []) {
+          if (m.id && seen.has(m.id)) continue;
+          if (m.id) seen.add(m.id);
+          matches.push({
+            ...(m.id ? { id: m.id } : {}),
+            kind:
+              m.metadata && typeof m.metadata.intent_kind === 'string'
+                ? (m.metadata.intent_kind as string)
+                : kind,
+            score: m.score ?? 0,
+            facet: '',
+          });
+        }
+      }
+    }
+
+    if (env.TURN_CACHE && matches.length) {
+      const { putIntentQueryMatches } = await import('../../cache/turn-cache.js');
+      await putIntentQueryMatches(
+        env.TURN_CACHE,
+        projectionId,
+        queryText,
+        input.builder_id,
+        matches,
+      );
     }
   }
 
@@ -347,7 +408,7 @@ function stateDependentRouting(input: TurnRoutingInput): TurnRoutingResult | nul
  */
 export async function classifyTurnRouting(
   env:
-    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING'>
+    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING' | 'TURN_CACHE'>
     | undefined,
   input: TurnRoutingInput,
 ): Promise<TurnRoutingResult> {
@@ -357,7 +418,7 @@ export async function classifyTurnRouting(
 
 async function classifyTurnRoutingRaw(
   env:
-    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING'>
+    | Pick<Env, 'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING' | 'TURN_CACHE'>
     | undefined,
   input: TurnRoutingInput,
 ): Promise<TurnRoutingResult> {

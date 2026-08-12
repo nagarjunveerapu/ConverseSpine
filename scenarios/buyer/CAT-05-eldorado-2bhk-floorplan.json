@@ -5,7 +5,7 @@
   "tags": ["catalog", "media", "floor_plan", "R5"],
   "turns": [
     { "text": "hi" },
-    { "text": "Apartment in North Bangalore" },
+    { "text": "2 BHK apartment in North Bangalore under 1.5 Cr" },
     {
       "text": "Brigade Eldorado",
       "assert": { "reply_includes": ["eldorado"] }
