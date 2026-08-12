@@ -294,7 +294,7 @@ describe('Phase 3 turn behavior', () => {
       {
         convId: 'fv3-jayanagar',
         builderId: 'lokations',
-        text: '2 BHK in Jayanagar',
+        text: '2 BHK in Jayanagar under 1 crore',
         channel: 'advisor_web',
       },
       deps,
@@ -321,7 +321,7 @@ describe('Phase 3 turn behavior', () => {
       {
         convId: 'fv3-jayanagar-affirm',
         builderId: 'lokations',
-        text: '2 BHK in Jayanagar',
+        text: '2 BHK in Jayanagar under 1 crore',
         channel: 'advisor_web',
       },
       deps,

@@ -231,6 +231,8 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
 }
 
 export function shouldRunTurnIntent(state: ConversationState, actionId?: string, text?: string): boolean {
+  // Destructive opt-out confirm owns bare affirm — never divert to RTI probe.
+  if (state.stopConfirmPending) return false;
   if (text && isCompareAmongOfferedTurn(text)) return false;
   if (actionId) return true;
   if (state.postVisitAckPending) return false;
@@ -326,7 +328,13 @@ export function applyTurnIntentResult(
   let next = { ...state, constraints: { ...state.constraints } };
 
   for (const key of clearedKeys) {
-    if (key === 'bhk') delete next.constraints.bhk;
+    if (key === 'bhk') {
+      delete next.constraints.bhk;
+      // Recovery "any configuration" waives the BHK brief slot.
+      const asked = new Set(next.discover.asked ?? []);
+      asked.add('bhk');
+      next = { ...next, discover: { ...next.discover, asked: [...asked] } };
+    }
     if (key === 'location') delete next.constraints.location;
     if (key === 'propertyType') delete next.constraints.propertyType;
     if (key === 'budget') {

@@ -450,7 +450,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // this project. The pivot lane is then skipped entirely — which also REPLACES
   // an LLM call with one embed on those turns, rather than adding work.
   let runTurnIntent = Boolean(
-    deps.turnIntent && shouldRunTurnIntent(state, input.action_id, trimmedText),
+    deps.turnIntent &&
+      !state.stopConfirmPending &&
+      shouldRunTurnIntent(state, input.action_id, trimmedText),
   );
   // Phase 0d / GO H — join extract ∥ routing on focused free-text.
   // UBM previously gated this on runTurnIntent; facet asks skip RTI so the

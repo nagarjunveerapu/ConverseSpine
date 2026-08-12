@@ -73,7 +73,11 @@ describe('decide — facet ask over shortlist routes to shortlist_answer', () =>
 
   it('constraint refine without a pick still re-searches (PIV-03 unchanged)', () => {
     const s = stateWithShortlist();
-    s.constraints = { bhk: '2bhk', budgetMaxInr: 7_000_000 } as ConversationState['constraints'];
+    s.constraints = {
+      location: 'Sakleshpur',
+      bhk: '2bhk',
+      budgetMaxInr: 7_000_000,
+    } as ConversationState['constraints'];
     const g = decide(s, ex({ askTopics: ['price'], speechAct: 'search' }));
     expect(g).toEqual({ kind: 'recommend' });
   });

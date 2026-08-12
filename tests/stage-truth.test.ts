@@ -69,7 +69,7 @@ describe('W5 stage truth', () => {
 
   it('event stages (visit_booked) still fire without onlyForward', async () => {
     const { turn, stageCalls } = harness('stage-visit');
-    await turn('plantation in sakleshpur');
+    await turn('plantation in sakleshpur under 50 lakhs');
     await turn('tell me about Ayana');
     await turn('book a site visit for saturday morning');
     const yes = await turn('yes');

@@ -30,17 +30,18 @@ describe('AB-2 — type-respect search', () => {
 
   it('zero typed matches → honest propertyTypeGap naming type AND place, not a wrong-type list', async () => {
     const t = turn('ab2-gap', fakeDeps());
-    const r = await t('apartments in sakleshpur');
+    // Apartment brief needs BHK + budget for recommend/no_fit (catalog-stress).
+    const r = await t('2 BHK apartments in sakleshpur under 1 Cr');
     expect(r.debug.goal.kind).toBe('no_fit');
     expect(r.reply).toMatch(/No \*apartment\*/i);
     expect(r.reply).toMatch(/sakleshpur/i);
     // must not present the plantation as if it were the asked type
-    expect(r.reply).not.toMatch(/Here's what fits/);
+    expect(r.reply).not.toMatch(/Here's what fits|Here's what lines up/);
   });
 
   it('a named project still beats pending recovery chips (name beats filters)', async () => {
     const t = turn('ab2-name', fakeDeps());
-    await t('apartments in sakleshpur'); // honest no_fit leaves recovery chips pending
+    await t('2 BHK apartments in sakleshpur under 1 Cr'); // honest no_fit leaves recovery chips pending
     const r = await t('tell me about Ayana'); // must commit focus, not fall into the probe
     expect(r.debug.phase).toBe('focused');
   });

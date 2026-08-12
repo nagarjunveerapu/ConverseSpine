@@ -1640,8 +1640,14 @@ export function briefAckPrefix(c: Constraints | undefined): string {
 export function firstMissingProbeSlot(c: Constraints | undefined): ProbeKind | undefined {
   if (!c?.location?.trim()) return 'location';
   if (c.budgetMaxInr === undefined) return 'budget';
-  if (c.purpose !== 'investment' && !c.bhk) return 'bhk';
   if (!c.purpose && c.budgetMaxInr === undefined) return 'purpose';
+  // Align with discover: skip BHK for investment + non-apartment property types.
+  const needsBhk =
+    c.purpose !== 'investment' &&
+    (!c.propertyType?.trim() ||
+      /apartment|flat/i.test(c.propertyType) ||
+      !/(plantation|planted|estate|villa|plot|land|bungalow)/i.test(c.propertyType));
+  if (needsBhk && !c.bhk) return 'bhk';
   return undefined;
 }
 

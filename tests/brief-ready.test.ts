@@ -37,6 +37,48 @@ describe('isBriefReady', () => {
     ).toBe(true);
   });
 
+  it('plantation type alone is ready (no BHK ladder)', () => {
+    expect(isBriefReady({ propertyType: 'plantation' })).toBe(true);
+    expect(isBriefReady({ propertyType: 'villa' })).toBe(true);
+  });
+
+  it('plantation location without type or budget is not ready', () => {
+    expect(isBriefReady({ location: 'Sakleshpur' })).toBe(false);
+  });
+
+  it('plantation / villa with location + budget skip bhk', () => {
+    expect(
+      isBriefReady({
+        location: 'Sakleshpur',
+        budgetMaxInr: 5_000_000,
+        propertyType: 'plantation',
+      }),
+    ).toBe(true);
+  });
+
+  it('apartment still requires bhk', () => {
+    expect(
+      isBriefReady({
+        location: 'Whitefield',
+        budgetMaxInr: 15_000_000,
+        propertyType: 'apartment',
+      }),
+    ).toBe(false);
+  });
+
+  it('asked bhk waives size for apartment recovery', () => {
+    expect(
+      isBriefReady(
+        {
+          location: 'Coorg',
+          budgetMaxInr: 10_000_000,
+          propertyType: 'Apartment',
+        },
+        { asked: ['bhk'] },
+      ),
+    ).toBe(true);
+  });
+
   it('mergeConstraints unions extract onto state', () => {
     expect(
       isBriefReady(

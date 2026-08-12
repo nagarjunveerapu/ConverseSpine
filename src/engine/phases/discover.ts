@@ -50,10 +50,12 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
 
   // Fresh search board: brief-ready + empty shortlist beats embedder compare/visit noise.
   // propertyType / lone BHK is NOT enough — probe fulfillments first (catalog-stress).
+  const asked = s.discover.asked;
   const freshSearchBoard =
     currentShortlist(s).length === 0 &&
     !s.focus &&
-    (isBriefReady(s.constraints) || isBriefReady(mergeConstraints(s.constraints, ex.constraints)));
+    (isBriefReady(s.constraints, { asked }) ||
+      isBriefReady(mergeConstraints(s.constraints, ex.constraints), { asked }));
   if (
     freshSearchBoard &&
     (ex.speechAct === 'search' ||
@@ -137,7 +139,7 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // hallucinated PROJECT_VECTORS identity (empty shortlist / off-shortlist pick).
   if (
     ex.speechAct === 'search' &&
-    isBriefReady(mergeConstraints(s.constraints, ex.constraints))
+    isBriefReady(mergeConstraints(s.constraints, ex.constraints), { asked })
   ) {
     return { kind: 'recommend' };
   }
@@ -154,7 +156,7 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // Embedder namedProjects must not invent a visit/compare board here.
   // Partial brief (e.g. "apartment" only) falls through to the probe ladder.
   if (ex.transition === 'want_visit' || ex.speechAct === 'visit_book') {
-    const ready = isBriefReady(mergeConstraints(s.constraints, ex.constraints));
+    const ready = isBriefReady(mergeConstraints(s.constraints, ex.constraints), { asked });
     if (ready && currentShortlist(s).length === 0 && !s.focus) {
       return { kind: 'recommend' };
     }
@@ -169,18 +171,18 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   }
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom' };
 
-  if (ex.rejected && isBriefReady(s.constraints)) return { kind: 'ack_reject_recommend' };
-  if (ex.wantsMore && isBriefReady(s.constraints)) return { kind: 'recommend' };
+  if (ex.rejected && isBriefReady(s.constraints, { asked })) return { kind: 'ack_reject_recommend' };
+  if (ex.wantsMore && isBriefReady(s.constraints, { asked })) return { kind: 'recommend' };
   // P2: search + media/facet without a pick → recommend board (not clarify).
   if (
-    isBriefReady(s.constraints) &&
+    isBriefReady(s.constraints, { asked }) &&
     ((ex.askTopics ?? []).some((t) => t === 'media' || t === 'price' || t === 'legal') ||
       ex.askTopic === 'media' ||
       ex.askTopic === 'price')
   ) {
     return { kind: 'recommend' };
   }
-  if (isBriefReady(s.constraints)) return { kind: 'recommend' };
+  if (isBriefReady(s.constraints, { asked })) return { kind: 'recommend' };
 
   // Below-threshold guard. Everything above failed to route this turn, so the
   // engine does NOT understand the ask. The remaining fallbacks (greet, orient)
@@ -333,9 +335,15 @@ export function firstMissingSlot(s: ConversationState): ProbeKind | undefined {
   // an investor gets purpose first and no bhk probe (mirror of the advisor
   // brief's rule table; same branch axis, coherent ladders).
   if (!c.purpose && !c.budgetMaxInr && !asked.has('purpose')) return 'purpose';
-  // BHK is a brief-ready requirement for end-use (isBriefReady) — keep probing
-  // even after budget lands. Investment skips BHK.
-  if (c.purpose !== 'investment' && !c.bhk && !asked.has('bhk')) return 'bhk';
+  // BHK only for apartment / unspecified end-use — not plantation/plot/villa/investment.
+  if (
+    c.purpose !== 'investment' &&
+    propertyTypeNeedsBhk(c.propertyType) &&
+    !c.bhk &&
+    !asked.has('bhk')
+  ) {
+    return 'bhk';
+  }
   return undefined;
 }
 
@@ -349,13 +357,49 @@ export function hasNarrowingConstraint(c: Constraints): boolean {
 }
 
 /**
- * Brief-ready for recommend / board — location + budget + (bhk unless investment).
- * propertyType alone must NOT short-circuit to options (catalog-stress / sticky-clarify parity).
+ * Apartment / unspecified end-use needs BHK. Explicit non-apartment types
+ * (plantation / plot / villa / …) and investment do not.
  */
-export function isBriefReady(c: Constraints): boolean {
+export function propertyTypeNeedsBhk(propertyType?: string): boolean {
+  if (!propertyType?.trim()) return true;
+  const s = propertyType.toLowerCase();
+  if (s.includes('apartment') || s.includes('flat')) return true;
+  if (
+    s.includes('plantation') ||
+    s.includes('planted') ||
+    s.includes('estate') ||
+    s.includes('villa') ||
+    s.includes('plot') ||
+    s.includes('land') ||
+    s.includes('bungalow')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Brief-ready for recommend / board.
+ * - Apartment / unspecified: location + budget + (bhk, unless asked/waived or investment).
+ * - Non-apartment (plantation/plot/villa/…): explicit propertyType is enough (no BHK);
+ *   location+budget without type also works for typed-adjacent funnels.
+ * Bare apartment / propertyType-less partials must NOT short-circuit (catalog-stress).
+ */
+export function isBriefReady(
+  c: Constraints,
+  opts?: { asked?: readonly string[] },
+): boolean {
+  if (c.purpose === 'investment') {
+    return Boolean(c.location?.trim() && c.budgetMaxInr !== undefined);
+  }
+  if (!propertyTypeNeedsBhk(c.propertyType)) {
+    if (c.propertyType?.trim()) return true;
+    return Boolean(c.location?.trim() && c.budgetMaxInr !== undefined);
+  }
   if (!c.location?.trim() || c.budgetMaxInr === undefined) return false;
-  if (c.purpose === 'investment') return true;
-  return Boolean(c.bhk);
+  if (c.bhk) return true;
+  if (opts?.asked?.includes('bhk')) return true;
+  return false;
 }
 
 export function mergeConstraints(a: Constraints, b: Constraints): Constraints {

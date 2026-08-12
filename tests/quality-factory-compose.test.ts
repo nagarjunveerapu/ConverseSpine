@@ -24,6 +24,13 @@ describe('quality-factory compose helpers', () => {
     ).toBe('bhk');
     expect(
       firstMissingProbeSlot({
+        location: 'Sakleshpur',
+        budgetMaxInr: 5_000_000,
+        propertyType: 'plantation',
+      }),
+    ).toBeUndefined();
+    expect(
+      firstMissingProbeSlot({
         location: 'Coorg',
         budgetMaxInr: 5_000_000,
         purpose: 'investment',
