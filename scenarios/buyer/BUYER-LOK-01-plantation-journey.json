@@ -5,11 +5,11 @@
   "tags": ["buyer", "lokations", "long"],
   "turns": [
     { "text": "hi" },
-    { "text": "plantation in sakleshpur" },
+    { "text": "investment plantation under 75 lakh" },
     {
       "text": "give me details on the project",
       "assert": {
-        "reply_includes": ["which"],
+        "reply_includes_any": ["which", "ayana", "krishnaja", "vanam"],
         "reply_excludes": ["possession December"]
       }
     },

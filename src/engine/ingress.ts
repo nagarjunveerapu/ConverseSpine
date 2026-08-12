@@ -74,6 +74,15 @@ export interface ExtractProvenance {
   focus_held?: { intent: string; score: number; topic: string };
   /** Phase 0d pivot arbiter reason (post extract∥routing join). */
   pivot_arbiter?: string;
+  /**
+   * LLM gap-fill / intent-recovery fired — turn is eligible for teach/train review.
+   * Written into ledger resolved_intent for export queues.
+   */
+  train_eligible?: boolean;
+  train_sources?: Array<'baml' | 'extract_signals' | 'intent_recovery'>;
+  train_proposal?: Record<string, unknown>;
+  /** Intent-recovery telemetry (closed labels). */
+  intent_recovery?: import('./intent-recovery.js').IntentRecoveryReport;
 }
 
 export function markIngressBlocked(

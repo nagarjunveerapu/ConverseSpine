@@ -43,8 +43,8 @@ function reply(relaxed?: RelaxedDimension[]): string {
 describe('relaxed-filter honesty', () => {
   it('claims a fit only when nothing was relaxed', () => {
     const out = reply();
-    expect(out).toMatch(/Here's what fits/i);
-    expect(out).not.toMatch(/couldn't match/i);
+    expect(out).toMatch(/Here's what (?:fits|lines up)/i);
+    expect(out).not.toMatch(/couldn't match|Couldn't nail/i);
   });
 
   it.each([
@@ -53,8 +53,8 @@ describe('relaxed-filter honesty', () => {
     ['budget', /that budget/i],
   ] as const)('never claims a fit when %s was relaxed', (dim, phrase) => {
     const out = reply([dim as RelaxedDimension]);
-    expect(out).not.toMatch(/Here's what fits/i);
-    expect(out).toMatch(/couldn't match/i);
+    expect(out).not.toMatch(/Here's what (?:fits|lines up)/i);
+    expect(out).toMatch(/couldn't match|Couldn't nail/i);
     expect(out).toMatch(phrase);
     // still offers the real inventory rather than dead-ending
     expect(out).toMatch(/Brigade Orchards/);
@@ -64,7 +64,7 @@ describe('relaxed-filter honesty', () => {
     const out = reply(['area', 'size']);
     expect(out).toMatch(/that area/i);
     expect(out).toMatch(/that size/i);
-    expect(out).not.toMatch(/Here's what fits/i);
+    expect(out).not.toMatch(/Here's what (?:fits|lines up)/i);
   });
 
   it('never leaks the buyer raw value — dimensions only', () => {

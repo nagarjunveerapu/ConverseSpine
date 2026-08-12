@@ -1,0 +1,23 @@
+{
+  "id": "SIL-98-01",
+  "title": "SIL: bare/budget brief binds find_projects (not brochure vacuum)",
+  "builder_id": "brigade-group",
+  "tags": ["sil", "precision", "search"],
+  "turns": [
+    { "text": "hi" },
+    {
+      "text": "70L",
+      "assert": {
+        "sil_top_kind": "find_projects",
+        "reply_excludes": ["brochure"]
+      }
+    },
+    {
+      "text": "budget is tight, 60 lakhs max",
+      "assert": {
+        "sil_top_kind": "find_projects",
+        "goal_kind_not": "clarify_project_pick"
+      }
+    }
+  ]
+}

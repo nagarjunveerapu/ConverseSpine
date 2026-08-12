@@ -459,7 +459,7 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
 
     const script = [
       'hi',
-      'plantation in sakleshpur',
+      'plantation in sakleshpur under 50 lakhs',
       'tell me about ayana',
       'pricing?',
       'what about the other one',

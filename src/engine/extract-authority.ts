@@ -10,6 +10,12 @@ import type { SemanticNluPort } from './adapters/semantic-nlu.js';
 import type { EngineLlm } from './ports.js';
 import { currentShortlist, discussedList } from './entity-store.js';
 import {
+  applyIntentRecovery,
+  needsIntentRecovery,
+  type IntentRecoveryMode,
+  type IntentRecoveryReport,
+} from './intent-recovery.js';
+import {
   buildBamlExtractInput,
   buildBamlShadowReport,
   looksLikeSearchBrief,
@@ -18,6 +24,7 @@ import {
   type BamlExtractMode,
   type BamlExtractResult,
 } from './extract-baml.js';
+import { applyPriceObjectionAuthority } from './price-objection.js';
 import {
   extractFacts,
   isConstraintRefinementTurn,
@@ -66,12 +73,21 @@ export interface ExtractTurnDeps {
   /** P6 — optional ExtractTurnFacts caller (tests inject fakes). */
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<BamlExtractResult | null>;
   bamlMode?: BamlExtractMode;
+  /** Intent recovery after BAML/slot abstain. */
+  intentRecover?: (input: {
+    text: string;
+    phase: string;
+    focusName?: string;
+  }) => Promise<import('./intent-recovery.js').IntentRecoveryResult | null>;
+  intentRecoveryMode?: import('./intent-recovery.js').IntentRecoveryMode;
   failureTools?: boolean;
   /**
    * Multi-intent Phase A — when true, topic merges UNION into askTopics (cap 3)
    * instead of empty-only fill. Behind TOPIC_UNION; not behaviour-neutral.
    */
   topicUnion?: boolean;
+  /** Defer shadow BAML / train off the sync path. */
+  waitUntil?: (p: Promise<unknown>) => void;
 }
 
 export interface ExtractTurnOptions {
@@ -231,55 +247,141 @@ export async function extractTurnAuthority(
     provenance.fields.namedProjects = 'embedder';
   }
 
+  // Intent-before-slots: evaluative price cues beat topic fills (BAML/embed).
+  {
+    const before = merged;
+    merged = applyPriceObjectionAuthority(merged, text);
+    if (merged.objection && !before.objection) {
+      provenance.fields.objection = 'regex';
+      provenance.fields.speechAct = provenance.fields.speechAct ?? 'chip_resolve';
+    }
+  }
+
   // P6: typed ExtractTurnFacts after embedder abstain — shadow by default.
+  // Skip promote when objection already latched (slots must not override intent).
   const bamlMode = deps.bamlMode ?? 'off';
-  if (bamlMode !== 'off' && needsBamlGapFill(merged, text, chipResolution) && deps.bamlExtract) {
-    const proposal = await deps.bamlExtract(
-      buildBamlExtractInput(text, state.phase, merged, state.focus?.projectName),
-    ).catch(() => null);
-    const report = buildBamlShadowReport(bamlMode, merged, proposal);
-    provenance.baml = report;
-    if (bamlMode === 'promote' && proposal?.confidence === 'llm') {
-      const searchBrief = looksLikeSearchBrief(text);
-      let promoted = stampSpeechAct(
-        applySpeechActPermissions(
-          mergeBamlGapFill(merged, proposal, { topicUnion: deps.topicUnion === true }),
+  if (
+    bamlMode !== 'off' &&
+    !merged.objection &&
+    needsBamlGapFill(merged, text, chipResolution) &&
+    deps.bamlExtract
+  ) {
+    // Hybrid dig: shadow BAML must not block the buyer (DeepSeek RTT).
+    if (bamlMode === 'shadow') {
+      const runShadow = async () => {
+        const proposal = await deps.bamlExtract!(
+          buildBamlExtractInput(text, state.phase, merged, state.focus?.projectName),
+        ).catch(() => null);
+        provenance.baml = buildBamlShadowReport(bamlMode, merged, proposal);
+      };
+      if (deps.waitUntil) deps.waitUntil(runShadow());
+      else await runShadow();
+    } else {
+      const proposal = await deps.bamlExtract(
+        buildBamlExtractInput(text, state.phase, merged, state.focus?.projectName),
+      ).catch(() => null);
+      const report = buildBamlShadowReport(bamlMode, merged, proposal);
+      provenance.baml = report;
+      if (bamlMode === 'promote' && proposal?.confidence === 'llm') {
+        const searchBrief = looksLikeSearchBrief(text);
+        let promoted = stampSpeechAct(
+          applySpeechActPermissions(
+            mergeBamlGapFill(merged, proposal, { topicUnion: deps.topicUnion === true }),
+            chipResolution,
+          ),
           chipResolution,
-        ),
-        chipResolution,
-      );
-      promoted = scrubEmbedderIdentityNoise(text, state.phase, promoted, [
-        ...currentShortlist(state),
-        ...discussedList(state),
-        ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
-      ], deps.catalogNames ?? []);
-      if (isConstraintRefinementTurn(text) && !promoted.namedProjects?.length && !promoted.pickName) {
-        promoted = { ...promoted, speechAct: 'search' };
+        );
+        promoted = scrubEmbedderIdentityNoise(text, state.phase, promoted, [
+          ...currentShortlist(state),
+          ...discussedList(state),
+          ...(state.focus ? [{ projectId: state.focus.projectId, name: state.focus.projectName }] : []),
+        ], deps.catalogNames ?? []);
+        if (isConstraintRefinementTurn(text) && !promoted.namedProjects?.length && !promoted.pickName) {
+          promoted = { ...promoted, speechAct: 'search' };
+        }
+        // Location correction: prefer regex/extracted location over BAML inventing a project.
+        if (isLocationCorrectionTurn(text) && merged.constraints.location) {
+          promoted = {
+            ...promoted,
+            constraints: { ...promoted.constraints, location: merged.constraints.location },
+          };
+        }
+        for (const field of report.would_fill) {
+          provenance.fields[field] = 'baml';
+        }
+        // Free-text promote may overwrite disagreed locality (polluted regex → BAML).
+        if (
+          proposal.location &&
+          promoted.constraints.location?.toLowerCase() === proposal.location.toLowerCase() &&
+          merged.constraints.location?.toLowerCase() !== proposal.location.toLowerCase()
+        ) {
+          provenance.fields.location = 'baml';
+        }
+        // P2: search briefs are search acts so discover recommends (not facet clarify).
+        if (searchBrief && (promoted.speechAct === 'unknown' || !promoted.speechAct)) {
+          promoted = { ...promoted, speechAct: 'search' };
+          provenance.fields.speechAct = 'baml';
+        }
+        // Intent-before-slots after BAML merge (mehengaa / bit expensive ≠ price FAQ).
+        promoted = applyPriceObjectionAuthority(promoted, text);
+        if (promoted.objection) {
+          provenance.fields.objection = provenance.fields.objection ?? 'regex';
+        }
+        return { extracted: promoted, provenance, chipResolution };
       }
-      // Location correction: prefer regex/extracted location over BAML inventing a project.
-      if (isLocationCorrectionTurn(text) && merged.constraints.location) {
-        promoted = {
-          ...promoted,
-          constraints: { ...promoted.constraints, location: merged.constraints.location },
-        };
+    }
+  }
+
+  // Intent recovery — paid closed-label pass when slots/topics still empty.
+  const recoveryMode: IntentRecoveryMode = deps.intentRecoveryMode ?? 'off';
+  if (
+    recoveryMode !== 'off' &&
+    deps.intentRecover &&
+    needsIntentRecovery(merged, text)
+  ) {
+    const proposal = await deps
+      .intentRecover({
+        text,
+        phase: state.phase,
+        ...(state.focus?.projectName ? { focusName: state.focus.projectName } : {}),
+      })
+      .catch(() => null);
+    const report: IntentRecoveryReport = {
+      mode: recoveryMode,
+      called: true,
+      labels: proposal?.labels ?? [],
+      confidence: proposal?.confidence ?? 'abstain',
+      ...(proposal?.abstainReason ? { abstain_reason: proposal.abstainReason } : {}),
+      train_eligible: true,
+    };
+    provenance.intent_recovery = report;
+    provenance.train_eligible = true;
+    provenance.train_sources = [...(provenance.train_sources ?? []), 'intent_recovery'];
+    provenance.train_proposal = {
+      text: text.slice(0, 240),
+      labels: report.labels,
+      confidence: report.confidence,
+      phase: state.phase,
+    };
+    if (recoveryMode === 'promote' && proposal?.confidence === 'llm' && proposal.labels.length) {
+      const recovered = applyIntentRecovery(merged, proposal);
+      for (const label of proposal.labels) {
+        provenance.fields[`recovery:${label}`] = 'llm';
       }
-      for (const field of report.would_fill) {
-        provenance.fields[field] = 'baml';
-      }
-      // Free-text promote may overwrite disagreed locality (polluted regex → BAML).
-      if (
-        proposal.location &&
-        promoted.constraints.location?.toLowerCase() === proposal.location.toLowerCase() &&
-        merged.constraints.location?.toLowerCase() !== proposal.location.toLowerCase()
-      ) {
-        provenance.fields.location = 'baml';
-      }
-      // P2: search briefs are search acts so discover recommends (not facet clarify).
-      if (searchBrief && (promoted.speechAct === 'unknown' || !promoted.speechAct)) {
-        promoted = { ...promoted, speechAct: 'search' };
-        provenance.fields.speechAct = 'baml';
-      }
-      return { extracted: promoted, provenance, chipResolution };
+      return { extracted: recovered, provenance, chipResolution };
+    }
+  }
+
+  // BAML call (even abstain) is train-eligible — human review of gap-fill.
+  if (provenance.baml?.called) {
+    provenance.train_eligible = true;
+    provenance.train_sources = [...new Set([...(provenance.train_sources ?? []), 'baml' as const])];
+    if (!provenance.train_proposal) {
+      provenance.train_proposal = {
+        text: text.slice(0, 240),
+        baml: provenance.baml,
+        phase: state.phase,
+      };
     }
   }
 

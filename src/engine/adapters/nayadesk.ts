@@ -22,6 +22,13 @@ import {
   mapVisitLogisticsFromProject,
 } from '../market-intel.js';
 import { uniqueMediaKinds } from '../media-asset.js';
+import {
+  getSearchMemo,
+  hashConstraints,
+  putSearchMemo,
+  putSegmentCard,
+  type CacheStats,
+} from '../../cache/turn-cache.js';
 
 /** Conversation context is Desk-focus-scoped — never use it for another project's identity. */
 function ctxForProject(
@@ -216,17 +223,77 @@ export function mapLocationIntel(raw: NdLocationIntelRow | null | undefined) {
 
 export function nayadeskData(
   crm: NayaDeskClient,
-  env?: Pick<import('../../env.js').Env, 'AI' | 'EDUCATION_VECTORS' | 'SIL_EMBED_MODEL'>,
+  env?: Pick<
+    import('../../env.js').Env,
+    'AI' | 'EDUCATION_VECTORS' | 'SIL_EMBED_MODEL' | 'TURN_CACHE'
+  > & { cacheStats?: CacheStats },
 ): EngineData {
+  const kv = env?.TURN_CACHE;
+  const stats = env?.cacheStats;
   return {
     async search(builderId, filters) {
+      const locations = filters.locations ? splitCsv(filters.locations) : undefined;
+      const projectTypes = filters.projectTypes ? splitCsv(filters.projectTypes) : undefined;
+      // Soft-rank prefs must not share hard-constraint memo. conversation_id alone
+      // (BPE fallback) is still hard-constraint searchable — keep L4 eligible.
+      const softRank = Boolean(
+        filters.commuteHub ||
+          (filters.preferenceWeights &&
+            Object.values(filters.preferenceWeights).some((v) => typeof v === 'number' && v > 0)),
+      );
+      const constraintHash = hashConstraints({
+        budgetMin: filters.budgetMinInr ?? null,
+        budgetMax: filters.budgetMaxInr ?? null,
+        locations: locations ?? null,
+        bhks: filters.bhks ?? null,
+        projectTypes: projectTypes ?? null,
+        purpose: filters.purpose ?? null,
+        searchText: filters.searchText ?? null,
+        max: filters.maxResults ?? 5,
+      });
+      // L4 — hard-constraint search memo (skip when soft-rank / conversation prefs).
+      if (!softRank) {
+        const memo = await getSearchMemo(kv, builderId, constraintHash);
+        if (memo?.matches) {
+          if (stats) {
+            stats.search = 'hit';
+            if (locations?.[0]) stats.seg = 'hit';
+          }
+          const area = locations?.[0];
+          if (area) {
+            void putSegmentCard(kv, {
+              builderId,
+              areaNorm: area.trim().toLowerCase(),
+              propertyType: (projectTypes?.[0] || 'any').toLowerCase(),
+              projects: memo.matches.slice(0, 8).map((m) => ({
+                projectId: m.project_id,
+                name: m.name,
+                microMarket: m.micro_market,
+                fromPriceDisplay: m.starting_price_display,
+              })),
+            });
+          }
+          return {
+            matches: memo.matches,
+            expandedLocations: memo.expandedLocations ?? [],
+            ...(Array.isArray(memo.recognizedLocations)
+              ? { recognizedLocations: memo.recognizedLocations }
+              : {}),
+            noMatchReasoning: memo.noMatchReasoning ?? '',
+          };
+        }
+        if (stats) stats.search = 'miss';
+      } else if (stats) {
+        stats.search = 'skip';
+      }
+
       const resp = await crm.searchProjects({
         builder_id: builderId,
         budget_min_inr: filters.budgetMinInr,
         budget_max_inr: filters.budgetMaxInr,
-        locations: filters.locations ? splitCsv(filters.locations) : undefined,
+        locations,
         bhks: filters.bhks ? splitCsv(filters.bhks) : undefined,
-        project_types: filters.projectTypes ? splitCsv(filters.projectTypes) : undefined,
+        project_types: projectTypes,
         purpose: filters.purpose,
         ...(filters.searchText ? { search_text: filters.searchText } : {}),
         ...(filters.conversationId ? { conversation_id: filters.conversationId } : {}),
@@ -236,19 +303,20 @@ export function nayadeskData(
         ...(filters.askSizeSqft ? { ask_size_sqft: filters.askSizeSqft } : {}),
         max_results: filters.maxResults ?? 5,
       });
-      return {
-        matches: resp.matches.map((m) => ({
-          project_id: m.project_id,
-          name: m.name,
-          micro_market: m.micro_market,
-          starting_price_inr: m.starting_price_inr,
-          starting_price_display: m.starting_price_display,
-          match_reasons: m.match_reasons,
-          project_type: m.project_type,
-          ...(m.tradeoff_note ? { tradeoff_note: m.tradeoff_note } : {}),
-          ...(m.dimension_fit ? { dimension_fit: m.dimension_fit } : {}),
-          ...(m.dimension_gap ? { dimension_gap: m.dimension_gap } : {}),
-        })),
+      const matches = resp.matches.map((m) => ({
+        project_id: m.project_id,
+        name: m.name,
+        micro_market: m.micro_market,
+        starting_price_inr: m.starting_price_inr,
+        starting_price_display: m.starting_price_display,
+        match_reasons: m.match_reasons,
+        project_type: m.project_type,
+        ...(m.tradeoff_note ? { tradeoff_note: m.tradeoff_note } : {}),
+        ...(m.dimension_fit ? { dimension_fit: m.dimension_fit } : {}),
+        ...(m.dimension_gap ? { dimension_gap: m.dimension_gap } : {}),
+      }));
+      const result = {
+        matches,
         expandedLocations: resp.expanded_locations ?? [],
         // null (no locations sent) and missing (old Desk) both map to
         // undefined — only a real array may trigger the junk-locality drop.
@@ -257,25 +325,66 @@ export function nayadeskData(
           : {}),
         noMatchReasoning: resp.no_match_reasoning ?? '',
       };
+      if (!softRank) {
+        await putSearchMemo(kv, builderId, constraintHash, {
+          matches,
+          expandedLocations: result.expandedLocations,
+          recognizedLocations: Array.isArray(resp.recognized_locations)
+            ? resp.recognized_locations
+            : null,
+          noMatchReasoning: result.noMatchReasoning,
+        });
+        const area = locations?.[0];
+        if (area && matches.length) {
+          await putSegmentCard(kv, {
+            builderId,
+            areaNorm: area.trim().toLowerCase(),
+            propertyType: (projectTypes?.[0] || 'any').toLowerCase(),
+            projects: matches.slice(0, 8).map((m) => ({
+              projectId: m.project_id,
+              name: m.name,
+              microMarket: m.micro_market,
+              fromPriceDisplay: m.starting_price_display,
+            })),
+          });
+        }
+      }
+      return result;
     },
 
     async catalog(builderId) {
-      const resp = await crm.searchProjects({ builder_id: builderId, max_results: 50 });
-      const prices = resp.matches.map((m) => m.starting_price_inr).filter((p) => p > 0);
-      const servedCities = Array.isArray(resp.served_cities)
-        ? resp.served_cities.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
-        : [];
+      const constraintHash = hashConstraints({ catalog: true, max: 50 });
+      const memo = await getSearchMemo(kv, builderId, constraintHash);
+      let matches = memo?.matches;
+      let servedCities: string[] = [];
+      if (!matches) {
+        const resp = await crm.searchProjects({ builder_id: builderId, max_results: 50 });
+        matches = resp.matches.map((m) => ({
+          project_id: m.project_id,
+          name: m.name,
+          micro_market: m.micro_market,
+          starting_price_inr: m.starting_price_inr,
+          starting_price_display: m.starting_price_display,
+          match_reasons: m.match_reasons,
+          project_type: m.project_type,
+        }));
+        servedCities = Array.isArray(resp.served_cities)
+          ? resp.served_cities.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+          : [];
+        void putSearchMemo(kv, builderId, constraintHash, { matches });
+      }
+      const prices = matches.map((m) => m.starting_price_inr).filter((p) => p > 0);
       return {
         priceMinInr: prices.length ? Math.min(...prices) : 0,
         priceMaxInr: prices.length ? Math.max(...prices) : 0,
-        projectTypes: [...new Set(resp.matches.map((m) => m.project_type ?? 'project'))],
-        microMarkets: [...new Set(resp.matches.map((m) => m.micro_market))],
+        projectTypes: [...new Set(matches.map((m) => m.project_type ?? 'project'))],
+        microMarkets: [...new Set(matches.map((m) => m.micro_market))],
         // Free — these rows are already in hand. The name resolvers need the
         // full set to judge which words name exactly one project.
-        projectNames: resp.matches.map((m) => ({ projectId: m.project_id, name: m.name })),
+        projectNames: matches.map((m) => ({ projectId: m.project_id, name: m.name })),
         ...(servedCities.length ? { servedCities } : {}),
-        total: resp.matches.length,
-        sample: resp.matches.slice(0, 10).map((m) => ({
+        total: matches.length,
+        sample: matches.slice(0, 10).map((m) => ({
           name: m.name,
           startingPriceDisplay: m.starting_price_display || formatInr(m.starting_price_inr),
         })),
@@ -296,23 +405,24 @@ export function nayadeskData(
 
     async projectDetail(_builderId, nd, projectId) {
       const t0 = Date.now();
-      let ctxTransport: unknown | undefined;
-      try {
-        // LI: context only when Desk conversation is focused; project GET can omit
-        // the sibling under some bindings — also pull /api/admin/location (Desk truth).
-        const [ctx, fullProject, liRow] = await Promise.all([
-          crm.conversationContext(nd),
-          crm.getProject(projectId).catch(() => null),
-          crm.getLocationIntelligence(projectId).catch(() => null),
-        ]);
-        const p = ctx.project;
-        if (p && p.project_id === projectId) {
+      // Isolate failures — a throwing conversationContext used to reject the
+      // whole Promise.all and drop a successful getProject, forcing identityOnly
+      // shells that poisoned L2 (proj miss every focused turn on dig).
+      const [ctx, fullProject, liRow] = await Promise.all([
+        crm.conversationContext(nd).catch(() => null),
+        crm.getProject(projectId).catch(() => null),
+        crm.getLocationIntelligence(projectId).catch(() => null),
+      ]);
+
+      const p = ctx?.project;
+      if (p && p.project_id === projectId) {
+        try {
           // STRUCTURAL INVARIANT (over-answer fix): detail.faqs means "the FAQ
           // answers matched to THIS question" and fetchAnswer is its ONLY
           // writer (topic-keyed faqLookup hits). The adapter must never ship
           // the whole catalog here — that's what turned "tell me about X"
           // into a 600-word dump of every FAQ.
-          const configurations = (ctx.units ?? [])
+          const configurations = (ctx!.units ?? [])
             .map((u) => ({
               unitType: u.unit_type ?? '',
               priceDisplay: u.price_display ?? (u.price_min_paise ? formatInr(Math.round(u.price_min_paise / 100)) : ''),
@@ -325,16 +435,16 @@ export function nayadeskData(
             .filter((u) => u.unitType);
           // W7 — one buyer-ready phase caveat from the journey composer output
           // (pre-RERA phases can hold/EOI but not book).
-          const phaseNote = phaseNoteFrom(ctx.phase_journeys);
-          const phaseMapped = mapPhasesFromJourneys(ctx.phase_journeys);
-          const mediaKinds = uniqueMediaKinds(ctx.media);
+          const phaseNote = phaseNoteFrom(ctx!.phase_journeys);
+          const phaseMapped = mapPhasesFromJourneys(ctx!.phase_journeys);
+          const mediaKinds = uniqueMediaKinds(ctx!.media);
           const location =
             mapLocationIntel(liRow) ??
             mapLocationIntel(fullProject?.location_intelligence) ??
-            mapLocationIntel(ctx.location_intelligence);
+            mapLocationIntel(ctx!.location_intelligence);
           const marketIntel = await resolveMarketIntel(
             crm,
-            ctx.market_intel ?? fullProject?.market_intel,
+            ctx!.market_intel ?? fullProject?.market_intel,
             p.micro_market || fullProject?.micro_market || '',
           );
           const extras = catalogExtras(p);
@@ -369,40 +479,42 @@ export function nayadeskData(
             },
             Date.now() - t0,
           );
+        } catch {
+          /* fall through — prefer catalog GET over identityOnly poison */
         }
-      } catch (err) {
-        ctxTransport = err;
-        /* fall through to getProject */
+      }
+
+      const catalog = fullProject ?? (await crm.getProject(projectId).catch(() => null));
+      if (!catalog) {
+        return dataAbsent(Date.now() - t0);
       }
       try {
-        const [p, liRow] = await Promise.all([
-          crm.getProject(projectId),
-          crm.getLocationIntelligence(projectId).catch(() => null),
-        ]);
         // S1 — LI ships on the project GET too, so location answers work even
         // when conversation context is unavailable (e.g. advisor-door sessions
         // whose Desk conversation row differs from the engine's nd).
         const location =
-          mapLocationIntel(liRow) ?? mapLocationIntel(p.location_intelligence);
-        const marketIntel = await resolveMarketIntel(crm, p.market_intel, p.micro_market);
-        const extras = catalogExtras(p);
+          mapLocationIntel(liRow) ?? mapLocationIntel(catalog.location_intelligence);
+        const marketIntel = await resolveMarketIntel(crm, catalog.market_intel, catalog.micro_market);
+        const extras = catalogExtras(catalog);
         return dataOk(
           {
-            projectId: p.project_id,
-            name: p.name,
-            microMarket: p.micro_market,
-            summary: p.summary,
-            reraNumber: p.rera_number,
-            possession: p.possession_date ? formatPossession(formatYearMonth(p.possession_date)) : undefined,
-            projectType: p.project_type,
+            projectId: catalog.project_id,
+            name: catalog.name,
+            microMarket: catalog.micro_market,
+            summary: catalog.summary,
+            reraNumber: catalog.rera_number,
+            possession: catalog.possession_date
+              ? formatPossession(formatYearMonth(catalog.possession_date))
+              : undefined,
+            projectType: catalog.project_type,
             // One price policy: route the band through the shared helper (no config
             // prices in this fallback branch, so it renders the band) instead of
             // emitting the raw band directly. Audit P0.2.
-            startingPriceDisplay: startingPriceDisplayFrom([], p.entry_price_band),
-            khata: p.khata_type,
-            naStatus: p.na_status,
-            ecStatus: p.ec_status,
-            loanEligibility: p.loan_eligibility,
+            startingPriceDisplay: startingPriceDisplayFrom([], catalog.entry_price_band),
+            khata: catalog.khata_type,
+            naStatus: catalog.na_status,
+            ecStatus: catalog.ec_status,
+            loanEligibility: catalog.loan_eligibility,
             ...(location ? { location } : {}),
             ...extras,
             ...(marketIntel ? { marketIntel } : {}),
@@ -410,8 +522,7 @@ export function nayadeskData(
           Date.now() - t0,
         );
       } catch (err) {
-        // Prefer the getProject failure; if both failed, report transport.
-        return dataFail(err ?? ctxTransport, Date.now() - t0);
+        return dataFail(err, Date.now() - t0);
       }
     },
 

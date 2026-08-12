@@ -4,6 +4,11 @@ import { makeEngineLlm } from '../engine/adapters/llm.js';
 import { makeSemanticNlu } from '../engine/adapters/semantic-nlu.js';
 import { nayadeskCrm, nayadeskData } from '../engine/adapters/nayadesk.js';
 import { extractTurnFactsBaml, resolveBamlExtractMode } from '../engine/extract-baml.js';
+import { llmRateTarget, resolveHybridMode } from '../engine/hybrid.js';
+import {
+  recoverIntentWithEnv,
+  resolveIntentRecoveryMode,
+} from '../engine/intent-recovery.js';
 import { runEngineTurn } from '../engine/turn.js';
 import { kvStore } from '../engine/store-kv.js';
 import type { EngineDeps } from '../engine/ports.js';
@@ -11,6 +16,19 @@ import { LangfuseTracer } from '../observability/langfuse.js';
 import { emitLocalTurnLog, localTurnLogEnabled } from '../observability/local-turn-log.js';
 import { classifyTurnIntent } from '../engine/turn-intent/classify.js';
 import { engineDepsWithRuntimeFlags } from './failure-flags.js';
+
+function resolveSyncBamlMode(env: Env): import('../engine/extract-baml.js').BamlExtractMode {
+  const hybrid = resolveHybridMode(env);
+  const sync = (env.SYNC_BAML_MODE ?? '').trim().toLowerCase();
+  if (sync === 'off' || sync === 'shadow' || sync === 'promote') {
+    return sync;
+  }
+  // Hybrid default: shadow BAML (train signal, no slot override). Floor→shadow.
+  if (hybrid === 'on' && (sync === '' || sync === 'floor')) {
+    return 'shadow';
+  }
+  return resolveBamlExtractMode(env);
+}
 
 /** ConverseEngine runtime — wires NayaDesk + KV state + LLM compose. */
 export class ConverseRuntime {
@@ -21,17 +39,27 @@ export class ConverseRuntime {
   constructor(readonly env: Env) {
     this.crm = new NayaDeskClient(env);
     this.trace = new LangfuseTracer(env);
-    const bamlMode = resolveBamlExtractMode(env);
+    const bamlMode = resolveSyncBamlMode(env);
+    const intentRecoveryMode = resolveIntentRecoveryMode(env);
+    const hybridMode = resolveHybridMode(env);
+    const cacheStats: import('../cache/turn-cache.js').CacheStats = {};
     this.engine = {
       data: nayadeskData(this.crm, {
         AI: env.AI,
         EDUCATION_VECTORS: env.EDUCATION_VECTORS,
         SIL_EMBED_MODEL: env.SIL_EMBED_MODEL,
+        TURN_CACHE: env.TURN_CACHE,
+        cacheStats,
       }),
       llm: makeEngineLlm(env),
       semantic: makeSemanticNlu(env),
       crm: nayadeskCrm(this.crm, { understandingCapture: env.UNDERSTANDING_CAPTURE === 'true' }),
-      store: kvStore(env.TURN_CACHE),
+      store: kvStore(env.TURN_CACHE, env.TURN_DEBOUNCER),
+      turnCache: env.TURN_CACHE,
+      projectEtag: (projectId) =>
+        this.crm.projectEtag(projectId).catch(() => null),
+      cacheStats,
+      projectCardMemo: new Map(),
       clock: {
         nowMs: () => Date.now(),
         nowIso: () => new Date().toISOString(),
@@ -39,6 +67,8 @@ export class ConverseRuntime {
       turnIntent: {
         classify: (input) => classifyTurnIntent(env, input),
       },
+      hybridMode,
+      ...(hybridMode === 'on' ? { llmRateTarget: llmRateTarget(env) } : {}),
       maps: env.GOOGLE_PLACES_API_KEY ? { apiKey: env.GOOGLE_PLACES_API_KEY } : undefined,
       // Forward the WHOLE intent-layer config, not just the bindings. This
       // Pick used to be {AI, INTENT_VECTORS} only, which silently dropped
@@ -56,12 +86,21 @@ export class ConverseRuntime {
               SIL_ROUTING_TAU: env.SIL_ROUTING_TAU,
               SIL_EMBED_FIRST: env.SIL_EMBED_FIRST,
               FAILURE_ROUTING: env.FAILURE_ROUTING,
+              TURN_CACHE: env.TURN_CACHE,
+              // debug bag — classify may stamp emb hit/miss
+              ...(cacheStats ? { cacheStats } : {}),
             }
           : undefined,
       ...(bamlMode !== 'off'
         ? {
             bamlMode,
             bamlExtract: (input) => extractTurnFactsBaml(env, input),
+          }
+        : {}),
+      ...(intentRecoveryMode !== 'off'
+        ? {
+            intentRecoveryMode,
+            intentRecover: (input) => recoverIntentWithEnv(env, input),
           }
         : {}),
       ...(env.FAILURE_LOG === 'true' ? { failureLog: true } : {}),
@@ -87,7 +126,26 @@ export class ConverseRuntime {
 
   /** Per-turn deps with KV force-off overlay for Failure flags (kill without redeploy). */
   async engineForTurn(): Promise<EngineDeps> {
-    return engineDepsWithRuntimeFlags(this.env, this.engine);
+    const base = await engineDepsWithRuntimeFlags(this.env, this.engine);
+    // Fresh memo + stats every turn — warm isolates reuse ConverseRuntime and a
+    // shared projectCardMemo was cross-chat poisoning L2 hit/miss + thinning
+    // overview when a stub card lingered from another conversation.
+    const cacheStats: import('../cache/turn-cache.js').CacheStats = {};
+    return {
+      ...base,
+      cacheStats,
+      projectCardMemo: new Map(),
+      data: nayadeskData(this.crm, {
+        AI: this.env.AI,
+        EDUCATION_VECTORS: this.env.EDUCATION_VECTORS,
+        SIL_EMBED_MODEL: this.env.SIL_EMBED_MODEL,
+        TURN_CACHE: this.env.TURN_CACHE,
+        cacheStats,
+      }),
+      ...(base.routingEnv
+        ? { routingEnv: { ...base.routingEnv, cacheStats } }
+        : {}),
+    };
   }
 }
 

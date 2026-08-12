@@ -1,0 +1,44 @@
+{
+  "id": "SIL-98-02",
+  "title": "SIL: maintenance charges \u2192 get_price bind (not amenities)",
+  "builder_id": "brigade-group",
+  "tags": [
+    "sil",
+    "precision",
+    "price"
+  ],
+  "turns": [
+    {
+      "text": "hi"
+    },
+    {
+      "text": "2 BHK apartment in North Bangalore under 1.5 Cr"
+    },
+    {
+      "text": "Brigade Eldorado",
+      "assert": {
+        "reply_includes": [
+          "eldorado"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
+    },
+    {
+      "text": "what are the maintenance charges?",
+      "assert": {
+        "sil_top_kind": "get_price",
+        "reply_excludes": [
+          "which one should I open",
+          "amenities list"
+        ]
+      }
+    }
+  ]
+}

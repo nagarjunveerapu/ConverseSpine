@@ -176,7 +176,12 @@ describe('P2 multi-act + P3 soft prefs', () => {
   it('search + want_visit without named project → recommend first', () => {
     const s = {
       ...initState('c1', 'brigade-group'),
-      constraints: { location: 'North Bangalore', budgetMaxInr: 15_000_000, propertyType: 'apartment' },
+      constraints: {
+        location: 'North Bangalore',
+        budgetMaxInr: 15_000_000,
+        propertyType: 'apartment',
+        bhk: '3 BHK',
+      },
       turnCount: 1,
       discover: { ...initState('c1', 'brigade-group').discover, oriented: true },
     };
@@ -191,7 +196,12 @@ describe('P2 multi-act + P3 soft prefs', () => {
   it('search + want_visit with embedder namedProjects on empty board → recommend', () => {
     const s = {
       ...initState('c1', 'brigade-group'),
-      constraints: { location: 'North Bangalore', budgetMaxInr: 15_000_000, propertyType: 'apartment' },
+      constraints: {
+        location: 'North Bangalore',
+        budgetMaxInr: 15_000_000,
+        propertyType: 'apartment',
+        bhk: '3 BHK',
+      },
       turnCount: 1,
       discover: { ...initState('c1', 'brigade-group').discover, oriented: true },
     };

@@ -96,6 +96,11 @@ export async function runTurn(
       ...(result.debug.extract_provenance
         ? { extract_provenance: result.debug.extract_provenance }
         : {}),
+      ...(result.debug.timings ? { timings: result.debug.timings } : {}),
+      ...(result.debug.cache ? { cache: result.debug.cache } : {}),
+      ...(result.debug.llm_used != null ? { llm_used: result.debug.llm_used } : {}),
+      ...(result.debug.llm_shed ? { llm_shed: true } : {}),
+      ...(result.debug.compose_template ? { compose_template: true } : {}),
     },
   };
 }

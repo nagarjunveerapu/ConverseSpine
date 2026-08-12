@@ -35,7 +35,7 @@ describe('W3 repeat guard', () => {
         { convId: 'rg-1', builderId: 'lokations', text, buyerPhone: '+919999999996', channel: 'advisor_web' },
         deps,
       );
-    await turn('plantation in sakleshpur');
+    await turn('plantation in sakleshpur under 50 lakhs');
     await turn('tell me about Ayana');
     // Two bare affirms → two 'advance' goals (LLM-composed, not template-locked).
     const first = await turn('ok');

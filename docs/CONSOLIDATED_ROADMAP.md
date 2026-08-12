@@ -5,7 +5,7 @@ Single sequencing doc merging: **Phase 0 fixes**, **Advisor Phase 1 (focused dep
 **Rule:** Design review + explicit **go implement** per phase ([`discuss-before-implement`](../../Naya/.cursor/rules/discuss-before-implement.mdc)).  
 **Quality:** Turn-by-turn golden threads; pass count alone is insufficient ([`no-quality-regression`](../../Naya/.cursor/rules/no-quality-regression.mdc)).
 
-**Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
+**Related docs:** [`CONVERSESPINE_LAYER_GUIDE.md`](./CONVERSESPINE_LAYER_GUIDE.md) · [`CONVERSESPINE_ARCHITECTURE.md`](./CONVERSESPINE_ARCHITECTURE.md) · [`QUALITY_FACTORY_PLAN.md`](./QUALITY_FACTORY_PLAN.md) (chat → ~9/10 dual-gate) · Naya [`docs/lld/README.md`](../../Naya/docs/lld/README.md)
 
 > **⚠ One line here is now wrong, and it matters.** "WhatsApp cutover deferred — Meta still on
 > Naya" is no longer true: the Spine owns the webhook (`src/webhook/whatsapp.ts` — signature

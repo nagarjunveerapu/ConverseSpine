@@ -52,12 +52,25 @@ describe('below-threshold clarify_intent', () => {
     expect(goal).not.toMatchObject({ kind: 'clarify_intent' });
   });
 
-  it('a narrowing constraint still wins — search beats clarifying', () => {
+  it('a brief-ready constraint still wins — search beats clarifying', () => {
     const s = {
       ...initState('c1', 'naya-advisor'),
-      constraints: { bhk: '3 BHK', location: 'Devanahalli' },
+      constraints: { bhk: '3 BHK', location: 'Devanahalli', budgetMaxInr: 15_000_000 },
     };
     expect(discover.decide(s, ex({ isQuestion: true }))).toMatchObject({ kind: 'recommend' });
+  });
+
+  it('partial narrowing (bhk+location, no budget) does not short-circuit to recommend', () => {
+    const s = {
+      ...initState('c1', 'naya-advisor'),
+      turnCount: 1,
+      discover: { ...initState('c1', 'naya-advisor').discover, oriented: true },
+      constraints: { bhk: '3 BHK', location: 'Devanahalli' },
+    };
+    expect(discover.decide(s, ex({}))).toMatchObject({
+      kind: 'probe',
+      slot: 'budget',
+    });
   });
 
   it('the reply asserts nothing — no figures, no places, no claims', () => {

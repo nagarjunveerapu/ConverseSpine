@@ -175,7 +175,7 @@ describe('store authority: shortlistIds + entities own the board', () => {
       runEngineTurn({ convId: 'dual-write', builderId: 'lokations', text, channel: 'advisor_web' }, deps);
 
     await say('hi');
-    await say('plantation in sakleshpur');
+    await say('plantation in sakleshpur under 50 lakhs');
     const focused = await say('give me details on the project');
     const s = focused.state;
 

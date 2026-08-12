@@ -241,6 +241,38 @@ export function joinPlaceLabels(names: readonly string[]): string {
 }
 
 /**
+ * Beyond this distance from nearest catalog project, a geocoded ask is
+ * outside served inventory (Mumbai/Andheri vs Bangalore stock) even when
+ * Desk resolveLocation succeeds.
+ */
+export const OUTSIDE_SERVED_KM = 120;
+
+/** Straight-line km to nearest project pin; null when ask or inventory missing. */
+export function nearestInventoryKm(
+  ask: { lat: number; lng: number },
+  coords: ReadonlyArray<{ lat: number; lng: number }>,
+): number | null {
+  if (!coords.length) return null;
+  let best = Number.POSITIVE_INFINITY;
+  for (const c of coords) {
+    const km = haversineKm(ask.lat, ask.lng, c.lat, c.lng);
+    if (km < best) best = km;
+  }
+  return Number.isFinite(best) ? best : null;
+}
+
+/** True when geocoded ask is far from all live inventory pins. */
+export function isOutsideServedInventory(
+  ask: { lat: number; lng: number } | null | undefined,
+  coords: ReadonlyArray<{ lat: number; lng: number }>,
+  maxKm = OUTSIDE_SERVED_KM,
+): boolean {
+  if (!ask || !coords.length) return false;
+  const km = nearestInventoryKm(ask, coords);
+  return km !== null && km > maxKm;
+}
+
+/**
  * Outside-served inventory bit — cities we sell in, not project names.
  * Null if no cities.
  */

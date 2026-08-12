@@ -162,6 +162,7 @@ describe('ConverseEngine facts', () => {
         budgetMaxInr: 2_000_000,
         location: 'Devanahalli',
         propertyType: 'apartment',
+        bhk: '2 BHK',
       },
     };
     const ex = extractFactsSync('so do they come in 20L?', s);
@@ -307,7 +308,7 @@ describe('ConverseEngine discover', () => {
       ...initState('c1', 'lokations'),
       turnCount: 2,
       discover: { ...initState('c1', 'lokations').discover, oriented: true },
-      constraints: { budgetMaxInr: 8_000_000, location: 'Sakleshpur' },
+      constraints: { budgetMaxInr: 8_000_000, location: 'Sakleshpur', bhk: '2 BHK' },
     };
     const goal = discover.decide(s, extractFactsSync('show options', s));
     expect(goal.kind).toBe('recommend');
@@ -444,7 +445,8 @@ describe('Coorg funnel (deterministic)', () => {
 
     await input('Hi');
     // Location filter is real — Sakleshpur board, not a Coorg-labeled stretch list.
-    const t2 = await input('sakleshpur, 50 Lakhs');
+    // Full apartment-like brief (location + budget + BHK) → recommend.
+    const t2 = await input('sakleshpur, 50 Lakhs, 2 BHK');
     expect(t2.debug.goal.kind).toBe('recommend');
     expect(t2.reply).toMatch(/Ayana/i);
     expect(currentShortlist(t2.state).length).toBeGreaterThanOrEqual(1);
@@ -531,7 +533,7 @@ describe('Focused project switch', () => {
       );
 
     await say('hi');
-    await say('plantation in sakleshpur');
+    await say('plantation in sakleshpur under 50 lakhs');
     await say('give me details on the project');
     expect((await deps.store.load('switch-test'))?.focus?.projectId).toBe('ayana');
 
@@ -552,7 +554,7 @@ describe('Focused project switch', () => {
       );
 
     await say('hi');
-    await say('plantation in sakleshpur');
+    await say('plantation in sakleshpur under 50 lakhs');
     await say('give me details on the project');
     const t4 = await say('Krishnaja Greens pricing');
     expect(t4.state.focus?.projectId).toBe('krishnaja');
@@ -571,7 +573,7 @@ describe('Post-visit ack', () => {
       );
 
     await say('hi');
-    await say('plantation in sakleshpur');
+    await say('plantation in sakleshpur under 50 lakhs');
     await say('give me details on the project');
     await say('book a visit Saturday morning');
     await say('yes');
@@ -669,13 +671,12 @@ describe('Sakleshpur funnel (deterministic)', () => {
       );
 
     await say('hi');
-    await say('looking for plantation properties in sakleshpur');
+    await say('looking for plantation properties in sakleshpur under 50 lakhs');
 
     const t3 = await say('give me details on the project');
     expect(t3.debug.goal).toMatchObject({ kind: 'answer', topic: 'overview' });
     expect(t3.state.phase).toBe('focused');
 
-    await say('50L');
     await say('want full details on Ayana');
 
     const t6 = await say('pricing and legal');

@@ -144,10 +144,35 @@ export function buildLedgerWritePayload(input: {
             ...(extractProvenance.routing_bind
               ? { routing_bind: extractProvenance.routing_bind }
               : {}),
+            ...(extractProvenance.intent_recovery
+              ? { intent_recovery: extractProvenance.intent_recovery }
+              : {}),
+            ...(extractProvenance.train_eligible
+              ? {
+                  train_eligible: true,
+                  ...(extractProvenance.train_sources?.length
+                    ? { train_sources: extractProvenance.train_sources }
+                    : {}),
+                  ...(extractProvenance.train_proposal
+                    ? { train_proposal: extractProvenance.train_proposal }
+                    : {}),
+                }
+              : {}),
           },
         }
       : {}),
   };
+
+  // Top-level train flag for exporters that don't walk provenance.
+  if (extractProvenance?.train_eligible) {
+    resolved_intent.train_eligible = true;
+    if (extractProvenance.train_sources?.length) {
+      resolved_intent.train_sources = extractProvenance.train_sources;
+    }
+    if (extractProvenance.train_proposal) {
+      resolved_intent.train_proposal = extractProvenance.train_proposal;
+    }
+  }
 
   const topicsAsked = [
     ...(ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []),

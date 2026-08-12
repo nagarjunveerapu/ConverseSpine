@@ -36,7 +36,7 @@ describe('W1 repair re-compose', () => {
         { convId: 'w1-repair', builderId: 'lokations', text, buyerPhone: '+919999999999', channel: 'advisor_web' },
         deps,
       );
-    await turn('plantation in sakleshpur');
+    await turn('plantation in sakleshpur under 50 lakhs');
     await turn('tell me about Ayana');
     const r = await turn('is it a good pick for a weekend home?');
 
@@ -62,7 +62,7 @@ describe('W1 repair re-compose', () => {
         { convId: 'w1-floor', builderId: 'lokations', text, buyerPhone: '+919999999990', channel: 'advisor_web' },
         deps,
       );
-    await turn('plantation in sakleshpur');
+    await turn('plantation in sakleshpur under 50 lakhs');
     await turn('tell me about Ayana');
     const r = await turn('is it a good pick for a weekend home?');
     if (r.debug.grounding !== 'pass') {
@@ -82,7 +82,7 @@ describe('W1 repair re-compose', () => {
         { convId: 'w1-budget', builderId: 'lokations', text, buyerPhone: '+919999999989', channel: 'advisor_web' },
         deps,
       );
-    await turn('plantation in sakleshpur');
+    await turn('plantation in sakleshpur under 50 lakhs');
     await turn('tell me about Ayana');
     const before = llm.calls.length;
     await turn('is it a good pick for a weekend home?');

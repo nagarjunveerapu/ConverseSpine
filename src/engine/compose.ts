@@ -5,6 +5,7 @@ import {
 import type {
   AnswerTopic,
   ComposeRequest,
+  Constraints,
   EvidenceSet,
   Match,
   ProbeKind,
@@ -32,7 +33,7 @@ function relaxedLead(
   const exact =
     channel === 'advisor_web'
       ? `Based on what you've shared, these look strongest`
-      : `Here's what fits`;
+      : `Here's what lines up`;
   if (!relaxed?.length) return exact;
   const nouns = relaxed.map((r) => RELAXED_NOUN[r]).filter(Boolean);
   if (!nouns.length) return exact;
@@ -42,7 +43,7 @@ function relaxedLead(
       : `${nouns.slice(0, -1).join(', ')} or ${nouns[nouns.length - 1]!}`;
   return channel === 'advisor_web'
     ? `I couldn't match ${phrase} tightly — here's the closest I can stand behind`
-    : `I couldn't match ${phrase} — here's what we do have`;
+    : `Couldn't nail ${phrase} exactly — here's what we do have`;
 }
 import { isInventoryAsk } from './facts.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
@@ -469,23 +470,41 @@ function shortlistTopicLabel(topic: import('./types.js').AnswerTopic): string {
   }
 }
 
+/** Stable variant pick — conversational without sounding copy-pasted. */
+function voicePick(seed: string | undefined, lines: string[]): string {
+  if (!lines.length) return '';
+  if (lines.length === 1) return lines[0]!;
+  let h = 0;
+  const s = seed ?? 'naya';
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return lines[h % lines.length]!;
+}
+
 export function fallbackReply(req: ComposeRequest): string {
   const { goal, evidence: ev, context } = req;
   const name = context.buyerName ? ` ${context.buyerName}` : '';
+  const seed = context.focusProjectName || context.buyerName || goal.kind;
   switch (goal.kind) {
     case 'greet': {
       const rb = context.returningBuyer;
       if (rb && rb.daysSinceLastSeen >= 1) {
-        const welcome = rb.buyerName ? `Welcome back, ${rb.buyerName}!` : 'Welcome back!';
-        return `${welcome} Still exploring property, or picking up where we left off?`;
+        const welcome = rb.buyerName ? `Welcome back, ${rb.buyerName}.` : 'Welcome back.';
+        return `${welcome} Still hunting, or picking up where we left off?`;
       }
-      return `Hi${name}! I can help you find the right property. What are you after — area, budget, or configuration?`;
+      return voicePick(seed, [
+        `Hi${name} — looking for a home, or more of an investment? Area and budget help me shortlist fast.`,
+        `Hey${name}. Tell me the area and budget you're working with — I'll pull what fits.`,
+        `Hi${name}. What are you after — a place to live, or something to invest in?`,
+      ]);
     }
     case 'orient': {
       const types = ev.catalog?.projectTypes.join(', ') || 'homes';
       const from =
-        ev.catalog && ev.catalog.priceMinInr > 0 ? `, starting from ${formatInr(ev.catalog.priceMinInr)}` : '';
-      return `We have ${types} on our books${from}. Which area, budget, and size are you thinking?`;
+        ev.catalog && ev.catalog.priceMinInr > 0 ? `, from ${formatInr(ev.catalog.priceMinInr)}` : '';
+      const ack = briefAckPrefix(context.constraints);
+      const next = firstMissingProbeSlot(context.constraints);
+      const ask = next ? probeCopy(next) : 'Which area, budget, and size are you thinking?';
+      return `${ack}We've got ${types} on the books${from}. ${ask}`;
     }
     case 'clarify_intent': {
       // Sticky clarify when we can re-anchor to outstanding job; else generic.
@@ -498,13 +517,18 @@ export function fallbackReply(req: ComposeRequest): string {
       });
       return (
         sticky ??
-        (context.channel === 'advisor_web'
-          ? `I'd rather get that right than guess — tell me what you're after in your own words (area, budget, or size).`
-          : `I'd rather get that right than guess — could you tell me a bit more about what you're after, like the area, budget, or size you have in mind?`)
+        voicePick(seed, [
+          context.channel === 'advisor_web'
+            ? `Don't want to guess — what's the area, budget, or size on your mind?`
+            : `Don't want to guess wrong — what's the area, budget, or size you're thinking?`,
+          `Quick one — area, budget, or BHK? I'll take it from there.`,
+        ])
       );
     }
-    case 'probe':
-      return probeCopy(goal.slot);
+    case 'probe': {
+      const ack = briefAckPrefix(context.constraints);
+      return `${ack}${probeCopy(goal.slot)}`;
+    }
     case 'recommend':
     case 'ack_reject_recommend': {
       const ms = (ev.matches ?? []).slice(0, 3);
@@ -671,15 +695,28 @@ export function fallbackReply(req: ComposeRequest): string {
           ? ' Tell me what to change — budget, area, or property type.'
           : '. Want to adjust budget, area, or property type?';
         const base = ev.noMatch.reasoning.endsWith('.') ? ev.noMatch.reasoning : `${ev.noMatch.reasoning}.`;
-        return `${base}${suffix}`;
+        const served =
+          ev.catalog?.servedCities?.length
+            ? ` We currently serve ${ev.catalog.servedCities.slice(0, 4).join(', ')}.`
+            : '';
+        return `${base}${served}${suffix}`;
       }
       return `I don't have an exact match right now. Want to adjust budget or area?`;
     }
     case 'objection': {
       const o = ev.objection;
       const angle = o?.reframeAngles[0];
-      const ack = o?.acknowledged ?? 'I hear you';
-      return `${ack}.${angle ? ` ${angle}` : ' Let me get you specifics.'} Want the numbers or a site visit?`;
+      const ack = o?.acknowledged
+        ? o.acknowledged.replace(/\.$/, '')
+        : voicePick(seed, [
+            'Yeah, pricing is the first thing people push on',
+            'Fair — it does sit on the higher side for some buyers',
+            'Got it — budget stretch is real',
+          ]);
+      const mid = angle
+        ? ` ${angle}`
+        : ' I can show a lower band in the same corridor, or walk the all-in numbers on this one.';
+      return `${ack}.${mid} Want cheaper options, a full cost breakup, or a site visit?`;
     }
     case 'emi_calculate':
       return ev.emi
@@ -796,8 +833,12 @@ export function fallbackReply(req: ComposeRequest): string {
         const asked = componentsForAsk(context.buyerText ?? '', p.components);
         const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 4);
         const parts = shown.map(formatPriceComponent).join(', ');
-        const atom = parts || formatStartingPrice(p.startingDisplay) || 'on file';
-        chunks.push(multiTopic ? atom : `*Pricing — ${p.projectName}:* ${atom}`);
+        const start = formatStartingPrice(p.startingDisplay);
+        const atom = parts || start || 'on file';
+        // Cost-sheet-only (stamp/registration) must not wear a "Pricing" hat when
+        // there is no unit BSP / starting figure — quality-factory Stage 1.
+        const header = priceAnswerHeader(p.projectName, shown, start);
+        chunks.push(multiTopic ? atom : `*${header}:* ${atom}`);
       }
       if (topics.includes('price') && ev.landedCost && !suppressPrice) {
         chunks.push(landedCostLine(ev.landedCost, { omitProjectName: multiTopic }));
@@ -1090,8 +1131,14 @@ export function fallbackReply(req: ComposeRequest): string {
         ? `Your brief so far: ${bits.join(', ')}. It's on the board side — change a chip anytime, or ask me to refine.`
         : `Your brief so far: ${bits.join(', ')}. Want me to show matches again, or open one by name?`;
     }
-    case 'handoff':
-      return `I'll have our team reach out directly on this — they'll take it from here.`;
+    case 'handoff': {
+      const phone = context.handoffPhone?.trim();
+      const who = context.handoffTeamName?.trim() || 'our sales team';
+      if (phone) {
+        return `I'll connect you with ${who} on this — you can also reach them at ${phone}. They'll take it from here.`;
+      }
+      return `I'll connect you with ${who} on this — they'll take it from here with your chat context.`;
+    }
     case 'warm_ack': {
       const name = context.buyerName ? `, ${context.buyerName}` : '';
       if (context.focusProjectName) {
@@ -1574,6 +1621,49 @@ function probeCopy(slot: ProbeKind): string {
     case 'priority':
       return 'One quick thing so I rank these right — does a shorter commute matter more, or staying on budget?';
   }
+}
+
+/** Ack slots already on file so probe/orient never re-ask the whole brief. */
+export function briefAckPrefix(c: Constraints | undefined): string {
+  if (!c) return '';
+  const bits: string[] = [];
+  if (c.propertyType) bits.push(String(c.propertyType).replace(/_/g, ' '));
+  if (c.bhk) bits.push(c.bhk);
+  if (c.location?.trim()) bits.push(c.location.trim());
+  if (c.budgetMaxInr) bits.push(`~${formatInr(c.budgetMaxInr)}`);
+  if (c.purpose === 'investment') bits.push('investment');
+  if (!bits.length) return '';
+  return `Got it — ${bits.join(', ')}. `;
+}
+
+/** Next missing brief slot for orient ask (mirrors discover.firstMissingSlot axis). */
+export function firstMissingProbeSlot(c: Constraints | undefined): ProbeKind | undefined {
+  if (!c?.location?.trim()) return 'location';
+  if (c.budgetMaxInr === undefined) return 'budget';
+  if (!c.purpose && c.budgetMaxInr === undefined) return 'purpose';
+  // Align with discover: skip BHK for investment + non-apartment property types.
+  const needsBhk =
+    c.purpose !== 'investment' &&
+    (!c.propertyType?.trim() ||
+      /apartment|flat/i.test(c.propertyType) ||
+      !/(plantation|planted|estate|villa|plot|land|bungalow)/i.test(c.propertyType));
+  if (needsBhk && !c.bhk) return 'bhk';
+  return undefined;
+}
+
+/** Unit/BSP vs charges-only header for price answers. */
+export function priceAnswerHeader(
+  projectName: string,
+  components: readonly { label: string }[],
+  startingDisplay?: string,
+): string {
+  const hasUnitPrice =
+    Boolean(startingDisplay?.trim()) ||
+    components.some((c) =>
+      /base|bsp|selling|rate|per\s*sq|starting|unit/i.test(c.label),
+    );
+  if (hasUnitPrice) return `Pricing — ${projectName}`;
+  return `Charges on file — ${projectName}`;
 }
 
 function priceOf(m: Match): string {

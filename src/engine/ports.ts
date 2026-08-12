@@ -425,13 +425,47 @@ export interface EngineDeps {
    *  just the bindings — see runtime/deps.ts. */
   routingEnv?: Pick<
     import('../env.js').Env,
-    'AI' | 'INTENT_VECTORS' | 'SIL_EMBED_MODEL' | 'SIL_INTENT_PROJECTION' | 'SIL_ROUTING_TAU' | 'SIL_EMBED_FIRST' | 'FAILURE_ROUTING'
-  >;
+    | 'AI'
+    | 'INTENT_VECTORS'
+    | 'SIL_EMBED_MODEL'
+    | 'SIL_INTENT_PROJECTION'
+    | 'SIL_ROUTING_TAU'
+    | 'SIL_EMBED_FIRST'
+    | 'FAILURE_ROUTING'
+    | 'TURN_CACHE'
+  > & {
+    /** Shared with EngineDeps.cacheStats so SIL classify can stamp emb hit/miss. */
+    cacheStats?: import('../cache/turn-cache.js').CacheStats;
+  };
   /** P6 ExtractTurnFacts — after embedder abstain. */
   bamlExtract?: (input: import('./extract-baml.js').BamlExtractInput) => Promise<
     import('./extract-baml.js').BamlExtractResult | null
   >;
   bamlMode?: import('./extract-baml.js').BamlExtractMode;
+  /** Intent recovery after slot/BAML abstain. */
+  intentRecoveryMode?: import('./intent-recovery.js').IntentRecoveryMode;
+  intentRecover?: (input: {
+    text: string;
+    phase: string;
+    focusName?: string;
+  }) => Promise<import('./intent-recovery.js').IntentRecoveryResult | null>;
+  /** Hybrid 80/20 compose gate. */
+  hybridMode?: import('./hybrid.js').HybridMode;
+  /** Soft LLM rate target (0–1); default 0.2 when hybrid on. */
+  llmRateTarget?: number;
+  /** Shared TURN_CACHE for L1–L4 read-model (optional). */
+  turnCache?: KVNamespace;
+  /** Desk project etag for L2 freshness. */
+  projectEtag?: (projectId: string) => Promise<{ etag: string; latest_updated_at: number } | null>;
+  /** Mutable per-turn cache hit/miss bag (debug). */
+  cacheStats?: import('../cache/turn-cache.js').CacheStats;
+  /**
+   * Same-turn project detail memo — media+legal packed asks hydrate twice;
+   * memo avoids a second Desk RTT within one turn (not persisted).
+   */
+  projectCardMemo?: Map<string, import('./types.js').ProjectDetail>;
+  /** Cloudflare waitUntil — async shadow / etag refresh. */
+  waitUntil?: (p: Promise<unknown>) => void;
   /** Failure-as-a-value Phase 0: shadow logging only, never behavior. */
   failureLog?: boolean;
   /** Failure-as-a-value Phase 1 behavior gate. */

@@ -5,7 +5,7 @@
   "tags": ["harden", "p4-cta", "hinglish", "brigade"],
   "turns": [
     { "text": "hi" },
-    { "text": "Apartment in North Bangalore" },
+    { "text": "2 BHK apartment in North Bangalore under 1.5 Cr" },
     { "text": "Give me more details on Brigade Eldorado" },
     {
       "text": "give me 2BHK configurations",

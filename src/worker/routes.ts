@@ -43,6 +43,26 @@ export interface DeskChatResponse {
     extract_provenance?: unknown;
     last_offered_count?: number;
     last_offered_ids?: string[];
+    timings?: {
+      pre_extract_ms?: number;
+      extract_ms?: number;
+      mid_pre_goal_ms?: number;
+      mid_catalog_ms?: number;
+      mid_location_ms?: number;
+      mid_phase_prep_ms?: number;
+      routing_ms?: number;
+      evidence_ms?: number;
+      compose_ms?: number;
+      goal_ms?: number;
+      post_compose_ms?: number;
+      store_save_ms?: number;
+      crm_pre_ms?: number;
+      total_ms?: number;
+    };
+    cache?: { seg?: string; proj?: string; emb?: string; search?: string };
+    llm_used?: boolean;
+    llm_shed?: boolean;
+    compose_template?: boolean;
   };
   whatsapp_actions?: TurnResult['whatsapp_actions'];
   media_attachments?: TurnResult['media_attachments'];
@@ -106,6 +126,11 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
       ...(result.debug?.last_offered_ids
         ? { last_offered_ids: result.debug.last_offered_ids }
         : {}),
+      ...(result.debug?.timings ? { timings: result.debug.timings } : {}),
+      ...(result.debug?.cache ? { cache: result.debug.cache } : {}),
+      ...(result.debug?.llm_used != null ? { llm_used: result.debug.llm_used } : {}),
+      ...(result.debug?.llm_shed ? { llm_shed: true } : {}),
+      ...(result.debug?.compose_template ? { compose_template: true } : {}),
     },
     ...(result.whatsapp_actions ? { whatsapp_actions: result.whatsapp_actions } : {}),
     ...(result.media_attachments?.length
@@ -177,6 +202,19 @@ export async function handleAgentSend(env: Env, body: AgentSendBody): Promise<Re
   }
 
   return json({ wamid, delivered: !!wamid, has_token: !!accessToken });
+}
+
+export async function handleCacheInvalidate(
+  env: Env,
+  body: unknown,
+): Promise<Response> {
+  const { invalidateTurnCache } = await import('../cache/turn-cache.js');
+  const req = body as import('../cache/turn-cache.js').InvalidateRequest;
+  if (!req || typeof req !== 'object' || !req.type) {
+    return json({ error: 'type_required' }, 400);
+  }
+  const result = await invalidateTurnCache(env.TURN_CACHE, req);
+  return json({ ok: true, ...result });
 }
 
 export function json(data: unknown, status = 200): Response {

@@ -108,10 +108,14 @@ export function extractDisclosedFacts(input: {
 
     if (topics.includes('availability') && ev.units?.length) {
       const list = ev.units.slice(0, 4).map((u) => u.unitType ?? u.sizeDisplay ?? 'unit').join('; ');
+      const selected =
+        ev.units.length === 1
+          ? `Selected unit: ${ev.units[0]!.unitType}${ev.units[0]!.priceDisplay ? ` (${ev.units[0]!.priceDisplay})` : ''}`
+          : `Configurations: ${list}`;
       out.push({
         kind: 'availability',
         project_id: projectId,
-        statement: clip(`Configurations: ${list}`),
+        statement: clip(selected),
         source_tool: 'listUnits',
       });
     }

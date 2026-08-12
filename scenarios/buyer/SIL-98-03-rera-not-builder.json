@@ -1,0 +1,44 @@
+{
+  "id": "SIL-98-03",
+  "title": "SIL: RERA registered \u2192 get_legal_info bind (not builder)",
+  "builder_id": "brigade-group",
+  "tags": [
+    "sil",
+    "precision",
+    "legal"
+  ],
+  "turns": [
+    {
+      "text": "hi"
+    },
+    {
+      "text": "2 BHK apartment in North Bangalore under 1.5 Cr"
+    },
+    {
+      "text": "Brigade Orchards",
+      "assert": {
+        "reply_includes": [
+          "orchards"
+        ],
+        "reply_excludes": [
+          "side-by-side comparison",
+          "Side-by-side comparison",
+          "Which matters most",
+          "vs Brigade Northridge"
+        ],
+        "phase": "focused",
+        "goal_topic": "overview"
+      }
+    },
+    {
+      "text": "Is it RERA registered?",
+      "assert": {
+        "sil_top_kind": "get_legal_info",
+        "reply_excludes": [
+          "which one should I open",
+          "reliable builder"
+        ]
+      }
+    }
+  ]
+}

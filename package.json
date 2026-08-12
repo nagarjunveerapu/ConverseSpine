@@ -33,7 +33,9 @@
     "test:probe": "tsx scripts/probe-project-vectors.ts",
     "smoke:p7": "bash scripts/smoke-p7-focused-chips.sh",
     "dev:local": "wrangler dev --env local --port 8789",
-    "dev:remote": "wrangler dev --env local --port 8789"
+    "dev:remote": "wrangler dev --env local --port 8789",
+    "soak:dig": "tsx scripts/run-dig-load-soak.ts",
+    "board:latency": "tsx scripts/run-latency-scenario-board.ts"
   },
   "dependencies": {
     "handlebars": "^4.7.8"

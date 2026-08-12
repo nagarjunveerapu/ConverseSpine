@@ -67,7 +67,7 @@ describe('nearby offer engine turns', () => {
       {
         convId,
         builderId: 'lokations',
-        text: 'plantation in sakleshpur',
+        text: 'plantation in sakleshpur under 50 lakhs',
         buyerPhone: '+919900002001',
         channel: 'advisor_web',
       },
@@ -93,7 +93,7 @@ describe('nearby offer engine turns', () => {
         deps,
       );
     await say('hi');
-    await say('plantation in sakleshpur');
+    await say('plantation in sakleshpur under 50 lakhs');
     await say('tell me about ayana');
     const r = await say('show me other projects too');
     expect(r.state.phase).toBe('discover');
@@ -114,7 +114,7 @@ describe('nearby offer engine turns', () => {
         deps,
       );
     await say('hi');
-    await say('plantation in sakleshpur');
+    await say('plantation in sakleshpur under 50 lakhs');
     const mid = await deps.store.load(convId);
     expect(mid?.rti?.pendingPrompt?.kind).toBe('location_broaden');
     const r = await say('yes, show me those nearby estates');

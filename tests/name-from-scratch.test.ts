@@ -56,7 +56,12 @@ describe('AB-6 — cold-named project commits, not re-searches', () => {
   it('a pure area search still recommends (no false commit)', async () => {
     const deps = fakeDeps();
     const r = await runEngineTurn(
-      { convId: 'ab6-search', builderId: 'lokations', text: 'apartments in Sarjapur', buyerPhone: '+919999999982' },
+      {
+        convId: 'ab6-search',
+        builderId: 'lokations',
+        text: '2 BHK apartments in Sarjapur under 1 Cr',
+        buyerPhone: '+919999999982',
+      },
       deps,
     );
     expect(r.debug.goal.kind).toBe('recommend');
