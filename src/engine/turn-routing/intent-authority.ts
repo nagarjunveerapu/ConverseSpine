@@ -32,6 +32,7 @@ import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { DECLINE } from '../turn-intent/dialogue-acts.js';
 import type { Extracted } from '../types.js';
 import type { TurnRoutingResult } from './types.js';
+import { isAttentionNudge } from '../placeability.js';
 
 /**
  * Effects an intent may assert on the turn. Deliberately tiny: each maps to a
@@ -177,6 +178,11 @@ export function shouldSurfaceUnknownIntent(
   ) {
     return false;
   }
+  // A knock is not an unknown request. "hello?" / "anyone there?" fell to
+  // unknown_request → "I couldn't make sense of that" — twice running, since a
+  // second knock reads the same. Let it route: project-first WA re-offers the
+  // book, which is what a waiting buyer wanted.
+  if (isAttentionNudge(text)) return false;
   // Closed FactKey extractors — same set that withAnswerRequirements uses.
   if (text.trim() && answerRequirements(text).length > 0) return false;
   // FAQ-shaped chips (builder honesty, bare loan/when…) — same closed set as

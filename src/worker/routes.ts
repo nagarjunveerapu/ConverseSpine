@@ -37,6 +37,8 @@ export interface DeskChatResponse {
     };
     phase?: string;
     goal?: unknown;
+    focus?: { projectId: string; projectName: string };
+    constraints?: Record<string, unknown>;
     tools?: string[];
     grounding?: string;
     speech_act?: string;
@@ -65,6 +67,7 @@ export interface DeskChatResponse {
     compose_template?: boolean;
   };
   whatsapp_actions?: TurnResult['whatsapp_actions'];
+  whatsapp_interactive?: TurnResult['whatsapp_interactive'];
   media_attachments?: TurnResult['media_attachments'];
 }
 
@@ -114,6 +117,8 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
       },
       ...(result.debug?.phase ? { phase: result.debug.phase } : {}),
       ...(result.debug?.goal !== undefined ? { goal: result.debug.goal } : {}),
+      ...(result.debug?.focus ? { focus: result.debug.focus } : {}),
+      ...(result.debug?.constraints ? { constraints: result.debug.constraints } : {}),
       ...(tools.length ? { tools } : {}),
       ...(result.debug?.grounding ? { grounding: result.debug.grounding } : {}),
       ...(result.debug?.speech_act ? { speech_act: result.debug.speech_act } : {}),
@@ -133,6 +138,7 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
       ...(result.debug?.compose_template ? { compose_template: true } : {}),
     },
     ...(result.whatsapp_actions ? { whatsapp_actions: result.whatsapp_actions } : {}),
+    ...(result.whatsapp_interactive ? { whatsapp_interactive: result.whatsapp_interactive } : {}),
     ...(result.media_attachments?.length
       ? { media_attachments: result.media_attachments }
       : {}),

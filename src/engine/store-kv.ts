@@ -13,11 +13,15 @@ function devMemory(): Map<string, ConversationState> {
 }
 
 /**
- * L0 — Conversation DO (TurnDebouncer) hot state, with KV durable fallback.
+ * L0 — Conversation DO (TurnDebouncer) hot state, with KV as the durable copy.
  * DO id = `state:{convId}` so /chat and WhatsApp share the same class.
  *
- * Sync path prefers KV (one RTT). DO is dual-written on save and warmed async
- * after KV hit so WhatsApp isolates get L0 without blocking /chat.
+ * The DO is READ FIRST because it is the only one of the two that is
+ * read-after-write consistent. KV is a per-colo cache with up to a minute of
+ * lag, and on WhatsApp consecutive turns do not arrive from one place: Meta
+ * delivers each webhook from its own egress, so the tap after a project card
+ * can land on a colo still holding the PRE-focus snapshot. That is how a size
+ * tap inside Brigade Eldorado came back as a book-wide search (13 Aug, live).
  */
 async function doStateGet(
   ns: DurableObjectNamespace | undefined,
@@ -48,7 +52,7 @@ async function doStatePut(
       body: JSON.stringify({ state }),
     });
   } catch {
-    /* non-fatal — KV remains source of truth */
+    /* non-fatal — KV still holds the durable copy */
   }
 }
 
@@ -59,24 +63,29 @@ export function kvStore(
   const memory = devMemory();
   return {
     async load(convId) {
+      const hot = await doStateGet(conversationDo, convId);
+      if (hot) return hot;
       if (kv) {
         const raw = await kv.get(`${PREFIX}${convId}`);
         if (raw) {
           const state = JSON.parse(raw) as ConversationState;
-          // Warm DO off the critical path.
-          void doStatePut(conversationDo, state);
+          // Warm the DO — but ONLY from a DO miss. Warming it after every KV
+          // read is what made a stale read stick: the lagging snapshot was
+          // written over the fresh one, so the turn after the bad turn was
+          // wrong too, from the good store.
+          await doStatePut(conversationDo, state);
           return state;
         }
       } else {
         const mem = memory.get(convId);
         if (mem) return mem;
       }
-      // KV miss — try DO (WhatsApp isolate may have L0 only).
-      const hot = await doStateGet(conversationDo, convId);
-      if (hot) return hot;
       return null;
     },
     async save(state) {
+      // Awaited: the DO is what the next turn reads. KV is written behind it
+      // as the durable 30-day copy (and the only store when no DO is bound).
+      await doStatePut(conversationDo, state);
       if (kv) {
         await kv.put(`${PREFIX}${state.convId}`, JSON.stringify(state), {
           expirationTtl: 60 * 60 * 24 * 30,
@@ -84,7 +93,6 @@ export function kvStore(
       } else {
         memory.set(state.convId, state);
       }
-      void doStatePut(conversationDo, state);
     },
     async logTurn(_entry) {
       /* optional — turn ledger via CRM */

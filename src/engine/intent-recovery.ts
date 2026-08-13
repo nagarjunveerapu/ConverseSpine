@@ -6,11 +6,15 @@
  */
 import type { Env } from '../env.js';
 import { hasPriceObjectionCue } from './price-objection.js';
-import type { Extracted, ObjectionTopic } from './types.js';
+import type { AnswerTopic, Extracted, ObjectionTopic } from './types.js';
 
 export type IntentRecoveryMode = 'off' | 'shadow' | 'promote';
 
 export type IntentRecoveryLabel =
+  | 'ask_price'
+  | 'ask_config'
+  | 'ask_amenity'
+  | 'ask_emi'
   | 'objection_price'
   | 'prefer_cheaper'
   | 'visit_answer'
@@ -35,6 +39,10 @@ export type IntentRecoveryReport = {
 };
 
 const VALID = new Set<IntentRecoveryLabel>([
+  'ask_price',
+  'ask_config',
+  'ask_amenity',
+  'ask_emi',
   'objection_price',
   'prefer_cheaper',
   'visit_answer',
@@ -48,7 +56,11 @@ Return STRICT JSON only.
 Schema: {"labels": string[], "confidence": "llm"|"abstain", "abstain_reason": string|null}
 
 Allowed labels ONLY:
-- objection_price: too expensive / mehengaa / out of budget
+- ask_price: ASKING what it costs — "how much is it", "kitne ka hai", "eshtu rate ide", "rate enu"
+- ask_config: SIZE or LAYOUT of the home — sqft, carpet area, plot extent, "1400 sqft is too small"
+- ask_amenity: about what the project has — parking, clubhouse, pool, security, "only one car park is not enough"
+- ask_emi: about the loan or the monthly outgo — EMI, eligibility, down payment, "I can pay 60000 per month"
+- objection_price: COMPLAINING the price is too high / mehengaa / out of budget
 - prefer_cheaper: ask for cheaper / lower options same area
 - visit_answer: answering a visit day/time/origin question (saturday, coming from X)
 - household_context: family size / kids / who will live there (not a search brief alone)
@@ -56,6 +68,11 @@ Allowed labels ONLY:
 - soft_rank: ranking preference without new hard constraints
 
 Rules:
+- A plain question about cost is ask_price, NEVER objection_price. Only a complaint objects.
+- A complaint about the UNIT or the AMENITIES is ask_config / ask_amenity, not objection_price —
+  "too small" and "not enough parking" are about the home, not the money.
+- NEVER label a timing question (possession, ready, handover, when) as ask_config — abstain instead.
+  These already have their own owner; a wrong label here answers the wrong question.
 - If unsure, confidence=abstain and labels=[].
 - Never invent project names, prices, or localities.
 - Multiple labels OK when clearly present.`;
@@ -123,6 +140,32 @@ export function applyIntentRecovery(ex: Extracted, result: IntentRecoveryResult)
   let next = { ...ex };
   const labels = result.labels;
 
+  // "kitne ka hai?" / "eshtu rate ide?" had no label of their own, so the model
+  // reached for objection_price — and the objection branch below DELETES the
+  // price ask. A buyer asking the price on the live line got handed to a sales
+  // team while the number sat in evidence.
+  const ASKED: ReadonlyArray<readonly [IntentRecoveryLabel, AnswerTopic]> = [
+    ['ask_price', 'price'],
+    ['ask_config', 'availability'],
+    ['ask_amenity', 'amenities'],
+    ['ask_emi', 'emi'],
+  ];
+  const asked = ASKED.filter(([label]) => labels.includes(label)).map(([, topic]) => topic);
+  if (asked.length && !labels.includes('objection_price')) {
+    // Recovery is a floor, never a second opinion. When the closed extractors
+    // already named a topic it stands alone — adding to it turned "when is
+    // possession?" into a multi-topic ask that answered with the size list,
+    // because the model reads that question as being about the unit too.
+    const already = next.askTopics ?? (next.askTopic ? [next.askTopic] : []);
+    if (!already.length) {
+      next = {
+        ...next,
+        askTopic: asked[0]!,
+        askTopics: asked,
+        speechAct: !next.speechAct || next.speechAct === 'unknown' ? 'answer' : next.speechAct,
+      };
+    }
+  }
   if (labels.includes('objection_price') || labels.includes('prefer_cheaper')) {
     const topic: ObjectionTopic = 'price';
     const restTopics = (next.askTopics ?? (next.askTopic ? [next.askTopic] : [])).filter(

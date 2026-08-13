@@ -458,6 +458,8 @@ function followUpNamed(ex: Extracted, text: string, s: ConversationState): Offer
 }
 
 function candidatesOf(s: ConversationState): OfferedProject[] {
+  // Open card / focused project owns visit — same as Advisor board selection.
+  if (s.focus) return [{ projectId: s.focus.projectId, name: s.focus.projectName }];
   const ents = discourseEntities(s);
   if (ents.length > 0) {
     const discussed = ents
@@ -465,13 +467,11 @@ function candidatesOf(s: ConversationState): OfferedProject[] {
       .sort((a, b) => a.firstSeenTurn - b.firstSeenTurn)
       .map((e) => ({ projectId: e.projectId, name: e.name }));
     if (discussed.length >= 2) return discussed;
-    if (s.focus) return [{ projectId: s.focus.projectId, name: s.focus.projectName }];
     if (discussed.length === 1) return discussed;
     return discourseOffered(s);
   }
   const discussed = discussedList(s);
   if (discussed.length >= 2) return [...discussed];
-  if (s.focus) return [{ projectId: s.focus.projectId, name: s.focus.projectName }];
   if (discussed.length === 1) return [...discussed];
   return [...currentShortlist(s)];
 }
@@ -1214,12 +1214,21 @@ function step(input: {
       };
     }
     const hoursLabel = parseSiteVisitHours(input.ctx.siteVisitHours).label;
+    // A re-ask that repeats itself word for word reads as "the bot didn't hear
+    // me" — and the buyer DID say something, we just couldn't use it. Name the
+    // miss, then ask again. Byte-identical consecutive replies are the defect.
+    const reAsking = askN > 1 && input.text.trim().length > 0;
     const copy = declined
       ? `No problem — which day and time work for *${projectName}*${stopPreview}? (Site visits usually ${hoursLabel}.)`
-      : say(
-          prefix,
-          `which day and time work for your visit to *${projectName}*${stopPreview}? (e.g. Saturday morning, or Monday 11am — site visits usually ${hoursLabel})`,
-        );
+      : reAsking
+        ? say(
+            prefix,
+            `I could not pin that to a date. Pick a day below, or type one like *Saturday* or *tomorrow* — the site is open ${hoursLabel}.`,
+          )
+        : say(
+            prefix,
+            `which day and time work for your visit to *${projectName}*${stopPreview}? (e.g. Saturday morning, or Monday 11am — site visits usually ${hoursLabel})`,
+          );
     return { kind: 'visit_ask', ask: 'day', copy, state: { ...baseState, askCount: askN, lastAsk: 'day' } };
   }
 

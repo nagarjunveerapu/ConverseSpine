@@ -151,32 +151,83 @@ function filterCatalog(f: SearchFilters): P[] {
     );
   }
   if (f.budgetMaxInr !== undefined) ms = ms.filter((p) => p.priceInr <= f.budgetMaxInr!);
+  // The floor was ignored here, so a "₹90 L to ₹1 Cr" brief came back with the
+  // ₹24.95 L entry project and no simulation could see it. Desk applies both
+  // ends; the fixture has to as well or it grades a search we don't ship.
+  if (f.budgetMinInr !== undefined) ms = ms.filter((p) => p.priceInr >= f.budgetMinInr!);
   ms.sort((a, b) => a.priceInr - b.priceInr);
   return ms.slice(0, f.maxResults ?? 3);
 }
 
-function projectDetailFor(id: string) {
+/**
+ * Every project's detail row used to be ONE literal — the same coffee-plantation
+ * summary, the same RERA number, the same Sakleshpur drive times — handed out
+ * for all nine projects. A North Bangalore apartment described itself as a
+ * Western Ghats estate in every transcript, and no simulation could catch it,
+ * because the fixture had no identity left to contaminate.
+ *
+ * Each field is now derived from the project's OWN row, so a detail row can only
+ * ever describe the project it belongs to.
+ */
+function projectIdentity(p: P) {
+  if (p.type === 'managed_plantation_estate') {
+    return {
+      summary: `Managed coffee plantation estate at ${p.market}, in the Western Ghats.`,
+      ecStatus: 'Clear — no encumbrance on record for the estate parcels.',
+      connectivitySummary: `${p.market} is reached via NH75; nearest town centre 12 km.`,
+      microMarketOverview: 'Rolling hills, coffee estates, cool climate year-round.',
+      nearbyPois: [`${p.market} town`, 'Bisle Ghat viewpoint', 'Hemavathi reservoir'],
+      driveTimes: ['Bangalore: ~4 hrs', 'Mangalore: ~3 hrs'],
+      possession: 'Dec 2027',
+    };
+  }
+  if (p.type === 'villa') {
+    return {
+      summary: `Gated villa community in ${p.market}.`,
+      ecStatus: 'Clear — no encumbrance on record for the layout.',
+      connectivitySummary: `${p.market} — airport road access, metro extension planned.`,
+      microMarketOverview: 'Established villa belt with schools and hospitals nearby.',
+      nearbyPois: ['Manyata Tech Park', 'Columbia Asia Hospital', 'Esteem Mall'],
+      driveTimes: ['Airport: ~35 min', 'MG Road: ~50 min'],
+      possession: 'Jun 2028',
+    };
+  }
+  return {
+    summary: `High-rise apartment development in ${p.market}, ${p.display} onwards.`,
+    ecStatus: 'Clear — no encumbrance on record for the project land.',
+    connectivitySummary: `${p.market} — ORR corridor, metro and tech-park access.`,
+    microMarketOverview: `${p.market} — tech corridor with schools, malls and hospitals within 5 km.`,
+    nearbyPois: [`${p.market} metro station`, 'Tech park cluster', 'Multi-speciality hospital'],
+    driveTimes: ['Airport: ~45 min', 'MG Road: ~40 min'],
+    possession: 'Dec 2027',
+  };
+}
+
+export function projectDetailFor(id: string) {
   const p = LOKATIONS.find((x) => x.id === id);
-  return p
-    ? {
-        projectId: p.id,
-        name: p.name,
-        microMarket: p.market,
-        reraNumber: 'PRM/KA/RERA/1251/446/2024',
-        possession: 'Dec 2027',
-        startingPriceDisplay: p.display,
-        projectType: p.type,
-        summary: 'Managed coffee plantation estate in the Western Ghats.',
-        ecStatus: 'Clear — no encumbrance on record for the estate parcels.',
-        loanEligibility: 'HDFC, SBI, ICICI, Axis — subject to buyer credit.',
-        location: {
-          connectivitySummary: '2.5 hrs from Bangalore via NH75; nearest town Sakleshpur 12 km.',
-          microMarketOverview: 'Rolling hills, coffee estates, cool climate year-round.',
-          nearbyPois: ['Sakleshpur town', 'Bisle Ghat viewpoint', 'Hemavathi reservoir'],
-          driveTimes: ['Bangalore: ~2.5 hrs', 'Mangalore: ~3 hrs'],
-        },
-      }
-    : null;
+  if (!p) return null;
+  const ident = projectIdentity(p);
+  const seq = String(LOKATIONS.findIndex((x) => x.id === p.id) + 1).padStart(3, '0');
+  return {
+    projectId: p.id,
+    name: p.name,
+    microMarket: p.market,
+    // One shared registration number across nine projects was the same
+    // contamination as the shared summary — and a worse one to show a buyer.
+    reraNumber: `PRM/KA/RERA/1251/${seq}/2024`,
+    possession: ident.possession,
+    startingPriceDisplay: p.display,
+    projectType: p.type,
+    summary: ident.summary,
+    ecStatus: ident.ecStatus,
+    loanEligibility: 'HDFC, SBI, ICICI, Axis — subject to buyer credit.',
+    location: {
+      connectivitySummary: ident.connectivitySummary,
+      microMarketOverview: ident.microMarketOverview,
+      nearbyPois: ident.nearbyPois,
+      driveTimes: ident.driveTimes,
+    },
+  };
 }
 
 /** Phase 0b inject keys — sticky until cleared by the test. */
@@ -374,7 +425,10 @@ export function fakeData(): EngineData & {
           project_id: 'ayana',
           name: 'Ayana',
           micro_market: 'Sakleshpur',
-          rera_number: 'PRM/KA/RERA/1251/446/2024',
+          // Derived, not repeated: two fixture rows disagreeing about one
+          // project's RERA number is the same contamination as one summary
+          // shared by nine projects.
+          rera_number: projectDetailFor('ayana')!.reraNumber,
           entry_price_band: '₹24.95 L',
         },
         builder: { name: 'Lokations', bot_name: 'Naya', bot_persona: '', bot_signature: '', preferred_tone: 'warm' },

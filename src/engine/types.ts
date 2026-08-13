@@ -1,5 +1,9 @@
 /** ConverseEngine — pure data contract. No infra imports. */
 
+// Type-only, and engine-local: emi.ts is arithmetic over outcome.ts and imports
+// nothing from here, so this cannot cycle.
+import type { Affordability } from './emi.js';
+
 export type Phase = 'discover' | 'focused' | 'visit' | 'handoff';
 
 export interface Constraints {
@@ -52,7 +56,16 @@ export interface DimensionGapReceipt {
   label: string;
 }
 
-export type ProbeKind = 'location' | 'budget' | 'bhk' | 'purpose' | 'priority';
+export type ProbeKind =
+  | 'location'
+  | 'budget'
+  | 'bhk'
+  | 'purpose'
+  | 'priority'
+  | 'propertyType'
+  | 'worries'
+  | 'schools'
+  | 'hub';
 
 export interface OfferedProject {
   projectId: string;
@@ -86,6 +99,12 @@ export interface DiscoverState {
   oriented: boolean;
   ignoredProbes: number;
   advancedOnce: boolean;
+  /**
+   * WA minimal brief (builder-allotted lines) — pending step after the buyer
+   * taps “Help me choose”. Two steps max: size, then budget. Cleared on a
+   * project pick, the Projects menu, or once both facts are known.
+   */
+  waBriefStep?: 'size' | 'budget';
   /** Recent turns for anaphora ("both", "these") — newest last. */
   recentMessages?: TranscriptMessage[];
   /**
@@ -194,6 +213,13 @@ export interface ConversationState {
   stageWritten?: 'engaged' | 'qualified';
   /** W3 — previous outbound reply (repeat guard compares against this). */
   lastReply?: string;
+  /**
+   * Fingerprints of the last few outbound lines, newest first. `lastReply`
+   * catches a line sent twice in a row; over 12 long conversations the repeats
+   * that actually landed were three and four turns apart — the same "which one?"
+   * menu at turns 7, 9, 10 and 13. A window of one cannot see a loop.
+   */
+  recentReplies?: string[];
   objectionCount?: number;
   /** Hybrid — count of sync DeepSeek compose/extract calls this conversation. */
   llmUsedCount?: number;
@@ -201,6 +227,23 @@ export interface ConversationState {
   ndBuyerPhone?: string;
   /** After visit_booked — next short ack should not escalate to handoff. */
   postVisitAckPending?: boolean;
+  /**
+   * The project this conversation has already booked a visit to. Booking
+   * DELETES `visit`, so without this the next visit-shaped turn ("and can my
+   * brother come too") re-asked "which day and time" one turn after saying
+   * "Done — your visit is set for Saturday at 10:30 AM".
+   */
+  lastBookedProjectId?: string;
+  /** One-shot: the booked slot has been read back, so a real change may re-ask. */
+  visitRebookOffered?: boolean;
+  /**
+   * What we already worked out from a monthly figure the buyer gave. Turn 2:
+   * "i can pay 55000 a month" → "about ₹63 L of loan, roughly ₹79 L of home".
+   * Turns 5, 9, 10 and 12: "I need a loan amount before I can work that out."
+   * The number was ours — derived, spoken, and then forgotten. Asking for it
+   * back is amnesia, not honesty.
+   */
+  affordability?: Affordability & { fromIncome: boolean };
   /** Opt-out confirmation/disambiguation is active. */
   stopConfirmPending?: boolean;
   /** Whether the pending turn confirms explicit deletion or clarifies contact scope. */
@@ -285,6 +328,10 @@ export type FactKey =
   | 'loan_eligibility'
   | 'project_type'
   | 'price'
+  /** Statutory add-ons — stamp duty, registration, GST — from the cost sheet. */
+  | 'stamp_duty'
+  /** The comparable unit rate. Only ever spoken from a published size + price. */
+  | 'price_per_sqft'
   | 'flood_zone'
   | 'rental_yield'
   /** Corridor appreciation from approved micro_market_intel. */
@@ -312,7 +359,31 @@ export type TurnGoal =
    */
   | { kind: 'clarify_intent' }
   | { kind: 'probe'; slot: ProbeKind }
-  | { kind: 'recommend' }
+  /**
+   * `askedTopic` — the buyer asked something of the BOOK before picking a
+   * project ("price?", "rera number first", "send the brochure"). The list is
+   * still the right screen, but the reply owes an answer to the question it was
+   * given: the book's own range where the book has one, and an honest "that
+   * lives per project — pick one" where it doesn't. Without this the turn fell
+   * to clarify_intent and replied "tell me a size or budget", throwing the
+   * buyer's question away because it carried no filter.
+   */
+  | {
+      kind: 'recommend';
+      askedTopic?: AnswerTopic;
+      /**
+       * A question about the LINE or the BOOK rather than a property — "are you
+       * a bot?", "do I pay commission?", "which is the cheapest?". The list is
+       * still the right screen; this says what the reply owes first.
+       */
+      bookQuestion?: import('./book-questions.js').BookQuestion;
+      /**
+       * The buyer described their own situation rather than asking anything —
+       * "this is my first home", "we have two small kids". The list is still
+       * the right screen; this says what the reply owes before it.
+       */
+      situation?: import('./book-questions.js').Situation;
+    }
   | { kind: 'advance'; reason: 'same_set' | 'cta_decline' }
   /** Shortlist has 2+ projects; buyer asked for details without naming which. */
   | { kind: 'clarify_project_pick' }
@@ -341,6 +412,14 @@ export type TurnGoal =
       /** Multi-intent Phase C — topics beyond the top-2 answered this turn. */
       parkedTopics?: AnswerTopic[];
       requires?: FactKey[];
+      /**
+       * The buyer asked something specific and NOTHING was recognised, so the
+       * topic fell back to `overview` as a DEFAULT rather than as evidence.
+       * Compose must say so plainly instead of reciting the project card — the
+       * card does not answer "share the location pin", and printing the same
+       * card for two different questions is how the bot reads as not listening.
+       */
+      unrecognised?: boolean;
     }
   /** EMI from a buyer-stated principal; no project pick or price lookup required. */
   | { kind: 'emi_calculate' }
@@ -645,6 +724,15 @@ export interface EmiEvidence {
   discloseInputs?: boolean;
   ratePercent: number;
   tenureYears: number;
+  /**
+   * Set when the basis came from something the buyer said on an EARLIER turn
+   * rather than this one. Computing on a remembered number is right; doing it
+   * silently is not — the reply names where the figure came from so a buyer
+   * whose circumstances changed can correct it.
+   */
+  basisSource?:
+    | { kind: 'buyer_monthly'; monthlyInr: number; fromIncome: boolean }
+    | { kind: 'buyer_budget'; budgetInr: number };
 }
 
 export interface LandedCostEvidence {
@@ -760,6 +848,16 @@ export interface EvidenceSet {
   visits?: VisitEvidence;
   /** holdableUnits: live per-type availability (AB-1). Positive = real count; 0/absent = unknown (Desk sends 0 when a project tracks no units). */
   units?: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string; holdableUnits?: number }>;
+  /**
+   * The comparable rate, derived where a published size and a published price
+   * meet. Computed in the evidence layer so the division happens once and
+   * compose only formats it — and so the answer contract can tell "we worked
+   * out a rate" apart from "we have a price".
+   */
+  perSqft?: {
+    projectName: string;
+    rows: Array<{ unitType: string; rateInr: number }>;
+  };
   /** FAQ-shaped ask where Desk had no row for the resolved key(s).
    *  taught: the missed key came from a human-taught facet bind (not buyer
    *  text) — the floor renders the honest miss instead of the overview card. */
@@ -813,6 +911,13 @@ export interface Extracted {
   emiTenureYears?: number;
   /** Explicit loan principal stated in an EMI ask; never a search budget. */
   emiPrincipalInr?: number;
+  /**
+   * "I can pay 55000 a month" / "I take home 1.5 lakhs a month", converted.
+   * Held on the turn so the state layer can keep it: the buyer states their
+   * budget in the unit they think in exactly once, and every money answer
+   * afterwards is owed that number.
+   */
+  affordability?: Affordability & { fromIncome: boolean };
   /** Phase 1 extraction/goal contract is active for this EMI turn. */
   emiContractV1?: boolean;
   mediaAssetKind?: string;
@@ -864,6 +969,11 @@ export interface ComposeContext {
   disclosedFacts?: Array<import('./disclosed-facts.js').DisclosedFact | Record<string, unknown>>;
   /** Voice gate — advisor_web gets consultative framing; default WhatsApp. */
   channel?: 'whatsapp' | 'advisor_web';
+  /** Skip area/budget interview — show the allotted book. */
+  waProjectFirst?: boolean;
+  /** How many configs the just-picked project has, when the chrome will offer
+   *  them as rows. The confirm copy has to name what is actually on screen. */
+  waSizeOptions?: number;
   /** Stage 7 — named latch when Desk provides sales contact. */
   handoffPhone?: string;
   handoffTeamName?: string;
@@ -886,7 +996,7 @@ export interface TurnDebug {
   /** 'recomposed' (W1) = draft failed grounding, ONE retry with the violations fed back succeeded. */
   grounding: 'pass' | 'repaired' | 'recomposed';
   /** W3 — repeat guard outcome, present only when the guard fired. */
-  repeat_guard?: 'recomposed' | 'template' | 'still_identical';
+  repeat_guard?: 'recomposed' | 'template' | 'still_identical' | 'acknowledged' | 'loop_broken';
   /** Set at ingress — chip tap vs typed message. */
   input_source?: import('./ingress.js').TurnInputSource;
   /** Per-field extract provenance (free-text funnel). */

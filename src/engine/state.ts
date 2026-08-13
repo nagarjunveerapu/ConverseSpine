@@ -27,6 +27,22 @@ export function initState(convId: string, builderId: string): ConversationState 
   };
 }
 
+/** WhatsApp test soak: wipe session without a second phone. */
+export function isSessionResetText(text: string): boolean {
+  const t = text.trim().toLowerCase().replace(/\s+/g, ' ');
+  return t === '/reset' || t === '/start' || t === 'start over' || t === 'new chat';
+}
+
+/** Keep conversation + Desk ids; drop focus, brief, visit, returning-buyer. */
+export function freshSession(s: ConversationState): ConversationState {
+  const next = initState(s.convId, s.builderId);
+  return {
+    ...next,
+    ...(s.ndConversationId ? { ndConversationId: s.ndConversationId } : {}),
+    ...(s.ndBuyerPhone ? { ndBuyerPhone: s.ndBuyerPhone } : {}),
+  };
+}
+
 export function emptyDiscover(): DiscoverState {
   return {
     asked: [],
@@ -108,7 +124,16 @@ export function applyVisitBooked(
       ? { projectId: prev.projectId, projectName: prev.projectName }
       : undefined);
   if (focus) {
-    return { ...rest, phase: 'focused', focus, postVisitAckPending: true };
+    return {
+      ...rest,
+      phase: 'focused',
+      focus,
+      postVisitAckPending: true,
+      // `visit` is cleared by design, but the FACT of the booking has to outlive
+      // the turn — otherwise the next visit-shaped question starts from zero.
+      lastBookedProjectId: focus.projectId,
+      visitRebookOffered: false,
+    };
   }
   return { ...rest, phase: 'handoff' };
 }
@@ -186,6 +211,9 @@ export function applyExtracted(
     ...(buyerName ? { buyerName } : {}),
     constraints,
     constraintAuthority,
+    // The latest monthly figure wins; an older one is never erased by a turn
+    // that simply didn't mention money.
+    ...(ex.affordability ? { affordability: ex.affordability } : {}),
     discover: { ...s.discover, rejectedProjectIds: rejected },
   };
 }

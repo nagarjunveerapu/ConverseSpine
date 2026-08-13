@@ -9,6 +9,7 @@ import type { ConversationState, Extracted, OfferedProject, AnswerTopic, Objecti
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 import { answerRequirements } from './answer-contract.js';
+import { affordabilityFromEmi, INCOME_SERVICING_RATIO } from './emi.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
 import { discourseOffered, currentShortlist, discussedList } from './entity-store.js';
 import { isPlausiblePlaceLabel } from './placeability.js';
@@ -145,8 +146,15 @@ export async function extractFacts(
   const emiTenure = parseEmiTenure(text);
   const mediaAssetKind = detectMediaAssetKind(text);
 
+  // Read on every turn, not only where the budget slot is writable: the search
+  // filter and the loan arithmetic are two different consumers of this number,
+  // and the second one has to survive the turn. Both parsers need the amount
+  // welded to a per-month phrase, so "emi for 20 years" and "30 percent
+  // upfront" stay silent here.
+  const afford = affordabilityFromMonthlyText(text);
+
   const constraints: Extracted['constraints'] = {};
-  const hinglishBhk = isSlotWritable('budget', filled, text) && isSlotWritable('bhk', filled, text) && isSlotWritable('location', filled, text)
+  const hinglishBhk =isSlotWritable('budget', filled, text) && isSlotWritable('bhk', filled, text) && isSlotWritable('location', filled, text)
     ? HINGLISH_LOC_BHK_BUDGET_RE.exec(text)
     : null;
   const hinglishBudget =
@@ -163,6 +171,11 @@ export async function extractFacts(
   } else if (budget) {
     constraints.budgetMaxInr = budget.max;
     if (budget.min !== undefined) constraints.budgetMinInr = budget.min;
+  } else if (isSlotWritable('budget', filled, text)) {
+    // A monthly instalment IS a budget — the buyer just gave it in the unit
+    // they think in. Convert it so the search cuts; the reply shows the working
+    // and the rate and tenure it assumed.
+    if (afford) constraints.budgetMaxInr = afford.priceInr;
   }
   if (bhk && !constraints.bhk) constraints.bhk = bhk;
   // A priority-probe answer ("Shorter commute") is a preference reply — the
@@ -277,6 +290,7 @@ export async function extractFacts(
     ...(emiRate !== undefined ? { emiRatePercent: emiRate } : {}),
     ...(emiTenure !== undefined ? { emiTenureYears: emiTenure } : {}),
     ...(emiPrincipal !== undefined ? { emiPrincipalInr: emiPrincipal } : {}),
+    ...(afford ? { affordability: afford } : {}),
     ...(options?.failureTools && askTopics.includes('emi') ? { emiContractV1: true } : {}),
     ...(mediaAssetKind ? { mediaAssetKind } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
@@ -324,8 +338,15 @@ export function extractFactsSync(
       : null;
   const budgetPickQuestion = isBudgetPickQuestion(text);
   const budgetFitQuestion = !budgetPickQuestion && isBudgetFitQuestion(text, budget);
+  const afford = affordabilityFromMonthlyText(text);
   const constraints: Extracted['constraints'] = {};
-  if (budget) constraints.budgetMaxInr = budget.max;
+  if (budget) {
+    constraints.budgetMaxInr = budget.max;
+  } else if (isSlotWritable('budget', filled, text)) {
+    // See the async path — a monthly instalment is a budget in the buyer's own
+    // unit, and the reply shows the arithmetic it used to convert it.
+    if (afford) constraints.budgetMaxInr = afford.priceInr;
+  }
   const softPrefsSync = detectSoftPrefs(text);
   const loc =
     !softPrefsSync.priorityFocus && isSlotWritable('location', filled, text)
@@ -365,6 +386,7 @@ export function extractFactsSync(
     ...(budgetPickQuestion ? { budgetPickQuestion: true, compareAdvice: true } : {}),
     ...(budgetFitQuestion ? { budgetFitQuestion: true } : {}),
     ...(emiPrincipal !== undefined ? { emiPrincipalInr: emiPrincipal } : {}),
+    ...(afford ? { affordability: afford } : {}),
     ...(emiRate !== undefined ? { emiRatePercent: emiRate } : {}),
     ...(emiTenure !== undefined ? { emiTenureYears: emiTenure } : {}),
     ...(options?.failureTools && askTopics.includes('emi') ? { emiContractV1: true } : {}),
@@ -495,6 +517,23 @@ export function resolveCatalogNameHit(
   return unique.length === 1 ? unique[0]! : null;
 }
 
+/**
+ * WA book descriptive-statement guard — does the buyer's text ANCHOR this
+ * project name, or merely brush it? "eldorado" / "coorg hills" anchor;
+ * a lone generic token off a vibe ("something green side, near hills" →
+ * Coorg Hills Estate) does not. Full distinctive name, or ≥2 distinctive
+ * tokens — catalog-derived, no hardcoded vocabulary.
+ */
+export function textAnchorsProjectName(text: string, name: string): boolean {
+  const t = ` ${text.toLowerCase()} `;
+  const distinctive = name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
+  if (distinctive.length >= 5 && t.includes(` ${distinctive} `)) return true;
+  if (t.includes(` ${name.toLowerCase()} `)) return true;
+  const tokens = offeredNameTokens(name).filter((tok) => tok.length >= 4);
+  const present = tokens.filter((tok) => new RegExp(`\\b${tok}\\b`, 'i').test(text));
+  return present.length >= 2;
+}
+
 /** Distinctive tokens for shortlist identity ("Krishnaja Greens" → krishnaja, greens). */
 function offeredNameTokens(name: string): string[] {
   const distinctive = name.replace(/^(brigade|lokations)\s+/i, '').toLowerCase();
@@ -592,7 +631,13 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
     // story), "13L down payment" (S05), "take home 85k". Same scrubber class
     // as family-of-4 above; both orders (amount-first and keyword-first).
     .replace(/\b\d[\d.,]*\s*(?:lakhs?|lacs?|l|k|cr|crores?)?\s*(?:saved|savings?|down\s*payment|downpayment|deposit(?:ed)?|salary|income)\b/g, ' ')
-    .replace(/\b(?:saved?|savings?|down\s*payment|downpayment|deposit(?:ed)?|salary|take\s*home|income|earns?|earning|paid|took|spent|gave|lost)\s*(?:of|is|was|:)?\s*\d[\d.,]*\s*(?:lakhs?|lacs?|l|k|cr|crores?)?\b/g, ' ');
+    .replace(/\b(?:saved?|savings?|down\s*payment|downpayment|deposit(?:ed)?|salary|take\s*home|income|earns?|earning|paid|took|spent|gave|lost)\s*(?:of|is|was|:)?\s*\d[\d.,]*\s*(?:lakhs?|lacs?|l|k|cr|crores?)?\b/g, ' ')
+    // A number tied to a weekday or a clock is a TIME, not a price bound —
+    // "sunday 12" / "monday 11am" / "sat 10.30" are visit slots riding free
+    // text ("sunday 12" persisted ₹12 L and poisoned every later search).
+    // A money unit right after the digits keeps it ("sunday, 50 lakhs").
+    .replace(/\b(?:mon|tue(?:s)?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?|sun)(?:day)?\s*(?:at|around|by|,)?\s*\d{1,2}(?:[:.]\d{2})?(?!\s*(?:lakhs?|lacs?|l\b|k\b|cr|crores?))\s*(?:am|pm)?\b/g, ' ')
+    .replace(/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b/g, ' ');
   const range = s.match(
     /(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?\s*(?:[-–—]|to|and)\s*(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?/,
   );
@@ -649,10 +694,29 @@ export function normalizeConfig(raw: string): string | null {
   return configs ?? null;
 }
 
+/**
+ * Is this BHK the home they HAVE, not the one they want?
+ *
+ * "We are a family of 4 moving from a rented 2bhk, my parents visit often so we
+ * need space" was read as a request for a 2 BHK — the engine took the size they
+ * are leaving as the size they want, then claimed a fit for it. The buyer said
+ * the opposite of what we heard, in the same sentence.
+ *
+ * Only the words immediately before the number are inspected: "moving from a
+ * rented 2bhk" is their present home, "moving to a 3bhk" is not.
+ */
+function describesTheHomeTheyAreLeaving(raw: string, at: number): boolean {
+  const before = raw.slice(Math.max(0, at - 44), at);
+  return /\b(?:from|out of|leaving|vacating|currently(?: in| living in)?|right now in|presently in|we (?:have|own|live in|stay in)|staying in|living in|rented|rental|existing|present|old|current)\b[^.]{0,24}$/i.test(
+    before,
+  );
+}
+
 /** BHK labels and plot-size phrases for unit_config matching. */
 export function extractConfigurationFilters(raw: string): string | undefined {
   const labels: string[] = [];
   for (const m of raw.matchAll(/([1-5](?:\.5)?)\s*(?:bhk|bedroom)s?\b/gi)) {
+    if (describesTheHomeTheyAreLeaving(raw, m.index ?? 0)) continue;
     labels.push(`${m[1]} BHK`);
   }
   if (/\b(?:studio|1\s*rk)\b/i.test(raw)) labels.push('Studio');
@@ -993,6 +1057,78 @@ export function parseEmiPrincipal(text: string): number | undefined {
   return inr && inr >= 100_000 ? inr : undefined;
 }
 
+/**
+ * A monthly instalment the buyer says they can carry — "I can pay 60000 per
+ * month", "monthly emi 45k". This is a budget stated in the unit real buyers
+ * think in, and reading it as nothing at all is why "what can I buy?" came
+ * back as a request to pick a size.
+ *
+ * Deliberately narrow: the amount must be attached to a per-month phrase, and
+ * the band rejects both maintenance-charge figures and mis-parses.
+ */
+/**
+ * Take-home pay stated per month — "I take home 1.5 lakhs a month, what can I
+ * afford?". Distinct from `parseMonthlyBudget`: this is income, not the
+ * instalment, so the caller must apply a servicing ratio and say that it did.
+ */
+export function parseMonthlyIncome(text: string): number | undefined {
+  const t = (text ?? '').trim();
+  if (!t) return undefined;
+  if (!/\b(?:take[- ]?home|salary|income|earn|ctc|in hand|in-hand)\b/i.test(t)) return undefined;
+  const m = /(?:₹\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|lakhs?|lacs?|l)?\b(?=[^.]{0,20}?\b(?:per|a|every)\s*month\b|[^.]{0,20}?\bmonthly\b|[^.]{0,20}?\bpm\b)/i.exec(t);
+  if (!m) return undefined;
+  const n = Number.parseFloat((m[1] ?? '').replace(/,/g, ''));
+  if (!isFinite(n) || n <= 0) return undefined;
+  const unit = (m[2] ?? '').toLowerCase();
+  const inr = /^(?:k|thousand)$/.test(unit)
+    ? n * 1000
+    : /^(?:lakhs?|lacs?|l)$/.test(unit)
+      ? n * 100_000
+      : n;
+  return inr >= 10_000 && inr <= 10_000_000 ? Math.round(inr) : undefined;
+}
+
+/**
+ * One reading of "what can I afford" from whatever monthly figure the buyer
+ * gave — the instalment they can carry, or the pay it has to come out of.
+ * `fromIncome` tells the reply which sentence it owes.
+ */
+export function affordabilityFromMonthlyText(
+  text: string,
+): (import('./emi.js').Affordability & { fromIncome: boolean }) | undefined {
+  const income = parseMonthlyIncome(text);
+  if (income !== undefined) {
+    const a = affordabilityFromEmi({ monthlyInr: income * INCOME_SERVICING_RATIO });
+    return a ? { ...a, fromIncome: true } : undefined;
+  }
+  const monthly = parseMonthlyBudget(text);
+  if (monthly === undefined) return undefined;
+  const a = affordabilityFromEmi({ monthlyInr: monthly });
+  return a ? { ...a, fromIncome: false } : undefined;
+}
+
+export function parseMonthlyBudget(text: string): number | undefined {
+  const t = (text ?? '').trim();
+  if (!t) return undefined;
+  // Income is not an instalment — "1.5 lakhs a month" is what they earn, and
+  // treating it as the EMI would put them in a ₹2 Cr home.
+  if (parseMonthlyIncome(t) !== undefined) return undefined;
+  const money = String.raw`(?:₹\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k|thousand)?`;
+  const perMonth = String.raw`(?:\s*(?:per|a|every)\s*month\b|\s*\/\s*(?:month|mo)\b|\s*(?:pm|p\.m\.|monthly)\b)`;
+  const m =
+    new RegExp(String.raw`${money}${perMonth}`, 'i').exec(t) ??
+    new RegExp(
+      String.raw`\bmonthly\s+(?:emi|payment|budget)\s*(?:of|is|:)?\s*${money}`,
+      'i',
+    ).exec(t);
+  if (!m) return undefined;
+  const raw = m[1]?.replace(/,/g, '');
+  const n = raw ? Number.parseFloat(raw) : NaN;
+  if (!isFinite(n) || n <= 0) return undefined;
+  const inr = /^(?:k|thousand)$/i.test(m[2] ?? '') ? n * 1000 : n;
+  return inr >= 5_000 && inr <= 2_000_000 ? Math.round(inr) : undefined;
+}
+
 /** Desk asset_kind for media share — exported for CAT / unit probes. */
 export function detectMediaAssetKind(text: string): string | undefined {
   const s = text.toLowerCase();
@@ -1040,8 +1176,20 @@ export function wantsImplicitProjectPick(
 
 /** Buyer asking for component-wise / all-in pricing — fetch landed-cost evidence. */
 export function wantsCostBreakdown(text: string): boolean {
-  return /\b(?:breakdown|break[- ]?up|landed cost|all[- ]in(?:\s+cost)?|component[- ]wise|cost break|full\s+price|all\s+charges|not\s+just\s+(?:bsp|base)|with\s+all\s+charges)\b/i.test(
-    text,
+  return (
+    /\b(?:breakdown|break[- ]?up|landed cost|all[- ]in(?:\s+cost)?|component[- ]wise|cost break|full\s+price|all\s+charges|not\s+just\s+(?:bsp|base)|with\s+all\s+charges)\b/i.test(
+      text,
+    ) ||
+    // "Are there any hidden charges?" is the distrust question, and the cost
+    // sheet IS its answer — every head, named. Answering it with "I don't have
+    // that on file" is the worst possible reply to the one question a buyer
+    // asks precisely because they suspect we are holding something back.
+    /\b(?:hidden|extra|additional|other|further|surprise)\s+(?:charges?|costs?|fees?|payments?)\b/i.test(
+      text,
+    ) ||
+    /\bwhat\s+else\s+(?:do|will)\s+i\s+(?:pay|have to pay)\b|\bover and above\b|\banything\s+(?:else|more)\s+(?:to pay|i pay|on top)\b/i.test(
+      text,
+    )
   );
 }
 
@@ -1272,6 +1420,9 @@ const LOCALITY_STOP = new Set([
   'only', 'just', 'near', 'nearby', 'around', 'close', 'by', 'to', 'at', 'in', 'of',
   'airport', 'project', 'projects', 'area', 'areas', 'place', 'somewhere', 'anywhere',
   'good', 'nice', 'best', 'us', 'consulate', 'office', 'work', 'my', 'me',
+  // Anaphora / budget glue — "apartments in same budget in Sarjapur" must not
+  // become locality=*same* (outside-served: "I don't have apartments in *same*").
+  'same', 'similar',
   // Function words and fillers. An utterance made only of these named nowhere:
   // "actually can you change something" reduces to "can you something".
   'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
@@ -1442,12 +1593,31 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
       '',
     )
     .trim();
+  // "in same budget in Sarjapur" — peel anaphoric budget glue so `in …` lands on the place.
+  scan = scan
+    .replace(/\bin\s+(?:the\s+)?same\s+budget\b/gi, ' ')
+    .replace(/\b(?:the\s+)?same\s+budget\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   // "no wait, Budigere Cross" — a lead-in segment made ENTIRELY of words that
   // are never a place is the buyer clearing their throat, not part of the area.
   // Same all-stopwords test the noise gate uses; a segment carrying anything
   // real ("3 BHK, under 50L") is left alone.
   const leadIn = /^([^,]{1,40}),\s*(.+)$/.exec(scan);
   if (leadIn && isLocalityNoise(leadIn[1])) scan = leadIn[2];
+
+  // "What about Sarjapur?" / "Sarjapur area?" — area pivots, not project overview.
+  const whatAboutPlace =
+    /\bwhat about\s+([A-Za-z][A-Za-z0-9\s'\/-]{2,40}?)(?:\s*\?|\s*$)/i.exec(scan);
+  if (whatAboutPlace?.[1]) {
+    const loc = acceptLocality(whatAboutPlace[1].replace(/\s*\/\s*/g, ' / ').trim());
+    if (loc) return loc;
+  }
+  const bareAreaAsk = /^([A-Za-z][A-Za-z\s-]{2,40}?)\s+area\s*\??$/i.exec(scan);
+  if (bareAreaAsk?.[1] && !/\b(lakhs|crore|bhk|budget|farm|plantation|managed)\b/i.test(bareAreaAsk[1])) {
+    const loc = acceptLocality(bareAreaAsk[1]);
+    if (loc) return loc;
+  }
 
   // Prefer `in …` locality. Allow slash micro-markets ("Aerospace Park / Devanahalli").
   // Stop at em-dash / UI tails AND before budget/soft-pref glue ("in North Bangalore under 1.2 Cr")

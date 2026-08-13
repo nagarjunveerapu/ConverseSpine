@@ -9,6 +9,7 @@
 import type { SemanticNluPort } from './adapters/semantic-nlu.js';
 import type { EngineLlm } from './ports.js';
 import { currentShortlist, discussedList } from './entity-store.js';
+import { applyWaInteractiveExtract } from '../channel/wa-pack.js';
 import {
   applyIntentRecovery,
   needsIntentRecovery,
@@ -27,11 +28,13 @@ import {
 import { applyPriceObjectionAuthority } from './price-objection.js';
 import {
   extractFacts,
+  extractLocation,
   isConstraintRefinementTurn,
   isDetailAskTurn,
   isLocationCorrectionTurn,
   locationLooksPolluted,
   looksLikeConfigAsk,
+  looksLikeOfferedProjectName,
   looksLikeSearchBriefText,
   unionAskTopics,
 } from './facts.js';
@@ -129,7 +132,11 @@ export async function extractTurnAuthority(
       await extractFacts(text, state, deps.llm, { inputSource: 'chip' }),
       chipResolution,
     );
-    const extracted = stampSpeechAct(seeded, chipResolution);
+    const extracted = applyWaInteractiveExtract(
+      options.actionId,
+      stampSpeechAct(seeded, chipResolution),
+      deps.catalogNames ?? [],
+    );
     return {
       extracted,
       provenance: {
@@ -218,6 +225,54 @@ export async function extractTurnAuthority(
   // PIV-03: "change to 2BHK under 70L" must recommend, not clarify_project_pick.
   if (isConstraintRefinementTurn(text) && !merged.namedProjects?.length && !merged.pickName) {
     merged = { ...merged, speechAct: 'search' };
+  }
+  merged = applyWaInteractiveExtract(options.actionId, merged, deps.catalogNames ?? []);
+  // Area pivot: "What about Sarjapur?" / "Sarjapur area?" must not stay answer/overview.
+  // SA-4 overview chip + permissions wipe location → stuck clarify_project_pick on the board.
+  {
+    const offeredHints = [
+      ...currentShortlist(state).map((o) => o.name),
+      ...discussedList(state).map((o) => o.name),
+      ...(state.focus?.projectName ? [state.focus.projectName] : []),
+    ];
+    const pivotLoc =
+      extractLocation(text, {
+        projectNameHints: offeredHints,
+        askTopics: [],
+      }) ??
+      (merged.constraints.location &&
+      !looksLikeOfferedProjectName(merged.constraints.location, offeredHints)
+        ? merged.constraints.location
+        : undefined);
+    const looksLikeAreaPivot =
+      Boolean(pivotLoc) &&
+      !looksLikeOfferedProjectName(pivotLoc!, offeredHints) &&
+      (/\bwhat about\b/i.test(text) ||
+        /\barea\s*\??\s*$/i.test(text.trim()) ||
+        /\b(?:any|apartments?|homes?|projects?|options?)\b.+\b(?:in|near|around)\b/i.test(text));
+    if (
+      looksLikeAreaPivot &&
+      pivotLoc &&
+      !merged.namedProjects?.length &&
+      !merged.pickName &&
+      (merged.speechAct === 'answer' ||
+        merged.transition === 'want_details' ||
+        merged.implicitProjectPick ||
+        merged.speechAct === 'unknown' ||
+        !merged.speechAct)
+    ) {
+      merged = {
+        ...merged,
+        speechAct: 'search',
+        constraints: { ...merged.constraints, location: pivotLoc },
+        askTopic: undefined,
+        askTopics: undefined,
+        transition: undefined,
+        implicitProjectPick: false,
+      };
+      provenance.fields.speechAct = 'regex';
+      provenance.fields.location = provenance.fields.location ?? 'regex';
+    }
   }
   // Phase 4: deterministic hold-intent gate ("hold/reserve a 2 bhk") — closed
   // set, regex-only, so turn logs show exactly why the hold sub-flow fired.

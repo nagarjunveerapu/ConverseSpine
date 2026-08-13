@@ -114,7 +114,7 @@ describe('Phase 1 destructive-intent gate', () => {
       actionPlan = entry.actionPlan;
     };
     await turn('coorg, 50 Lakhs');
-    const ask = await turn("don't call me, only chat here");
+    const ask = await turn('stop contacting me');
     expect(ask.reply).toMatch(/stop calling and keep chatting here/i);
     expect(ask.reply).toMatch(/stop all contact and delete your details/i);
     expect(ask.state.stopConfirmMode).toBe('contact_scope');
@@ -132,6 +132,21 @@ describe('Phase 1 destructive-intent gate', () => {
     const stillAmbiguous = await turn('yes');
     expect(stillAmbiguous.reply).toMatch(/stop calling and keep chatting here/i);
     expect(stillAmbiguous.state.stopConfirmPending).toBe(true);
+    expect(deps.crm.calls).not.toContain('delete-memory');
+  });
+
+  it('reads "no calls, message me here" as a channel choice, not an opt-out', async () => {
+    // The buyer named a channel to KEEP. Asking them to disambiguate against
+    // "delete your details" answers a request to carry on with an offer to
+    // erase them — the gate exists to protect a destructive act, and there is
+    // no destructive act in this sentence.
+    const { deps, turn } = phase1Harness('stop-scope-channel');
+    await turn('coorg, 50 Lakhs');
+    const kept = await turn("don't call me, only chat here");
+    expect(kept.reply).toMatch(/no calls/i);
+    expect(kept.reply).toMatch(/nothing gets deleted/i);
+    expect(kept.reply).not.toMatch(/delete your details/i);
+    expect(kept.state.stopConfirmPending).not.toBe(true);
     expect(deps.crm.calls).not.toContain('delete-memory');
   });
 

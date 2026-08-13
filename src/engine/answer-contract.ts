@@ -3,8 +3,32 @@ import { hasAppreciation, hasInvestmentRoi, hasRentBands } from './market-intel.
 import type { AnswerTopic, EvidenceSet, FactKey, TurnGoal } from './types.js';
 
 const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
-  { key: 'carpet_area', pattern: /\bcarpet\s+(?:area|size)\b/i },
+  // "is 1400 sqft carpet or super built up?" — the buyer says the word bare, so
+  // requiring "carpet AREA" made the commonest form of the question invisible.
+  { key: 'carpet_area', pattern: /\bcarpet\b/i },
   { key: 'built_up_area', pattern: /\b(?:built[- ]?up|super\s+built[- ]?up|sba)\s*(?:area|size)?\b/i },
+  // The statutory add-ons the buyer budgets for separately. Answered from the
+  // cost sheet's one-time charges — never estimated, since the rate is a state
+  // rule we do not hold.
+  // "Are there any hidden charges?" — the distrust question. It asks for the
+  // statutory and one-time heads by another name, so it takes the same key: the
+  // cost sheet is the answer, and topic routing follows the key.
+  {
+    key: 'stamp_duty',
+    pattern:
+      /\b(?:hidden|extra|additional|other|further|surprise)\s+(?:charges?|costs?|fees?|payments?)\b|\bwhat\s+else\s+(?:do|will)\s+i\s+(?:pay|have to pay)\b|\bover and above\b/i,
+  },
+  {
+    key: 'stamp_duty',
+    pattern:
+      /\b(?:stamp\s*duty|registration\s+(?:charges?|fees?|cost)|reg(?:n|istration)?\s*charges?|khata\s+(?:charges?|fees?)|gst\b|statutory\s+charges?)\b/i,
+  },
+  // The comparable rate. "per sqft", "rate per square feet", "psf".
+  {
+    key: 'price_per_sqft',
+    pattern:
+      /\b(?:per\s*(?:sq\.?\s*ft|sqft|square\s*(?:feet|foot)|sft)|(?:sq\.?\s*ft|sqft|sft)\s*rate|psf|rate\s+per\s+(?:sq\.?\s*ft|sqft|square\s*(?:feet|foot)))\b/i,
+  },
   { key: 'possession', pattern: /\b(?:possession|handover)(?:\s+(?:date|timeline|when))?\b/i },
   // Focused menu chip — bare "when" means possession on the open project.
   { key: 'possession', pattern: /^when\s*[?.!]?\s*$/i },
@@ -12,6 +36,14 @@ const REQUIREMENT_PATTERNS: ReadonlyArray<{ key: FactKey; pattern: RegExp }> = [
   {
     key: 'possession',
     pattern: /\bwhen(?:'s| is)?(?:\s+it)?\s+ready(?!\s+to\s+move)\b|\bwhen\s+ready\b/i,
+  },
+  // The comparative form of the same question. "which is ready first" carries no
+  // "when" and no "possession", so both closed sets were silent on it and the
+  // turn fell through to a generic comparison card — twice in one live run.
+  {
+    key: 'possession',
+    pattern:
+      /\bready\s+(?:first|sooner|earlier)\b|\bwhich\s+(?:one\s+)?(?:is|will\s+be|gets)\s+ready\b|\bdelivers?\s+(?:first|sooner|earlier)\b|\bhands?\s+over\s+(?:first|sooner|earlier)\b/i,
   },
   { key: 'rera', pattern: /\brera(?:\s+(?:number|status|registration))?\b/i },
   { key: 'khata', pattern: /\bkhata\b/i },
@@ -89,6 +121,8 @@ export function answerRequirements(text: string): FactKey[] {
 const FACT_KEY_TOPIC: Partial<Record<FactKey, AnswerTopic>> = {
   carpet_area: 'price',
   built_up_area: 'price',
+  stamp_duty: 'price',
+  price_per_sqft: 'price',
   price: 'price',
   possession: 'availability',
   rera: 'legal',
@@ -145,7 +179,15 @@ export function withAnswerRequirements(
     }
   }
   // Wave 3 — returns + cost: keep price topic so pricing evidence is not dropped.
-  if (requires.includes('price')) {
+  // stamp_duty / price_per_sqft ride along: a buyer can ask for the statutory
+  // heads or the rate without ever saying "price", and without the topic the
+  // pricing fetch never runs — the contract then reports a miss for evidence
+  // nobody went and got. "Are there any hidden charges?" is exactly that shape.
+  if (
+    requires.includes('price') ||
+    requires.includes('stamp_duty') ||
+    requires.includes('price_per_sqft')
+  ) {
     const topics = next.topics?.length ? [...next.topics] : [next.topic];
     if (!topics.includes('price')) {
       const withPrice = [...topics, 'price'] as AnswerTopic[];
@@ -178,6 +220,20 @@ export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
   const faqKeys = new Set(
     evidence.detail?.faqs?.map((faq) => faq.questionKey.toLowerCase()) ?? [],
   );
+  // A comparison delivers the same facts, two columns wide. This read only the
+  // single-project detail, so "which is ready first" — a possession question by
+  // any reading — came back "I don't have possession on file" with both dates
+  // sitting in the matrix. A row counts as delivered only when it holds a real
+  // value: the matrix fills empties with an em dash.
+  const matrixKeys = new Set(
+    (evidence.compare?.matrix?.rows ?? [])
+      .filter((r) => r.values.some((v) => v.trim() && v.trim() !== '—'))
+      .map((r) => (r.key ?? '').toLowerCase()),
+  );
+  if (matrixKeys.has('possession')) delivered.push('possession');
+  if (matrixKeys.has('project_type')) delivered.push('project_type');
+  if (matrixKeys.has('loan_eligibility')) delivered.push('loan_eligibility');
+  if (matrixKeys.has('starting_price') || matrixKeys.has('price_range')) delivered.push('price');
   if (
     evidence.detail?.possession ||
     faqKeys.has('possession') ||
@@ -203,6 +259,17 @@ export function deliveredFactKeys(evidence: EvidenceSet): FactKey[] {
     delivered.push('loan_eligibility');
   }
   if (evidence.detail?.projectType) delivered.push('project_type');
+  // Statutory add-ons are delivered only by a charge line that names one — the
+  // base price is not an answer to "what is the stamp duty".
+  const STATUTORY = /\b(?:stamp|registration|regn|gst|khata|statutory|govt|government)\b/i;
+  if (
+    evidence.landedCost?.oneTime.some((c) => STATUTORY.test(c.label)) ||
+    evidence.pricing?.components?.some((c) => STATUTORY.test(c.label))
+  ) {
+    delivered.push('stamp_duty');
+  }
+  // A rate is only real when a published size and a published price meet.
+  if (evidence.perSqft?.rows.length) delivered.push('price_per_sqft');
   // Price is delivered by a live pricing quote OR by config prices already on
   // the detail (incl. the resilient projectCache fallback) — so a flaked
   // pricingQuote can't produce a false "I don't have price on file" when the

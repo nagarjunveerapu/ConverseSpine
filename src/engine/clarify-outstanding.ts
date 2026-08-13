@@ -43,29 +43,33 @@ export function speakStickyClarify(input: StickyClarifyInput): string | null {
     }
   }
 
+  // Inside a project we know exactly what is on the table, so a short buyer
+  // message ("??") is not a failure to announce — it is a cue to say plainly
+  // where we are and name the choices. "I couldn't make sense of that" put the
+  // blame on the buyer for a turn the bot had already fumbled.
   if (input.phase === 'focused' && input.focusName) {
     const topic = (input.priorTopics?.[0] ?? '').toLowerCase();
     if (topic === 'legal') {
       return (
-        `I couldn't make sense of that. Still on legal for *${input.focusName}* — ` +
-        'ask about RERA, OC, khata, or title, or name what you need next.'
+        `We're on the legal papers for *${input.focusName}*. ` +
+        'I can pull the RERA number, the OC status, the khata, or the title — say which.'
       );
     }
     if (topic === 'amenities') {
       return (
-        `I couldn't make sense of that. Still on amenities for *${input.focusName}* — ` +
-        'what would you like to know, or ask about price/legal next.'
+        `We're on amenities for *${input.focusName}*. ` +
+        "I can tell you what's built and what's promised — or move to price or the legal papers."
       );
     }
     if (topic === 'price') {
       return (
-        `I couldn't make sense of that. Still on pricing for *${input.focusName}* — ` +
-        'ask for a breakdown, or name another detail you need.'
+        `We're on pricing for *${input.focusName}*. ` +
+        'I can break the cost down by size, work out the all-in figure, or show the monthly EMI — which one?'
       );
     }
     return (
-      `I couldn't make sense of that. Still looking at *${input.focusName}* — ` +
-      'ask about price, legal, amenities, or what you need next.'
+      `Let me put that plainly — we're on *${input.focusName}*. ` +
+      'I can give you the price, the legal papers, the amenities, or put a site visit on the calendar. Which one?'
     );
   }
 

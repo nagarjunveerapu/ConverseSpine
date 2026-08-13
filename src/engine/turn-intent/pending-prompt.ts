@@ -1,6 +1,7 @@
 import type { EvidenceSet, TurnGoal } from '../types.js';
 import type { AdvisorUiMode, SearchRecoveryEnvelope } from '../recovery-planner.js';
 import type { PendingPrompt, PendingPromptKind, RtiState } from './types.js';
+import { composedOfferIn, offerPromisesAllInCost, resolveOfferTopic } from '../compose.js';
 
 export function excerptReply(reply: string, max = 200): string {
   const flat = reply.replace(/\s+/g, ' ').trim();
@@ -172,14 +173,41 @@ export function buildRtiStateUpdate(input: {
   turnCount: number;
   previousRti?: RtiState;
   focus?: { projectId: string; projectName: string } | null;
+  /** A hold / visit confirm is open — a closing nudge must not steal its yes. */
+  hardQuestionOutstanding?: boolean;
+  /** What the buyer has already told us — a closer's yes resolves against it. */
+  constraints?: { bhk?: string };
+  /**
+   * This turn's affirm already spent an offer. It does NOT stop a new one from
+   * arming: answering "yes" and then asking a fresh question is the normal
+   * shape of a conversation, and suppressing here is what made the second and
+   * third "yes" in a row fall to a generic nudge.
+   */
+  consumingAffirm?: boolean;
 }): RtiState {
-  const pendingPrompt = buildPendingPrompt(
-    input.goal,
-    input.evidence,
-    input.searchRecovery,
-    input.turnCount,
-    input.focus,
-  );
+  // If the reply ends in one of compose's enumerated closers, THAT is the
+  // question outstanding — it is the last thing the buyer read, so it is what
+  // their next "yes" answers. It outranks a goal-derived prompt for the same
+  // reason: the buyer replies to the words, not to our goal kind.
+  const composed =
+    input.focus && !input.hardQuestionOutstanding ? composedOfferIn(input.reply) : undefined;
+  const pendingPrompt = composed
+    ? {
+        kind: 'offer_pricing' as const,
+        project_id: input.focus!.projectId,
+        project_name: input.focus!.projectName,
+        topic: resolveOfferTopic(composed, input.constraints),
+        ...(offerPromisesAllInCost(composed) ? { breakdown: true } : {}),
+        options: composed.options,
+        asked_at_turn: input.turnCount,
+      }
+    : buildPendingPrompt(
+        input.goal,
+        input.evidence,
+        input.searchRecovery,
+        input.turnCount,
+        input.focus,
+      );
   const successTurn =
     input.goal.kind === 'recommend' ||
     input.goal.kind === 'commit' ||
@@ -187,6 +215,7 @@ export function buildRtiStateUpdate(input: {
     (input.evidence.matches?.length ?? 0) > 0;
   // offer_pricing / location_broaden succeed with matches but still need a CTA bind.
   const keepPending =
+    Boolean(composed) ||
     pendingPrompt?.kind === 'offer_pricing' ||
     pendingPrompt?.kind === 'location_broaden' ||
     (!successTurn && Boolean(pendingPrompt));

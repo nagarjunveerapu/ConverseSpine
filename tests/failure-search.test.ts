@@ -239,7 +239,7 @@ describe('Phase 3 turn behavior', () => {
         },
         deps,
       );
-    await turn("don't call me, only chat here");
+    await turn('stop contacting me');
     const kept = await turn('keep the chat');
     expect(kept.reply).toMatch(/keep your property search/i);
     expect(kept.reply).not.toMatch(/identify that location/i);

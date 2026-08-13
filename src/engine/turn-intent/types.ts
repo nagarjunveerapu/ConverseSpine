@@ -17,6 +17,20 @@ export interface PendingPrompt {
   project_name?: string;
   /** For offer_pricing — topic to seed on bare affirm (usually price). */
   topic?: import('../types.js').AnswerTopic;
+  /**
+   * The offer promised the ALL-IN cost, not the headline price. A bare "yes"
+   * to "shall I work out the all-in figure?" has to reach the cost sheet —
+   * answering it with the sticker price is not the thing that was offered.
+   */
+  breakdown?: boolean;
+  /**
+   * The forks the question actually offered, in the order they were spoken.
+   * A two-way question ("loan eligibility, or the configs?") can be answered
+   * with "both", "neither", "the second one", or by naming a fork — none of
+   * which is a bare yes. Without this the bot hears only "yes" and answers
+   * everything else with a photocopy of its own last message.
+   */
+  options?: ReadonlyArray<import('../types.js').AnswerTopic>;
   location_target?: string;
   chip_ids?: string[];
   asked_at_turn: number;

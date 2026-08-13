@@ -5,6 +5,7 @@ import { resolveFaqQuestionKeys } from '../faq-keys.js';
 import { holdUnitType } from '../hold-intent.js';
 import { BARE_BHK_CONFIG_RE } from '../turn-routing/intent-authority.js';
 import { DECLINE } from '../turn-intent/dialogue-acts.js';
+import { resolvePendingFork } from '../pending-fork.js';
 
 /** Unique projects the buyer can honestly compare / deictically address. */
 function discourseProjectCount(s: ConversationState): number {
@@ -129,6 +130,15 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
     !ex.recallConstraints &&
     !(ex.namedProjects?.length);
 
+  // The bot's own closer was a FORK, and a fork takes more answers than yes.
+  // "both", "neither", "the second one", or naming a fork by word all used to
+  // fall straight through to a verbatim repeat of the card that asked.
+  const fork = resolvePendingFork(text, s.rti?.pendingPrompt);
+  if (fork && !ex.isQuestion && !(ex.namedProjects?.length) && !ex.objection) {
+    if (fork.kind === 'none') return { kind: 'advance', reason: 'cta_decline' };
+    return { kind: 'answer', topic: fork.topic, projectId: focus.projectId };
+  }
+
   // P4-CTA defense: pending offer_pricing blocks bareAffirm below, so a missed
   // RTI seedAskTopic used to fall through to overview. Consume the CTA here.
   if (bareAffirmBase && s.rti?.pendingPrompt?.kind === 'offer_pricing') {
@@ -145,6 +155,16 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
     /\bwant pricing\b/i.test(s.rti?.lastReplyExcerpt ?? '')
   ) {
     return { kind: 'answer', topic: 'price', projectId: focus.projectId };
+  }
+
+  // The nudge we sent last turn WAS a question — "Shall I set up a visit to X,
+  // or hold a unit for you while you decide?" — and nothing armed a prompt for
+  // it, because a visit is not an answer topic. So the yes it asked for fell
+  // through to the same nudge, and the buyer said yes to it at turns 3, 10 and
+  // 15 of the same conversation. A bare yes takes the first fork offered; the
+  // hold stays available on the words.
+  if (bareAffirmBase && !s.rti?.pendingPrompt && s.rti?.lastGoalKind === 'advance') {
+    return { kind: 'propose_visit', projectId: focus.projectId };
   }
 
   const bareAffirm = bareAffirmBase && !s.rti?.pendingPrompt;
@@ -257,11 +277,32 @@ export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal
     composeSet = [primary];
   }
   const { active, parked } = splitComposeTopics(composeSet);
+  const chosen = active[0] ?? primary;
   return {
     kind: 'answer',
-    topic: active[0] ?? primary,
+    topic: chosen,
     projectId: focus.projectId,
     ...(active.length > 1 ? { topics: active } : {}),
     ...(parked.length ? { parkedTopics: parked } : {}),
+    // `overview` reached by fallback is the engine shrugging. When the buyer
+    // asked something specific, say we don't have it — do not recite the card.
+    ...(chosen === 'overview' && isUnrecognisedAsk(ex, text) ? { unrecognised: true } : {}),
   };
+}
+
+/** Did the buyer ASK for the overview, or is overview just where we landed? */
+const OVERVIEW_REQUEST =
+  /\b(?:tell me (?:about|more)|details?|overview|more info|information|about (?:this|the) (?:project|property)|kya hai|batao|full details)\b/i;
+
+function isUnrecognisedAsk(ex: Extracted, text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  // An explicit overview request, a details transition, or a bare project pick
+  // all EARN the card.
+  if (ex.transition === 'want_details') return false;
+  if (ex.askTopic === 'overview' || ex.askTopics?.includes('overview')) return false;
+  if (ex.namedProjects?.length || ex.pickName) return false;
+  if (OVERVIEW_REQUEST.test(t)) return false;
+  // A specific question with nothing extracted — that is a miss, not an answer.
+  return ex.isQuestion === true || /\?/.test(t) || t.split(/\s+/).length >= 4;
 }

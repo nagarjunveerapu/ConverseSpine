@@ -51,7 +51,7 @@ export function isVisitDayUtterance(text: string): boolean {
 
 /** Explicit clock time from buyer text — null when none stated. */
 export function extractVisitTime(text: string): { hour: number; minute: number } | null {
-  const compact = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  const compact = text.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b/i);
   if (compact) {
     let hour = parseInt(compact[1]!, 10);
     const minute = compact[2] ? parseInt(compact[2], 10) : 0;

@@ -135,6 +135,12 @@ export interface Env {
    */
   SYNC_BAML_MODE?: string;
 
+  /**
+   * WhatsApp project-first: pack Advisor chips onto list/buttons and skip the
+   * discovery brief. on | off. Unset = on for non-prod, off for prod.
+   */
+  WA_PROJECT_FIRST?: string;
+
   /** Langfuse observability (optional). */
   LANGFUSE_PUBLIC_KEY?: string;
   LANGFUSE_SECRET_KEY?: string;

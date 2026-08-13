@@ -1,7 +1,8 @@
 import type { Env } from '../env.js';
 import { resolveBuilderByPhoneNumberId } from '../channel/phone-resolve.js';
 import { getMetaAppSecret, verifyMetaWebhookSignature } from '../channel/meta-secrets.js';
-import { sendText, sendTyping, sendInteractiveButtons, appendNumberedMenu } from '../channel/whatsapp-client.js';
+import { deliverWhatsAppTurn } from '../channel/wa-deliver.js';
+import { sendTyping } from '../channel/whatsapp-client.js';
 import { seenWebhookMessage, overRateLimit } from '../channel/ingress-guard.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
 import { handleChat } from '../worker/routes.js';
@@ -126,26 +127,7 @@ export async function handleWhatsAppWebhook(
           });
 
           if (creds.access_token) {
-            const labels = result.whatsapp_actions?.map((a) => a.label) ?? [];
-            const body = labels.length ? appendNumberedMenu(result.reply_text, labels) : result.reply_text;
-            if (result.whatsapp_actions?.length) {
-              await sendInteractiveButtons(
-                phoneNumberId,
-                buyerPhone,
-                body,
-                result.whatsapp_actions.map((a) => ({ id: a.id, title: a.label })),
-                creds.access_token,
-              );
-            } else {
-              await sendText(phoneNumberId, buyerPhone, body, creds.access_token);
-            }
-            const { deliverWhatsAppMediaAttachments } = await import('../channel/deliver-media.js');
-            await deliverWhatsAppMediaAttachments(
-              phoneNumberId,
-              buyerPhone,
-              result.media_attachments,
-              creds.access_token,
-            );
+            await deliverWhatsAppTurn(phoneNumberId, buyerPhone, result, creds.access_token);
           }
         };
 

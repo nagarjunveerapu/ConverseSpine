@@ -16,6 +16,7 @@ import { LangfuseTracer } from '../observability/langfuse.js';
 import { emitLocalTurnLog, localTurnLogEnabled } from '../observability/local-turn-log.js';
 import { classifyTurnIntent } from '../engine/turn-intent/classify.js';
 import { engineDepsWithRuntimeFlags } from './failure-flags.js';
+import { resolveWaProjectFirst } from '../channel/wa-pack.js';
 
 function resolveSyncBamlMode(env: Env): import('../engine/extract-baml.js').BamlExtractMode {
   const hybrid = resolveHybridMode(env);
@@ -114,6 +115,10 @@ export class ConverseRuntime {
         : {}),
       ...(env.VISIT_EMBED_ACTS_ONLY === 'true' ? { visitEmbedActsOnly: true } : {}),
       ...(env.TOPIC_UNION === 'true' ? { topicUnion: true } : {}),
+      waProjectFirst: resolveWaProjectFirst(
+        env.WA_PROJECT_FIRST,
+        (env.NAYADESK_URL ?? '').includes('nayadesk-prod'),
+      ),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),

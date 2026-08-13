@@ -86,11 +86,40 @@ describe('visit phase', () => {
     expect(goal.kind).toBe('visit_booked');
   });
 
-  it('which-projects: come for the visit with 2 discussed asks chooser (no silent multi-seed)', () => {
+  it('want_visit with focus uses the open project, not the discussed set', () => {
     const s = {
       ...initState('t', 'lokations'),
       phase: 'visit' as const,
       focus: { projectId: 'krishnaja', projectName: 'Krishnaja Greens' },
+      discover: {
+        ...initState('t', 'lokations').discover,
+        discussedProjects: [
+          { projectId: 'ayana', name: 'Ayana' },
+          { projectId: 'krishnaja', name: 'Krishnaja Greens' },
+        ],
+        lastOffered: [
+          { projectId: 'ayana', name: 'Ayana' },
+          { projectId: 'krishnaja', name: 'Krishnaja Greens' },
+        ],
+      },
+      visit: undefined,
+    };
+    const goal = decide(
+      s,
+      { constraints: {}, transition: 'want_visit' },
+      { text: 'come for the visit', now },
+    );
+    expect(goal.kind).toBe('visit_ask');
+    if (goal.kind === 'visit_ask') {
+      expect(goal.ask).not.toBe('which_projects');
+      expect(goal.state.projectId).toBe('krishnaja');
+    }
+  });
+
+  it('which-projects: come for the visit with 2 discussed and no focus asks chooser', () => {
+    const s = {
+      ...initState('t', 'lokations'),
+      phase: 'visit' as const,
       discover: {
         ...initState('t', 'lokations').discover,
         discussedProjects: [

@@ -36,21 +36,55 @@ describe('W3 repeat guard', () => {
         deps,
       );
     await turn('plantation in sakleshpur under 50 lakhs');
-    await turn('tell me about Ayana');
-    // Two bare affirms → two 'advance' goals (LLM-composed, not template-locked).
-    const first = await turn('ok');
-    const second = await turn('ok');
-    expect(second.debug.goal.kind).toBe('advance');
+    // An off-book question the file cannot answer, asked twice. The reply is
+    // LLM-composed, so a second identical draft is exactly what the guard is for.
+    const first = await turn('what school district is this in?');
+    const second = await turn('what school district is this in?');
 
     // The contract: the guard FIRES on a would-be verbatim repeat, and either
     // re-composes (replies differ) or lands on the accepted template floor
     // (explicitly marked still_identical) — never a silent repeat.
-    if (second.reply === first.reply) {
-      expect(second.debug.repeat_guard).toBe('still_identical');
-    } else if (second.debug.repeat_guard) {
+    expect(second.reply).not.toBe(first.reply);
+    if (second.debug.repeat_guard) {
       expect(['recomposed', 'template']).toContain(second.debug.repeat_guard);
-      expect(llm.calls.some((c) => c.vary)).toBe(true);
     }
+  });
+
+  it('a bare affirm answers the question the bot just asked — it does not re-nudge', async () => {
+    // Was: two bare "ok"s produced two identical 'advance' nudges, and the
+    // guard existed to break the tie. The affirm now binds to the closer the
+    // buyer actually read, so consecutive yeses walk the offer instead.
+    const deps = fakeDeps();
+    const turn = (text: string) =>
+      runEngineTurn(
+        { convId: 'rg-3', builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'advisor_web' },
+        deps,
+      );
+    await turn('plantation in sakleshpur under 50 lakhs');
+    await turn('tell me about Ayana');
+    const first = await turn('ok');
+    const second = await turn('ok');
+    expect(first.debug.goal.kind).toBe('answer');
+    expect(second.debug.goal.kind).toBe('answer');
+    expect(second.reply).not.toBe(first.reply);
+  });
+
+  it('a nudge never repeats itself verbatim — templates are exempt from the guard', async () => {
+    // advance is template-locked, so W3 never sees it. The nudge has to notice
+    // for itself that the buyer already read it and step aside.
+    const deps = fakeDeps();
+    const turn = (text: string) =>
+      runEngineTurn(
+        { convId: 'rg-4', builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
+        deps,
+      );
+    await turn('plantation in sakleshpur under 50 lakhs');
+    await turn('tell me about Ayana');
+    const first = await turn('no thanks');
+    const second = await turn('no thanks');
+    expect(first.debug.goal.kind).toBe('advance');
+    expect(second.debug.goal.kind).toBe('advance');
+    expect(second.reply).not.toBe(first.reply);
   });
 
   it('template-locked goals are exempt — deterministic content may repeat', async () => {
