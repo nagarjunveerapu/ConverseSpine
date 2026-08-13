@@ -44,6 +44,8 @@ describe('visit-slot', () => {
     expect(extractVisitTime('10AM')).toEqual({ hour: 10, minute: 0 });
     expect(extractVisitTime('10 PM')).toEqual({ hour: 22, minute: 0 });
     expect(extractVisitTime('12 AM')).toEqual({ hour: 0, minute: 0 });
+    expect(extractVisitTime('10.30 AM')).toEqual({ hour: 10, minute: 30 });
+    expect(extractVisitTime('tomorrow 10.30am')).toEqual({ hour: 10, minute: 30 });
     expect(extractVisitTime('Saturday')).toBeNull();
     expect(formatVisitTimeLabel(10, 0)).toBe('10:00 AM');
   });

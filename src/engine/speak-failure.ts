@@ -47,9 +47,18 @@ const UNSUPPORTED_COPY: Readonly<Record<string, string>> = Object.freeze({
  * thinner than we are. State the real reason instead — the refusal is the
  * product, and hiding it behind a shrug spends the credibility it earns.
  */
+/**
+ * Subjects whose decline carries a policy reason, so they can never be folded
+ * into the generic "I don't have X on file" sentence.
+ */
+export function intelGatedSubject(subject: string): boolean {
+  return subject === 'rental_yield' || subject === 'appreciation';
+}
+
 /** Intel-gated declines — keep the policy reason; name the focused project when known. */
 function intelGatedCopy(subject: string, projectName?: string): string | undefined {
   const named = (projectName ?? '').trim();
+  if (!intelGatedSubject(subject)) return undefined;
   if (subject === 'rental_yield') {
     return named
       ? `I don't quote a rental-yield figure I can't source for *${named}* — that means approved rent data for the corridor or the builder's own stated return, and I have neither.`

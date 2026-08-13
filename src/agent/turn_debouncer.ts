@@ -1,17 +1,22 @@
 import type { Env } from '../env.js';
 import type { ConversationState } from '../engine/types.js';
-import { sendText, sendTyping, sendInteractiveButtons, appendNumberedMenu } from '../channel/whatsapp-client.js';
+import { sendTyping } from '../channel/whatsapp-client.js';
+import { deliverWhatsAppTurn } from '../channel/wa-deliver.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
 import { handleChat } from '../worker/routes.js';
 
 interface InboxEntry {
   text: string;
+  action_id?: string;
   meta_message_id: string;
   received_at: number;
 }
 
 const DEBOUNCE_MS = 2000;
 const L0_STATE_KEY = 'l0_state';
+/** Meta message ids already accepted for this buyer — the retry guard. */
+const SEEN_KEY = 'seen_wamids';
+const SEEN_MAX = 50;
 
 /**
  * Conversation DO — WhatsApp debounce + L0 hot conversation state.
@@ -57,15 +62,33 @@ export class TurnDebouncer implements DurableObject {
       buyer_phone: string;
       phone_number_id: string;
       text: string;
+      action_id?: string;
       meta_message_id: string;
     };
+
+    // Meta delivers at-least-once. The webhook's KV guard is a cache — a retry
+    // that lands on another colo reads the id as unseen and the buyer gets the
+    // same answer twice. Every message for this buyer routes through this one
+    // DO, whose storage is strongly consistent, so the guard belongs here.
+    if (body.meta_message_id) {
+      const seen = (await this.state.storage.get<string[]>(SEEN_KEY)) ?? [];
+      if (seen.includes(body.meta_message_id)) {
+        return Response.json({ deduped: true });
+      }
+      await this.state.storage.put(SEEN_KEY, [...seen, body.meta_message_id].slice(-SEEN_MAX));
+    }
 
     await this.state.storage.put('builder_id', body.builder_id);
     await this.state.storage.put('buyer_phone', body.buyer_phone);
     await this.state.storage.put('phone_number_id', body.phone_number_id);
 
     const inbox = (await this.state.storage.get<InboxEntry[]>('inbox')) ?? [];
-    inbox.push({ text: body.text, meta_message_id: body.meta_message_id, received_at: Date.now() });
+    inbox.push({
+      text: body.text,
+      ...(body.action_id ? { action_id: body.action_id } : {}),
+      meta_message_id: body.meta_message_id,
+      received_at: Date.now(),
+    });
     await this.state.storage.put('inbox', inbox);
 
     const existing = await this.state.storage.getAlarm();
@@ -84,8 +107,13 @@ export class TurnDebouncer implements DurableObject {
 
     await this.state.storage.put('inbox', []);
 
-    const text = inbox.map((e) => e.text).join(' ');
-    const lastWamid = inbox[inbox.length - 1]?.meta_message_id;
+    const last = inbox[inbox.length - 1];
+    const action_id = [...inbox].reverse().find((e) => e.action_id)?.action_id;
+    const text =
+      last?.action_id
+        ? last.text
+        : inbox.map((e) => e.text).join(' ');
+    const lastWamid = last?.meta_message_id;
 
     const rt = createWorkerRuntime(this.env);
     const creds = await rt.crm.getWhatsAppCreds(builder_id);
@@ -93,29 +121,16 @@ export class TurnDebouncer implements DurableObject {
     if (lastWamid && token) await sendTyping(phone_number_id, lastWamid, token);
 
     // W6 — the debouncer is only ever fed by the WhatsApp webhook.
-    const result = await handleChat(rt, { builder_id, buyer_phone, text, channel: 'whatsapp' });
+    const result = await handleChat(rt, {
+      builder_id,
+      buyer_phone,
+      text,
+      ...(action_id ? { action_id } : {}),
+      channel: 'whatsapp',
+    });
 
     if (token) {
-      const labels = result.whatsapp_actions?.map((a) => a.label) ?? [];
-      const body = labels.length ? appendNumberedMenu(result.reply_text, labels) : result.reply_text;
-      if (result.whatsapp_actions?.length) {
-        await sendInteractiveButtons(
-          phone_number_id,
-          buyer_phone,
-          body,
-          result.whatsapp_actions.map((a) => ({ id: a.id, title: a.label })),
-          token,
-        );
-      } else {
-        await sendText(phone_number_id, buyer_phone, body, token);
-      }
-      const { deliverWhatsAppMediaAttachments } = await import('../channel/deliver-media.js');
-      await deliverWhatsAppMediaAttachments(
-        phone_number_id,
-        buyer_phone,
-        result.media_attachments,
-        token,
-      );
+      await deliverWhatsAppTurn(phone_number_id, buyer_phone, result, token);
     }
   }
 }

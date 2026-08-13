@@ -425,14 +425,25 @@ export function applyTurnIntentResult(
   }
 
   if (intent.kind === 'focused_question') {
-    next = {
-      ...next,
-      rti: {
-        ...next.rti,
-        pendingPrompt: undefined,
-      },
-    };
-    // Decline of offer_pricing: stay focused, no seed topic — overview/ack via normal decide.
+    // A seeded topic consumed the offer — clear it.
+    //
+    // A decline did NOT. This branch used to clear either way and hand the turn
+    // to "normal decide" — but decide's entire decline path keys off
+    // `pendingPrompt.kind === 'offer_pricing'`, so the layer that answers "no"
+    // was reading a slot the layer above had just emptied. It fell through to
+    // the project card: the buyer declined a visit and got the overview they
+    // had already been shown, which re-offered the visit, which they declined
+    // again. The end-of-turn RTI rebuild re-arms from THIS turn's reply either
+    // way, so leaving it standing cannot leak past the decide that needs it.
+    if (intent.ask_topic) {
+      next = {
+        ...next,
+        rti: {
+          ...next.rti,
+          pendingPrompt: undefined,
+        },
+      };
+    }
     return {
       state: next,
       clearedKeys,

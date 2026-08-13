@@ -253,10 +253,11 @@ export default {
           buyer_phone?: string;
           text?: string;
           conversation_id?: string;
+          action_id?: string;
           channel?: 'whatsapp' | 'advisor_web' | 'api';
         };
 
-        if (!parsed.builder_id || !parsed.buyer_phone || !parsed.text) {
+        if (!parsed.builder_id || !parsed.buyer_phone || typeof parsed.text !== 'string') {
           return json({ error: 'validation', required: ['builder_id', 'buyer_phone', 'text'] }, 400);
         }
 
@@ -278,6 +279,7 @@ export default {
             buyer_phone: parsed.buyer_phone,
             text: parsed.text,
             conversation_id: parsed.conversation_id,
+            action_id: parsed.action_id,
             // W6 — label the door; bare /chat callers are 'api'.
             channel: parsed.channel ?? 'api',
           },

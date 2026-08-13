@@ -27,8 +27,11 @@ describe('speakStickyClarify', () => {
       focusName: 'Ayana',
       priorTopics: ['legal'],
     });
-    expect(copy).toMatch(/Still on legal for \*Ayana\*/);
+    // Stays on legal, for THIS project — and without blaming the buyer for a
+    // turn the bot fumbled ("I couldn't make sense of that").
+    expect(copy).toMatch(/legal[^.]*\*Ayana\*/i);
     expect(copy).toMatch(/RERA/);
+    expect(copy).not.toMatch(/make sense of that/i);
   });
 
   it('visit origin: starting area', () => {

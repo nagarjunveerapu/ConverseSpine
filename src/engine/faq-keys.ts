@@ -21,12 +21,29 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:resale|appreciation|capital\s+gains?)\b|एप्रिसिएशन/i,
   },
   {
+    // Desk calls the getting-out answer `exit` — resale trend, transferability,
+    // lock-in. `resale_value` matches no row in the corpus.
+    //
+    // Deliberately NOT matching "can i sell … later": that phrasing family is
+    // taught on the Understanding board, and a text bind here would disable the
+    // teach (`taughtFaqKey` yields to any deterministic bind). A pattern must not
+    // take a phrasing a human has already labelled.
+    key: 'exit',
+    re: /\b(?:resale|lock[- ]?in|freely\s+transferable|transferabilit\w+|exit\s+(?:option|route|value))\b/i,
+  },
+  {
     key: 'payment_plan',
     re: /\b(?:payment\s+plan|payment\s+schedule|construction[- ]linked(?:\s+plan)?|clp|down\s*payments?(?:\s+plan)?)\b/i,
   },
   {
+    // Same ask, the other key. Desk holds 10 rows under `payment_process` and
+    // only 2 under `payment_plan`; whichever the project carries, serves.
+    key: 'payment_process',
+    re: /\b(?:payment\s+(?:plan|schedule|process|terms)|construction[- ]linked(?:\s+plan)?|clp|down\s*payments?(?:\s+plan)?|when\s+do\s+i\s+pay|how\s+do\s+i\s+pay)\b/i,
+  },
+  {
     key: 'banks',
-    re: /\b(?:loan\s+eligib|home\s+loan|bank\s+loan|housing\s+loan|which\s+banks?\s+(?:give|provide|approve)|banks?\s+available|is\s+banks?\s+available|can\s+i\s+get\s+banks?|get\s+banks?\s+for|what\s+about\s+(?:banks?|loans?)|(?:tell\s+me\s+about|need)\s+(?:banks?|loan(?:\s+details)?|loan\s+eligibility)|about\s+banks?|loan\s+mil(?:e(?:ga|gi)?)?|ispe\s+loan|loan\s+ho\s+jayega)\b/i,
+    re: /\b(?:loan\s+eligib|home\s+loan|bank\s+loan|housing\s+loan|which\s+banks?\s+(?:give|provide|approve|are\s+approved)|banks?\s+available|is\s+banks?\s+available|can\s+i\s+get\s+banks?|get\s+banks?\s+for|what\s+about\s+(?:banks?|loans?)|(?:tell\s+me\s+about|need)\s+(?:banks?|loan(?:\s+details)?|loan\s+eligibility)|about\s+banks?|loan\s+mil(?:e(?:ga|gi)?)?|ispe\s+loan|loan\s+ho\s+jayega)\b/i,
   },
   {
     // Desk canonical FAQ key is `banks` (loan_eligibility aliases there).
@@ -65,6 +82,12 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:maintenance(?:\s+charges?)?|cam\s+charges?|upkeep\s+cost)\b/i,
   },
   {
+    // Desk's key is `maintenance` — 16 approved rows, every one of them stranded
+    // behind the `_charges` suffix. "maintenance in both" got the comparison card.
+    key: 'maintenance',
+    re: /\b(?:maintenance(?:\s+charges?)?|cam\s+charges?|upkeep\s+cost)\b/i,
+  },
+  {
     // Desk question_key is `water_power` (brigade enrichment / live corpus).
     // "how is water and power there?" (D2.16) missed the supply-only phrasing.
     key: 'water_power',
@@ -80,7 +103,7 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   },
   {
     key: 'rera_status',
-    re: /\b(?:rera\s+status|is\s+(?:it\s+)?rera\s+(?:registered|approved))\b/i,
+    re: /\b(?:rera\s+status|is\s+(?:it\s+|this\s+)?rera\s+(?:registered|approved|certified)|rera\s+certified)\b/i,
   },
   {
     // "schools near <project>" / "schools around" must route too (S1 — the
@@ -95,6 +118,31 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
   {
     key: 'metro_connectivity',
     re: /\b(?:metro(?:\s+connectivity|\s+access)?|namma\s+metro)\b/i,
+  },
+  {
+    // Desk files the WHOLE location bucket under `location_schools` — the street
+    // address, connectivity, airport and IT-park distances, not just schools.
+    // 40 approved rows, and nothing could reach them: `airport_distance` and
+    // `connectivity` are names no row in the corpus answers to. This is why the
+    // flagship could not say its own address in six tries, and why "which one is
+    // closer to the airport" came back as a generic comparison card.
+    //
+    // Placed after schools / hospitals / metro (those bind first and answer more
+    // precisely) but ahead of `airport_distance`, which is a dead name: a live
+    // key must never queue behind one nothing can serve.
+    //
+    // Deliberately NOT matching bare "location" / "location details": that is a
+    // chip ask with a structured owner, and binding a key the project may not
+    // hold turns a good location card into "I don't have that on file". Only the
+    // phrasings the structured card does not answer — the street address, the
+    // distances, connectivity — reach for the written row.
+    key: 'location_schools',
+    re: /\bwhere(?:'s|\s+is|\s+exactly)\b|\baddress\b|\b(?:connectivity|well[- ]connected)\b|\bhow\s+far\b|\bdistance\s+(?:to|from)\b|\b(?:itpl|it\s+park|tech\s+park)\b/i,
+  },
+  {
+    // One project files the same answer under its own name.
+    key: 'project_location',
+    re: /\bwhere(?:'s|\s+is|\s+exactly)\b|\baddress\b/i,
   },
   {
     key: 'airport_distance',
@@ -218,6 +266,63 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     // "can I start construction immediately?" (C2.7).
     key: 'construction_rules',
     re: /\bconstruction\s+(?:rules?|guidelines?|restrictions?|timeline)\b|\b(?:start|begin)\s+construction\b|\bwhen\s+can\s+i\s+(?:build|construct)\b|\bbuild(?:ing)?\s+(?:rules?|guidelines?|restrictions?)\b/i,
+  },
+
+  // ——— AB-1, second sweep: the rest of the orphaned corpus ———
+  // A key-by-key diff of the live corpus against the keys these patterns can
+  // emit found 137 of 456 approved answers unreachable, and eight patterns
+  // aimed at names no row uses. Everything below is a name repair — the answer
+  // was already written and approved, and every lookup stays gated on the
+  // project holding the row.
+  {
+    key: 'promoter_info',
+    re: /\bpromoter\b|\bwho\s+(?:is\s+)?(?:the\s+)?(?:builder|developer)\b|\bwho\s+(?:is\s+)?(?:building|developing)\b/i,
+  },
+  {
+    key: 'compact_units',
+    re: /\b(?:compact|smallest|budget[- ]friendly|entry[- ]level)\s+(?:units?|options?|homes?|flats?)\b|\bsmallest\s+(?:unit|flat|home|apartment)\b|\bdo\s+you\s+have\s+(?:a\s+)?1\s*bhk\b/i,
+  },
+  // `configurations_summary` (4 rows) and `pricing` (26) are deliberately NOT
+  // bound here. Both sit on top of a structured answer the engine already gives
+  // — the config card and the pricing card — so binding them would attach a
+  // second, whole-project answer to a size-scoped or unit-scoped question. That
+  // is the over-answer dump, not a repair. They need a compose-side gate ("serve
+  // the written row only when the structured answer missed"), which is its own
+  // change.
+  {
+    key: 'project_type_summary',
+    re: /\b(?:what\s+(?:type|kind)\s+of\s+(?:project|property)|project\s+type|property\s+type)\b/i,
+  },
+  {
+    key: 'base_rate',
+    re: /\bbase\s+(?:rate|price)\b|\brate\s+per\s+(?:sq\.?\s*ft|sqft|square\s*(?:feet|foot))\b|\bpsf\s+rate\b/i,
+  },
+  {
+    key: 'floor_plan',
+    re: /\bfloor\s*plans?\b|\bunit\s+plans?\b|\blayout\s+plan\b/i,
+  },
+  {
+    // Plotted sibling of `security` — fencing and demarcation before you build.
+    key: 'plot_security',
+    re: /\b(?:fenced|fencing|compound\s+wall|demarcat\w+)\b|\bsecurity\b.{0,20}\bplot\b|\bplot\b.{0,20}\bsecurity\b/i,
+  },
+  {
+    key: 'private_garden',
+    re: /\b(?:private\s+)?gardens?\b|\bbackyard\b|\bown\s+(?:garden|yard)\b/i,
+  },
+  {
+    key: 'build_coverage',
+    re: /\b(?:can\s+i\s+build|buildable|build(?:ing)?\s+(?:area|coverage|ratio)|how\s+much\s+can\s+i\s+(?:build|construct))\b/i,
+  },
+  {
+    key: 'ec_status',
+    re: /\b(?:ec|encumbrance)\b/i,
+  },
+  {
+    // Generic "what is this project" — Desk keeps a written summary for the
+    // families whose overview card is thin (managed resort villas, plotted).
+    key: 'project_info',
+    re: /\bwhat\s+is\s+(?:this|the)\s+(?:project|property|development)\b|\btell\s+me\s+what\s+this\s+is\b/i,
   },
 ];
 

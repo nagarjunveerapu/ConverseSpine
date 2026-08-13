@@ -2,16 +2,112 @@ import {
   formatDisclosedForPrompt,
   hasDisclosedRera,
 } from './disclosed-facts.js';
+import { answerBookQuestion, answerSituation } from './book-questions.js';
 import type {
   AnswerTopic,
+  CompareMatrixPayload,
+  ComposeContext,
   ComposeRequest,
   Constraints,
   EvidenceSet,
+  FactKey,
   Match,
   ProbeKind,
   RelaxedDimension,
   TurnGoal,
 } from './types.js';
+
+/** Builder-allotted WhatsApp greet — show the book, never the Advisor brief. */
+export function waBookFirstGreet(opts: {
+  builderName?: string;
+  catalog?: {
+    priceMinInr?: number;
+    projectTypes?: readonly string[];
+    microMarkets?: readonly string[];
+    total?: number;
+  } | null;
+}): string {
+  const brand = (opts.builderName || '').trim() || 'this builder';
+  const types = (opts.catalog?.projectTypes ?? []).filter(Boolean).slice(0, 3);
+  const markets = (opts.catalog?.microMarkets ?? []).filter(Boolean).slice(0, 3);
+  const min = opts.catalog?.priceMinInr ?? 0;
+  const bits = [
+    types.length ? types.join(', ') : 'homes',
+    ...(markets.length ? [markets.join(', ')] : []),
+    ...(min > 0 ? [`from about ${formatInr(min)}`] : []),
+  ];
+  const pickLine =
+    (opts.catalog?.total ?? 0) > 1
+      ? `Here's the book. Pick a project — or tap *Help me choose* and I'll narrow it in two taps.`
+      : `Here's the book. Pick a project, or tell me a size if you want me to filter.`;
+  return `Welcome to *${brand}*. ${bits.join(' — ')}.\n\n${pickLine}`;
+}
+
+/**
+ * What the BOOK can say about a topic before any project is picked.
+ *
+ * Two honest shapes, never a third. The book has its own price spread, so
+ * "price?" at the door gets a number. Everything else — RERA, possession,
+ * amenities, floor plans — is registered per project, so the answer is where
+ * the fact lives plus the list to pick from. Both are answers; "tell me a size
+ * or budget" was not, and that is what this replaces.
+ *
+ * Returns '' when there is nothing honest to lead with, so the list stands alone.
+ */
+function bookLevelAnswer(topic: AnswerTopic, ev: EvidenceSet): string {
+  const min = ev.catalog?.priceMinInr ?? 0;
+  const max = ev.catalog?.priceMaxInr ?? 0;
+  switch (topic) {
+    case 'price':
+    case 'emi':
+      if (min <= 0) return '';
+      return max > min
+        ? `Across the book, homes run ${formatInr(min)} – ${formatInr(max)}. `
+        : `Homes here start at ${formatInr(min)}. `;
+    case 'legal':
+      return `Each project carries its own RERA registration and title papers — open one and I'll give you its number. `;
+    case 'availability':
+    case 'property_type':
+      return `Sizes and live availability are per project. `;
+    case 'media':
+      return `Floor plans and brochures are held per project. `;
+    case 'amenities':
+      return `Amenities differ by project. `;
+    default:
+      return '';
+  }
+}
+
+/**
+ * Is this line the one the buyer just read? Templates are exempt from the W3
+ * repeat guard (a hold's terms SHOULD restate verbatim), so a template that is
+ * a nudge rather than a commitment has to check for itself.
+ */
+function repeatsPrior(line: string, prior: string | undefined): boolean {
+  if (!prior) return false;
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const p = norm(prior);
+  const l = norm(line);
+  return p === l || p.startsWith(l.slice(0, 60));
+}
+
+/** Requirement receipt — the buyer sees exactly what the line understood. */
+export function waBriefReceipt(c: Constraints | undefined): string {
+  if (!c) return '';
+  const bits: string[] = [];
+  // A bare number here is a size, not a count — never print "Noted: *2*".
+  if (c.bhk?.trim()) bits.push(c.bhk.trim().replace(/^(\d+)$/, '$1 BHK'));
+  else if (c.propertyType?.trim()) bits.push(c.propertyType.trim());
+  if (c.budgetMaxInr !== undefined && c.budgetMinInr !== undefined) {
+    bits.push(`${formatInr(c.budgetMinInr)} – ${formatInr(c.budgetMaxInr)}`);
+  } else if (c.budgetMaxInr !== undefined) {
+    bits.push(`under ${formatInr(c.budgetMaxInr)}`);
+  } else if (c.budgetMinInr !== undefined) {
+    bits.push(`above ${formatInr(c.budgetMinInr)}`);
+  }
+  if (!bits.length) return '';
+  return `Noted: *${bits.join(' · ')}*. `;
+}
 
 /** Buyer-facing noun for a relaxed dimension — never their raw value. */
 const RELAXED_NOUN: Record<RelaxedDimension, string> = {
@@ -45,7 +141,9 @@ function relaxedLead(
     ? `I couldn't match ${phrase} tightly — here's the closest I can stand behind`
     : `Couldn't nail ${phrase} exactly — here's what we do have`;
 }
-import { isInventoryAsk } from './facts.js';
+import { affordabilityFromMonthlyText, isCostComponentAsk, isInventoryAsk } from './facts.js';
+import { INCOME_SERVICING_RATIO } from './emi.js';
+import { humanizeMediaKind } from './media-asset.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
 import { answerRequirements } from './answer-contract.js';
 import { speakStickyClarify } from './clarify-outstanding.js';
@@ -63,6 +161,59 @@ const PARK_TOPIC_LABEL: Partial<Record<AnswerTopic, string>> = {
   compare: 'a comparison',
   education: 'a short explainer',
 };
+
+/**
+ * The arithmetic behind a budget we derived from a monthly instalment.
+ *
+ * The extractor turns "I can pay 60000 per month" into a budget so the search
+ * cuts. Acting on that silently would be putting words in the buyer's mouth —
+ * the reply names the instalment, the rate and the tenure it assumed, and the
+ * number it arrived at, so a buyer who assumes differently can say so.
+ */
+function affordabilityLead(buyerText: string | undefined): string {
+  const a = affordabilityFromMonthlyText(buyerText ?? '');
+  if (!a) return '';
+  const basis = a.fromIncome
+    ? `Lenders will usually let about ${Math.round(INCOME_SERVICING_RATIO * 100)}% of take-home go to the instalment, so call it ₹${a.monthlyInr.toLocaleString('en-IN')} a month`
+    : `At ₹${a.monthlyInr.toLocaleString('en-IN')} a month`;
+  return `${basis} — on ${a.ratePercent}% over ${a.tenureYears} years that services about ${formatInr(a.loanInr)} of loan, roughly ${formatInr(a.priceInr)} of home with the usual 20% down. `;
+}
+
+/**
+ * Facts a buyer named in a long brief that a shortlist cannot answer.
+ *
+ * "3 bhk in north bangalore, 90 lakhs to 1 crore, possession within a year,
+ * and I want to know about home loan options too" is four asks. The search
+ * consumed the size and the budget and the reply went quiet on the other two,
+ * which reads as not having been heard. Say them back and say where they live.
+ */
+const CARRIED_LABEL: Partial<Record<FactKey, string>> = {
+  possession: 'possession',
+  loan_eligibility: 'home loans',
+  rera: 'RERA',
+  khata: 'khata',
+  ec_status: 'the title position',
+  stamp_duty: 'stamp duty',
+  price_per_sqft: 'the per-sqft rate',
+  carpet_area: 'carpet area',
+  built_up_area: 'built-up area',
+};
+
+function carriedAsks(buyerText: string | undefined): string {
+  const labels = [
+    ...new Set(
+      answerRequirements(buyerText ?? '')
+        .map((k) => CARRIED_LABEL[k])
+        .filter((x): x is string => Boolean(x)),
+    ),
+  ];
+  if (!labels.length) return '';
+  const phrase =
+    labels.length === 1
+      ? labels[0]!
+      : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]!}`;
+  return ` You also asked about ${phrase} — that's per project, so open one and I'll give you its answer.`;
+}
 
 function parkContinuation(parked: readonly AnswerTopic[] | undefined): string {
   if (!parked?.length) return '';
@@ -89,6 +240,199 @@ function isPossessionAsk(text: string | undefined): boolean {
 }
 
 /**
+ * A closer is a QUESTION, and a question the engine cannot hear the answer to
+ * is worse than no question at all: the simulation had every money reply end in
+ * "Would it help if I estimated the total cost…", and "yes" landed on a visit
+ * pitch while "no" triggered a full overview dump — declining got you MORE.
+ *
+ * So the closer's words and the record of what was asked come from one table.
+ * `topic` is what a bare yes means; `options` are the named forks a buyer can
+ * pick by name instead. Nothing may append a question to a reply without an
+ * entry here — that is the whole point of the table.
+ */
+export interface ComposedOffer {
+  /** Verbatim, including the leading space — the reply ends with exactly this. */
+  readonly text: string;
+  /** What a bare "yes" resolves to. */
+  readonly topic: AnswerTopic;
+  /** Forks the buyer can name instead of affirming. */
+  readonly options: readonly AnswerTopic[];
+  /**
+   * Whether a bare "yes" should be routed to `topic` — i.e. whether the offer
+   * names something the engine can actually deliver. False only for `compare`,
+   * which needs a second project this table cannot know about: binding a yes to
+   * a question we cannot answer is worse than not hearing it, because the buyer
+   * gets a confused reply instead of a next step. Rotation is irrelevant here —
+   * a filler closer that names pricing and configs is still a real offer, and
+   * treating it as noise is what dropped the second yes in a row.
+   */
+  readonly binds: boolean;
+}
+
+const CLOSERS = {
+  // Named `pricing_detail`, not `payment_schedule`: a payment schedule is a
+  // builder document (media kind `payment_plan`), not something this engine can
+  // compute. Offering it and then answering with the price is a broken promise —
+  // the closer says what the `price` topic actually delivers.
+  pricing_detail: {
+    text: ' I can also take you through the pricing in detail if you are weighing affordability.',
+    topic: 'price',
+    options: ['price'],
+    binds: true,
+  },
+  possession_configs: {
+    text: ' Want the configurations that deliver in that window, or pricing next?',
+    topic: 'availability',
+    options: ['availability', 'price'],
+    binds: true,
+  },
+  compare_nearby: {
+    text: ' If you are comparing projects, I can also explain how this differs from nearby options.',
+    topic: 'compare',
+    options: ['compare'],
+    binds: false,
+  },
+  total_cost: {
+    text: ' Would it help if I estimated the total cost for a specific BHK?',
+    topic: 'availability',
+    options: ['availability', 'price'],
+    binds: true,
+  },
+  price_or_stock: {
+    text: ' Want pricing on a specific size, or shall I check live unit availability?',
+    topic: 'price',
+    options: ['price', 'availability'],
+    binds: true,
+  },
+  price_or_legal: {
+    text: ' I can also share pricing or legal approvals next if that helps the comparison.',
+    topic: 'price',
+    options: ['price', 'legal'],
+    binds: true,
+  },
+  loan_price_visit: {
+    text: ' Want loan eligibility, pricing, or a site visit next?',
+    topic: 'emi',
+    options: ['emi', 'price'],
+    binds: true,
+  },
+  overview_three: {
+    text: ' Want pricing details, unit configurations, or the legal & RERA picture?',
+    topic: 'price',
+    options: ['price', 'availability', 'legal'],
+    binds: true,
+  },
+  overview_loan: {
+    text: ' Curious about loan eligibility, or shall I walk through the configs?',
+    topic: 'emi',
+    options: ['emi', 'availability'],
+    binds: true,
+  },
+  overview_cost: {
+    text: ' Want a cost breakdown next, or how this compares nearby?',
+    topic: 'price',
+    options: ['price', 'compare'],
+    binds: true,
+  },
+  generic_deeper: {
+    text: ' I can go deeper on pricing, legal, or a visit whenever you are ready.',
+    topic: 'price',
+    options: ['price', 'legal'],
+    binds: true,
+  },
+  generic_compare: {
+    text: ' I can also compare this with nearby options if that helps.',
+    topic: 'compare',
+    options: ['compare'],
+    binds: false,
+  },
+  generic_pricing: {
+    text: ' Want pricing next, or a walkthrough of configs?',
+    topic: 'price',
+    options: ['price', 'availability'],
+    binds: true,
+  },
+  // ── Variants ──────────────────────────────────────────────────────────────
+  // Same job, different words. Every one is a table row, so it still binds a
+  // bare "yes" — this is a rotation, not free text. Without them the topic
+  // routing above was a pure function of topic, so a buyer who asked about
+  // price four times got the identical sentence four times.
+  // A variant must be a PARAPHRASE of the offer it stands in for — same topic,
+  // same options. Bound to 'price' instead of 'availability', this sentence
+  // read like the same offer to a buyer and a different one to the engine, so
+  // "yes" re-answered the price they already had. Different words, same deal.
+  total_cost_alt: {
+    text: ' Want me to work out the all-in figure for one of the sizes?',
+    topic: 'availability',
+    options: ['availability', 'price'],
+    binds: true,
+  },
+  // The BHK-free variant. A plot, a plantation or a villa has no BHK, and
+  // offering to "estimate the total cost for a specific BHK" on one reads as a
+  // bot reciting an apartment script at a buyer who is not buying an apartment.
+  total_cost_unitless: {
+    text: ' Want the all-in cost for one of the sizes on file?',
+    topic: 'availability',
+    options: ['availability', 'price'],
+    binds: true,
+  },
+  price_or_stock_alt: {
+    text: ' Want pricing on one of the sizes, or a check on what is still unsold?',
+    topic: 'price',
+    options: ['price', 'availability'],
+    binds: true,
+  },
+} as const satisfies Record<string, ComposedOffer>;
+
+type CloserId = keyof typeof CLOSERS;
+
+/**
+ * What a bare "yes" to this closer actually asks for. A closer that offers to
+ * cost a size binds to availability while no size is known — "yes" then means
+ * "show me the sizes". Once the buyer HAS picked one, the same yes means the
+ * cost of that size, and replying with the size list again is the bot not
+ * hearing the answer it just received.
+ */
+/** Does this closer promise the ALL-IN cost (not the sticker price)? */
+export function offerPromisesAllInCost(offer: ComposedOffer): boolean {
+  return /total cost|all-in (?:cost|figure)/i.test(offer.text);
+}
+
+export function resolveOfferTopic(
+  offer: ComposedOffer,
+  constraints?: { bhk?: string },
+): AnswerTopic {
+  if (offerPromisesAllInCost(offer) && constraints?.bhk?.trim()) return 'price';
+  return offer.topic;
+}
+
+const CLOSER_LIST: readonly ComposedOffer[] = Object.values(CLOSERS);
+
+/**
+ * Which offer a finished reply is carrying. A table lookup on the exact strings
+ * the table itself emitted — NOT a re-parse of the prose. Re-deriving meaning
+ * from rendered words is the bug this whole table exists to kill.
+ */
+export function composedOfferIn(reply: string): ComposedOffer | undefined {
+  const trimmed = reply.trimEnd();
+  return CLOSER_LIST.find((c) => c.binds && trimmed.endsWith(c.text.trim()));
+}
+
+/** Deterministic index into a pool of n — same seed, same choice. */
+function hashPick(n: number, seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i) * (i + 1)) % 997;
+  return h % n;
+}
+
+/** Deterministic pick from a pool — same buyer text, same closer. */
+function rotate<T>(pool: readonly T[], seed: string): T {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i) * (i + 1)) % 997;
+  return pool[h % pool.length]!;
+}
+
+/**
  * End-of-reply closer — contextual when we can, lightly rotated otherwise.
  * Avoids the same "Want anything else… or a visit?" after every turn.
  */
@@ -97,44 +441,66 @@ function closingCta(opts: {
   topics?: readonly AnswerTopic[];
   projectName?: string;
   park?: string;
+  /** The closer the LAST reply ended with — never say it twice running. */
+  priorReply?: string;
+  /** Project form, so an apartment script is never read at a plot buyer. */
+  projectType?: string;
+  /** This reply already GAVE the all-in cost — offering to work it out now
+   *  reads as the bot not having heard the answer it just delivered. */
+  allInDelivered?: boolean;
 }): string {
   if (opts.park) return opts.park;
   const t = (opts.buyerText ?? '').toLowerCase();
   const topics = opts.topics ?? [];
   const pname = opts.projectName || 'this project';
 
-  if (isLoanEligibilityAsk(opts.buyerText)) {
-    return ' I can also break down the payment schedule if you are weighing affordability.';
-  }
-  if (isPossessionAsk(opts.buyerText)) {
-    return ' Want the configurations that deliver in that window, or pricing next?';
-  }
-  if (topics.includes('price') && topics.includes('location')) {
-    return ' If you are comparing projects, I can also explain how this differs from nearby options.';
-  }
+  // Anything that is not a flat has no BHK. Asking a plantation or plot buyer
+  // about "a specific BHK" is the awkwardness in non-apartment contexts.
+  const unitless =
+    !!opts.projectType &&
+    !/\b(?:apartment|flat|residence|condo|high[- ]?rise|tower)\b/i.test(opts.projectType);
+  // The prior turn's closer, recovered from the table by exact match — the same
+  // mechanism that binds a "yes", used here to refuse a repeat.
+  const priorText = opts.priorReply ? composedOfferIn(opts.priorReply)?.text.trim() : undefined;
+
+  /**
+   * First choice, then its alternates. Skips whatever was just said; falls back
+   * to the head when every option has been used, because saying the right thing
+   * twice beats saying the wrong thing once.
+   */
+  const pick = (...ids: readonly CloserId[]): string => {
+    const pool = ids.map((id) => CLOSERS[id].text);
+    const fresh = pool.filter((text) => text.trim() !== priorText);
+    return (fresh.length ? fresh : pool)[
+      fresh.length > 1 ? hashPick(fresh.length, opts.buyerText || pname) : 0
+    ]!;
+  };
+
+  if (isLoanEligibilityAsk(opts.buyerText)) return pick('pricing_detail');
+  if (isPossessionAsk(opts.buyerText)) return pick('possession_configs');
+  if (topics.includes('price') && topics.includes('location')) return pick('compare_nearby');
   if (topics.includes('price') || /\b(?:price|pricing|cost|how much)\b/.test(t)) {
-    return ' Would it help if I estimated the total cost for a specific BHK?';
+    // The all-in figure is on screen already — move the conversation on rather
+    // than re-offering the very thing the buyer just read.
+    if (opts.allInDelivered) return pick('price_or_stock', 'price_or_stock_alt');
+    return unitless
+      ? pick('total_cost_unitless', 'total_cost_alt')
+      : pick('total_cost', 'total_cost_alt');
   }
   if (topics.includes('availability') || /\b(?:config|bhk|inventory|sizes?)\b/.test(t)) {
-    return ' Want pricing on a specific size, or shall I check live unit availability?';
+    return pick('price_or_stock', 'price_or_stock_alt');
   }
   if (topics.includes('location') || /\b(?:location|connect|nearby|metro|airport)\b/.test(t)) {
-    return ' I can also share pricing or legal approvals next if that helps the comparison.';
+    return pick('price_or_legal');
   }
-  if (topics.includes('legal') || /\b(?:rera|khata|legal)\b/.test(t)) {
-    return ' Want loan eligibility, pricing, or a site visit next?';
-  }
+  if (topics.includes('legal') || /\b(?:rera|khata|legal)\b/.test(t)) return pick('loan_price_visit');
 
-  const pool = [
-    ` Anything else you want to dig into on *${pname}*?`,
-    ` I can also compare this with nearby options if that helps.`,
-    ` I can go deeper on pricing, legal, or a visit whenever you are ready.`,
-    ` Want the payment schedule next, or a walkthrough of configs?`,
-  ];
-  const seed = opts.buyerText || topics.join(',') || pname;
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i) * (i + 1)) % 997;
-  return pool[h % pool.length]!;
+  // The generic pool carries no `*${pname}*` variant any more: an interpolated
+  // closer cannot be matched back to its record, so it could never bind a yes.
+  return rotate(
+    [CLOSERS.generic_compare.text, CLOSERS.generic_deeper.text, CLOSERS.generic_pricing.text],
+    opts.buyerText || topics.join(',') || pname,
+  );
 }
 import { formatUnitConfigLine } from './unit-config.js';
 import { matchFitClauses, sensitivityLine } from './sensitivity.js';
@@ -170,7 +536,7 @@ export function renderComposePrompt(req: ComposeRequest): string {
     );
     lines.push(`Write ONE short reply (2-4 sentences, WhatsApp tone). No markdown headers or bullet dumps.`);
   }
-  lines.push(`This turn's GOAL: ${describeGoal(goal)}.`);
+  lines.push(`This turn's GOAL: ${describeGoal(goal, context)}.`);
   if (req.vary) {
     // W3 — anti-repeat retry: the previous draft matched the last bot reply
     // verbatim (see PRIOR CONTEXT's excerpt). Same facts, fresh wording.
@@ -285,10 +651,12 @@ function renderPriorContext(context: ComposeRequest['context']): string {
   return bits.join('\n');
 }
 
-function describeGoal(g: TurnGoal): string {
+function describeGoal(g: TurnGoal, ctx?: ComposeContext): string {
   switch (g.kind) {
     case 'greet':
-      return 'greet and ask what they are looking for';
+      return ctx?.waProjectFirst
+        ? 'greet and invite them to pick a project from the list — do NOT ask area or budget'
+        : 'greet and ask what they are looking for';
     case 'orient':
       return 'briefly describe the portfolio and ask area/budget/size';
     case 'clarify_intent':
@@ -323,7 +691,9 @@ function describeGoal(g: TurnGoal): string {
     case 'emi_calculate':
       return 'calculate EMI from the buyer-stated loan principal in EVIDENCE';
     case 'commit':
-      return 'confirm their project choice and offer next step';
+      return ctx?.waProjectFirst
+        ? 'confirm the project they picked in one short line — do NOT dump configurations, price band, or legal/RERA; the list/buttons own next step'
+        : 'confirm their project choice and offer next step';
     case 'propose_visit':
       return 'offer to set up a site visit and ask which day works';
     case 'visit_ask':
@@ -481,15 +851,40 @@ function voicePick(seed: string | undefined, lines: string[]): string {
 }
 
 export function fallbackReply(req: ComposeRequest): string {
+  return tidySentenceEnds(fallbackReplyBody(req));
+}
+
+/**
+ * Desk copy usually already ends in a period, and the assembly adds its own —
+ * "…available in the Brigade legal pack.." reached a buyer. Squeeze the pair
+ * and leave ellipses ("hold on…") and decimals ("1.5") alone.
+ */
+function tidySentenceEnds(reply: string): string {
+  return reply.replace(/(?<![.!?])([.!?])\.(?=\s|$)/g, '$1');
+}
+
+function fallbackReplyBody(req: ComposeRequest): string {
   const { goal, evidence: ev, context } = req;
   const name = context.buyerName ? ` ${context.buyerName}` : '';
   const seed = context.focusProjectName || context.buyerName || goal.kind;
   switch (goal.kind) {
     case 'greet': {
       const rb = context.returningBuyer;
+      if (context.waProjectFirst) {
+        return waBookFirstGreet({ builderName: context.builderName, catalog: ev.catalog });
+      }
       if (rb && rb.daysSinceLastSeen >= 1) {
         const welcome = rb.buyerName ? `Welcome back, ${rb.buyerName}.` : 'Welcome back.';
         return `${welcome} Still hunting, or picking up where we left off?`;
+      }
+      // Brand-first — buyer should know which builder's book this is (not a generic Naya line).
+      const brand = (context.builderName || '').trim();
+      if (brand) {
+        return voicePick(seed, [
+          `Welcome to *${brand}*${name ? `,${name}` : ''}. I'm your property advisor here — tell me the area and budget you're working with and I'll pull what fits.`,
+          `Hi${name} — welcome to *${brand}*. Looking for a home or an investment? Area and budget help me shortlist fast.`,
+          `Hey${name}. You're with *${brand}*. What area and budget should I shortlist against?`,
+        ]);
       }
       return voicePick(seed, [
         `Hi${name} — looking for a home, or more of an investment? Area and budget help me shortlist fast.`,
@@ -507,6 +902,23 @@ export function fallbackReply(req: ComposeRequest): string {
       return `${ack}We've got ${types} on the books${from}. ${ask}`;
     }
     case 'clarify_intent': {
+      if (context.waProjectFirst) {
+        // Was: "I don't want to guess wrong on that. Tell me a size or budget…"
+        // — one defensive sentence answering 65 different situations, from "are
+        // you a bot?" to "what's the cheapest one?". Refusing to guess is right;
+        // leading with the refusal and then asking for a brief the buyer never
+        // offered is what reads as evasive. Say what the book HAS first, so even
+        // a miss leaves the buyer with something true, then ask once.
+        const total = ev.catalog?.total ?? 0;
+        const markets = (ev.catalog?.microMarkets ?? []).filter(Boolean).slice(0, 3);
+        const min = ev.catalog?.priceMinInr ?? 0;
+        const max = ev.catalog?.priceMaxInr ?? 0;
+        const have = total > 0 ? `${total} projects` : 'the full book';
+        const where = markets.length ? ` across ${joinPlaceLabels(markets)}` : '';
+        const band =
+          min > 0 && max > min ? `, ${formatInr(min)} – ${formatInr(max)}` : min > 0 ? `, from ${formatInr(min)}` : '';
+        return `I'm not sure I followed that one. What I have is ${have}${where}${band} — pick any project below for its details, or tell me a size or budget and I'll cut the book to fit.`;
+      }
       // Sticky clarify when we can re-anchor to outstanding job; else generic.
       const sticky = speakStickyClarify({
         phase: context.focusProjectName ? 'focused' : 'discover',
@@ -526,13 +938,75 @@ export function fallbackReply(req: ComposeRequest): string {
       );
     }
     case 'probe': {
+      // Minimal brief on allotted lines — two questions, anchored to the book.
+      if (context.waProjectFirst) {
+        if (goal.slot === 'bhk' || goal.slot === 'propertyType') {
+          return `Two quick taps and I'll cut the book to fit. First — how much space do you need?`;
+        }
+        if (goal.slot === 'budget') {
+          const min = ev.catalog?.priceMinInr ?? 0;
+          const max = ev.catalog?.priceMaxInr ?? 0;
+          const spread = min > 0 && max > min ? ` Homes here run ${formatInr(min)} – ${formatInr(max)}.` : '';
+          const ackBits = context.constraints.bhk?.trim() || context.constraints.propertyType?.trim();
+          const ack = ackBits ? `Got it — ${ackBits}. ` : '';
+          return `${ack}And the ceiling you'd rather stay under?${spread} Tap a band, or type a number.`;
+        }
+      }
       const ack = briefAckPrefix(context.constraints);
       return `${ack}${probeCopy(goal.slot)}`;
     }
     case 'recommend':
     case 'ack_reject_recommend': {
       const ms = (ev.matches ?? []).slice(0, 3);
+      // The buyer asked the BOOK something before picking a project. The list is
+      // still the right screen; the lead sentence is what makes it an answer.
+      const bookLead =
+        context.waProjectFirst && goal.kind === 'recommend' && goal.askedTopic
+          ? bookLevelAnswer(goal.askedTopic, ev)
+          : '';
+      // A question about the line or the book itself ("are you a bot?", "which
+      // is the cheapest?"). This one IS the reply — the list is the evidence.
+      if (context.waProjectFirst && goal.kind === 'recommend' && goal.bookQuestion) {
+        // "cheapest" and "most premium" are questions about the WHOLE book, so
+        // they are answered from the catalog's own price extremes — a search
+        // result set is whatever the last filter left behind, and naming its
+        // ends would call some mid-priced project the top of the book.
+        const min = ev.catalog?.priceMinInr ?? 0;
+        const max = ev.catalog?.priceMaxInr ?? 0;
+        const sample = ev.catalog?.sample ?? [];
+        const named = (display: string) =>
+          display ? sample.find((p) => p.startingPriceDisplay === display)?.name : undefined;
+        const minDisplay = min > 0 ? formatInr(min) : '';
+        const maxDisplay = max > 0 ? formatInr(max) : '';
+        return answerBookQuestion(goal.bookQuestion, {
+          builderName: context.builderName ?? '',
+          total: ev.catalog?.total ?? (ev.matches?.length ?? 0),
+          ...(minDisplay ? { minDisplay } : {}),
+          ...(maxDisplay ? { maxDisplay } : {}),
+          ...(named(minDisplay) ? { cheapestName: named(minDisplay)! } : {}),
+          ...(max > min && named(maxDisplay) ? { premiumName: named(maxDisplay)! } : {}),
+          markets: ev.catalog?.microMarkets ?? [],
+          ...(context.focusProjectName ? { focusName: context.focusProjectName } : {}),
+        });
+      }
+      // The buyer described their own situation. Answer that first — the list is
+      // still what goes on screen underneath it.
+      if (context.waProjectFirst && goal.kind === 'recommend' && goal.situation) {
+        return answerSituation(goal.situation, {
+          builderName: context.builderName ?? '',
+          total: ev.catalog?.total ?? (ev.matches?.length ?? 0),
+          markets: ev.catalog?.microMarkets ?? [],
+        });
+      }
       if (!ms.length) {
+        if (context.waProjectFirst) {
+          const receipt = waBriefReceipt(context.constraints);
+          if (receipt) {
+            // Honest no-fit for the brief cut — never a silently relaxed list.
+            return `${receipt}Nothing in the book fits that exactly. Here's everything — or change the size or budget and I'll re-cut.`;
+          }
+          return `${bookLead}Here's the book. Pick a project — or tap *Help me choose* and I'll narrow it in two taps.`;
+        }
         return `I couldn't find a fresh match with those filters — tell me if you'd like to adjust area or budget?`;
       }
       const pre = goal.kind === 'ack_reject_recommend' ? 'No problem. ' : '';
@@ -586,7 +1060,10 @@ export function fallbackReply(req: ComposeRequest): string {
         const countCue = n === 1 ? '1 match is on your board' : `${n} matches are on your board`;
         body = `${pre}${lead} — ${countCue}.${tail} ${nextAsk}`;
       } else {
-        body = `${pre}${lead}: ${list}.${tail} ${nextAsk}`;
+        // Receipt first on allotted WA lines — the cut is played back before the list.
+        const receipt = context.waProjectFirst ? waBriefReceipt(context.constraints) : '';
+        const afford = affordabilityLead(context.buyerText);
+        body = `${afford}${bookLead}${afford ? '' : receipt}${pre}${lead}: ${list}.${tail}${carriedAsks(context.buyerText)} ${nextAsk}`;
       }
       // Singleton exact fit — soft nearby CTA (board stays exact until they opt in).
       if (ev.nearbyOffer?.asked && ev.nearbyOffer.nearbyAreas.length && ms.length === 1) {
@@ -653,10 +1130,15 @@ export function fallbackReply(req: ComposeRequest): string {
       // here: nudge the DEAL forward, not the search. Soft CTA decline
       // (cta_decline) is a short ack + one NBA — never an overview recycle.
       if (context.focusProjectName) {
-        if (goal.reason === 'cta_decline') {
-          return `No problem — want a site visit to *${context.focusProjectName}*, loan details, or something else on this project?`;
-        }
-        return `Shall I set up a visit to *${context.focusProjectName}*, or hold a unit for you while you decide?`;
+        const decline = goal.reason === 'cta_decline';
+        const nudge = decline
+          ? `No problem — want a site visit to *${context.focusProjectName}*, loan details, or something else on this project?`
+          : `Shall I set up a visit to *${context.focusProjectName}*, or hold a unit for you while you decide?`;
+        // The buyer already read this and moved on. Saying it again is the bot
+        // looping; the honest second move is to stop nudging and offer the way
+        // out — their own words, the book, or a person.
+        if (!repeatsPrior(nudge, context.priorReplyExcerpt)) return nudge;
+        return `I don't want to keep nudging. Tell me what you'd like to know about *${context.focusProjectName}* and I'll pull it — or say "projects" for the full book, or "call me" and our team will reach out.`;
       }
       const lead = ev.matches?.[0]?.name;
       if (ev.nextSlot) return `Those are still the closest fits. ${probeCopy(ev.nextSlot)}`;
@@ -691,10 +1173,25 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       if (ev.noMatch?.reasoning) {
         const emptyChips = ev.searchRecovery?.suggested_actions.length === 0;
+        const base = ev.noMatch.reasoning.endsWith('.')
+          ? ev.noMatch.reasoning
+          : `${ev.noMatch.reasoning}.`;
+        // An allotted book has nine projects, not a market — so "no match" is
+        // never the end of the sentence. Say what the book actually spans, and
+        // the buyer can see for themselves which of their filters has to give.
+        if (context.waProjectFirst && ev.catalog?.priceMinInr && ev.catalog.priceMaxInr) {
+          const band = `${formatInr(ev.catalog.priceMinInr)} to ${formatInr(ev.catalog.priceMaxInr)}`;
+          const count = ev.catalog.total ?? 0;
+          const book = count
+            ? `All ${count} projects on the book run ${band}`
+            : `The book runs ${band}`;
+          return `${base} ${book} — here they are, so you can see which part of the brief to loosen.${carriedAsks(context.buyerText)}`;
+        }
+        // `.` twice: the reasoning already ends in a full stop, and the suffix
+        // opened with another one.
         const suffix = emptyChips
           ? ' Tell me what to change — budget, area, or property type.'
-          : '. Want to adjust budget, area, or property type?';
-        const base = ev.noMatch.reasoning.endsWith('.') ? ev.noMatch.reasoning : `${ev.noMatch.reasoning}.`;
+          : ' Want to adjust budget, area, or property type?';
         const served =
           ev.catalog?.servedCities?.length
             ? ` We currently serve ${ev.catalog.servedCities.slice(0, 4).join(', ')}.`
@@ -733,6 +1230,7 @@ export function fallbackReply(req: ComposeRequest): string {
         return "I don't have a short explainer for that yet — ask me about property types, buying steps, or buyer documents, or name a project.";
       }
 
+
       // Over-answer fix — a primary "tell me about X" gets the compact card,
       // never the chunk assembly (and never FAQ text): sizes, one price band,
       // location, possession, one probing question. Facet asks fall through.
@@ -748,6 +1246,25 @@ export function fallbackReply(req: ComposeRequest): string {
             k === 'operator_model' ||
             k === 'visit_logistics',
         ) ?? false;
+      // A rate ask is answered with the rate. It used to fall through to the
+      // price chunks and come back as the headline number, which is the one
+      // answer the buyer explicitly did not want.
+      if (goal.requires?.includes('price_per_sqft') && ev.perSqft?.rows.length) {
+        const pname =
+          ev.perSqft.projectName ||
+          ev.detail?.name ||
+          ev.pricing?.projectName ||
+          context.focusProjectName ||
+          '';
+        const line = pname ? perSqftLine(ev.perSqft, pname) : '';
+        if (line) {
+          return `${line}${closingCta({
+            buyerText: context.buyerText,
+            topics: ['price'],
+            projectName: pname,
+          })}`;
+        }
+      }
       // Possession / loan facet asks must never be swallowed by the overview card
       // (configs + price first) — answer the asked atom, then optional follow-ups.
       if (isPossessionAsk(context.buyerText) && ev.detail?.possession && !ev.detail.faqs?.length) {
@@ -803,13 +1320,22 @@ export function fallbackReply(req: ComposeRequest): string {
       if (
         topics[0] === 'overview' &&
         ev.detail &&
+        // An unrecognised ask lands on 'overview' because the router had nothing
+        // else to give it — reciting the card here is what made every unknown
+        // question receive a byte-identical project brief.
+        !goal.unrecognised &&
         !ev.detail.faqs?.length &&
         !ev.faqMiss?.keys.length &&
         !advisoryRequired &&
         !isPossessionAsk(context.buyerText) &&
         !isLoanEligibilityAsk(context.buyerText)
       ) {
-        return overviewCard(ev.detail);
+        return overviewCard(ev.detail, {
+          ...(context.priorReplyExcerpt ? { priorReply: context.priorReplyExcerpt } : {}),
+          // Same base as the default seed, plus the turn's own text — so the
+          // card is stable for a given turn and moves between turns.
+          seed: `${ev.detail.name}${ev.detail.microMarket ?? ''}${context.buyerText ?? ''}`,
+        });
       }
 
       const chunks: string[] = [];
@@ -829,16 +1355,19 @@ export function fallbackReply(req: ComposeRequest): string {
 
       if (topics.includes('price') && ev.pricing && !suppressPrice) {
         const p = ev.pricing;
-        // AB-1 — an asked component ("club membership fee?") leads alone.
-        const asked = componentsForAsk(context.buyerText ?? '', p.components);
-        const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 4);
-        const parts = shown.map(formatPriceComponent).join(', ');
+        const lead = priceLeadForAsk(
+          p,
+          context.buyerText ?? '',
+          context.constraints,
+          ev.detail,
+        );
         const start = formatStartingPrice(p.startingDisplay);
-        const atom = parts || start || 'on file';
-        // Cost-sheet-only (stamp/registration) must not wear a "Pricing" hat when
-        // there is no unit BSP / starting figure — quality-factory Stage 1.
-        const header = priceAnswerHeader(p.projectName, shown, start);
-        chunks.push(multiTopic ? atom : `*${header}:* ${atom}`);
+        const header = priceAnswerHeader(
+          p.projectName,
+          isCostComponentAsk(context.buyerText ?? '') ? p.components : [],
+          start,
+        );
+        chunks.push(multiTopic ? lead : `*${header}:* ${lead}`);
       }
       if (topics.includes('price') && ev.landedCost && !suppressPrice) {
         chunks.push(landedCostLine(ev.landedCost, { omitProjectName: multiTopic }));
@@ -927,9 +1456,19 @@ export function fallbackReply(req: ComposeRequest): string {
         const relevant = legalSnapshotRendered
           ? ev.detail.faqs.filter((f) => !/^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(f.questionKey))
           : ev.detail.faqs;
+        // Distinct FAQ KEYS routinely carry identical prose (banks and
+        // loan_eligibility are usually the same sentence), and joining them
+        // blind printed that sentence twice in every EMI answer.
+        const seenAnswers = new Set<string>();
         const body = relevant
           .map((f) => f.answer.trim())
-          .filter(Boolean)
+          .filter((a) => {
+            if (!a) return false;
+            const key = a.toLowerCase().replace(/\s+/g, ' ');
+            if (seenAnswers.has(key)) return false;
+            seenAnswers.add(key);
+            return true;
+          })
           .join(' ');
         if (body) chunks.push(body);
       } else if (topics.includes('emi') && ev.emi) {
@@ -948,6 +1487,9 @@ export function fallbackReply(req: ComposeRequest): string {
           topics,
           projectName: extra?.projectName ?? subjectName,
           park,
+          ...(context.priorReplyExcerpt ? { priorReply: context.priorReplyExcerpt } : {}),
+          ...(ev.detail?.projectType ? { projectType: ev.detail.projectType } : {}),
+          ...(ev.landedCost ? { allInDelivered: true } : {}),
         });
       if (multiTopic && chunks.length >= 1) {
         const body = chunks
@@ -968,15 +1510,27 @@ export function fallbackReply(req: ComposeRequest): string {
       }
       if (goal.topic === 'price' && ev.pricing && !suppressPrice) {
         const p = ev.pricing;
-        const asked = componentsForAsk(context.buyerText ?? '', p.components);
-        const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 3);
-        const parts = shown.map(formatPriceComponent).join(', ');
-        return `For *${p.projectName}*: ${parts || formatStartingPrice(p.startingDisplay) || 'pricing on file'}.${cta({ projectName: p.projectName })}`;
+        const lead = priceLeadForAsk(
+          p,
+          context.buyerText ?? '',
+          context.constraints,
+          ev.detail,
+        );
+        return `For *${p.projectName}*: ${lead}.${cta({ projectName: p.projectName })}`;
       }
       if (goal.topic === 'property_type' && ev.detail?.projectType) {
         return `${projectTypeLine(ev.detail)} Want pricing, plot sizes, or a visit?`;
       }
       if (goal.topic === 'compare' && ev.compare?.tableText.trim()) {
+        // Answer the question that was asked, not "here is everything".
+        //
+        // Six different comparison questions in one live run — which is bigger,
+        // which is closer to the airport, which is ready first, compare the 2
+        // BHK, maintenance in both, better clubhouse — came back as the same
+        // eight-row card, three times identically. The matrix has been carrying
+        // keyed rows the whole time and nothing read them.
+        const led = compareFacetLead(context.buyerText ?? '', ev.compare);
+        if (led) return led;
         const advice = compareAdviceLine(context.buyerText ?? '', ev.compare.projects);
         return advice ? `${advice}\n\n${ev.compare.tableText.trim()}` : ev.compare.tableText.trim();
       }
@@ -1028,7 +1582,7 @@ export function fallbackReply(req: ComposeRequest): string {
         const pname = ev.detail?.name ?? context.focusProjectName;
         // AB-1 — an inventory ask ("is there any inventory left?") wants the
         // availability FACT. A config card list without it is a non-answer.
-        let body: string;
+        let facts: string;
         if (isInventoryAsk(context.buyerText ?? '')) {
           const tracked = ev.units.filter((u) => (u.holdableUnits ?? 0) > 0);
           if (tracked.length) {
@@ -1036,25 +1590,28 @@ export function fallbackReply(req: ComposeRequest): string {
               .slice(0, 4)
               .map((u) => `${u.holdableUnits} × ${u.unitType}`)
               .join(', ');
-            body = `Yes — still open${pname ? ` at *${pname}*` : ''}: ${lines}.${cta({ projectName: pname })}`;
+            facts = `Yes — still open${pname ? ` at *${pname}*` : ''}: ${lines}.`;
           } else {
             // All-zero counts can mean "not tracked" as much as "sold out" — Desk
             // sends 0 for every config when a project has no unit rows at all.
             // Never claim sold out without positive evidence; route the exact
             // count to the team instead.
-            body = `${summarizeUnitConfigs(ev.units, pname)} Exact unit-level counts are confirmed by our team.${cta({ projectName: pname })}`;
+            facts = `${summarizeUnitConfigs(ev.units, pname)} Exact unit-level counts are confirmed by our team.`;
           }
         } else {
-          body = `${summarizeUnitConfigs(ev.units, pname)}.${cta({ projectName: pname })}`;
+          facts = `${summarizeUnitConfigs(ev.units, pname)}.`;
         }
-        // Unit-typed site image / floor plan co-fetched with BHK-scoped availability.
+        // Unit-typed site image / floor plan co-fetched with BHK-scoped
+        // availability. It is its OWN sentence and it goes before the question —
+        // appended after the closer it read as a lowercase run-on
+        // ("…check live unit availability? here's the site photos").
         if (ev.media?.allowed && ev.media.cdnUrl) {
-          const mediaBit = mediaShareLine(ev.media, context.focusProjectName, {
+          const bit = mediaShareLine(ev.media, context.focusProjectName, {
             omitProjectName: true,
-          });
-          body = `${body.replace(/\s*$/, '')} ${mediaBit}`;
+          }).trim();
+          facts = `${facts.replace(/\s*$/, '')} ${bit.charAt(0).toUpperCase()}${bit.slice(1)}.`;
         }
-        return body;
+        return `${facts}${cta({ projectName: pname })}`;
       }
       // SA-3: availability with empty units — honest empty, not generic overview.
       if (goal.topic === 'availability') {
@@ -1077,13 +1634,70 @@ export function fallbackReply(req: ComposeRequest): string {
         return `I don't have that detail on file for *${pname}* yet.${cta({ projectName: pname })}`;
       }
       if (ev.detail) {
+        // Everything that COULD answer has now declined to. If the buyer asked
+        // something specific and `overview` was only where the router landed,
+        // the card is not an answer — and reciting the identical card for every
+        // unrecognised question is exactly how the bot reads as not listening.
+        if (goal.unrecognised) {
+          const pname = ev.detail.name || context.focusProjectName || 'this project';
+          // "2027 is too late for me", "I need to check with my wife", "I don't
+          // want a high rise" are STATEMENTS. Answering them with "I don't have
+          // that on file" claims a lookup for a fact nobody asked for — a
+          // category error, and the buyer hears a bot that didn't read the
+          // sentence. Only a question earns the file answer; a statement gets
+          // acknowledged, and gets the one lever this line actually has.
+          // A statement can still name a fact we hold. "1400 sqft for a 3 bhk is
+          // too small" reads as an objection, but the sizes are on file and the
+          // useful reply is the bigger configuration — not a note passed to the
+          // team. Fact-bearing statements fall through to the answer path;
+          // "2027 is too late", "I need to check with my wife" do not, because
+          // there is no fact in them to look up.
+          const namesAMeasurement =
+            /\b(?:sq\.?\s*ft|sqft|sft|square\s*(?:feet|foot)|carpet|built[- ]?up)\b/i.test(
+              context.buyerText ?? '',
+            );
+          if (!goal.requires?.length && !namesAMeasurement && !looksLikeAQuestion(context.buyerText)) {
+            const said = `Understood — I've noted that and it goes to the *${pname}* team with your own words.`;
+            const lever = ` If it changes what you're after, tell me a size or a budget and I'll re-cut the book — or say "projects" to see everything, "call me" and someone will reach you.`;
+            if (!repeatsPrior(said, context.priorReplyExcerpt)) return `${said}${lever}`;
+          }
+          const miss = `I don't have that on file for *${pname}* — I'd rather have our team confirm it than guess, so I'm passing it on. Meanwhile I can give you pricing, the configurations, the legal picture, or set up a site visit.`;
+          // Two misses in a row means the menu isn't what they want. Saying the
+          // same sentence again reads as a wall; name the gap and hand them a
+          // person instead.
+          if (!repeatsPrior(miss, context.priorReplyExcerpt)) return miss;
+          return `That's a second one I can't answer from the file for *${pname}*, so I've flagged both for our team to come back on. If it's easier, say "call me" and someone will reach you — or tell me a date and I'll set up a site visit.`;
+        }
         // Overview fallthrough — the founder-spec card: sizes, one price
         // band (from configs), location, possession, one probing question.
-        return overviewCard(ev.detail);
+        return overviewCard(ev.detail, {
+          ...(context.priorReplyExcerpt ? { priorReply: context.priorReplyExcerpt } : {}),
+          // Same base as the default seed, plus the turn's own text — so the
+          // card is stable for a given turn and moves between turns.
+          seed: `${ev.detail.name}${ev.detail.microMarket ?? ''}${context.buyerText ?? ''}`,
+        });
       }
       return `Let me get that confirmed and follow up shortly.`;
     }
     case 'commit':
+      if (context.waProjectFirst) {
+        // The pick opens the project's own sizes. Naming them is the whole
+        // point of the sub-option step — a buyer who taps a project has
+        // chosen WHERE and is now choosing WHAT, and every later answer
+        // (price, availability, EMI) is sharper once the size is known. The
+        // jobs stay on the same list, so the size is an option, not a toll.
+        const sizes = context.waSizeOptions ?? 0;
+        if (sizes >= 2) {
+          // Only claim a count when every one of them is on screen — the list
+          // caps at 7 rows, and "7 sizes" over 6 rows is a promise we broke.
+          const head = sizes <= 7 ? `${sizes} sizes on file` : 'these are the sizes on file';
+          return (
+            `*${goal.projectName}* — ${head}. ` +
+            `Pick the one you're after and I'll price it, or go straight to the full price list or a visit.`
+          );
+        }
+        return `*${goal.projectName}* — Price, a visit, or ask me anything.`;
+      }
       return `Great choice${name} — let's look at *${goal.projectName}*. Want pricing, legal status, or to line up a visit?`;
     case 'propose_visit':
       return context.channel === 'advisor_web'
@@ -1147,6 +1761,9 @@ export function fallbackReply(req: ComposeRequest): string {
       return `You're all set${name}! If anything else comes up — pricing, legal, or a visit — just ask.`;
     }
     case 'smalltalk':
+      if (context.waProjectFirst) {
+        return waBookFirstGreet({ builderName: context.builderName, catalog: ev.catalog });
+      }
       return `Doing well, thanks${name}! What kind of property are you exploring — area, budget, or configuration?`;
     default:
       return `Tell me the area, budget, or a project name and I'll pull live options from our catalog.`;
@@ -1217,15 +1834,27 @@ function legalSnapshotLine(
  */
 function asksLegalSnapshotAtom(
   text: string | undefined,
-  faqs: ReadonlyArray<{ questionKey: string }>,
+  faqs: ReadonlyArray<{ questionKey: string; answer?: string }>,
 ): boolean {
   if (!text) return false;
   // Title-atom cues only — phrase-scoped so a bare "loan approval" can't trip it.
   if (!/\b(?:rera|khata|title|encumbrance|\bec\b|clear\s+title|approval\s+status|plan\s+approval|legal\s+status|legal\s+details?)\b/i.test(text)) return false;
-  // A legal-snapshot FAQ already carries this atom — the FAQ body answers it, no snapshot.
+  // A legal-snapshot FAQ owns this atom only if its BODY actually answers it.
+  // Brigade's legal_status FAQ is the khata blurb — keyed legal, silent on RERA —
+  // so "is it RERA approved?" was answered with A-Khata and the registration
+  // number we hold was never spoken. Own the topic ≠ deliver the fact.
   const legalOwned = /^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i;
-  return !faqs.some((f) => legalOwned.test(f.questionKey));
+  const reraAsked = /\brera\b/i.test(text);
+  return !faqs.some(
+    (f) =>
+      legalOwned.test(f.questionKey) &&
+      (!reraAsked || RERA_IN_ANSWER.test(f.answer ?? '')),
+  );
 }
+
+/** A RERA registration as a buyer would recognise it — "PRM/KA/RERA/…", "RERA no …". */
+const RERA_IN_ANSWER =
+  /(?:\bPRM\/|\brera\s*(?:registration\s*)?(?:no\.?|number|#)?\s*[:\-]?\s*[A-Z0-9][A-Z0-9\/]{6,})/i;
 
 /** RERA/khata/title snapshot only — the other legal atom (loan) comes from the FAQ body. */
 function legalTitleSnapshot(
@@ -1263,6 +1892,12 @@ function legalTitleSnapshot(
  * Summary-first config copy — group by BHK family before listing variants.
  * Avoids a flat database dump of every row.
  */
+/** "a", "a and b", "a, b and c" — sizes read as prose, not as a slash-list. */
+function joinWithAnd(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
 export function summarizeUnitConfigs(
   units: ReadonlyArray<{
     unitType: string;
@@ -1291,21 +1926,28 @@ export function summarizeUnitConfigs(
     return `${lead}${formatUnitConfigLine(u)}`;
   }
 
-  const head =
-    families.length === 1
-      ? `Yes — ${families[0]![1].length} ${families[0]![0]} variant${families[0]![1].length > 1 ? 's' : ''} on file`
-      : `Yes — ${families.length} configuration families on file (${families.map(([f]) => f).join(', ')})`;
+  // "2 2 BHK variants on file. 2 BHK: 2 variants ranges from …" — the head and
+  // the line said the same thing twice, and the count collided with the size
+  // name. One family gets ONE sentence; the sizes are the useful half.
+  const sizesOf = (rows: UnitRow[]): string =>
+    joinWithAnd(rows.map((r) => r.sizeDisplay).filter((s): s is string => !!s).slice(0, 3));
 
+  if (families.length === 1) {
+    const [family, rows] = families[0]!;
+    const sizes = sizesOf(rows);
+    const layouts = `${rows.length} layout${rows.length > 1 ? 's' : ''}`;
+    return sizes
+      ? `${lead}Yes — *${family}* is on file, in ${layouts}: ${sizes}. Exact availability depends on live inventory`
+      : `${lead}Yes — *${family}* is on file, in ${layouts}. Exact availability depends on live inventory`;
+  }
+
+  const head = `Yes — ${families.length} sizes on file (${families.map(([f]) => f).join(', ')})`;
   const lines = families.slice(0, 4).map(([family, rows]) => {
-    const sizes = rows
-      .map((r) => r.sizeDisplay)
-      .filter(Boolean)
-      .slice(0, 2);
-    const sizeBit = sizes.length ? ` ranges from ${sizes.join(' / ')}` : '';
+    const sizes = sizesOf(rows);
     if (rows.length === 1) {
-      return `${family}${sizeBit || ` — ${formatUnitConfigLine(rows[0]!).replace(rows[0]!.unitType, '').trim()}`}`;
+      return `${family}${sizes ? ` — ${sizes}` : ` — ${formatUnitConfigLine(rows[0]!).replace(rows[0]!.unitType, '').trim()}`}`;
     }
-    return `${family}: ${rows.length} variants${sizeBit}`;
+    return `${family} — ${rows.length} layouts${sizes ? `, ${sizes}` : ''}`;
   });
 
   return `${lead}${head}. ${lines.join('. ')}. Exact availability depends on live inventory`;
@@ -1402,10 +2044,12 @@ function mediaShareLine(
   opts?: { omitProjectName?: boolean },
 ): string {
   const asset = humanizeAsset(media.assetKind);
+  // "Here's the site photos" — the lead has to agree with the label's number.
+  const here = /s$/i.test(asset) ? 'here are' : "here's";
   if (media.allowed && media.cdnUrl) {
-    if (opts?.omitProjectName) return `here's the ${asset}`;
+    if (opts?.omitProjectName) return `${here} the ${asset}`;
     const pname = media.projectName || focusProjectName || 'this project';
-    return `Here's the ${asset} for *${pname}*`;
+    return `${here.charAt(0).toUpperCase()}${here.slice(1)} the ${asset} for *${pname}*`;
   }
   const pname = media.projectName || focusProjectName || 'this project';
   // media.redirectHint / reason are INTERNAL composer instructions — Desk
@@ -1418,24 +2062,8 @@ function mediaShareLine(
   return `I don't have the ${humanizeAsset(media.assetKind)} for *${pname}* on file yet — I can walk you through the details here or share it at your site visit.`;
 }
 
-/** Buyer-facing name for a media asset kind — never an underscored key like `floor_plan`. */
-function humanizeAsset(kind?: string): string {
-  if (!kind) return 'document';
-  const nice: Record<string, string> = {
-    floor_plan: 'floor plan',
-    master_plan: 'master plan',
-    layout_plan: 'layout plan',
-    brochure: 'brochure',
-    price_sheet: 'price sheet',
-    cost_sheet: 'cost sheet',
-    payment_plan: 'payment plan',
-    site_image: 'site photos',
-    site_plan: 'site plan',
-    video: 'walkthrough video',
-    photo: 'photos',
-  };
-  return nice[kind] ?? kind.replace(/_/g, ' ');
-}
+/** Buyer-facing name for a media asset kind — the vocabulary lives in media-asset.ts. */
+const humanizeAsset = humanizeMediaKind;
 
 function formatPriceComponent(c: { label: string; value: string }): string {
   const label = c.label.trim();
@@ -1542,19 +2170,70 @@ export function locationSnapshotLine(
   return bits.join('. ');
 }
 
+/**
+ * Where a carried-forward number came from, said out loud. The buyer gave it
+ * once, several turns ago; answering off it without naming it would read as the
+ * bot inventing a figure — and would leave them no way to say "that's changed".
+ */
+function emiBasisLead(source: import('./types.js').EmiEvidence['basisSource']): string {
+  if (!source) return '';
+  if (source.kind === 'buyer_budget') {
+    return `Working to the ${formatInr(source.budgetInr)} you're looking at — `;
+  }
+  const monthly = `₹${source.monthlyInr.toLocaleString('en-IN')}`;
+  return source.fromIncome
+    ? `Off the take-home you gave — about ${monthly} a month towards the instalment — `
+    : `Working from the ${monthly} a month you mentioned — `;
+}
+
 function emiSnapshotLine(e: import('./types.js').EmiEvidence): string {
+  const from = emiBasisLead(e.basisSource);
   if (!e.discloseInputs) {
     const down = e.downPaymentFormatted
       ? ` (~${e.downPaymentFormatted} down on ${e.basisFormatted})`
       : '';
-    return `Indicative EMI: *${e.emiFormatted}/month*${down} at ${e.ratePercent}% for ${e.tenureYears} years`;
+    return `${from}Indicative EMI: *${e.emiFormatted}/month*${down} at ${e.ratePercent}% for ${e.tenureYears} years`;
   }
   if (e.basisKind === 'explicit_principal') {
-    return `Indicative EMI: *${e.emiFormatted}/month* on a ${e.principalFormatted} loan at ${e.ratePercent}% for ${e.tenureYears} years`;
+    return `${from}Indicative EMI: *${e.emiFormatted}/month* on a ${e.principalFormatted} loan at ${e.ratePercent}% for ${e.tenureYears} years`;
   }
   const ltv = e.ltvPercent ?? 80;
   const down = e.downPaymentFormatted ? `; ~${e.downPaymentFormatted} down` : '';
-  return `Indicative EMI: *${e.emiFormatted}/month* on a ${ltv}% loan (${e.principalFormatted} principal${down}) against ${e.basisFormatted} project price, at ${e.ratePercent}% for ${e.tenureYears} years`;
+  // A basis the BUYER gave is not a project price, and calling it one would put
+  // a number in the builder's mouth.
+  const against =
+    e.basisSource?.kind === 'buyer_budget'
+      ? `against ${e.basisFormatted}`
+      : `against ${e.basisFormatted} project price`;
+  return `${from}Indicative EMI: *${e.emiFormatted}/month* on a ${ltv}% loan (${e.principalFormatted} principal${down}) ${against}, at ${e.ratePercent}% for ${e.tenureYears} years`;
+}
+
+/**
+ * The comparable rate, derived only where a published size and a published
+ * price meet. Rounded to ₹10 and stated as "about" — it is arithmetic on the
+ * starting price and the smaller end of the size band, not a quoted rate, and
+ * the reply says so rather than passing a division off as a builder number.
+ */
+/**
+ * Did this turn ask for a fact at all? A question mark, or an opening the
+ * language reserves for asking. Deliberately narrow: when in doubt this returns
+ * true and the buyer gets the file answer, which is the safer of the two.
+ */
+function looksLikeAQuestion(text?: string): boolean {
+  const t = (text ?? '').trim();
+  if (!t) return true;
+  if (t.includes('?')) return true;
+  return /^(?:what|when|where|which|who|whom|whose|why|how|is|are|was|were|do|does|did|can|could|will|would|should|shall|may|any|tell me|show me|send|give me|share)\b/i.test(
+    t,
+  );
+}
+
+function perSqftLine(ps: NonNullable<EvidenceSet['perSqft']>, projectName: string): string {
+  if (!ps.rows.length) return '';
+  const body = ps.rows
+    .map((r) => `${r.unitType} about ₹${r.rateInr.toLocaleString('en-IN')}/sqft`)
+    .join(', ');
+  return `On *${projectName}*, from the published sizes and starting prices: ${body}. That is the starting price over the smaller end of each size band, so read it as indicative — the cost sheet carries the quoted rate.`;
 }
 
 function landedCostLine(
@@ -1571,6 +2250,66 @@ function landedCostLine(
   const charges = oneTime ? `; ${oneTime}` : '';
   const total = lc.totalDisplay ? `; all-in ~${lc.totalDisplay}` : '';
   return `${base}${charges}${total}`;
+}
+
+/**
+ * Which row of the comparison the buyer actually asked for.
+ *
+ * Read off the closed sets that already exist — the answer-contract FactKeys and
+ * the Desk FAQ keys — so a new phrasing is taught in the same one place as
+ * everywhere else. No new intent vocabulary lives here.
+ */
+const COMPARE_FACET_BY_KEY: Readonly<Record<string, string>> = Object.freeze({
+  possession: 'possession',
+  ready_to_move: 'possession',
+  price: 'starting_price',
+  pricing: 'starting_price',
+  base_rate: 'starting_price',
+  price_per_sqft: 'starting_price',
+  project_type: 'project_type',
+  project_type_summary: 'project_type',
+  loan_eligibility: 'loan_eligibility',
+  banks: 'loan_eligibility',
+  location_schools: 'location',
+  project_location: 'location',
+  metro_connectivity: 'location',
+  airport_distance: 'location',
+  nearby_schools: 'location',
+  nearby_hospitals: 'location',
+  configurations: 'configurations',
+  compact_units: 'configurations',
+});
+
+function compareFacetLead(
+  buyerText: string,
+  cmp: { tableText: string; matrix?: CompareMatrixPayload },
+): string {
+  const rows = cmp.matrix?.rows;
+  const names = cmp.matrix?.projects?.map((p) => p.name) ?? [];
+  if (!rows?.length || names.length < 2 || !buyerText.trim()) return '';
+
+  const asked = [...answerRequirements(buyerText), ...resolveFaqQuestionKeys(buyerText)];
+  const wanted = asked.map((k) => COMPARE_FACET_BY_KEY[k]).find(Boolean);
+  if (!wanted) return '';
+
+  const row = rows.find((r) => r.key === wanted);
+  // The facet is real but this comparison has no row for it (maintenance, the
+  // clubhouse, which is physically bigger). Repeating the same eight rows claims
+  // they answer it. Say what the table holds and let them pick.
+  if (!row) return '';
+
+  const lines = names
+    .map((n, i) => `• *${n}* — ${row.values[i]?.trim() || '—'}`)
+    .join('\n');
+  const others = rows
+    .filter((r) => r.key !== wanted)
+    .map((r) => r.label.toLowerCase())
+    .slice(0, 3)
+    .join(', ');
+  return (
+    `*${row.label}*\n${lines}` +
+    (others ? `\n\nI can put ${others} side by side too — say which.` : '')
+  );
 }
 
 function compareAdviceLine(
@@ -1618,6 +2357,14 @@ function probeCopy(slot: ProbeKind): string {
       return 'How many bedrooms — 2 BHK, 3 BHK, something else?';
     case 'purpose':
       return 'Is this for you to live in, or as an investment?';
+    case 'propertyType':
+      return 'What kind of home are you picturing?';
+    case 'worries':
+      return "What quietly worries you about this purchase?";
+    case 'schools':
+      return 'Should I weigh school access?';
+    case 'hub':
+      return 'Where do you commute to?';
     case 'priority':
       return 'One quick thing so I rank these right — does a shorter commute matter more, or staying on budget?';
   }
@@ -1649,6 +2396,42 @@ export function firstMissingProbeSlot(c: Constraints | undefined): ProbeKind | u
       !/(plantation|planted|estate|villa|plot|land|bungalow)/i.test(c.propertyType));
   if (needsBhk && !c.bhk) return 'bhk';
   return undefined;
+}
+
+/** Unit price / asked cost-sheet row — never default to stamp duty as "the price". */
+function priceLeadForAsk(
+  p: {
+    components: ReadonlyArray<{ label: string; value: string }>;
+    startingDisplay?: string;
+  },
+  text: string,
+  constraints: Constraints | undefined,
+  detail?: { configurations?: ReadonlyArray<{ unitType: string; priceDisplay: string; priceMinInr: number }> },
+): string {
+  if (isCostComponentAsk(text)) {
+    const asked = componentsForAsk(text, p.components);
+    const shown = asked.length ? asked.slice(0, 4) : p.components.slice(0, 3);
+    const parts = shown.map(formatPriceComponent).join(', ');
+    return parts || formatStartingPrice(p.startingDisplay) || 'charges on file';
+  }
+  const bhk = constraints?.bhk?.trim();
+  if (bhk && detail?.configurations?.length) {
+    const n = /(\d+)/.exec(bhk)?.[1];
+    const rows = detail.configurations.filter((c) =>
+      n ? new RegExp(`\\b${n}\\s*bhk\\b`, 'i').test(c.unitType) : false,
+    );
+    const priced = rows.filter((c) => c.priceMinInr > 0 || c.priceDisplay.trim());
+    if (priced.length) {
+      const min = Math.min(...priced.map((c) => c.priceMinInr).filter((x) => x > 0));
+      const display = priced.find((c) => c.priceDisplay.trim())?.priceDisplay || formatInr(min);
+      if (display) return `${bhk} from ${display.replace(/^from\s+/i, '')}`;
+    }
+  }
+  const start = formatStartingPrice(p.startingDisplay);
+  if (start) return start;
+  const startingRow = p.components.find((c) => /starting|base|bsp|selling/i.test(c.label));
+  if (startingRow) return formatPriceComponent(startingRow);
+  return 'pricing on file — ask for a size if you want a unit total';
 }
 
 /** Unit/BSP vs charges-only header for price answers. */
@@ -1815,7 +2598,10 @@ export function summaryBlurb(summary: string | undefined): string {
   return ` ${out}`;
 }
 
-export function overviewCard(d: NonNullable<EvidenceSet['detail']>): string {
+export function overviewCard(
+  d: NonNullable<EvidenceSet['detail']>,
+  opts?: { priorReply?: string; seed?: string },
+): string {
   const cfgs = d.configurations ?? [];
   const types = cfgs.map((c) => c.unitType).filter(Boolean);
   const typesLine = types.length
@@ -1831,15 +2617,21 @@ export function overviewCard(d: NonNullable<EvidenceSet['detail']>): string {
   const blurb = summaryBlurb(d.summary);
   // Overview keeps a short probing question (founder-spec card), but rotates
   // the ask so every project card does not end on the same visit prompt.
-  const overviewClosers = [
-    ' Want pricing details, unit configurations, or the legal & RERA picture?',
-    ' Curious about loan eligibility, or shall I walk through the configs?',
-    ' Want a cost breakdown next, or how this compares nearby?',
+  //
+  // The seed used to be the project name alone, which is CONSTANT for a given
+  // project — so the rotation never rotated: one project got one sentence for
+  // the life of the conversation, and "Curious about loan eligibility?" landed
+  // 102 times in 970 turns. The seed now moves with the turn, and whatever the
+  // last reply closed with is struck from the pool outright.
+  const pool = [
+    CLOSERS.overview_three.text,
+    CLOSERS.overview_loan.text,
+    CLOSERS.overview_cost.text,
   ];
-  let h = 0;
-  const seed = d.name + (d.microMarket ?? '');
-  for (let i = 0; i < seed.length; i++) h = (h + seed.charCodeAt(i) * (i + 1)) % 997;
-  return `*${d.name}*${where}.${facts}${phase}${blurb}${overviewClosers[h % overviewClosers.length]}`;
+  const priorText = opts?.priorReply ? composedOfferIn(opts.priorReply)?.text.trim() : undefined;
+  const fresh = pool.filter((text) => text.trim() !== priorText);
+  const closer = rotate(fresh.length ? fresh : pool, opts?.seed ?? d.name + (d.microMarket ?? ''));
+  return `*${d.name}*${where}.${facts}${phase}${blurb}${closer}`;
 }
 
 /**

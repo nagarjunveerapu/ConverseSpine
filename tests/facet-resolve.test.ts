@@ -119,9 +119,40 @@ describe('AB-1 — cost-component asks get THE component, not the whole card', (
     expect(reply).not.toMatch(/Car Parking/);
   });
 
-  it('a generic price ask keeps the full card', () => {
+  it('a generic price ask keeps the unit price, not stamp duty', () => {
     const reply = fallbackReply(priceReq("what's the price?"));
     expect(reply).toMatch(/Base Selling Price/);
+    expect(reply).not.toMatch(/Stamp Duty/);
+  });
+
+  it('Yes pricing / 2 BHK total leads with unit figure', () => {
+    const yes = fallbackReply(priceReq('Yes pricing'));
+    expect(yes).toMatch(/Base Selling Price/);
+    expect(yes).not.toMatch(/Stamp Duty/);
+    const total = fallbackReply({
+      ...priceReq('2 bhk total price'),
+      context: {
+        ...priceReq('2 bhk total price').context,
+        constraints: { bhk: '2 BHK' },
+      },
+      evidence: {
+        tools: ['pricing'],
+        pricing: {
+          projectName: 'Brigade Eldorado',
+          components: ELDORADO_COMPONENTS,
+          startingDisplay: '₹89 L',
+        },
+        detail: {
+          projectId: 'eldorado',
+          name: 'Brigade Eldorado',
+          microMarket: 'Bagalur',
+          configurations: [{ unitType: '2 BHK', priceDisplay: '₹95 L', priceMinInr: 9_500_000 }],
+        },
+      },
+    });
+    expect(total).toMatch(/2 BHK/);
+    expect(total).toMatch(/95 L/);
+    expect(total).not.toMatch(/Stamp Duty/);
   });
 
   // Review AB-1 note 3: parking is BOTH a FAQ key and a cost-sheet row. When the

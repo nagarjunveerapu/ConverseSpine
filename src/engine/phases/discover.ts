@@ -4,11 +4,31 @@ import { nameMentioned } from '../project_references.js';
 import { resolvePick } from '../state.js';
 import { formatInr } from '../compose.js';
 import { currentShortlist, discussedList } from '../entity-store.js';
-import { isNonPlaceUtterance } from '../placeability.js';
+import { isAttentionNudge, isNonPlaceUtterance } from '../placeability.js';
+import { isAdvisorBriefChipPhrase } from '../advisor-brief-chips.js';
 import { isCompareAmongOfferedTurn } from '../turn-intent/compare-intent.js';
+import { asksForAHuman, asksForSomethingNotOnBook, resolveBookQuestion, resolveSituation } from '../book-questions.js';
 
-export function decide(s: ConversationState, ex: Extracted, buyerText?: string): TurnGoal {
+export function decide(
+  s: ConversationState,
+  ex: Extracted,
+  buyerText?: string,
+  opts?: { skipBrief?: boolean },
+): TurnGoal {
   const d = s.discover;
+  const asked = s.discover.asked;
+  const mergedC = mergeConstraints(s.constraints, ex.constraints);
+  const ready = isBriefReady(mergedC, { asked });
+  const readyState = isBriefReady(s.constraints, { asked });
+  // "Can someone call me?", "connect me to your sales manager", "who will show
+  // me around?" — a request for a PERSON, which no open project turns into a
+  // question about that project. It has to be resolved above every fact path
+  // below, or the focused answer layer treats it as a missing data point and
+  // says "I don't have that on file" to a buyer asking for a callback.
+  if (opts?.skipBrief && buyerText) {
+    const handoff = asksForAHuman(buyerText);
+    if (handoff) return { kind: 'recommend', bookQuestion: handoff };
+  }
   if (ex.recallConstraints) return { kind: 'recall_constraints' };
   if (ex.recall) return { kind: 'visit_recall' };
   const asksEmi =
@@ -50,12 +70,10 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
 
   // Fresh search board: brief-ready + empty shortlist beats embedder compare/visit noise.
   // propertyType / lone BHK is NOT enough — probe fulfillments first (catalog-stress).
-  const asked = s.discover.asked;
   const freshSearchBoard =
     currentShortlist(s).length === 0 &&
     !s.focus &&
-    (isBriefReady(s.constraints, { asked }) ||
-      isBriefReady(mergeConstraints(s.constraints, ex.constraints), { asked }));
+    ready;
   if (
     freshSearchBoard &&
     (ex.speechAct === 'search' ||
@@ -139,7 +157,7 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // hallucinated PROJECT_VECTORS identity (empty shortlist / off-shortlist pick).
   if (
     ex.speechAct === 'search' &&
-    isBriefReady(mergeConstraints(s.constraints, ex.constraints), { asked })
+    ready
   ) {
     return { kind: 'recommend' };
   }
@@ -156,13 +174,14 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // Embedder namedProjects must not invent a visit/compare board here.
   // Partial brief (e.g. "apartment" only) falls through to the probe ladder.
   if (ex.transition === 'want_visit' || ex.speechAct === 'visit_book') {
-    const ready = isBriefReady(mergeConstraints(s.constraints, ex.constraints), { asked });
     if (ready && currentShortlist(s).length === 0 && !s.focus) {
       return { kind: 'recommend' };
     }
     if (!(ex.namedProjects?.length)) {
       if (ready) return { kind: 'recommend' };
       if (!ready && currentShortlist(s).length === 0 && !s.focus) {
+        // Builder-allotted WA: show the book so they pick a project first.
+        if (opts?.skipBrief) return { kind: 'recommend' };
         // fall through to probe / orient
       } else {
         return { kind: 'propose_visit' };
@@ -171,18 +190,40 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   }
   if (ex.objection) return { kind: 'objection', topic: ex.objectionTopic ?? 'custom' };
 
-  if (ex.rejected && isBriefReady(s.constraints, { asked })) return { kind: 'ack_reject_recommend' };
-  if (ex.wantsMore && isBriefReady(s.constraints, { asked })) return { kind: 'recommend' };
+  if (ex.rejected && readyState) return { kind: 'ack_reject_recommend' };
+  if (ex.wantsMore && readyState) return { kind: 'recommend' };
   // P2: search + media/facet without a pick → recommend board (not clarify).
   if (
-    isBriefReady(s.constraints, { asked }) &&
+    readyState &&
     ((ex.askTopics ?? []).some((t) => t === 'media' || t === 'price' || t === 'legal') ||
       ex.askTopic === 'media' ||
       ex.askTopic === 'price')
   ) {
     return { kind: 'recommend' };
   }
-  if (isBriefReady(s.constraints, { asked })) return { kind: 'recommend' };
+  if (readyState) return { kind: 'recommend' };
+
+  // "Want details on any of these?" — a bare yes to the list's own fork. The
+  // list is the question, so the shortlist is the answer: one match opens, two
+  // or more earn the pick menu. Without this the yes fell through to the
+  // below-threshold guard and came back "tell me a size or budget", asking for
+  // the brief the buyer had just given.
+  if (ex.affirm && !ex.decline && !ex.isQuestion && !s.focus) {
+    const shortlist = currentShortlist(s);
+    if (shortlist.length === 1) return commitPickWithFollowUp(shortlist[0]!, ex);
+    if (shortlist.length >= 2) return { kind: 'clarify_project_pick' };
+    // Nothing on the board and nothing outstanding: "yes" still means yes. The
+    // only thing on offer was the book, so that is what yes agreed to.
+    if (opts?.skipBrief) return { kind: 'recommend' };
+  }
+
+  // "I don't like this one, show me something else". Rejection and wanting more
+  // both needed a complete brief to route, which an allotted book never asks
+  // for — so on this line they fell to the clarify floor and the buyer got
+  // asked for a size instead of being shown the rest of the book.
+  if (opts?.skipBrief && (ex.rejected || ex.wantsMore) && !ready) {
+    return ex.rejected ? { kind: 'ack_reject_recommend' } : { kind: 'recommend' };
+  }
 
   // Below-threshold guard. Everything above failed to route this turn, so the
   // engine does NOT understand the ask. The remaining fallbacks (greet, orient)
@@ -194,18 +235,88 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // Smalltalk still wins: "hi there" is understood, not a miss. A question we
   // DID route (askTopic/askTopics) never reaches here.
   // First-home / "not sure where to start" — discovery help, not clarify.
+  // "are you a bot?", "do I pay commission?", "which is the cheapest?" — about
+  // the line or the book, not a property. Resolved HERE, above the guard that
+  // sends any unrouted question to clarify_intent: these end in a question mark
+  // more often than not, so below that guard they were unreachable.
+  // Property intent always wins: "I don't want to share my details, just tell me
+  // the price" reads as a privacy question and IS a price question, and the
+  // buyer's actual ask is the price. This module only ever gets the turns the
+  // intent layer found nothing in.
+  if (
+    opts?.skipBrief &&
+    !ex.askTopic &&
+    !(ex.askTopics?.length) &&
+    !(ex.namedProjects?.length)
+  ) {
+    const bookQ = resolveBookQuestion(buyerText ?? '');
+    if (bookQ) return { kind: 'recommend', bookQuestion: bookQ };
+  }
+
   if (isFirstHomeHelpAsk(ex)) {
+    // Builder-allotted WA: "not sure where to start" opens the two-tap minimal
+    // brief (size → budget) instead of dumping the book.
+    if (opts?.skipBrief) {
+      if (!mergedC.bhk?.trim() && !mergedC.propertyType?.trim()) return { kind: 'probe', slot: 'bhk' };
+      if (mergedC.budgetMaxInr === undefined) return { kind: 'probe', slot: 'budget' };
+      return { kind: 'recommend' };
+    }
     if (!d.oriented) return { kind: 'orient' };
     if (firstMissingSlot(s) === undefined || d.ignoredProbes >= 3) return { kind: 'recommend' };
     return { kind: 'probe', slot: nextSlot(s) };
   }
-  if (ex.isQuestion && !ex.smalltalk && !ex.askTopic && !(ex.askTopics?.length)) {
+
+  // A stated situation ("we have two small kids", "I work from home") — below
+  // the minimal brief, which already owns "where do I start", and only when the
+  // buyer brought no filter with it: "we are 7 people, need a big place" is a
+  // size ask and belongs to search.
+  if (
+    opts?.skipBrief &&
+    !ex.askTopic &&
+    !(ex.askTopics?.length) &&
+    !(ex.namedProjects?.length) &&
+    !hasNarrowingConstraint(ex.constraints)
+  ) {
+    const situation = resolveSituation(buyerText ?? '');
+    if (situation) return { kind: 'recommend', situation };
+  }
+
+  // "do you have Prestige Lakeside?", "anything in Jayanagar?" — nothing above
+  // resolved it, and on a single-builder book that failure IS the answer.
+  // Has to sit above the unrouted-question guard below, which would otherwise
+  // ask the buyer to rephrase a question we understood perfectly well.
+  if (
+    opts?.skipBrief &&
+    !(ex.namedProjects?.length) &&
+    !hasNarrowingConstraint(ex.constraints) &&
+    !ex.forceRecommendList &&
+    ex.speechAct !== 'search'
+  ) {
+    const absent = asksForSomethingNotOnBook(buyerText ?? '');
+    if (absent) return { kind: 'recommend', bookQuestion: absent };
+  }
+
+  if (
+    ex.isQuestion &&
+    !ex.smalltalk &&
+    // "hello?" carries a question mark and no question. Clarifying a knock
+    // reads as blame; turn 0 greets it, later turns re-offer the book.
+    !isAttentionNudge(buyerText ?? '') &&
+    !ex.askTopic &&
+    !(ex.askTopics?.length) &&
+    // "I can pay 60000 per month, what can I buy?" is a question that already
+    // carries its own filter. Clarifying it asks the buyer to repeat what they
+    // just said — the book can be cut and shown right now.
+    !hasNarrowingConstraint(ex.constraints) &&
+    !(ex.namedProjects?.length)
+  ) {
     return { kind: 'clarify_intent' };
   }
   // Keyboard smash / non-place noise — sticky clarify, never portfolio orient.
   // (ask_next_step must also refuse noise — see shouldConsumeAskNextStep.)
   if (
     buyerText &&
+    !opts?.skipBrief &&
     isNonPlaceUtterance(buyerText) &&
     !hasNarrowingConstraint(ex.constraints) &&
     !(ex.namedProjects?.length) &&
@@ -217,6 +328,41 @@ export function decide(s: ConversationState, ex: Extracted, buyerText?: string):
   // named project, search brief, or first-home help ask.
   if (s.turnCount === 0 && !hasRoutableTurnZeroAsk(ex, s)) {
     return { kind: 'greet' };
+  }
+  if (opts?.skipBrief) {
+    // "hi" / "ok" / noise / leftover chip labels re-offer the book. A real
+    // statement the engine could not route gets ONE honest probe
+    // (clarify_intent packs the three doors) — never the same dump twice.
+    // Anything routable still recommends.
+    const routable =
+      hasNarrowingConstraint(ex.constraints) ||
+      (ex.namedProjects?.length ?? 0) > 0 ||
+      ex.forceRecommendList ||
+      ex.speechAct === 'search';
+    const text = buyerText?.trim() ?? '';
+    if (
+      routable ||
+      ex.smalltalk ||
+      !text ||
+      isNonPlaceUtterance(text) ||
+      isAdvisorBriefChipPhrase(text)
+    ) {
+      // A brief IS the question; the cut list answers it. Leading with a
+      // book-level sentence here would answer something the buyer didn't ask.
+      return { kind: 'recommend' };
+    }
+    // A recognised ask carrying no filter is still a question the book can
+    // answer ("price?", "rera number first"). It used to fail `routable` — no
+    // constraint, no project name — and got "tell me a size or budget", which
+    // answers a question the buyer never asked. Exactly one topic, or the lead
+    // would assert a confident answer to whichever one won the tie.
+    const asked = ex.askTopic ? [ex.askTopic] : (ex.askTopics ?? []);
+    if (asked.length === 1) return { kind: 'recommend', askedTopic: asked[0]! };
+    // ONE honest probe, not two. Asking again after the buyer has already failed
+    // to answer the same question means the question is not the problem — show
+    // the book and let them point at something instead.
+    if (s.rti?.lastGoalKind === 'clarify_intent') return { kind: 'recommend' };
+    return { kind: 'clarify_intent' };
   }
   if (ex.smalltalk) return { kind: 'smalltalk' };
   if (!d.oriented) return { kind: 'orient' };

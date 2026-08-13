@@ -67,6 +67,50 @@ export function mediaKindMissingFromInventory(
   return !have.has(want);
 }
 
+/**
+ * Every asset kind the buyer named in one message.
+ *
+ * "send brochure floor plan price list and rera" is four asks; the share port
+ * takes one kind, so the reply delivered the floor plan and said nothing about
+ * the brochure. A buyer reads that silence as "sent". Reading the buyer's own
+ * words against the closed Desk enum is how the reply knows what it left out.
+ */
+const KIND_PHRASES: ReadonlyArray<readonly [DeskMediaKind, RegExp]> = [
+  ['brochure', /\b(?:e[- ]?)?brochures?\b/i],
+  ['floor_plan', /\b(?:floor|unit|layout)\s*plans?\b/i],
+  ['master_plan', /\b(?:master|site)\s*plans?\b/i],
+  ['price_sheet', /\bprice\s*(?:list|sheet)\b|\bcost\s*sheet\b|\brate\s*card\b/i],
+  ['site_image', /\b(?:photos?|pictures?|pics?|images?|gallery)\b/i],
+  ['payment_plan', /\bpayment\s*(?:plan|schedule)\b|\bclp\b/i],
+  ['location_map', /\blocation\s*map\b|\bgoogle\s*(?:map|pin)\b/i],
+];
+
+/** Buyer-facing name for an asset kind — never an underscored key like `floor_plan`. */
+export function humanizeMediaKind(kind?: string): string {
+  if (!kind) return 'document';
+  const nice: Record<string, string> = {
+    floor_plan: 'floor plan',
+    master_plan: 'master plan',
+    layout_plan: 'layout plan',
+    brochure: 'brochure',
+    price_sheet: 'price sheet',
+    cost_sheet: 'cost sheet',
+    payment_plan: 'payment plan',
+    site_image: 'site photos',
+    site_plan: 'site plan',
+    location_map: 'location map',
+    video: 'walkthrough video',
+    photo: 'photos',
+  };
+  return nice[kind] ?? kind.replace(/_/g, ' ');
+}
+
+export function requestedMediaKinds(text: string): DeskMediaKind[] {
+  const t = (text ?? '').trim();
+  if (!t) return [];
+  return KIND_PHRASES.filter(([, re]) => re.test(t)).map(([k]) => k);
+}
+
 export function uniqueMediaKinds(
   rows: ReadonlyArray<{ asset_kind?: string | null }> | null | undefined,
 ): string[] | undefined {

@@ -52,6 +52,49 @@ export function parseSiteVisitHours(raw?: string | null): SiteHoursWindow {
   return { openMin: 9 * 60, closeMin: 19 * 60, label: DEFAULT_SITE_VISIT_HOURS };
 }
 
+const DAY_TOKENS: ReadonlyArray<readonly [RegExp, number]> = [
+  [/^sun/i, 0], [/^mon/i, 1], [/^tue/i, 2], [/^wed/i, 3],
+  [/^thu/i, 4], [/^fri/i, 5], [/^sat/i, 6],
+];
+
+function dayIndex(token: string): number | null {
+  for (const [re, idx] of DAY_TOKENS) if (re.test(token.trim())) return idx;
+  return null;
+}
+
+/**
+ * Which weekdays the site is open, from the same string the copy quotes
+ * ("Mon–Sun, 9am–7pm" → all seven; "Mon–Sat" → six; "Sat, Sun" → two).
+ *
+ * Chrome that offers a day must be cut from THIS — the walk shipped copy
+ * saying Mon–Sun beside buttons saying Saturday/Sunday, which reads to a
+ * buyer as "they don't work weekdays".
+ */
+export function parseSiteVisitDays(raw?: string | null): Set<number> {
+  const all = new Set([0, 1, 2, 3, 4, 5, 6]);
+  const label = (raw && raw.trim()) || DEFAULT_SITE_VISIT_HOURS;
+  // Day part only — drop anything from the first clock token onward.
+  const dayPart = label.replace(/[–—]/g, '-').split(/\d/)[0] ?? '';
+  if (!dayPart.trim()) return all;
+  const range = /([a-z]{3,9})\s*-\s*([a-z]{3,9})/i.exec(dayPart);
+  if (range) {
+    const from = dayIndex(range[1]!);
+    const to = dayIndex(range[2]!);
+    if (from === null || to === null) return all;
+    const out = new Set<number>();
+    for (let i = 0, d = from; i < 7; i++, d = (d + 1) % 7) {
+      out.add(d);
+      if (d === to) break;
+    }
+    return out.size ? out : all;
+  }
+  const listed = dayPart
+    .split(/[,/&]|\band\b/i)
+    .map((t) => dayIndex(t))
+    .filter((d): d is number => d !== null);
+  return listed.length ? new Set(listed) : all;
+}
+
 export function minutesFromIsoIst(iso: string): number | null {
   const m = /T(\d{2}):(\d{2})/.exec(iso);
   if (!m) return null;

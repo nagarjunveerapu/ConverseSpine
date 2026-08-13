@@ -30,7 +30,7 @@ import {
 import { runEngineTurn } from '../src/engine/turn.js';
 import type { ConversationState, Match } from '../src/engine/types.js';
 import { buildAdvisorNba } from '../src/advisor/nba.js';
-import { fakeDeps } from './fakes.js';
+import { fakeDeps, projectDetailFor } from './fakes.js';
 import {
   gradeCompareBoth,
   gradeOtherOne,
@@ -444,7 +444,9 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
         const q = gradeReraGrounded({
           buyer: text,
           reply: r.reply,
-          reraFromDetail: 'PRM/KA/RERA/1251/446/2024',
+          // Read from the book, not repeated here — a hardcoded copy is how a
+          // fixture and its assertions drift into disagreeing about one project.
+          reraFromDetail: projectDetailFor('ayana')!.reraNumber,
         });
         expect(q, q ? `${q.reason}\n${q.reply}` : '').toBeNull();
       }

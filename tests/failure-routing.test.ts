@@ -433,7 +433,7 @@ describe('Phase 2 turn contract', () => {
       {
         convId: 'fv2-pending-owner',
         builderId: 'lokations',
-        text: "don't call me, only chat here",
+        text: 'stop contacting me',
         channel: 'advisor_web',
       },
       deps,

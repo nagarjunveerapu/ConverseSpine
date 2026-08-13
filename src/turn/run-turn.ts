@@ -2,6 +2,7 @@ import { postTurnEgress } from './egress.js';
 import type { ConverseRuntime } from '../runtime/deps.js';
 import { runEngineTurn } from '../engine/turn.js';
 import type { TurnInput, TurnResult } from '../types.js';
+import { packedToInteractive } from '../channel/wa-pack.js';
 
 /**
  * ConverseEngine turn entry — replaces legacy intent→composer spine.
@@ -69,11 +70,16 @@ export async function runTurn(
     });
   }
 
+  const interactive = result.whatsappInteractive
+    ? packedToInteractive(result.whatsappInteractive)
+    : undefined;
+
   return {
     reply_text: result.reply,
     composer: result.debug.goal.kind,
     turn_index: result.state.turnCount,
     ...(result.whatsappActions ? { whatsapp_actions: result.whatsappActions } : {}),
+    ...(interactive ? { whatsapp_interactive: interactive } : {}),
     ...(result.mediaAttachments?.length
       ? {
           media_attachments: result.mediaAttachments.map((a) => ({
@@ -90,6 +96,15 @@ export async function runTurn(
     debug: {
       phase: result.debug.phase,
       goal: result.debug.goal,
+      ...(result.state.focus
+        ? {
+            focus: {
+              projectId: result.state.focus.projectId,
+              projectName: result.state.focus.projectName,
+            },
+          }
+        : {}),
+      ...(result.state.constraints ? { constraints: { ...result.state.constraints } } : {}),
       tools: result.debug.tools,
       grounding: result.debug.grounding,
       ...(result.debug.speech_act ? { speech_act: result.debug.speech_act } : {}),

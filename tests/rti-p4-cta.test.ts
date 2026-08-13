@@ -120,7 +120,12 @@ describe('P4-CTA — offer_pricing pending', () => {
     expect(intent.ask_topic).toBeUndefined();
     const applied = applyTurnIntentResult(state, intent, []);
     expect(applied.state.phase).toBe('focused');
-    expect(applied.state.rti?.pendingPrompt).toBeUndefined();
+    // The offer STANDS through a decline. It used to be cleared right here, and
+    // the decline path in focused.decide keys off exactly this slot — so "no"
+    // fell through to a fresh overview card instead of a short ack (L04 turns
+    // 4, 11, 13). An affirm consumes the offer; a decline is answered from it.
+    expect(applied.state.rti?.pendingPrompt?.kind).toBe('offer_pricing');
+    expect(applied.seedAskTopic).toBeUndefined();
   });
 
   it('nahi chahiye while focused stays focused (not location invent / no_fit)', async () => {

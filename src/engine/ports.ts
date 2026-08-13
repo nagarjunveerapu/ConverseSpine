@@ -453,6 +453,8 @@ export interface EngineDeps {
   hybridMode?: import('./hybrid.js').HybridMode;
   /** Soft LLM rate target (0–1); default 0.2 when hybrid on. */
   llmRateTarget?: number;
+  /** WhatsApp project-first: pack chips + skip discovery brief. */
+  waProjectFirst?: boolean;
   /** Shared TURN_CACHE for L1–L4 read-model (optional). */
   turnCache?: KVNamespace;
   /** Desk project etag for L2 freshness. */

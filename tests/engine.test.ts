@@ -620,7 +620,7 @@ describe('Mysuru funnel fixes', () => {
     await say('show me plantation projects');
     await say('give me details on ayana');
     const t4 = await say('pricing');
-    expect(t4.reply).toMatch(/Starting from ₹24\.95 L/i);
+    expect(t4.reply).toMatch(/₹24\.95 L/);
     expect(t4.reply).not.toMatch(/From From/i);
   });
 

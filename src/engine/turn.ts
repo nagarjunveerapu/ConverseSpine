@@ -3,6 +3,7 @@
  * extract → merge → phase transition → goal → evidence → compose → verify → persist
  */
 import * as discover from './phases/discover.js';
+import { asksForAHuman, HANDOFF_QUESTIONS } from './book-questions.js';
 import * as focused from './phases/focused.js';
 import * as visit from './phases/visit.js';
 import {
@@ -13,10 +14,23 @@ import {
   shouldResumeVisitDraft,
 } from './phases/visit.js';
 import { isVisitDayUtterance } from './visit-slot.js';
+import { DEFAULT_SITE_VISIT_HOURS, parseSiteVisitDays } from './visit-hours.js';
+import { AFFIRM_ONLY, DECLINE } from './turn-intent/dialogue-acts.js';
 import { isDifferentDayPhrase, isSameDayPhrase } from './visit-itinerary.js';
 import * as handoff from './phases/handoff.js';
 import { buildTurnLogSnapshot } from '../observability/turn-log-snapshot.js';
 import { extractTurnAuthority } from './extract-authority.js';
+import {
+  advanceWaBriefState,
+  isWaBriefActionId,
+  packWhatsAppInteractive,
+  packedToSuggestedActions,
+  syncWaBriefFromGoal,
+  waCanonicalUtterance,
+  waListPickKeepsCommit,
+  WA_MENU_PROJECTS,
+  type WaPacked,
+} from '../channel/wa-pack.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
 import { buildLedgerWritePayload } from './ledger-write.js';
@@ -24,7 +38,7 @@ import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
 import { searchLocalityWiden } from './locality-widen.js';
-import { currentShortlist, discussedList, discourseEntities } from './entity-store.js';
+import { currentShortlist, discussedList, discourseEntities, popFocus } from './entity-store.js';
 import {
   collapseCoverageMarkets,
   coverageCityCoverBit,
@@ -47,9 +61,10 @@ import {
   contactScopeFailure,
   isExplicitDeleteIntent,
   isStandaloneStop,
+  keepsOneChannel,
   resolvePendingStop,
 } from './optout-confirm.js';
-import { speakFailure } from './speak-failure.js';
+import { intelGatedSubject, speakFailure } from './speak-failure.js';
 import { speakStickyClarify } from './clarify-outstanding.js';
 import { holdsFocusAgainstRelease } from './turn-routing/focus-hold.js';
 import { speakEducation } from './education.js';
@@ -69,6 +84,7 @@ import {
   locationLooksPolluted,
   resolveCatalogNameHit,
   splitComposeTopics,
+  textAnchorsProjectName,
   wantsCostBreakdown,
 } from './facts.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
@@ -99,6 +115,8 @@ import {
   incObjection,
   hydrateLegacyDiscourse,
   initState,
+  freshSession,
+  isSessionResetText,
   isSameAsLast,
   markAsked,
   markOriented,
@@ -107,7 +125,7 @@ import {
   releaseToDiscover,
   withNdConversation,
 } from './state.js';
-import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply } from './compose.js';
+import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply, waBookFirstGreet } from './compose.js';
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import {
@@ -118,7 +136,12 @@ import {
   seedProjectCacheFromL2,
   writeProjectCardFromDetail,
 } from './project-cache.js';
-import { mediaKindMissingFromInventory, normalizeMediaAssetKind } from './media-asset.js';
+import {
+  humanizeMediaKind,
+  mediaKindMissingFromInventory,
+  normalizeMediaAssetKind,
+  requestedMediaKinds,
+} from './media-asset.js';
 import { attachmentFromMediaEvidence, type MediaAttachment } from './media-attachment.js';
 import { gateMarketIntel } from './market-intel.js';
 import { mergeEvidencePatches } from './merge-evidence-patches.js';
@@ -171,7 +194,7 @@ import type {
   TurnDebug,
   TurnGoal,
 } from './types.js';
-import type { DataResult, EngineDeps } from './ports.js';
+import type { DataResult, EngineDeps, UnitConfig } from './ports.js';
 
 export interface EngineTurnInput {
   convId: string;
@@ -210,6 +233,8 @@ export interface EngineTurnOutput {
   searchRecovery?: SearchRecoveryEnvelope;
   uiMode?: AdvisorUiMode;
   whatsappActions?: SuggestedAction[];
+  /** Packed Cloud API interactive (list XOR buttons) when WA_PROJECT_FIRST. */
+  whatsappInteractive?: WaPacked;
   /** Structured media for Advisor cards / WhatsApp native send — never in prose. */
   mediaAttachments?: MediaAttachment[];
 }
@@ -237,6 +262,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let state = hydrateLegacyDiscourse(
     (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId),
   );
+  // Snapshot BEFORE anything in this turn can consume it: several lanes clear
+  // pendingPrompt on their way through, so reading it at write time cannot tell
+  // "there was no question" from "the question was just answered".
+  const promptAtTurnStart = state.rti?.pendingPrompt;
   // L2 → conversation cache when focus is cold (survives KV lag / thin saves).
   state = await seedProjectCacheFromL2(deps, state);
   if (!deps.projectCardMemo) deps.projectCardMemo = new Map();
@@ -264,7 +293,55 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   let llmShed = false;
   let composeTemplate = false;
 
-  const trimmedText = input.text.trim();
+  // A tap means what its ID says, not what its label reads. The visit FSM and
+  // the regex lanes all consume free text, so a canonical utterance is how an
+  // id speaks to them ("wa.day.saturday" → "saturday"). Without it a buyer who
+  // taps "Sat 16 Aug" answers nothing and the machine re-asks forever.
+  const canonicalTap = waCanonicalUtterance(input.action_id);
+  const trimmedText = canonicalTap ?? input.text.trim();
+  if (isSessionResetText(trimmedText) && !input.action_id) {
+    const keptNd = state.ndConversationId;
+    const keptPhone = state.ndBuyerPhone ?? input.buyerPhone;
+    state = freshSession(state);
+    if (keptNd) state = withNdConversation(state, keptNd, keptPhone);
+    const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
+    const skipBrief = deps.waProjectFirst === true && channel === 'whatsapp';
+    const catalog = await deps.data.catalog(state.builderId).catch(() => null);
+    const reply = skipBrief
+      ? `Starting fresh.\n\n${waBookFirstGreet({
+          builderName: friendlyBuilder(state.builderId),
+          catalog,
+        })}`
+      : 'Starting fresh — tell me the area and budget you are working with.';
+    const packed = skipBrief
+      ? packWhatsAppInteractive({
+          goal: { kind: 'greet' },
+          state,
+          catalogNames: catalog?.projectNames ?? [],
+          briefAreas: catalog?.microMarkets ?? [],
+          singleProject: (catalog?.projectNames?.length ?? 0) <= 1,
+          catalog,
+        })
+      : undefined;
+    state = markOriented({
+      ...state,
+      turnCount: 1,
+      lastReply: reply,
+      recentReplies: rememberReply(state, reply),
+    });
+    await deps.store.save(state);
+    const packedActions = packed ? packedToSuggestedActions(packed) : undefined;
+    return {
+      reply,
+      state,
+      debug: withIngressDebug(
+        { phase: state.phase, goal: { kind: 'greet' }, tools: [], grounding: 'pass' },
+        inputSource,
+      ),
+      ...(packedActions ? { whatsappActions: packedActions } : {}),
+      ...(packed && packed.kind !== 'text' ? { whatsappInteractive: packed } : {}),
+    };
+  }
   if (!trimmedText) {
     if (state.postVisitAckPending) {
       return runEngineTurn({ ...input, text: 'thanks' }, deps);
@@ -361,6 +438,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
+  const skipBrief = deps.waProjectFirst === true && channel === 'whatsapp';
+  if (skipBrief && input.action_id === WA_MENU_PROJECTS) {
+    // Projects is the always-there exit: back to the book from anywhere.
+    // releaseToDiscover, not popFocus — popFocus keeps a single-entry stack
+    // unchanged, so the tap silently stayed on the project. Drop the visit
+    // pending markers too so the window/day guards below don't pull the turn
+    // back into the visit ask; keep the draft for a typed resume later.
+    state = releaseToDiscover(state);
+    if (state.visit && (state.visit.lastAsk || state.visit.pendingDayIso)) {
+      const { lastAsk: _ask, pendingDayIso: _day, ...rest } = state.visit;
+      state = { ...state, visit: rest };
+    }
+  }
   const durableConstraintsBeforeTurn = { ...state.constraints };
   const ingressFilled = new Set<IngressSlotKey>(input.ingressFilledSlots ?? []);
   const uiModeHint = state.phase === 'focused' ? focusedUiMode(state) : recoveryUiMode(state);
@@ -449,8 +539,29 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // believing it. A >=tau_high answer-intent bind means the buyer asked ABOUT
   // this project. The pivot lane is then skipped entirely — which also REPLACES
   // an LLM call with one embed on those turns, rather than adding work.
+  // Project-first WA: the RTI recovery machine is Advisor-web furniture — its
+  // canned adjust-your-filters probe and patch-chips would hijack unrouted
+  // turns (and persist junk like "green side" as a locality) before the
+  // book's own clarify path (three doors) ever ran.
+  //
+  // But the veto was doing TWO jobs with one flag: keeping the recovery
+  // machine out, and — by accident — throwing away the answer to the question
+  // the bot itself just asked. Compose closers arm rti.pendingPrompt on every
+  // channel ("Want pricing on a specific size?"), and a bare "yes" to that
+  // offer was falling through 40 lanes of free-text guessing instead of
+  // resolving against it. The gate below is cut so ruleClassify's L2 branch
+  // (pending offer_pricing + focused + affirm/decline → focused_question)
+  // always answers before the classifier LLM or any recovery kind can run —
+  // the open question is read; the filter-adjust furniture stays dark.
+  const waPendingOfferResolve =
+    skipBrief &&
+    !input.action_id &&
+    state.phase === 'focused' &&
+    state.rti?.pendingPrompt?.kind === 'offer_pricing' &&
+    (AFFIRM_ONLY.test(trimmedText) || DECLINE.test(trimmedText));
   let runTurnIntent = Boolean(
     deps.turnIntent &&
+      (!skipBrief || waPendingOfferResolve) &&
       !state.stopConfirmPending &&
       shouldRunTurnIntent(state, input.action_id, trimmedText),
   );
@@ -572,7 +683,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     const intent = await deps.turnIntent.classify(intentInput);
 
     const applied = applyTurnIntentResult(state, intent, intentInput.suggested_actions);
-    state = applied.state;
+    // "Who will show me around the site?" classifies as release_focus — the
+    // buyer is asking about a PERSON, and the classifier reads any turn that is
+    // not about the project as leaving it. Dropping focus here answered a
+    // question about Brigade Eldorado without naming Brigade Eldorado, and put
+    // the whole book back on screen underneath it. Asking for a human is not
+    // leaving the project you asked about.
+    const keptFocus =
+      state.focus && !applied.state.focus && skipBrief && asksForAHuman(trimmedText)
+        ? state.focus
+        : undefined;
+    state = keptFocus
+      ? { ...applied.state, phase: 'focused', focus: keptFocus }
+      : applied.state;
     for (const k of applied.clearedKeys) clearedKeys.add(k);
     if (intent.kind === 'apply_recovery_patch') {
       recoveryChipTurn = true;
@@ -614,9 +737,13 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         searchRecovery = await freshSearchRecovery(deps, state, channel);
       }
       const cappedRecovery = capRecoveryForChannel(searchRecovery, channel);
-      const reply = applied.probeReply;
+      // The `lastReplyExcerpt` check above is a window of one, and the probe
+      // menu came back three and four turns later untouched. This path speaks,
+      // so it registers what it said and takes the same third-send break as
+      // the compose tail.
+      const { reply, state: outbound } = guardOutbound(state, applied.probeReply);
       state = {
-        ...state,
+        ...outbound,
         turnCount: state.turnCount + 1,
         rti: {
           ...state.rti,
@@ -751,9 +878,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     extractProvenance.pivot_arbiter = pivotArbiterReason;
   }
 
-  // Trade-off soft signals (priority / hub / schools / worries) are advisor-web
-  // only. detectSoftPrefs still runs in facts for the location-pollution guard,
-  // but WA must not persist those fields or fire Desk preference re-rank.
+  // Soft Advisor prefs (hub / schools / worries) stay off WhatsApp — this
+  // number is a builder-allotted book, not the city-wide brief.
   if (channel !== 'advisor_web') {
     const hardConstraints = { ...ex.constraints };
     delete hardConstraints.priorityFocus;
@@ -1017,6 +1143,31 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       precomputedRouting?.routing === 'unsupported'
     ) {
       const { location: _ignored, ...constraints } = ex.constraints;
+      ex = { ...ex, constraints };
+    }
+  }
+  // WA book: a locality must exist in this builder's live book (micro-market
+  // or project-name echo). Place-ish junk ("green side") must not persist and
+  // drive a doomed search — dropping it here lets the honest probe own the
+  // turn. Live catalog only, never a hardcoded place list.
+  if (skipBrief && ex.constraints.location && catalogForTurn) {
+    const cand = ex.constraints.location.trim().toLowerCase();
+    const namesHit = (catalogForTurn.projectNames ?? []).filter((p) =>
+      p.name.trim().toLowerCase().includes(cand),
+    );
+    const known =
+      cand.length >= 3 &&
+      ((catalogForTurn.microMarkets ?? []).some((m) => {
+        const mm = m.trim().toLowerCase();
+        return mm.includes(cand) || cand.includes(mm);
+      }) ||
+        // One project echoed back as a "location" is a project reference we can
+        // still act on. A fragment shared by several ("Brigade" in a Brigade
+        // book) is the BRAND, and searching for it as a place returns "No exact
+        // match for Brigade" against a book that is entirely Brigade.
+        namesHit.length === 1);
+    if (!known) {
+      const { location: _junk, ...constraints } = ex.constraints;
       ex = { ...ex, constraints };
     }
   }
@@ -1338,7 +1489,6 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         : {}),
     },
   });
-
   // W2: constraint pivot invalidates stale shortlist — no catalog names; delta-driven.
   if (
     currentShortlist(state).length > 0 &&
@@ -1407,7 +1557,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
   // Multi-intent Phase B — routing's answer_topics union into extract (set grows only).
-  {
+  // Not on WA brief taps: the id is the meaning; topics read off the row label
+  // ("Help me choose", "Under ₹85L") would dodge the minimal-brief step trap.
+  if (!(skipBrief && isWaBriefActionId(input.action_id))) {
     const before = ex.askTopics?.length ?? (ex.askTopic ? 1 : 0);
     ex = mergeRoutingTopicsIntoExtract(ex, routing);
     const after = ex.askTopics?.length ?? (ex.askTopic ? 1 : 0);
@@ -1606,7 +1758,10 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       reply = sticky ?? speakFailure(unsupportedFailure);
     }
 
-    state = { ...state, turnCount: state.turnCount + 1 };
+    ({ reply, state } = guardOutbound(
+      { ...state, turnCount: state.turnCount + 1 },
+      reply,
+    ));
     await deps.store.save(state);
     await deps.crm
       .appendMessage(nd || input.convId, 'inbound', input.text)
@@ -1742,6 +1897,34 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         ),
       };
     }
+  }
+
+  // "Do not call, just message me here" is a request to KEEP talking, on one
+  // channel. Extraction reads only the "do not call" half and stamps `stop`,
+  // which sent it into the destructive gate below and answered a buyer who
+  // asked us to keep messaging with an offer to delete their details.
+  if (ex.stop && keepsOneChannel(trimmedText)) {
+    const reply =
+      `Noted — no calls, we'll keep everything here on WhatsApp. Nothing gets deleted, and it's on this conversation so the team sees it too. ` +
+      (state.focus?.projectName
+        ? `Carry on whenever you like — pricing for *${state.focus.projectName}*, the configurations, the legal papers, or a site visit.`
+        : `Carry on whenever you like — pick any project below, or tell me a size or budget.`);
+    state = { ...state, turnCount: state.turnCount + 1 };
+    await deps.store.save(state);
+    if (nd) {
+      await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
+      await deps.crm
+        .appendMessage(nd, 'outbound', reply, { replyKey: 'channel_preference' })
+        .catch(() => {});
+    }
+    return {
+      reply,
+      state,
+      debug: withIngressDebug(
+        { phase: state.phase, goal: { kind: 'handoff' }, tools: [], grounding: 'pass' },
+        inputSource,
+      ),
+    };
   }
 
   if (ex.stop && nd) {
@@ -1943,6 +2126,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const now = new Date(deps.clock.nowMs());
   let visitCtx: visit.VisitCtx | null = null;
+  /** The builder's own hours string — the chrome that offers a day is cut from it. */
+  let siteHoursForTurn: string | undefined;
   {
     const phasePrepT0 = deps.clock.nowMs();
     if (state.phase === 'visit') {
@@ -1979,12 +2164,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       }
     }
 
+    siteHoursForTurn =
+      (await deps.data.builder(state.builderId).catch(() => null))?.siteVisitHours ??
+      'Mon–Sun, 9am–7pm';
     visitCtx = {
-      text: input.text,
+      // trimmedText, not input.text — a day/window TAP speaks to the FSM
+      // through its canonical utterance, never through its human label.
+      text: trimmedText,
       now,
-      siteVisitHours:
-        (await deps.data.builder(state.builderId).catch(() => null))?.siteVisitHours ??
-        'Mon–Sun, 9am–7pm',
+      siteVisitHours: siteHoursForTurn,
       originGeo:
         visitState?.originLat != null && visitState?.originLng != null
           ? { lat: visitState.originLat, lng: visitState.originLng }
@@ -2052,6 +2240,32 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // cold name the embedder missed and (b) safely confirms one the embedder found on a
   // search-classified turn (which discover.decide would not commit). A hallucinated
   // embedder name that isn't in the text simply yields no hit and falls through.
+  // Minimal-brief step machine: menu taps open it, answers advance it, picks
+  // abandon it — before goal decide so the pending step can trap a pure turn.
+  if (skipBrief) {
+    // Descriptive-statement guard: an embedder name-bind off a vibe ("near
+    // hills" → Coorg Hills Estate) must not open a project. A pure statement
+    // in discover only commits when the text anchors the name; taps carry
+    // ids, and questions/asks route normally.
+    if (
+      !input.action_id &&
+      state.phase === 'discover' &&
+      ((ex.namedProjects?.length ?? 0) > 0 || ex.pickName) &&
+      !ex.isQuestion &&
+      !ex.askTopic &&
+      !(ex.askTopics?.length) &&
+      ex.transition !== 'want_visit' &&
+      ex.speechAct !== 'visit_book'
+    ) {
+      const anchored =
+        (ex.namedProjects ?? []).some((p) => textAnchorsProjectName(trimmedText, p.name)) ||
+        (ex.pickName ? textAnchorsProjectName(trimmedText, ex.pickName) : false);
+      if (!anchored) {
+        ex = { ...ex, namedProjects: undefined, pickName: undefined, implicitProjectPick: false };
+      }
+    }
+    state = advanceWaBriefState(state, input.action_id, ex);
+  }
   const coldNameEligible =
     state.phase === 'discover' &&
     !state.focus &&
@@ -2074,6 +2288,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       : await decideGoalAsync(state, ex, visitCtx, deps, trimmedText, channel);
   } else {
     goal = await decideGoalAsync(state, ex, visitCtx, deps, trimmedText, channel);
+  }
+  // WA list tap ≡ Advisor board open: keep commit (thin confirm + BHK list).
+  // want_details on the packer stamp would otherwise swap this to overviewCard.
+  if (skipBrief && waListPickKeepsCommit(input.action_id, goal, ex) && goal.kind === 'commit') {
+    goal = { kind: 'commit', projectId: goal.projectId, projectName: goal.projectName };
+  }
+  // Discover can start the brief itself (help-me asks) — keep the step in sync.
+  if (skipBrief) {
+    state = syncWaBriefFromGoal(state, goal);
   }
 
   // W1 focus bind: answer goals must not silently drift to embedder-invented projects.
@@ -2098,6 +2321,21 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
   if (deps.failureAnswer && goal.kind === 'answer') {
     goal = withAnswerRequirements(goal, trimmedText);
+  }
+  // You never ask for a day you already have. One turn after "Done — your visit
+  // is set for Saturday at 10:30 AM", "and can my brother come too" came back
+  // as "Which day and time work for your visit?" — the booking had been erased
+  // from state the moment it was made. Read the real booking back instead, once;
+  // if the buyer genuinely wants a different day the next ask goes through, and
+  // a day they NAME never reaches here (that is a propose, not an ask).
+  if (
+    goal.kind === 'visit_ask' &&
+    (goal.ask === 'day' || goal.ask === 'time' || goal.ask === 'project') &&
+    state.lastBookedProjectId &&
+    !state.visitRebookOffered
+  ) {
+    goal = { kind: 'visit_recall' };
+    state = { ...state, visitRebookOffered: true };
   }
   goalMs = deps.clock.nowMs() - goalT0;
 
@@ -2206,7 +2444,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   } else if (goal.kind === 'answer') {
     evidence = await fetchAnswer(goal, state, ex, deps, nd, trimmedText);
   } else if (goal.kind === 'emi_calculate') {
-    evidence = fetchEmiCalculation(ex);
+    evidence = fetchEmiCalculation(ex, state);
   } else if (goal.kind === 'shortlist_answer') {
     evidence = await fetchShortlistAnswer(goal, state, ex, deps, nd);
   } else if (goal.kind === 'visit_recall') {
@@ -2233,6 +2471,42 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     evidence = enforceAnswerContract(goal, evidence);
   }
 
+  // A buyer asking for a person gets a person, not nine project cards — the
+  // list would read as the brush-off the ask was already trying to escape.
+  // (Declared here so the attach guard below stays one expression.)
+  // A book-level ask ("price?" before any project is picked) is answered from the
+  // book's own spread, so the catalog has to reach compose. Search evidence never
+  // carried it — only the greet path did. clarify_intent needs it for the same
+  // reason: a miss should still hand the buyer something true about the book.
+  // `no_fit` needs it too: on an allotted book, "nothing matched" is only half
+  // an answer — the buyer has to see what the book does span to know which of
+  // their filters to give up.
+  if (
+    ((goal.kind === 'recommend' &&
+      (goal.askedTopic ||
+        (goal.bookQuestion && !HANDOFF_QUESTIONS.has(goal.bookQuestion)) ||
+        goal.situation)) ||
+      goal.kind === 'clarify_intent' ||
+      goal.kind === 'no_fit') &&
+    !evidence.catalog &&
+    catalogForTurn
+  ) {
+    evidence = { ...evidence, catalog: catalogForTurn };
+  }
+
+  // A project pick opens that project's OWN sizes — the sub-option step in the
+  // book design. Copy and chrome are decided from the same configs, fetched
+  // before compose so the sentence can never promise rows the pack won't send.
+  let pickSizeUnits: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string }> | undefined;
+  // The goal carries the picked id — state.focus is only committed later in
+  // the turn, so reading focus here saw the PREVIOUS project (or none at all).
+  const pickedProjectId =
+    goal.kind === 'commit' ? goal.projectId || state.focus?.projectId : undefined;
+  if (skipBrief && pickedProjectId && !state.constraints?.bhk?.trim()) {
+    pickSizeUnits = await deps.data.listUnits(pickedProjectId).catch(() => []);
+  }
+  const offersSizeRows = (pickSizeUnits?.length ?? 0) >= 2;
+
   const alreadyShownSameSet = evidence.matches ? isSameAsLast(state, evidence.matches) : false;
   const ff = state.feedForward;
   const disclosedForCompose = [
@@ -2246,10 +2520,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     builderName: friendlyBuilder(state.builderId),
     buyerText: input.text,
     channel,
+    ...(skipBrief ? { waProjectFirst: true } : {}),
+    ...(offersSizeRows ? { waSizeOptions: pickSizeUnits!.length } : {}),
     ...(state.focus ? { focusProjectName: state.focus.projectName } : {}),
     returningBuyer: state.returningBuyer,
     ...(ff?.priorTopics?.length ? { priorTopics: ff.priorTopics } : {}),
-    ...(ff?.priorReplyExcerpt ? { priorReplyExcerpt: ff.priorReplyExcerpt } : {}),
+    // The last thing the buyer read. Templates need it too, not just the LLM:
+    // a template-locked nudge is exempt from the repeat guard, so without this
+    // it repeated itself verbatim turn after turn.
+    ...(ff?.priorReplyExcerpt || state.lastReply
+      ? { priorReplyExcerpt: ff?.priorReplyExcerpt || state.lastReply! }
+      : {}),
     ...(disclosedForCompose.length ? { disclosedFacts: disclosedForCompose } : {}),
     // Stage 7 — named latch when Desk provides escalation_phone on builder/objection ctx.
     ...(evidence.escalationPhone?.trim()
@@ -2318,6 +2599,15 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     !!evidence.detail &&
     !evidence.faqMiss?.keys.length;
   const emiCalculateDeterministic = goal.kind === 'emi_calculate';
+  const waBagDeterministic =
+    skipBrief &&
+    !state.focus &&
+    (goal.kind === 'greet' ||
+      goal.kind === 'clarify_intent' ||
+      goal.kind === 'smalltalk' ||
+      goal.kind === 'probe' ||
+      goal.kind === 'recommend' ||
+      goal.kind === 'ack_reject_recommend');
 
   // no_fit is a hard honesty statement with a well-built template (constraint
   // gap, catalog floor, alternate project) — LLM paraphrase of it produced
@@ -2356,7 +2646,8 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     propertyTypeDeterministic ||
     commitDeterministic ||
     overviewDeterministic ||
-    emiCalculateDeterministic;
+    emiCalculateDeterministic ||
+    waBagDeterministic;
 
   const hybridOn = deps.hybridMode === 'on';
   const rateTarget = deps.llmRateTarget ?? 0.2;
@@ -2478,7 +2769,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // matches, keep it (deterministic content is allowed to repeat; only LLM
   // drafts are guarded).
   let repeat_guard: TurnDebug['repeat_guard'];
-  if (!hybridOn && !templateLocked && !retryUsed && state.lastReply && sameLine(reply, state.lastReply)) {
+  // Checked FIRST, and against the whole window: the single-line guard below
+  // would otherwise "acknowledge" the third send and call it handled — which is
+  // how the same menu went out at turns 7, 9, 10 and 13 with an apology stapled
+  // to half of them. Only a question, and only on what would be the third send.
+  if (/\?$/.test(reply.trim()) && timesAlreadySent(reply, state) >= 2) {
+    reply = breakRepeatLoop();
+    repeat_guard = 'loop_broken';
+  } else if (!hybridOn && !templateLocked && !retryUsed && state.lastReply && sameLine(reply, state.lastReply)) {
     retryUsed = true;
     let varied = '';
     try {
@@ -2501,21 +2799,79 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       repeat_guard = 'recomposed';
     } else {
       const floor = fallbackReply(req);
-      repeat_guard = sameLine(floor, state.lastReply) ? 'still_identical' : 'template';
-      if (repeat_guard === 'template') reply = floor;
+      if (!sameLine(floor, state.lastReply)) {
+        reply = floor;
+        repeat_guard = 'template';
+      } else {
+        // The floor is the same line too. It used to ship verbatim here.
+        reply = acknowledgeRepeat(floor);
+        repeat_guard = 'acknowledged';
+      }
     }
+  } else if (state.lastReply && sameLine(reply, state.lastReply)) {
+    // A template that lands on the same line twice. The content is deterministic
+    // and must not be paraphrased — a hold's terms have to restate exactly — but
+    // sending the identical message is the bot not registering that the buyer
+    // already read it. Say that we noticed, keep the facts word-for-word.
+    reply = acknowledgeRepeat(reply);
+    repeat_guard = 'acknowledged';
   }
 
   if (evidence.notices?.length) {
-    const failureCopy = evidence.notices
-      .map((failure) =>
+    const projectName = state.focus?.projectName;
+    // Two plain `no_data` misses used to speak twice — "I don't have carpet area
+    // on file. I do have the cost sheet. I don't have built up area on file. I do
+    // have the cost sheet." One gap, named once, with one shared offer.
+    const plain = evidence.notices.filter(
+      (f) => f.kind === 'no_data' && !intelGatedSubject(f.subject),
+    );
+    const rest = evidence.notices.filter((f) => !plain.includes(f));
+    const parts: string[] = [];
+    if (plain.length) {
+      const subjects = dedupe(plain.map((f) => f.subject.replace(/[._]/g, ' ')));
+      const alts = dedupe(plain.flatMap((f) => failureAlternatives(f, evidence)));
+      parts.push(
+        `I don't have ${joinWith(subjects, 'or')} on file${projectName ? ` for *${projectName}*` : ''}.` +
+          (alts.length ? ` I do have ${joinWith(alts, 'and')}.` : ''),
+      );
+    }
+    for (const failure of rest) {
+      parts.push(
         speakFailure(failure, {
-          ...(state.focus?.projectName ? { projectName: state.focus.projectName } : {}),
+          ...(projectName ? { projectName } : {}),
           alternatives: failureAlternatives(failure, evidence),
         }),
-      )
-      .join(' ');
-    reply = `${failureCopy} ${reply}`.trim();
+      );
+    }
+    reply = `${parts.join(' ')} ${reply}`.trim();
+  }
+
+  // "Loan eligibility, or shall I walk through the configs?" — "yes" answers a
+  // question that had two answers. The engine takes the first, which is fine;
+  // taking it SILENTLY is not. One clause names the branch taken and the way to
+  // the other, so a yes is never a guess the buyer can't see or undo.
+  if (
+    goal.kind === 'answer' &&
+    trimmedText &&
+    AFFIRM_ONLY.test(trimmedText) &&
+    (promptAtTurnStart?.options?.length ?? 0) > 1 &&
+    goal.topic === promptAtTurnStart!.options![0]
+  ) {
+    const other = promptAtTurnStart!.options![1]!;
+    reply = `${forkTopicLabel(goal.topic)} first — say *${forkTopicWord(other)}* for ${forkTopicPhrase(other)}.\n\n${reply.trim()}`;
+  }
+
+  // A multi-asset ask is answered one asset at a time, and silence on the rest
+  // reads as "sent". Name what did not go out — the buyer is waiting for it.
+  if (goal.kind === 'answer' && trimmedText) {
+    const wanted = requestedMediaKinds(trimmedText);
+    if (wanted.length > 1) {
+      const sent = normalizeMediaAssetKind(evidence.media?.assetKind);
+      const missing = wanted.filter((k) => k !== sent);
+      if (missing.length && evidence.media?.allowed) {
+        reply = `${reply.trim()}\n\nI haven't sent ${joinWith(missing.map(humanizeMediaKind), 'or')} — say the word and I'll check what's on file for it.`;
+      }
+    }
   }
 
   if (goal.kind === 'visit_booked') {
@@ -2537,6 +2893,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   }
 
   state = applyGoalToState(state, goal, evidence);
+  if (skipBrief && (goal.kind === 'greet' || goal.kind === 'recommend' || goal.kind === 'orient')) {
+    state = markOriented(state);
+  }
   // W2 — the hold-confirm window is one-shot for BOOKING: any turn that didn't
   // re-propose downgrades it (awaitingConfirm off), so a stray "yes" can never
   // book directly. The offer itself lingers for 6 turns — a bare affirm inside
@@ -2557,8 +2916,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       visit: { ...state.visit, awaitingConfirm: false },
     };
   }
-  // W3 — remember the outbound line for the repeat guard.
-  state = { ...state, lastReply: reply };
+  // W3 — remember the outbound line for the repeat guard, and its fingerprint
+  // for the wider window.
+  state = { ...state, lastReply: reply, recentReplies: rememberReply(state, reply) };
   if (evidence.detail && goal.kind === 'answer') {
     // detail.faqs are "the FAQ answers matched to THIS question" and fetchAnswer
     // is their only writer (see the adapter's single-owner invariant). Durable
@@ -2665,9 +3025,24 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       uiMode,
       turnCount: state.turnCount,
       previousRti: state.rti,
+      ...(state.constraints?.bhk ? { constraints: { bhk: state.constraints.bhk } } : {}),
       focus: state.focus
         ? { projectId: state.focus.projectId, projectName: state.focus.projectName }
         : null,
+      // A hold or a visit awaiting confirmation is a HARD question — the engine
+      // asked it and is holding a commitment open on the answer. A closing
+      // "want pricing next?" is a soft nudge. One pending question per turn
+      // means the soft one yields; otherwise a digression's closer quietly
+      // steals the yes that belonged to the hold.
+      hardQuestionOutstanding:
+        (state.hold?.unitType != null && state.turnCount - (state.hold.offeredAtTurn ?? 0) <= 6) ||
+        state.visit?.awaitingConfirm === true,
+      // A soft offer binds ONCE. Without this, "ok / ok / ok" walks the buyer
+      // through every topic in the table and never reaches a next step.
+      // Read the utterance, not just ex.affirm — several lanes route a bare
+      // "ok" without ever stamping the affirm flag.
+      consumingAffirm:
+        Boolean(promptAtTurnStart) && (Boolean(ex.affirm) || AFFIRM_ONLY.test(trimmedText)),
     }),
   };
 
@@ -2825,6 +3200,58 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       })()
     : undefined;
 
+  let packed: WaPacked | undefined;
+  if (skipBrief) {
+    // The money menu's rows ARE the project's configs, so it needs them even
+    // when the answer itself was a headline price (evidence.units is only
+    // filled for availability answers).
+    let moneyUnits = evidence.units?.length ? evidence.units : pickSizeUnits;
+    if (
+      !moneyUnits?.length &&
+      goal.kind === 'answer' &&
+      (goal.topic === 'price' || goal.topic === 'emi') &&
+      state.focus?.projectId
+    ) {
+      moneyUnits = await deps.data.listUnits(state.focus.projectId).catch(() => []);
+    }
+    const offersDays =
+      goal.kind === 'visit_ask' || goal.kind === 'propose_visit' || goal.kind === 'visit_propose';
+    if (offersDays && siteHoursForTurn === undefined) {
+      // A visit goal can be reached from discover, where the visit block never ran.
+      siteHoursForTurn =
+        (await deps.data.builder(state.builderId).catch(() => null))?.siteVisitHours ??
+        DEFAULT_SITE_VISIT_HOURS;
+    }
+    packed = packWhatsAppInteractive({
+      goal,
+      state,
+      catalogNames:
+        evidence.matches?.length
+          ? evidence.matches.map((m) => ({
+              projectId: m.projectId,
+              name: m.name,
+              description: matchRowHint(m),
+            }))
+          : catalogForTurn?.projectNames ?? [],
+      briefAreas: catalogForTurn?.microMarkets ?? [],
+      singleProject: (catalogForTurn?.projectNames?.length ?? 0) <= 1,
+      catalog: catalogForTurn,
+      siteVisitHours: siteHoursForTurn,
+      openDays: parseSiteVisitDays(siteHoursForTurn),
+      nowMs: deps.clock.nowMs(),
+      ...(moneyUnits?.length ? { focusUnits: moneyUnits } : {}),
+      // The node menu is cut from the focused project's own record — only when
+      // this turn's evidence actually fetched THAT project (an answer about a
+      // compare target must not draw Eldorado's menu under Orchards' name).
+      ...(evidence.detail &&
+      state.focus?.projectId &&
+      evidence.detail.projectId === state.focus.projectId
+        ? { focusFacts: evidence.detail }
+        : {}),
+    });
+  }
+  const packedActions = packed ? packedToSuggestedActions(packed) : undefined;
+
   return {
     reply,
     state,
@@ -2833,12 +3260,31 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     ...(cappedRecovery ? { searchRecovery: cappedRecovery } : {}),
     uiMode,
     whatsappActions:
+      packedActions ??
       whatsAppButtons(searchRecovery, channel) ??
       (channel === 'whatsapp' && evidence.nearbyOffer
         ? nearbyOfferSuggestedActions(evidence.nearbyOffer).slice(0, 2)
         : undefined),
+    ...(packed && packed.kind !== 'text' ? { whatsappInteractive: packed } : {}),
     ...(mediaAttachments?.length ? { mediaAttachments } : {}),
   };
+}
+
+function matchRowHint(m: {
+  startingPriceDisplay?: string;
+  tradeoffNote?: string;
+  dimensionFit?: ReadonlyArray<{ good: boolean; evidence: string; dimension: string }>;
+  dimensionGap?: { label: string };
+}): string {
+  const goods = (m.dimensionFit ?? [])
+    .filter((d) => d.good)
+    .slice(0, 2)
+    .map((d) => `✓ ${(d.evidence || d.dimension).trim()}`)
+    .filter((s) => s.length > 2);
+  const gap = m.dimensionGap?.label?.trim() ? `⚠ ${m.dimensionGap.label.trim()}` : '';
+  const bits = [...goods, gap].filter(Boolean);
+  if (bits.length) return bits.join(' · ');
+  return (m.tradeoffNote || m.startingPriceDisplay || '').trim();
 }
 
 /** Honest-miss shapes (Desk teach_verify + compose templates). */
@@ -2902,8 +3348,90 @@ async function reportCatalogWatchFromTurn(args: {
 /** W3 — verbatim-repeat comparison: case/whitespace-insensitive. */
 function sameLine(a: string, b: string | undefined): boolean {
   if (!b) return false;
-  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-  return norm(a) === norm(b);
+  return replyFingerprint(a) === replyFingerprint(b);
+}
+
+/** How many outbound lines back the repeat guard can see. */
+const REPEAT_WINDOW = 8;
+
+/**
+ * Case- and whitespace-insensitive identity for an outbound line. Stored rather
+ * than the line itself so the window costs bytes, not kilobytes, in a state
+ * blob that rides every turn.
+ */
+export function replyFingerprint(reply: string): string {
+  const norm = reply.toLowerCase().replace(/\s+/g, ' ').trim();
+  let h = 0x811c9dc5;
+  for (let i = 0; i < norm.length; i++) {
+    h ^= norm.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${h.toString(36)}.${norm.length.toString(36)}`;
+}
+
+/** Times this exact line has already been sent in the recent window. */
+function timesAlreadySent(reply: string, s: ConversationState): number {
+  const fp = replyFingerprint(reply);
+  return (s.recentReplies ?? []).filter((x) => x === fp).length;
+}
+
+function rememberReply(s: ConversationState, reply: string): string[] {
+  return [replyFingerprint(reply), ...(s.recentReplies ?? [])].slice(0, REPEAT_WINDOW);
+}
+
+/**
+ * Every path that SENDS has to leave the trace the next turn's guard reads.
+ *
+ * The repeat guard lived only on the main compose path, so the early returns —
+ * sticky clarify, recovery probes — could send the same line four times without
+ * ever registering that they had: "Let me put that plainly — we're on Brigade
+ * Cornerstone… Which one?" at turns 7, 9, 10 and 13, with not even the adjacent
+ * guard noticing, because those turns never wrote `lastReply` at all.
+ */
+function guardOutbound(
+  s: ConversationState,
+  reply: string,
+): { reply: string; state: ConversationState } {
+  const out =
+    /\?$/.test(reply.trim()) && timesAlreadySent(reply, s) >= 2 ? breakRepeatLoop() : reply;
+  return { reply: out, state: { ...s, lastReply: out, recentReplies: rememberReply(s, out) } };
+}
+
+/**
+ * The line is the right one and cannot be paraphrased — deterministic facts and
+ * commitment terms have to restate exactly — but the buyer already read it.
+ * Keep the words, add the fact that we noticed.
+ *
+ * Question vs statement is the whole distinction: re-asking a question they just
+ * failed to answer means the question is not landing, so hand control back;
+ * repeating a fact they asked for twice is fine once it is labelled as a repeat.
+ */
+function acknowledgeRepeat(reply: string): string {
+  const body = reply.trim();
+  if (!body) return reply;
+  return /\?$/.test(body)
+    ? `${reply}\n\nIf that's not the right question, tell me in your own words what you're after and I'll take it from there.`
+    : `Same as a moment ago — ${body.charAt(0).toLowerCase()}${body.slice(1)}`;
+}
+
+/**
+ * Third identical send inside the window: the loop is ours, not theirs.
+ *
+ * L10 asked four straight questions about the agreement — litigation, delay
+ * compensation, the penalty clause, whether the booking amount is refundable —
+ * and got the same "price, legal papers, amenities, or a site visit — which
+ * one?" menu at turns 7, 9, 10 and 13. Sending it a fourth time claims the menu
+ * is an answer. Say what is actually happening and give two real exits.
+ *
+ * Deliberately only the THIRD send, and only for a question: a line repeated
+ * twice is often legitimate (a cancel then a rebook re-asks for the day), and
+ * a fact restated on request is not a loop.
+ */
+function breakRepeatLoop(): string {
+  return (
+    "That's the third time I've sent you the same line — I'm not understanding the question. " +
+    'Put it in your own words and I\'ll answer it, or say *talk to someone* and I\'ll bring in the site team.'
+  );
 }
 
 /** "today 5:30 pm" / "tomorrow 5:30 pm" / "14 Jul, 5:30 pm" — IST, for hold-confirm copy. */
@@ -2943,6 +3471,7 @@ function decideGoal(
   ex: Extracted,
   visitCtx: visit.VisitCtx | null,
   text = '',
+  skipBrief = false,
 ): TurnGoal {
   if (ex.recallConstraints) return { kind: 'recall_constraints' };
   if (ex.recall) return { kind: 'visit_recall' };
@@ -2957,9 +3486,20 @@ function decideGoal(
   if (ex.wantsHuman && !(s.focus && catalogAskOwns(ex, text))) {
     return { kind: 'handoff' };
   }
+  // The same precedence, for the phrasings `wantsHuman` does not stamp. On a
+  // builder-allotted book these were the majority of the handoff lane: "can
+  // someone call me?", "call me tomorrow after 6pm", "connect me to your sales
+  // manager". Below this line a focused turn read them as facts about the open
+  // project ("I don't have that on file") and a callback time as a site-visit
+  // slot to be negotiated down to 5 PM. Same catalog guard as above — a facet
+  // ask that happens to contain "call me" is still a facet ask.
+  if (skipBrief && text && !(s.focus && catalogAskOwns(ex, text))) {
+    const handoffQ = asksForAHuman(text);
+    if (handoffQ) return { kind: 'recommend', bookQuestion: handoffQ };
+  }
   switch (s.phase) {
     case 'discover':
-      return discover.decide(s, ex, text);
+      return discover.decide(s, ex, text, skipBrief ? { skipBrief: true } : undefined);
     case 'focused':
       // text feeds the deterministic hold-intent gate (visit-style regex).
       return focused.decide(s, ex, text);
@@ -2981,11 +3521,14 @@ async function decideGoalAsync(
   text: string,
   channel: TurnIntentChannel = 'whatsapp',
 ): Promise<TurnGoal> {
+  const skipBrief = deps.waProjectFirst === true && channel === 'whatsapp';
   if (ex.recallConstraints) return { kind: 'recall_constraints' };
   // Noise / smash — sticky clarify before ask_next_step / false brochure binds.
   // Ignore askTopics: embedder often nearest-neighbours get_brochure on smash.
   // When the hard brief is already filled, bare "ok" must advance — not re-probe.
+  // Project-first WA: "hi" / "ok" must re-offer the book, not "couldn't make sense".
   if (
+    !skipBrief &&
     s.phase === 'discover' &&
     isNonPlaceUtterance(text) &&
     !discover.hasNarrowingConstraint(ex.constraints) &&
@@ -2996,6 +3539,23 @@ async function decideGoalAsync(
       return resolveAskNextStepGoal(s, channel);
     }
     return { kind: 'clarify_intent' };
+  }
+  // Minimal-brief trap: a pending size/budget step catches PURE turns (brief
+  // answers, "ok", noise). A facet ask, name, visit or real question routes
+  // normally — the step stays pending and re-offers on the next pure turn.
+  const pendingWaBrief = skipBrief && s.phase !== 'focused' ? s.discover.waBriefStep : undefined;
+  if (
+    pendingWaBrief &&
+    !ex.askTopic &&
+    !(ex.askTopics?.length) &&
+    !(ex.namedProjects?.length) &&
+    ex.transition !== 'want_visit' &&
+    ex.speechAct !== 'visit_book' &&
+    !ex.objection &&
+    !ex.recall &&
+    !(ex.isQuestion && !ex.smalltalk)
+  ) {
+    return { kind: 'probe', slot: pendingWaBrief === 'size' ? 'bhk' : 'budget' };
   }
   // Phase 2c — ask_next_step is state-conditioned; consume before phase decide
   // so cold/board/focused/visit don't fall through to search/overview.
@@ -3025,7 +3585,7 @@ async function decideGoalAsync(
       };
     }
   }
-  return decideGoal(s, ex, visitCtx, text);
+  return decideGoal(s, ex, visitCtx, text, skipBrief);
 }
 
 async function fetchRecommend(
@@ -3056,7 +3616,8 @@ async function fetchRecommend(
   // Soft-rank: full prefs on advisor-web; WA only when the buyer explicitly
   // weighs value/investment (CRM Phase 4) — never re-rank WA on soft NL heuristics.
   const prefs = advisorSearchPrefs(s.constraints);
-  if (channel === 'advisor_web') {
+  const rankFull = channel === 'advisor_web';
+  if (rankFull) {
     if (prefs.preferenceWeights) filters = { ...filters, preferenceWeights: prefs.preferenceWeights };
     if (prefs.commuteHub) filters = { ...filters, commuteHub: prefs.commuteHub };
     if (prefs.budgetTargetInr) filters = { ...filters, budgetTargetInr: prefs.budgetTargetInr };
@@ -3069,6 +3630,16 @@ async function fetchRecommend(
       ...filters,
       preferenceWeights: { value: prefs.preferenceWeights.value },
     };
+  }
+  const skipSearchForBag =
+    deps.waProjectFirst === true &&
+    channel === 'whatsapp' &&
+    !discover.hasNarrowingConstraint(s.constraints) &&
+    !discover.hasNarrowingConstraint(ex.constraints) &&
+    !(ex.namedProjects?.length) &&
+    !ex.forceRecommendList;
+  if (skipSearchForBag) {
+    return { goal: base, evidence: { tools: [], matches: [] } };
   }
   let strictSearch = await searchWithFilters(deps, s.builderId, filters);
 
@@ -3499,7 +4070,14 @@ async function fetchRecommend(
       !ex.forceRecommendList &&
       isSameAsLast(s, listed)
     ) {
-      const miss = s.discover.advancedOnce ? undefined : discover.firstMissingSlot(s);
+      // Project-first WA never asks area/purpose — the book's brief is size
+      // and budget only, so the same-set nudge may only probe those two.
+      const missRaw = s.discover.advancedOnce ? undefined : discover.firstMissingSlot(s);
+      const skipBriefHere = deps.waProjectFirst === true && channel === 'whatsapp';
+      const miss =
+        skipBriefHere && missRaw && missRaw !== 'bhk' && missRaw !== 'budget'
+          ? undefined
+          : missRaw;
       return {
         goal: { kind: 'advance', reason: 'same_set' },
         evidence: {
@@ -3765,14 +4343,57 @@ async function fetchObjection(
  * snapshot, priceBasis + computeEmi for EMI. A project with no value renders an
  * honest "not on file"; no facts at all → honest miss, never a bare pick-menu.
  */
-function fetchEmiCalculation(ex: Extracted): EvidenceSet {
+/**
+ * The basis a money question may be worked on when the buyer did not restate
+ * one this turn.
+ *
+ * "i can pay 55000 a month" was converted, spoken back — "about ₹63 L of loan,
+ * roughly ₹79 L of home" — and then forgotten: four later turns in the same
+ * conversation answered "I need a loan amount before I can work that out". The
+ * number was ours. Recompute on it, and stamp where it came from, because a
+ * figure carried forward silently is a figure the buyer cannot correct.
+ */
+function recalledEmiBasis(s: ConversationState):
+  | {
+      input: { principalInr: number } | { projectPriceInr: number };
+      source: NonNullable<import('./types.js').EmiEvidence['basisSource']>;
+    }
+  | undefined {
+  const a = s.affordability;
+  if (a && a.loanInr > 0) {
+    return {
+      input: { principalInr: a.loanInr },
+      source: { kind: 'buyer_monthly', monthlyInr: a.monthlyInr, fromIncome: a.fromIncome },
+    };
+  }
+  const budget = s.constraints.budgetMaxInr;
+  if (budget !== undefined && budget > 0) {
+    return {
+      input: { projectPriceInr: budget },
+      source: { kind: 'buyer_budget', budgetInr: budget },
+    };
+  }
+  return undefined;
+}
+
+function fetchEmiCalculation(ex: Extracted, s: ConversationState): EvidenceSet {
+  const recalled = ex.emiPrincipalInr === undefined ? recalledEmiBasis(s) : undefined;
   const outcome = computeEmi({
-    ...(ex.emiPrincipalInr !== undefined ? { principalInr: ex.emiPrincipalInr } : {}),
+    ...(ex.emiPrincipalInr !== undefined
+      ? { principalInr: ex.emiPrincipalInr }
+      : (recalled?.input ?? {})),
     ...(ex.emiRatePercent !== undefined ? { ratePercent: ex.emiRatePercent } : {}),
     ...(ex.emiTenureYears !== undefined ? { tenureYears: ex.emiTenureYears } : {}),
   });
   return outcome.ok
-    ? { tools: ['emi'], emi: { ...outcome.value, discloseInputs: true } }
+    ? {
+        tools: ['emi'],
+        emi: {
+          ...outcome.value,
+          discloseInputs: true,
+          ...(recalled ? { basisSource: recalled.source } : {}),
+        },
+      }
     : { tools: [], failure: outcome.failure };
 }
 
@@ -3896,6 +4517,41 @@ function cleanShortlistFacetValue(v: string | undefined): string {
   return t === '—' ? '' : t;
 }
 
+/** Plain words for a fork branch — what the buyer would say back, and what it is. */
+const FORK_LABELS: Record<string, readonly [word: string, label: string]> = {
+  price: ['price', 'pricing'],
+  emi: ['emi', 'loan eligibility'],
+  availability: ['configs', 'the configurations'],
+  legal: ['legal', 'the legal papers'],
+  compare: ['compare', 'how it compares nearby'],
+  amenities: ['amenities', 'the amenities'],
+  location: ['location', 'the location'],
+  media: ['brochure', 'the brochure'],
+  visit: ['visit', 'a site visit'],
+};
+
+function forkTopicWord(topic: string): string {
+  return FORK_LABELS[topic]?.[0] ?? topic.replace(/_/g, ' ');
+}
+
+function forkTopicPhrase(topic: string): string {
+  return FORK_LABELS[topic]?.[1] ?? topic.replace(/_/g, ' ');
+}
+
+function forkTopicLabel(topic: string): string {
+  const label = forkTopicPhrase(topic);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function dedupe(xs: string[]): string[] {
+  return [...new Set(xs.filter(Boolean))];
+}
+
+function joinWith(xs: string[], conj: 'and' | 'or'): string {
+  if (xs.length <= 1) return xs[0] ?? '';
+  return `${xs.slice(0, -1).join(', ')} ${conj} ${xs[xs.length - 1]}`;
+}
+
 function failureAlternatives(
   failure: Failure,
   evidence: EvidenceSet,
@@ -3904,8 +4560,14 @@ function failureAlternatives(
     failure.subject === 'carpet_area' ||
     failure.subject === 'built_up_area'
   ) {
+    // Name the bands. "The published configuration sizes" tells the buyer a
+    // category exists; "2 BHK 1050-1180 sqft" is the thing they came for, minus
+    // the basis we genuinely don't record.
+    const bands = (evidence.units ?? [])
+      .filter((u) => u.sizeDisplay)
+      .map((u) => `${u.unitType} ${u.sizeDisplay}`);
     return [
-      ...(evidence.units?.length ? ['the published configuration sizes'] : []),
+      ...(bands.length ? [`the published sizes — ${bands.join(', ')}`] : []),
       ...(evidence.pricing || evidence.landedCost ? ['the cost sheet'] : []),
     ];
   }
@@ -3926,13 +4588,59 @@ async function gatherPriceEvidencePatch(args: {
   unitType: string | undefined;
   focusName: string;
   buyerText?: string;
+  /** The buyer said yes to an offer of the all-in cost — the words are "yes",
+   *  but the ask is the cost sheet. */
+  breakdownRequested?: boolean;
 }): Promise<EvidenceSet> {
   const { deps, s, nd, projectId, unitType, focusName, buyerText } = args;
   let evidence: EvidenceSet = { tools: [] };
-  const breakdownAsk = buyerText ? wantsCostBreakdown(buyerText) : false;
-  if (breakdownAsk && unitType) {
+  const required = buyerText ? answerRequirements(buyerText) : [];
+  const breakdownAsk =
+    args.breakdownRequested === true || (buyerText ? wantsCostBreakdown(buyerText) : false);
+  // The statutory add-ons live on the cost sheet, not the price sheet — so
+  // "what about stamp duty and registration?" has to reach for the same
+  // evidence "give me the full breakup" does, or it gets answered with the
+  // headline price, which is not what was asked.
+  const statutoryAsk = required.includes('stamp_duty');
+  // A rate needs a size, and sizes live on the published configurations. So
+  // does the honest answer to "carpet or super built-up?" — the book records
+  // the bands but not which basis they are on, and naming the bands is the
+  // difference between a shrug and a useful admission.
+  const rateAsk = required.includes('price_per_sqft');
+  const areaAsk = required.includes('carpet_area') || required.includes('built_up_area');
+  let units: UnitConfig[] = [];
+  if ((statutoryAsk && !unitType) || rateAsk || areaAsk) {
+    units = await deps.data.listUnits(projectId).catch(() => []);
+    if (areaAsk && units.length) {
+      evidence = {
+        ...evidence,
+        units: units.map((u) => ({
+          unitType: u.unitType,
+          priceDisplay: u.priceDisplay,
+          ...(u.sizeDisplay ? { sizeDisplay: u.sizeDisplay } : {}),
+        })),
+      };
+    }
+    if (rateAsk) {
+      const rows = units
+        .filter((u) => (u.sizeMinSqft ?? 0) > 0 && u.priceMinInr > 0)
+        .map((u) => ({
+          unitType: u.unitType,
+          // Rounded to ₹10 — a rate carried to the rupee reads like a quote.
+          rateInr: Math.round(u.priceMinInr / (u.sizeMinSqft as number) / 10) * 10,
+        }))
+        .filter((r) => r.rateInr > 0);
+      if (rows.length) {
+        evidence = { ...evidence, perSqft: { projectName: focusName, rows } };
+      }
+    }
+  }
+  // No config chosen yet — quote the entry one. `landedCostLine` names the unit
+  // it priced, so the buyer always knows which home the charges belong to.
+  const costUnit = unitType ?? units[0]?.unitType;
+  if ((breakdownAsk || statutoryAsk) && costUnit) {
     const landedRes = await deps.data
-      .landedCost(s.builderId, nd, projectId, unitType)
+      .landedCost(s.builderId, nd, projectId, costUnit)
       .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
     evidence = stampToolRun(evidence, 'landedCost', landedRes);
     if (landedRes.ok) {
@@ -3975,8 +4683,11 @@ async function gatherEmiEvidencePatch(args: {
     .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }));
   evidence = stampToolRun(evidence, 'priceBasis', basisRes);
   const basis = basisRes.ok ? basisRes.value : null;
+  // No published basis for this project/size is not the end of the arithmetic —
+  // the buyer may have already given us the only number this sum needs.
+  const recalled = basis ? undefined : recalledEmiBasis(s);
   const outcome = computeEmi({
-    ...(basis ? { projectPriceInr: basis.priceInr } : {}),
+    ...(basis ? { projectPriceInr: basis.priceInr } : (recalled?.input ?? {})),
     ratePercent: ex.emiRatePercent ?? DEFAULT_RATE_PERCENT,
     tenureYears: ex.emiTenureYears ?? DEFAULT_TENURE_YEARS,
   });
@@ -3987,6 +4698,7 @@ async function gatherEmiEvidencePatch(args: {
       emi: {
         ...outcome.value,
         ...(deps.failureTools ? { discloseInputs: true } : {}),
+        ...(recalled ? { basisSource: recalled.source } : {}),
       },
     };
   } else if (deps.failureTools) {
@@ -4287,6 +4999,9 @@ async function fetchAnswer(
           unitType,
           focusName,
           buyerText,
+          breakdownRequested:
+            Boolean(s.rti?.pendingPrompt?.breakdown) &&
+            Boolean(buyerText && AFFIRM_ONLY.test(buyerText.trim())),
         })
       : Promise.resolve({ tools: [] } satisfies EvidenceSet),
     wantEmi
@@ -4775,7 +5490,13 @@ async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineD
     const matches = matchesFromLastOffered(s).slice(0, 3);
     return { tools: ['lastOffered'], matches };
   }
-  if (goal.kind === 'orient') {
+  if (goal.kind === 'orient' || goal.kind === 'greet') {
+    const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
+    return { tools: ['catalog'], catalog };
+  }
+  // Minimal-brief steps speak the live spread ("Homes here run ₹52L – ₹1.6 Cr")
+  // and the packer cuts band rows from it — memoized per turn, so cheap.
+  if (goal.kind === 'probe' && (goal.slot === 'bhk' || goal.slot === 'budget' || goal.slot === 'propertyType')) {
     const catalog = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
     return { tools: ['catalog'], catalog };
   }

@@ -149,12 +149,24 @@ export interface TurnResult {
   composer: string;
   turn_index: number;
   whatsapp_actions?: Array<{ id: string; label: string; patch: Record<string, string | undefined>; user_line: string; expected_matches: number }>;
+  /** Native Cloud API interactive (list XOR buttons). Saarathi / webhook send this. */
+  whatsapp_interactive?:
+    | { type: 'button'; buttons: Array<{ id: string; title: string }> }
+    | {
+        type: 'list';
+        button: string;
+        sections: Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }>;
+      };
   /** Named media for client cards / WhatsApp native send (URL not in reply_text). */
   media_attachments?: MediaAttachmentDto[];
   /** Engine debug — NayaDesk Auto/Vault map tools → brain.tool_calls. */
   debug?: {
     phase?: string;
     goal?: unknown;
+    /** Turn-end conversation state. Additive, and the reason the live harness
+     *  can grade a deployed reply as strictly as the in-process one. */
+    focus?: { projectId: string; projectName: string };
+    constraints?: Record<string, unknown>;
     tools?: string[];
     grounding?: string;
     speech_act?: string;

@@ -14,7 +14,13 @@ describe('answer delivery contract', () => {
       'carpet_area',
       'rera',
     ]);
-    expect(answerRequirements('show the stamp duty and club fee')).toEqual([]);
+    // Stamp duty used to extract nothing, so "what about stamp duty?" was
+    // answered with the headline price and the contract never noticed. It is a
+    // cost-sheet atom now; a club fee still is not modelled, and claiming it
+    // would be worse than missing it.
+    expect(answerRequirements('show the stamp duty and club fee')).toEqual(['stamp_duty']);
+    expect(answerRequirements('what is the club fee')).toEqual([]);
+    expect(answerRequirements('what is the per sqft rate?')).toEqual(['price_per_sqft']);
   });
 
   it('turns a full miss terminal and a partial miss into notices', () => {

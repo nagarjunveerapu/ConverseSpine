@@ -78,6 +78,8 @@ FAILURE_ROUTING = "true"
 FAILURE_SEARCH = "true"
 # Failure-as-a-value Phase 4: required facts + partial no-data outcomes.
 FAILURE_ANSWER = "true"
+# WhatsApp project-first: skip discovery brief; pack list XOR 3 buttons.
+WA_PROJECT_FIRST = "on"
 # THE WIRE: a >=tau_high answer-intent bind vetoes the isFocusedSearchPivot
 # regex. OFF -- measured too broad. On merged main, focused on Brigade
 # Eldorado, 4 of 6 genuine pivots were PINNED to the old project:
@@ -344,6 +346,7 @@ ADVISOR_BUILDER_ID = "naya-advisor"
 LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 # HTTP fallback if service binding is cold/misnamed (same pattern as dig).
 NAYADESK_URL = "https://nayadesk-prod.nagarjun-arjun.workers.dev"
+WA_PROJECT_FIRST = "off"
 # Milestone 1: FAILURE_*/SIL_*/CHIP_RANK_LIVE stay unset (off). Flag soak = milestone 2.
 # Cutover runbook: NayaDesk docs/PROD_CUTOVER.md
 
@@ -406,6 +409,7 @@ FAILURE_TOOLS = "true"
 FAILURE_ROUTING = "true"
 FAILURE_SEARCH = "true"
 FAILURE_ANSWER = "true"
+WA_PROJECT_FIRST = "on"
 ROUTING_IN_GOAL = "false"
 UNDERSTANDING_BEFORE_MUTATION = "true"
 TOPIC_UNION = "true"
