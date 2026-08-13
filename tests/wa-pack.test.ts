@@ -31,17 +31,28 @@ describe('resolveWaProjectFirst', () => {
 });
 
 describe('packWhatsAppInteractive', () => {
-  it('greet packs the project book, not purpose buttons', () => {
+  it('greet packs the three-door welcome; the opened book keeps the pick rows', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'greet' },
       state: initState('c', 'brigade-group'),
       catalogNames: CATALOG,
       singleProject: false,
     });
-    expect(packed.kind).toBe('list');
-    if (packed.kind === 'list') {
-      expect(packed.button).toBe('See projects');
-      expect(packed.sections[0]!.rows.map((r) => r.id)).toContain('wa.pick.brigade-eldorado');
+    expect(packed.kind).toBe('buttons');
+    if (packed.kind === 'buttons') {
+      expect(packed.buttons.map((b) => b.id)).toEqual(['wa.menu.choose', 'wa.menu.see', 'wa.menu.know']);
+    }
+    const book = packWhatsAppInteractive({
+      goal: { kind: 'greet' },
+      state: initState('c', 'brigade-group'),
+      catalogNames: CATALOG,
+      singleProject: false,
+      bookOpen: true,
+    });
+    expect(book.kind).toBe('list');
+    if (book.kind === 'list') {
+      expect(book.button).toBe('See projects');
+      expect(book.sections[0]!.rows.map((r) => r.id)).toContain('wa.pick.brigade-eldorado');
     }
   });
 
@@ -61,7 +72,7 @@ describe('packWhatsAppInteractive', () => {
     }
   });
 
-  it('focused with BHK still packs 3 job buttons including Projects', () => {
+  it('focused price answer with BHK moves on — EMI and visit, never the ladder again', () => {
     let s = commitTo(initState('c', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
     s = { ...s, constraints: { ...s.constraints, bhk: '3 BHK' } };
     const packed = packWhatsAppInteractive({
@@ -70,11 +81,13 @@ describe('packWhatsAppInteractive', () => {
       catalogNames: CATALOG,
       singleProject: false,
     });
-    expect(packed.kind).toBe('buttons');
-    if (packed.kind === 'buttons') {
-      expect(packed.buttons).toHaveLength(3);
-      expect(packed.buttons[2]!.id).toBe(WA_MENU_PROJECTS);
-      expect(packed.buttons.every((b) => b.title.length <= 20)).toBe(true);
+    expect(packed.kind).toBe('list');
+    if (packed.kind === 'list') {
+      const ids = packed.sections[0]!.rows.map((r) => r.id);
+      expect(ids.some((id) => id.startsWith('wa.money.bhk.'))).toBe(false);
+      expect(ids.some((id) => id.startsWith('wa.money.emi'))).toBe(true);
+      expect(ids).toContain('visit_book');
+      expect(ids[ids.length - 1]).toBe(WA_MENU_PROJECTS);
     }
   });
 
@@ -101,12 +114,13 @@ describe('packWhatsAppInteractive', () => {
 });
 
 describe('packedToInteractive + greet copy', () => {
-  it('maps greet project list to Graph-shaped dto', () => {
+  it('maps the opened book list to Graph-shaped dto', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'greet' },
       state: initState('c', 'brigade-group'),
       catalogNames: CATALOG,
       singleProject: false,
+      bookOpen: true,
     });
     const dto = packedToInteractive(packed);
     expect(dto?.type).toBe('list');
@@ -136,7 +150,7 @@ describe('packedToInteractive + greet copy', () => {
       },
     });
     expect(reply).toMatch(/Welcome to \*Brigade Group\*/);
-    expect(reply).toMatch(/Here's the book/i);
+    expect(reply).toMatch(/What are you looking for\?/);
     expect(reply.toLowerCase()).not.toMatch(/what brings you here/);
     expect(reply.toLowerCase()).not.toMatch(/area and budget/);
     expect(reply.toLowerCase()).not.toMatch(/drown you in filters/);

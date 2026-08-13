@@ -46,7 +46,7 @@ function state(over: Partial<ConversationState> = {}): ConversationState {
 }
 
 describe('greet sheet — the second door', () => {
-  it('multi-project greet leads with Help me choose', () => {
+  it('multi-project greet is the three-door welcome; See everything opens the book', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'greet' },
       state: initState('c1', 'brigade-group'),
@@ -54,11 +54,24 @@ describe('greet sheet — the second door', () => {
       singleProject: false,
       catalog: CATALOG,
     });
-    expect(packed.kind).toBe('list');
-    if (packed.kind === 'list') {
-      expect(packed.sections[0]!.rows[0]!.id).toBe(WA_MENU_CHOOSE);
-      expect(packed.sections[0]!.rows.length).toBeLessThanOrEqual(10);
-      expect(packed.sections[0]!.rows.map((r) => r.id)).toContain('wa.pick.brigade-eldorado');
+    expect(packed.kind).toBe('buttons');
+    if (packed.kind === 'buttons') {
+      expect(packed.buttons.map((b) => b.id)).toEqual(['wa.menu.choose', 'wa.menu.see', 'wa.menu.know']);
+    }
+    // The tapped door shows the book list the old greet used to dump.
+    const book = packWhatsAppInteractive({
+      goal: { kind: 'greet' },
+      state: initState('c1', 'brigade-group'),
+      catalogNames: BAG,
+      singleProject: false,
+      catalog: CATALOG,
+      bookOpen: true,
+    });
+    expect(book.kind).toBe('list');
+    if (book.kind === 'list') {
+      expect(book.sections[0]!.rows[0]!.id).toBe(WA_MENU_CHOOSE);
+      expect(book.sections[0]!.rows.length).toBeLessThanOrEqual(10);
+      expect(book.sections[0]!.rows.map((r) => r.id)).toContain('wa.pick.brigade-eldorado');
     }
   });
 
@@ -75,11 +88,13 @@ describe('greet sheet — the second door', () => {
     }
   });
 
-  it('greet copy offers the two-tap door only when the book has 2+ projects', () => {
+  it('greet copy is the quiet welcome for a real book, the single-project line otherwise', () => {
     const many = waBookFirstGreet({ builderName: 'Brigade', catalog: { ...CATALOG, total: 6 } });
-    expect(many).toMatch(/Help me choose/);
+    expect(many).toMatch(/What are you looking for\?/);
+    // No catalog dump on the welcome — corridors and price live behind See everything.
+    expect(many).not.toMatch(/from about/);
     const one = waBookFirstGreet({ builderName: 'Brigade', catalog: { ...CATALOG, total: 1 } });
-    expect(one).not.toMatch(/Help me choose/);
+    expect(one).toMatch(/Pick a project/);
   });
 });
 

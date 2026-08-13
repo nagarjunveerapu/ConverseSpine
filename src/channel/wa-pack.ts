@@ -13,6 +13,9 @@ export const WA_MENU_PROJECTS = 'wa.menu.projects';
 export const WA_MENU_CHOOSE = 'wa.menu.choose';
 /** Jump straight to the budget step (clarify buttons). */
 export const WA_MENU_BUDGET = 'wa.menu.budget';
+/** Welcome doors (mock parity): open the book / type the project name. */
+export const WA_MENU_SEE = 'wa.menu.see';
+export const WA_MENU_KNOW = 'wa.menu.know';
 export const WA_PICK_PREFIX = 'wa.pick.';
 export const WA_BHK_PREFIX = 'wa.bhk.';
 export const WA_SIZE_ANY = 'wa.bhk.any';
@@ -201,6 +204,12 @@ export interface WaPackInput {
    * the dishonest affordance this whole layer exists to avoid.
    */
   focusFacts?: WaNodeFacts;
+  /**
+   * The buyer tapped a door that opens the book (See everything / Back to
+   * projects) — greet-shaped goals then show the project list, not the
+   * three-button welcome.
+   */
+  bookOpen?: boolean;
 }
 
 /**
@@ -590,6 +599,20 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
       goal.kind === 'advance' ||
       goal.kind === 'clarify_project_pick');
 
+  // The mock's welcome: three quiet doors, not nine rows. The book list is one
+  // tap away behind "See everything"; a reset/greet without that tap never
+  // dumps the whole catalog on the first screen.
+  if (showBag && goal.kind === 'greet' && !input.bookOpen && bag.length > 1) {
+    return {
+      kind: 'buttons',
+      buttons: [
+        { id: WA_MENU_CHOOSE, title: 'Help me choose' },
+        { id: WA_MENU_SEE, title: 'See everything' },
+        { id: WA_MENU_KNOW, title: 'I know the project' },
+      ],
+    };
+  }
+
   if ((showMatches || showBag) && bag.length > 0) {
     const rows: WaListRow[] = [];
     // Second door: buyers who don't know the book tap into the two-tap brief.
@@ -625,6 +648,30 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
     // Never re-offer the row we just answered — that is what made the visit
     // chrome loop forever, and it reads as "the bot didn't hear me".
     const justAnswered = goal.topic === 'emi' ? WA_MONEY_EMI : WA_MONEY_TOTAL;
+    // The buyer already named a size (brief tap or typed): the size question is
+    // ANSWERED. Re-offering the ladder reads as "the bot didn't hear me" — the
+    // rows move on to what they haven't learned yet: EMI, then the nodes.
+    if (state.constraints?.bhk?.trim()) {
+      const next: WaListRow[] = [
+        ...(justAnswered !== WA_MONEY_EMI
+          ? [{ id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' }]
+          : [{ id: WA_MONEY_TOTAL, title: 'Total price', description: 'the headline number' }]),
+        ...waNodeRows(input.focusFacts),
+      ];
+      if (!next.some((r) => r.id === 'visit_book')) {
+        next.push({ id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' });
+      }
+      return {
+        kind: 'list',
+        button: 'What next',
+        sections: [
+          {
+            title: clip(focus.projectName ?? 'This project', 24),
+            rows: withWayBack(stampProject(next, focus.projectId)),
+          },
+        ],
+      };
+    }
     const rows = stampProject(
       moneyRows(input.focusUnits).filter((r) => r.id !== justAnswered),
       focus.projectId,
@@ -655,6 +702,36 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
           {
             title: clip(focus.projectName ?? 'This project', 24),
             rows: withWayBack(stampProject(nodeRows, focus.projectId)),
+          },
+        ],
+      };
+    }
+  }
+
+  // Project pick with the size ALREADY known (brief tap or typed): the card
+  // never re-asks it. Rows go to the money answers for that size and the nodes
+  // the record can back — the mock's "next steps", not a second size ladder.
+  if (goal.kind === 'commit' && focus && state.constraints?.bhk?.trim()) {
+    const rows: WaListRow[] = [
+      {
+        id: WA_MONEY_TOTAL,
+        title: clip(`Price — ${state.constraints.bhk}`, 24),
+        description: 'the headline number',
+      },
+      { id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' },
+      ...waNodeRows(input.focusFacts),
+    ];
+    if (!rows.some((r) => r.id === 'visit_book')) {
+      rows.push({ id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' });
+    }
+    if (rows.length > 3) {
+      return {
+        kind: 'list',
+        button: 'What next',
+        sections: [
+          {
+            title: clip(focus.projectName ?? 'This project', 24),
+            rows: withWayBack(stampProject(rows, focus.projectId)),
           },
         ],
       };
@@ -986,6 +1063,8 @@ export function isWaBriefActionId(actionId: string | undefined): boolean {
     aid === WA_MENU_CHOOSE ||
     aid === WA_MENU_BUDGET ||
     aid === WA_MENU_PROJECTS ||
+    aid === WA_MENU_SEE ||
+    aid === WA_MENU_KNOW ||
     aid === WA_SIZE_ANY ||
     aid === WA_BUDGET_ANY ||
     aid === WA_TYPE_VILLA ||
@@ -1024,7 +1103,7 @@ export function advanceWaBriefState(
   const sizeKnown = !!c.bhk?.trim() || !!c.propertyType?.trim();
   const budgetKnown = c.budgetMaxInr !== undefined || c.budgetMinInr !== undefined;
 
-  if (aid === WA_MENU_PROJECTS || parseWaPickId(aid)) return withWaBriefStep(state, undefined);
+  if (aid === WA_MENU_PROJECTS || aid === WA_MENU_SEE || parseWaPickId(aid)) return withWaBriefStep(state, undefined);
   if (aid === WA_MENU_CHOOSE) {
     return withWaBriefStep(state, !sizeKnown ? 'size' : !budgetKnown ? 'budget' : undefined);
   }

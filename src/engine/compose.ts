@@ -36,11 +36,12 @@ export function waBookFirstGreet(opts: {
     ...(markets.length ? [markets.join(', ')] : []),
     ...(min > 0 ? [`from about ${formatInr(min)}`] : []),
   ];
-  const pickLine =
-    (opts.catalog?.total ?? 0) > 1
-      ? `Here's the book. Pick a project — or tap *Help me choose* and I'll narrow it in two taps.`
-      : `Here's the book. Pick a project, or tell me a size if you want me to filter.`;
-  return `Welcome to *${brand}*. ${bits.join(' — ')}.\n\n${pickLine}`;
+  // The console welcome (mock parity): three quiet doors, no catalog dump.
+  // The corridors/price line moved behind "See everything" — the book screen.
+  if ((opts.catalog?.total ?? 0) > 1) {
+    return `Welcome to *${brand}*.\n\nI can help you shortlist, compare, or book a visit.\n\nWhat are you looking for?`;
+  }
+  return `Welcome to *${brand}*. ${bits.join(' — ')}.\n\nHere's the book. Pick a project, or tell me a size if you want me to filter.`;
 }
 
 /**

@@ -29,8 +29,11 @@ import {
   waCanonicalUtterance,
   waListPickKeepsCommit,
   WA_MENU_PROJECTS,
+  WA_MENU_SEE,
+  WA_MENU_KNOW,
   type WaPacked,
 } from '../channel/wa-pack.js';
+import { waConsoleCardReply, waConsoleNodeReply } from '../channel/wa-console.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
 import { buildLedgerWritePayload } from './ledger-write.js';
@@ -439,7 +442,31 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
 
   const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
   const skipBrief = deps.waProjectFirst === true && channel === 'whatsapp';
-  if (skipBrief && input.action_id === WA_MENU_PROJECTS) {
+  // "I know the project" — the welcome's third door. Nothing to compute: ask
+  // for the name and get out of the way; the next typed message is the search.
+  if (skipBrief && input.action_id === WA_MENU_KNOW) {
+    const reply = 'Which project? Type the name — even roughly — and I’ll pull up its file.';
+    state = {
+      ...state,
+      turnCount: state.turnCount + 1,
+      lastReply: reply,
+      recentReplies: rememberReply(state, reply),
+    };
+    state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
+    await deps.store.save(state);
+    const knowPacked: WaPacked = {
+      kind: 'buttons',
+      buttons: [{ id: WA_MENU_PROJECTS, title: 'See everything' }],
+    };
+    return {
+      reply,
+      state,
+      debug: withIngressDebug({ phase: state.phase, goal: { kind: 'orient' }, tools: [], grounding: 'pass' }, inputSource),
+      whatsappActions: packedToSuggestedActions(knowPacked),
+      whatsappInteractive: knowPacked,
+    };
+  }
+  if (skipBrief && (input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE)) {
     // Projects is the always-there exit: back to the book from anywhere.
     // releaseToDiscover, not popFocus — popFocus keeps a single-entry stack
     // unchanged, so the tap silently stayed on the project. Drop the visit
@@ -2892,6 +2919,48 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     }
   }
 
+  // Console voice — a node tap's screen is authored from the same record the
+  // honest menu gate read. Compose's closers, leftovers and config dumps never
+  // ride a tap; free text keeps the engine's reply untouched.
+  if (skipBrief) {
+    const authoredNode = waConsoleNodeReply(input.action_id, goal, evidence.detail);
+    if (authoredNode) reply = authoredNode;
+    // The book screen — "See everything" / "Back to projects" opens the list,
+    // and the words describe the book, not whatever goal the engine landed on.
+    if (!state.focus && (input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE)) {
+      const mm = (catalogForTurn?.microMarkets ?? []).slice(0, 3).join(', ');
+      reply = `Here's the book${mm ? ` — ${mm}` : ''}. Pick a project, or tap *✨ Help me choose* and I'll cut it to fit in two taps.`;
+    }
+    // The project card. With a size already given, it states the buyer's fit —
+    // the size is CONSUMED, spoken back as this project's answer. Without one,
+    // it is the mock's card: one labelled line per node the record can back.
+    if (goal.kind === 'commit' && state.focus?.projectId) {
+      const pid = state.focus.projectId;
+      if (state.constraints?.bhk?.trim()) {
+        const units = pickSizeUnits?.length
+          ? pickSizeUnits
+          : await deps.data.listUnits(pid).catch(() => []);
+        const wanted = /(\d+)/.exec(state.constraints.bhk)?.[1];
+        const fit = wanted
+          ? units.filter((u) => new RegExp(`\\b${wanted}\\s*BHK`, 'i').test(u.unitType))
+          : [];
+        if (fit.length) {
+          const lines = fit
+            .slice(0, 3)
+            .map((u) => `• ${[u.unitType, u.sizeDisplay, u.priceDisplay].filter(Boolean).join(' · ')}`);
+          reply = `*${state.focus.projectName ?? 'This project'}* — your fit:\n${lines.join('\n')}\n\nPrice, EMI, the project file — or a visit?`;
+        }
+      } else {
+        const cardDetail =
+          evidence.detail && evidence.detail.projectId === pid
+            ? evidence.detail
+            : state.projectCache?.[pid];
+        const card = cardDetail ? waConsoleCardReply(cardDetail, pickSizeUnits) : undefined;
+        if (card) reply = card;
+      }
+    }
+  }
+
   state = applyGoalToState(state, goal, evidence);
   if (skipBrief && (goal.kind === 'greet' || goal.kind === 'recommend' || goal.kind === 'orient')) {
     state = markOriented(state);
@@ -3243,11 +3312,20 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       // The node menu is cut from the focused project's own record — only when
       // this turn's evidence actually fetched THAT project (an answer about a
       // compare target must not draw Eldorado's menu under Orchards' name).
-      ...(evidence.detail &&
-      state.focus?.projectId &&
-      evidence.detail.projectId === state.focus.projectId
-        ? { focusFacts: evidence.detail }
-        : {}),
+      // This turn's fetched record when it IS the focus; else the cached card —
+      // a pick or money turn deliberately fetches no overview, but the node
+      // menu must still know what the project holds.
+      ...(() => {
+        const pid = state.focus?.projectId;
+        const facts =
+          evidence.detail && pid && evidence.detail.projectId === pid
+            ? evidence.detail
+            : pid
+              ? state.projectCache?.[pid]
+              : undefined;
+        return facts ? { focusFacts: facts } : {};
+      })(),
+      bookOpen: input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE,
     });
   }
   const packedActions = packed ? packedToSuggestedActions(packed) : undefined;
