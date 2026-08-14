@@ -52,9 +52,12 @@ function memoSet(deps: EngineDeps, projectId: string, detail: ProjectDetail): vo
  */
 export function promoteDurableProjectDetail(detail: ProjectDetail): ProjectDetail {
   if (!detail.identityOnly) return detail;
-  // Configs+name are enough: the identityOnly flag only means "Desk focus was
-  // elsewhere when hydrated". Once listUnits gave real configs under a known
-  // name, persisting the poison flag blocked L2 and forced proj:miss every turn.
+  // ONE stable catalog fact promotes the card. Units alone do NOT: listUnits
+  // answers for any project whether or not the detail was reachable, so
+  // "configs + a name" promoted the very shell the flag exists to mark, and the
+  // promoted stub then read as a cache hit on every later turn — the console
+  // showed money rows and no project file for the rest of the conversation
+  // (founder, 14 Aug). A shell keeps its flag and is re-fetched instead.
   const stable =
     Boolean(detail.summary?.trim()) ||
     Boolean(detail.mediaKinds?.length) ||
@@ -62,8 +65,7 @@ export function promoteDurableProjectDetail(detail: ProjectDetail): ProjectDetai
     Boolean(detail.possession?.trim()) ||
     Boolean(detail.loanEligibility?.trim()) ||
     Boolean(detail.startingPriceDisplay?.trim()) ||
-    Boolean(detail.reraNumber?.trim()) ||
-    Boolean(detail.configurations?.length && detail.name?.trim());
+    Boolean(detail.reraNumber?.trim());
   if (!stable) return detail;
   const { identityOnly: _poison, ...rest } = detail;
   return rest;
@@ -72,6 +74,24 @@ export function promoteDurableProjectDetail(detail: ProjectDetail): ProjectDetai
 /** Name/RERA/price-band stubs must not count as hits — they thin overview replies. */
 export function isUsableProjectCard(detail: ProjectDetail | null | undefined): boolean {
   if (!detail || detail.identityOnly) return false;
+  // A card carrying units and NOTHING else is shell-shaped: listUnits answers
+  // for any project, so this is what a promoted identity-only shell looks like
+  // once the flag is gone. Cards written by older builds sit in L2 for up to
+  // six hours; refusing them here heals the conversation on the next turn
+  // instead of leaving the project file missing until they expire.
+  if (
+    detail.configurations?.length &&
+    !detail.summary?.trim() &&
+    !detail.reraNumber?.trim() &&
+    !detail.possession?.trim() &&
+    !detail.startingPriceDisplay?.trim() &&
+    !detail.loanEligibility?.trim() &&
+    !detail.mediaKinds?.length &&
+    !detail.phases?.length &&
+    !detail.location
+  ) {
+    return false;
+  }
   // Overview compose needs unit rows or a real summary — band-only catalog GETs
   // set startingPriceDisplay and were falsely treated as complete L2 hits.
   return Boolean(detail.configurations?.length || detail.summary?.trim());

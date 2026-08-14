@@ -2964,15 +2964,20 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       const pid = goal.projectId;
       const name = goal.projectName ?? state.focus?.projectName ?? 'This project';
       // A plain list-pick deliberately fetches no overview — resolve the record
-      // anyway (evidence → cache → one hydrate) so the card and the console
-      // menu are cut from what the project actually holds, not from silence.
+      // anyway so the card and the console menu are cut from what the project
+      // actually holds, not from silence. Read the cache THROUGH hydrate, never
+      // directly: the board search prefetches every match, and a match that
+      // isn't Desk's current focus legitimately yields an identity-only shell
+      // (name + units; no RERA, no media, no location). Taking that shell at
+      // face value is what left the console showing money rows and nothing else
+      // (founder, 14 Aug — "I don't see other options even now"). hydrate
+      // refuses unusable cards and re-fetches; the adapter's catalog-GET
+      // fallback carries the legal/possession facts the file rows are gated on.
       commitDetail =
         evidence.detail && evidence.detail.projectId === pid
           ? evidence.detail
-          : state.projectCache?.[pid]?.projectId === pid
-            ? state.projectCache[pid]
-            : ((await hydrateProjectDetail(deps, state, pid).catch(() => null))?.detail ??
-              undefined);
+          : ((await hydrateProjectDetail(deps, state, pid).catch(() => null))?.detail ??
+            undefined);
       // One config list for the card, the fit lines AND the console menu. An
       // overview-fetched detail carries no configurations — graft them on so
       // the cached record keeps feeding money rows on every later turn.
@@ -3041,7 +3046,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // The commit's resolved record is durable project truth — cache it so the
   // very next turn's menu and screens read it for free (answer turns get the
   // same treatment below; commit was the gap that left focusFacts cold).
-  if (skipBrief && commitDetail && goal.kind === 'commit' && goal.projectId === commitDetail.projectId) {
+  // identityOnly shells are NOT project truth — promoting one installs a card
+  // that every later hydrate treats as a hit, so the file rows stay missing for
+  // the whole conversation. Cache only a record that already stands on its own.
+  if (
+    skipBrief &&
+    commitDetail &&
+    goal.kind === 'commit' &&
+    goal.projectId === commitDetail.projectId &&
+    !commitDetail.identityOnly
+  ) {
     const { faqs: _questionScoped, ...rawDurable } = commitDetail;
     state = {
       ...state,

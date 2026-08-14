@@ -11,7 +11,7 @@ import {
 import { markFacetSeen, projectSeenFacets, recordEntities } from '../src/engine/entity-store.js';
 import { commitTo, initState } from '../src/engine/state.js';
 import { runEngineTurn } from '../src/engine/turn.js';
-import { fakeDeps, projectDetailFor } from './fakes.js';
+import { fakeData, fakeDeps, projectDetailFor } from './fakes.js';
 
 /**
  * The founder's 14-Aug walk, asserted turn by turn — the regression this whole
@@ -182,5 +182,70 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     // Said once: the next turn keeps the screen but not the closing line.
     const again = await turn('Possession', `${WA_NODE_TIME}${WA_PROJECT_STAMP}cornerstone`);
     expect(again.reply).not.toContain('the full file on');
+  });
+});
+
+/**
+ * "See I don't see other options even now" (founder, 14 Aug, with screenshots).
+ * The console drew money rows and the two standing doors — never Trust & legal,
+ * Location, Possession. The board search prefetches every match, and a match
+ * that isn't Desk's focus yields an IDENTITY-ONLY shell: a name and units, no
+ * legal facts. The commit read that shell straight out of projectCache, so the
+ * file rows had nothing to gate on — and promoting it (units + a name were
+ * enough to strip the flag) made every later hydrate treat the shell as a hit,
+ * keeping the file missing for the rest of the conversation.
+ */
+describe('an identity-only shell never becomes the project file', () => {
+  function shellHarness(convId: string) {
+    const data = fakeData();
+    const deps = { ...fakeDeps(), data, waProjectFirst: true };
+    const turn = (text: string, actionId?: string) =>
+      runEngineTurn(
+        {
+          convId,
+          builderId: 'lokations',
+          text,
+          buyerPhone: '+919999991181',
+          channel: 'whatsapp',
+          ...(actionId ? { action_id: actionId } : {}),
+        },
+        deps,
+      );
+    return { data, turn };
+  }
+
+  it('the pick re-fetches past a prefetched shell, so the file rows draw', async () => {
+    const { data, turn } = shellHarness('wa-shell-pick');
+    // Desk's conversationContext is focus-scoped, so a prefetched match that
+    // isn't the focus yields a shell. This is the ordinary board turn.
+    data.fail.projectDetail = 'absent';
+    await turn('Help me choose', WA_MENU_CHOOSE);
+    await turn('2 BHK', 'wa.bhk.2_bhk');
+    const board = await turn('Under ₹80L', 'wa.budget.u_8000000');
+    expect(board.state.projectCache?.['krishnaja']?.identityOnly).toBe(true);
+    expect(board.state.projectCache?.['krishnaja']?.reraNumber).toBeUndefined();
+
+    // The detail is reachable on the pick — the console must go and get it
+    // instead of dressing the shell up as the project file.
+    delete data.fail.projectDetail;
+    const pick = await turn('Krishnaja', 'wa.pick.krishnaja');
+    const aids = listRows(pick)!.map((r) => splitProjectStamp(r.id).aid);
+    expect(aids).toContain(WA_NODE_TRUST);
+    expect(aids).toContain(WA_NODE_TIME);
+    // The founder's screenshot was exactly four rows: two money, two doors.
+    expect(aids.length).toBeGreaterThan(4);
+    expect(pick.state.projectCache?.['krishnaja']?.reraNumber).toBeTruthy();
+  });
+
+  it('a shell that survives the pick is never promoted into the cache', async () => {
+    const { data, turn } = shellHarness('wa-shell-poison');
+    data.fail.projectDetail = 'absent';
+    await turn('Help me choose', WA_MENU_CHOOSE);
+    await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Under ₹80L', 'wa.budget.u_8000000');
+    const pick = await turn('Krishnaja', 'wa.pick.krishnaja');
+    const cached = pick.state.projectCache?.['krishnaja'];
+    expect(cached?.reraNumber).toBeUndefined();
+    expect(cached?.identityOnly).toBe(true);
   });
 });
