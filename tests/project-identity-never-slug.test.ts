@@ -110,6 +110,9 @@ describe('a project is never named after its id', () => {
       name: 'Brigade Eldorado',
       microMarket: 'Aerospace Park / Devanahalli Corridor',
       summary: 'cached',
+      // Complete now includes having been asked what documents exist — a card
+      // that never was is re-fetched, however much else it carries.
+      filesFetched: true,
     };
     const { detail } = await hydrateProjectDetail(
       // projectDetail would throw if called — it must not be.
@@ -155,6 +158,7 @@ describe('a project is never named after its id', () => {
       name: 'Brigade Eldorado',
       microMarket: 'Devanahalli',
       summary: 'from L2',
+      filesFetched: true,
     });
 
     const poisoned = stateWith({
@@ -176,7 +180,7 @@ describe('a project is never named after its id', () => {
     expect((await getProjectCard(fakeKv, PID))?.detail.summary).toBe('from L2');
   });
 
-  it('writeProjectCardFromDetail persists promoted shells', async () => {
+  it('a promoted shell is not taught to L2 — it was never asked for its files', async () => {
     const kv = new Map<string, string>();
     const fakeKv = {
       get: async (key: string, type?: string) => {
@@ -201,6 +205,24 @@ describe('a project is never named after its id', () => {
       reraNumber: 'PRM/KA/RERA/x',
     });
 
+    // This shell is Eldorado's: configs, a RERA number, and no idea whether the
+    // project has documents. Teaching it to L2 is what served a project file
+    // with its sixteen files invisible for six hours. Refusing costs one fetch
+    // on the next turn; it does NOT restore the original block, because that
+    // came from a poisoned entry being served, not from an absent one.
+    expect(await getProjectCard(fakeKv, PID)).toBeNull();
+
+    // Asked and answered — that card is worth keeping, even if the answer was
+    // that the project has nothing to send.
+    await writeProjectCardFromDetail({ turnCache: fakeKv, projectCardMemo: new Map() } as never, PID, {
+      projectId: PID,
+      name: 'Brigade Eldorado',
+      microMarket: '',
+      identityOnly: true,
+      configurations: [{ unitType: '2 BHK', priceDisplay: '₹57.5 L', priceMinInr: 5750000 }],
+      reraNumber: 'PRM/KA/RERA/x',
+      filesFetched: true,
+    });
     const card = await getProjectCard(fakeKv, PID);
     expect(card?.detail.identityOnly).toBeUndefined();
     expect(card?.detail.reraNumber).toBe('PRM/KA/RERA/x');
