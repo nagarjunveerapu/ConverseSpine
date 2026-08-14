@@ -152,6 +152,43 @@ export function mapAmenitiesFromSpec(specJson: string | null | undefined): strin
   return undefined;
 }
 
+/**
+ * The township's numbers off spec_json. `mapAmenitiesFromSpec` wants an amenity
+ * LIST, which most catalog rows don't carry — but nearly every row carries the
+ * numbers (50 acres, 12 towers, 60% open space, 80,000 sqft of amenities), and
+ * they are what the Life section can honestly say.
+ */
+export function mapSpecFromProject(
+  specJson: string | null | undefined,
+): ProjectDetail['spec'] | undefined {
+  const text = trim(specJson);
+  if (!text) return undefined;
+  let o: Record<string, unknown>;
+  try {
+    const v = JSON.parse(text) as unknown;
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+    o = v as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  const num = (k: string): number | undefined => {
+    const v = o[k];
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+  };
+  const spec: NonNullable<ProjectDetail['spec']> = {
+    ...(num('total_acres') !== undefined ? { totalAcres: num('total_acres')! } : {}),
+    ...(num('total_units') !== undefined ? { totalUnits: num('total_units')! } : {}),
+    ...(num('tower_count') !== undefined ? { towerCount: num('tower_count')! } : {}),
+    ...(num('floors_per_tower') !== undefined ? { floorsPerTower: num('floors_per_tower')! } : {}),
+    ...(num('open_space_pct') !== undefined ? { openSpacePct: num('open_space_pct')! } : {}),
+    ...(num('amenities_sqft') !== undefined ? { amenitiesSqft: num('amenities_sqft')! } : {}),
+    ...(trim(o.water_supply) ? { waterSupply: trim(o.water_supply)! } : {}),
+    ...(trim(o.power_backup) ? { powerBackup: trim(o.power_backup)! } : {}),
+    ...(trim(o.construction_tech) ? { constructionTech: trim(o.construction_tech)! } : {}),
+  };
+  return Object.keys(spec).length ? spec : undefined;
+}
+
 export function hasRentBands(mi?: ProjectMarketIntel): boolean {
   return (mi?.rentBands.length ?? 0) > 0;
 }

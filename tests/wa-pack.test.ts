@@ -71,7 +71,7 @@ describe('packWhatsAppInteractive', () => {
     if (packed.kind === 'list') {
       expect(packed.button).toBe('More');
       const ids = packed.sections[0]!.rows.map((r) => r.id);
-      expect(ids).toEqual(['visit_book', WA_MENU_PROJECTS]);
+      expect(ids).toEqual(['visit_book', 'compare_projects', WA_MENU_PROJECTS]);
       expect(ids).not.toContain(WA_MONEY_MENU);
     }
   });
@@ -96,7 +96,8 @@ describe('packWhatsAppInteractive', () => {
       expect(ids.some((id) => id.startsWith('wa.money.bhk.'))).toBe(false);
       const total = rows.find((r) => r.id.startsWith('wa.money.total'));
       expect(total?.title).toBe('Total cost — 3 BHK');
-      expect(ids.some((id) => id.startsWith('wa.money.emi'))).toBe(true);
+      // EMI moved inside Money — the root keeps only the hottest money row.
+      expect(ids.some((id) => id.startsWith('wa.node.money'))).toBe(true);
       expect(ids).toContain('visit_book');
       expect(ids[ids.length - 1]).toBe(WA_MENU_PROJECTS);
     }

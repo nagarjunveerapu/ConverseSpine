@@ -3486,6 +3486,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         return facts ? { focusFacts: facts } : {};
       })(),
       bookOpen: input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE,
+      // Which level of the file this turn is on — the tapped id is the whole
+      // navigation state, so nothing has to be remembered between turns.
+      ...(input.action_id ? { actionId: input.action_id } : {}),
     });
   }
   const packedActions = packed ? packedToSuggestedActions(packed) : undefined;

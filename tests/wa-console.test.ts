@@ -89,6 +89,27 @@ describe('the console speaks the tap, nothing else', () => {
     expect(waConsoleNodeReply('wa.node.later@h', { kind: 'answer', topic: 'overview' }, hollow)).toBeUndefined();
   });
 
+  it('Life answers with the township numbers when no amenity list exists', () => {
+    // Desk holds the numbers on almost every project and the LIST on almost
+    // none. Refusing to answer Life because a different column is empty is the
+    // catalog gap talking, not the record.
+    const noList: ProjectDetail = {
+      ...DETAIL,
+      amenities: undefined,
+      spec: { totalAcres: 50, towerCount: 12, floorsPerTower: 24, openSpacePct: 60, amenitiesSqft: 80000 },
+    };
+    const reply = waConsoleNodeReply('wa.node.life@brigade-eldorado', { kind: 'answer', topic: 'overview' }, noList)!;
+    expect(reply).toContain('50 acres');
+    expect(reply).toContain('80,000 sqft');
+    expect(reply).toContain('12');
+
+    // Nothing on either side is still silence — never an empty heading.
+    const bare: ProjectDetail = { ...DETAIL, amenities: undefined, spec: undefined };
+    expect(
+      waConsoleNodeReply('wa.node.life@brigade-eldorado', { kind: 'answer', topic: 'overview' }, bare),
+    ).toBeUndefined();
+  });
+
   it('a stamp for another project never speaks this record', () => {
     expect(
       waConsoleNodeReply('wa.node.trust@brigade-orchards', { kind: 'answer', topic: 'legal' }, DETAIL),
@@ -131,7 +152,8 @@ describe('chips consume what the buyer already said', () => {
     if (packed.kind === 'list') {
       const ids = packed.sections[0]!.rows.map((r) => r.id);
       expect(ids.some((id) => id.startsWith('wa.money.bhk.'))).toBe(false);
-      expect(ids.some((id) => id.startsWith('wa.money.emi'))).toBe(true);
+      // EMI is a Money row now — the root offers the section, not the answer.
+      expect(ids.some((id) => id.startsWith('wa.node.money'))).toBe(true);
       expect(ids.some((id) => id.startsWith('wa.node.trust'))).toBe(true);
       expect(ids).toContain('visit_book');
     }
@@ -149,8 +171,9 @@ describe('chips consume what the buyer already said', () => {
     if (packed.kind === 'list') {
       const ids = packed.sections[0]!.rows.map((r) => r.id);
       expect(ids.some((id) => id.startsWith('wa.money.bhk.'))).toBe(false);
-      expect(ids.some((id) => id.startsWith('wa.console.sizes'))).toBe(true);
-      expect(ids.some((id) => id.startsWith('wa.money.emi'))).toBe(true);
+      // The size question lives in The unit; money in Money. One row each.
+      expect(ids.some((id) => id.startsWith('wa.node.unit'))).toBe(true);
+      expect(ids.some((id) => id.startsWith('wa.node.money'))).toBe(true);
     }
   });
 

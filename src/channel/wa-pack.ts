@@ -6,6 +6,7 @@ import type { ConversationState, TurnGoal } from '../engine/types.js';
 import { HANDOFF_QUESTIONS } from '../engine/book-questions.js';
 import type { Extracted } from '../engine/types.js';
 import { currentShortlist, focusedRef, projectSeenFacets } from '../engine/entity-store.js';
+import { humanizeMediaKind } from '../engine/media-asset.js';
 import type { SeenFacet } from '../engine/entity-store.js';
 import type { SuggestedAction } from '../engine/recovery-planner.js';
 
@@ -59,6 +60,86 @@ export const WA_NODE_TIME = 'wa.node.time';
 export const WA_NODE_LATER = 'wa.node.later';
 /** Opens the node menu itself — "More about this project". */
 export const WA_MENU_NODE = 'wa.menu.node';
+/**
+ * The file has SECTIONS, and a section opens onto its own screen. Money and The
+ * unit complete the set the root offers; the other five already had ids.
+ */
+export const WA_NODE_MONEY = 'wa.node.money';
+export const WA_NODE_UNIT = 'wa.node.unit';
+/**
+ * One sub-topic inside a section — `wa.sub.<node>.<topic>`. The node is IN the
+ * id, so a tap that arrives days later still knows which screen drew it and
+ * which screen to draw again underneath the answer.
+ */
+export const WA_SUB_PREFIX = 'wa.sub.';
+/** Send one document — `wa.doc.<asset_kind>`, the kinds the media layer speaks. */
+export const WA_DOC_PREFIX = 'wa.doc.';
+/** Up one level: back to the file's sections. */
+export const WA_BACK_FILE = 'wa.back.file';
+/** Put another project beside this one — the id the speech-act catalog knows. */
+export const WA_COMPARE = 'compare_projects';
+
+/** The file's sections, in the order the root menu draws them. */
+export const WA_FILE_NODES = ['money', 'trust', 'place', 'life', 'time', 'unit'] as const;
+export type WaFileNode = (typeof WA_FILE_NODES)[number];
+
+const NODE_ID: Record<WaFileNode, string> = {
+  money: WA_NODE_MONEY,
+  trust: WA_NODE_TRUST,
+  place: WA_NODE_PLACE,
+  life: WA_NODE_LIFE,
+  time: WA_NODE_TIME,
+  unit: WA_NODE_UNIT,
+};
+
+const NODE_TITLE: Record<WaFileNode, string> = {
+  money: 'Money',
+  trust: 'Trust & legal',
+  place: 'Place',
+  life: 'Life',
+  time: 'Time',
+  unit: 'The unit',
+};
+
+/**
+ * Which section a document belongs under — the founder's "Trust amalgamated
+ * with Media": a legal sub-topic offers its own paperwork, the unit offers the
+ * floor plan for the size the buyer gave, money offers the payment schedule.
+ */
+const DOC_NODE: Record<string, WaFileNode> = {
+  brochure: 'life',
+  payment_plan: 'money',
+  price_sheet: 'money',
+  revenue_sharing_model: 'money',
+  floor_plan: 'unit',
+  site_image: 'unit',
+  master_plan: 'place',
+  location_map: 'place',
+  kmz_layout: 'place',
+  legal_agreement: 'trust',
+  ownership_certificate: 'trust',
+  allotment_letter: 'trust',
+  soil_report: 'trust',
+  crop_yield_report: 'life',
+};
+
+/** Which section a tap belongs to — the id says so, no state to consult. */
+export function waNodeOf(actionId: string | undefined): WaFileNode | undefined {
+  if (!actionId) return undefined;
+  const { aid } = splitProjectStamp(actionId.trim());
+  for (const n of WA_FILE_NODES) if (aid === NODE_ID[n]) return n;
+  if (aid.startsWith(WA_SUB_PREFIX)) {
+    const node = aid.slice(WA_SUB_PREFIX.length).split('.')[0];
+    return (WA_FILE_NODES as readonly string[]).includes(node ?? '')
+      ? (node as WaFileNode)
+      : undefined;
+  }
+  if (aid.startsWith(WA_DOC_PREFIX)) return DOC_NODE[aid.slice(WA_DOC_PREFIX.length)];
+  // Money's rows shipped before the sections did and stay exactly as they are.
+  if (aid === WA_MONEY_TOTAL || aid === WA_MONEY_EMI || aid === WA_MONEY_PLAN) return 'money';
+  if (aid === WA_CONSOLE_SIZES || aid.startsWith(WA_MONEY_BHK_PREFIX)) return 'unit';
+  return undefined;
+}
 
 const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
@@ -86,7 +167,37 @@ export function waCanonicalUtterance(actionId: string | undefined): string | und
   if (aid === WA_NODE_LIFE) return 'what amenities does it have';
   if (aid === WA_NODE_TIME) return 'when is possession';
   if (aid === WA_NODE_LATER) return 'what rental yield and returns can I expect';
-  if (aid === WA_MENU_NODE) return 'tell me more about this project';
+  if (aid === WA_MENU_NODE || aid === WA_BACK_FILE) return 'tell me more about this project';
+  if (aid === WA_NODE_MONEY) return 'what does it cost';
+  if (aid === WA_NODE_UNIT) return 'which units and sizes are available';
+  // Sub-topics speak the same closed-set phrases their section does, cut to one
+  // question. No new pattern is introduced anywhere — the id picks a sentence
+  // the engine already parses (P7: the lane is the corpus, never a new regex).
+  if (aid.startsWith(WA_SUB_PREFIX)) {
+    const topic = aid.slice(WA_SUB_PREFIX.length);
+    const said: Record<string, string> = {
+      'trust.rera': 'what is the rera number',
+      'trust.khata': 'what is the khata type',
+      'trust.ec': 'is the encumbrance certificate available',
+      'trust.approvals': 'which authority approved the project',
+      'place.metro': 'how far is the metro station',
+      'place.schools': 'what schools are nearby',
+      'place.hospitals': 'what hospitals are nearby',
+      'place.commute': 'how long is the commute to work',
+      'life.amenities': 'what amenities does it have',
+      'life.spec': 'how big is the project',
+      'time.possession': 'when is possession',
+      'time.phases': 'what is the phase wise possession schedule',
+      'unit.sizes': 'which units and sizes are available',
+    };
+    return said[topic];
+  }
+  // A document row means "send me that file" — the phrasing requestedMediaKinds
+  // already reads, so the existing media path does the sending.
+  if (aid.startsWith(WA_DOC_PREFIX)) {
+    const kind = aid.slice(WA_DOC_PREFIX.length);
+    return kind ? `share the ${humanizeMediaKind(kind)}` : undefined;
+  }
   // Money rows speak the phrases the closed sets already parse — "all-in cost
   // with all charges" is wantsCostBreakdown's own vocabulary, so a Total-cost
   // tap reaches the landed-cost sheet instead of reprinting the board's price.
@@ -221,6 +332,12 @@ export interface WaPackInput {
    * three-button welcome.
    */
   bookOpen?: boolean;
+  /**
+   * The id the buyer just tapped. Navigation has no state to keep: the id says
+   * which level of the file this turn is on, so a tap from an old message opens
+   * the screen it was drawn under even after a restart.
+   */
+  actionId?: string;
 }
 
 /**
@@ -259,6 +376,32 @@ export interface WaNodeFacts {
     drivers?: ReadonlyArray<unknown>;
   };
   mediaKinds?: readonly string[];
+  /** The documents themselves — a section names the files it can send. */
+  mediaAssets?: ReadonlyArray<{
+    assetId: string;
+    kind: string;
+    title?: string;
+    unitTypeFilter?: string;
+  }>;
+  /** The township's numbers — what Life says when the amenity list is a gap. */
+  spec?: {
+    totalAcres?: number;
+    towerCount?: number;
+    openSpacePct?: number;
+    amenitiesSqft?: number;
+    totalUnits?: number;
+    waterSupply?: string;
+    powerBackup?: string;
+    constructionTech?: string;
+  };
+  approvalAuthority?: string;
+  registrationScope?: string;
+  reraApplicability?: string;
+  naStatus?: string;
+  loanEligibility?: string;
+  microMarket?: string;
+  startingPriceDisplay?: string;
+  phaseNote?: string;
   /** The focused project's configs — money-row gates read these. */
   configurations?: ReadonlyArray<{
     unitType: string;
@@ -326,8 +469,14 @@ function bhkMatchedUnit(
 /** Section title: the project's own name when it fits Meta's 24, one fixed voice when it doesn't. */
 export function waConsoleTitle(projectName: string | undefined): string {
   const name = projectName?.trim();
-  const composed = name ? `${name} — what to check` : '';
-  return composed && composed.length <= 24 ? composed : 'What to check';
+  const composed = name ? `${name} — the file` : '';
+  return composed && composed.length <= 24 ? composed : 'The file';
+}
+
+/** Inside a section: the section names itself, so the buyer knows where they are. */
+export function waNodeTitle(node: WaFileNode): string {
+  const composed = `${NODE_TITLE[node]} — what to check`;
+  return composed.length <= 24 ? composed : NODE_TITLE[node];
 }
 
 export interface WaConsoleRowsInput {
@@ -342,16 +491,146 @@ export interface WaConsoleRowsInput {
   leadRows?: ReadonlyArray<WaListRow>;
 }
 
+const NUM = (n: number) => n.toLocaleString('en-IN');
+
+/** Documents of this section, newest-kind-first, one row per kind. */
+function docRows(
+  facts: WaNodeFacts | undefined,
+  node: WaFileNode,
+  bhk?: string,
+  exclude?: ReadonlySet<string>,
+): WaListRow[] {
+  const assets = facts?.mediaAssets ?? [];
+  if (!assets.length) return [];
+  const byKind = new Map<string, typeof assets>();
+  for (const a of assets) {
+    if (DOC_NODE[a.kind] !== node) continue;
+    // A topic row that already sends this document must not be offered twice —
+    // "Payment plan" and "Payment plan · document · 1 file" are one row.
+    if (exclude?.has(a.kind)) continue;
+    byKind.set(a.kind, [...(byKind.get(a.kind) ?? []), a]);
+  }
+  const rows: WaListRow[] = [];
+  for (const [kind, list] of byKind) {
+    // A floor plan bound to the buyer's own size says so — "the floor plan for
+    // YOUR 2 BHK" is a different offer from "a floor plan".
+    const mine = bhk
+      ? list.find((a) => a.unitTypeFilter && bhkMatchedUnit([{ unitType: a.unitTypeFilter }], bhk))
+      : undefined;
+    // The count has to be what the tap will actually send. A project with four
+    // floor plans, one per size, does not owe a 2 BHK buyer four files — saying
+    // "4 files" under a row titled "Floor plan — 2 BHK" promises three that
+    // belong to somebody else's home.
+    const sendable = mine
+      ? list.filter(
+          (a) => !a.unitTypeFilter || bhkMatchedUnit([{ unitType: a.unitTypeFilter }], bhk!),
+        )
+      : list;
+    const label = humanizeMediaKind(kind);
+    const title = mine?.unitTypeFilter
+      ? `${label[0]!.toUpperCase()}${label.slice(1)} — ${mine.unitTypeFilter}`
+      : `${label[0]!.toUpperCase()}${label.slice(1)}`;
+    rows.push({
+      id: `${WA_DOC_PREFIX}${kind}`,
+      title: clip(title, 24),
+      description: `document · ${sendable.length} file${sendable.length > 1 ? 's' : ''}`,
+    });
+  }
+  return rows;
+}
+
+/** What each section can honestly say on its own row of the file. */
+function sectionHint(
+  node: WaFileNode,
+  facts: WaNodeFacts | undefined,
+  units: ReadonlyArray<{ unitType: string; sizeDisplay?: string }>,
+): string | undefined {
+  switch (node) {
+    case 'money':
+      return 'all-in, EMI, payment plan';
+    case 'trust': {
+      const bits = [
+        facts?.reraNumber?.trim() || facts?.phases?.some((p) => p.reraNumber?.trim()) ? 'RERA' : '',
+        facts?.khata?.trim() ?? '',
+        facts?.ecStatus?.trim() ? 'EC' : '',
+        facts?.mediaAssets?.some((a) => DOC_NODE[a.kind] === 'trust') ? 'documents' : '',
+      ].filter(Boolean);
+      return bits.length ? bits.join(' · ') : undefined;
+    }
+    case 'place': {
+      const bits = [
+        facts?.location?.metroStations?.length ? 'metro' : '',
+        facts?.location?.schools?.length ? 'schools' : '',
+        facts?.location?.hospitals?.length ? 'hospitals' : '',
+      ].filter(Boolean);
+      return bits.length ? bits.join(' · ') : facts?.microMarket?.trim();
+    }
+    case 'life': {
+      const s = facts?.spec;
+      const bits = [
+        s?.amenitiesSqft ? `${NUM(s.amenitiesSqft)} sqft amenities` : '',
+        s?.totalAcres ? `${NUM(s.totalAcres)} acres` : '',
+        !s?.amenitiesSqft && !s?.totalAcres && facts?.amenities?.length
+          ? facts.amenities.slice(0, 3).join(' · ')
+          : '',
+      ].filter(Boolean);
+      return bits.length ? bits.join(' · ') : undefined;
+    }
+    case 'time':
+      return facts?.possession?.trim() || 'dates and status';
+    case 'unit': {
+      const bits = [
+        units.length ? 'sizes' : '',
+        facts?.mediaKinds?.includes('floor_plan') ? 'floor plan' : '',
+        facts?.mediaKinds?.includes('site_image') ? 'views' : '',
+      ].filter(Boolean);
+      return bits.length ? bits.join(' · ') : undefined;
+    }
+  }
+}
+
+/** True when the record can back this section at all — an empty section is never drawn. */
+function sectionHasData(
+  node: WaFileNode,
+  facts: WaNodeFacts | undefined,
+  units: ReadonlyArray<{ unitType: string }>,
+): boolean {
+  switch (node) {
+    case 'money':
+      return units.length > 0 || Boolean(facts?.startingPriceDisplay?.trim());
+    case 'trust':
+      return Boolean(
+        facts?.reraNumber?.trim() ||
+          facts?.khata?.trim() ||
+          facts?.ecStatus?.trim() ||
+          facts?.naStatus?.trim() ||
+          facts?.approvalAuthority?.trim() ||
+          facts?.phases?.some((p) => p.reraNumber?.trim()) ||
+          facts?.mediaAssets?.some((a) => DOC_NODE[a.kind] === 'trust'),
+      );
+    case 'place':
+      return locationHasData(facts?.location) || Boolean(facts?.microMarket?.trim());
+    case 'life':
+      return Boolean(facts?.amenities?.length || facts?.spec);
+    case 'time':
+      return Boolean(facts?.possession?.trim() || facts?.phases?.some((p) => p.possession?.trim()));
+    case 'unit':
+      return units.length > 0;
+  }
+}
+
 /**
- * THE console menu — the mock's "what to check", built in exactly one place.
- * Every row is gated on data the record actually holds, every delivered row is
- * dropped by the seen ledger, and no row ever reprints a number the reply just
- * said (descriptions carry no ₹). Money means the mock's money: total cost,
- * payment plan, EMI — never a bare "Price". Book a visit and Switch project
- * are standing doors; everything else earns its slot.
+ * THE file — the root menu is the project's SECTIONS, not a flat pile of
+ * answers. A section is a place you can stand: it stays on the list whether or
+ * not you have been inside it, because navigation you can only use once is not
+ * navigation. A section is drawn only when the record can back it.
  *
- * infoCount is the all-seen signal: 0 means nothing unseen is left to offer —
- * the caller can say "you've been through the full file" instead of a menu.
+ * The one non-section row is the hybrid the founder chose: `Total cost — 2 BHK`,
+ * already cut to the size the buyer gave, stays one tap from the root because it
+ * is the question almost everyone asks. It obeys the seen ledger and disappears
+ * once delivered; everything else about money lives inside Money.
+ *
+ * infoCount is the all-seen signal — 0 means the record backs nothing at all.
  */
 export function waConsoleRows(input: WaConsoleRowsInput): { rows: WaListRow[]; infoCount: number } {
   const facts = input.facts;
@@ -359,110 +638,179 @@ export function waConsoleRows(input: WaConsoleRowsInput): { rows: WaListRow[]; i
   const bhk = input.bhk?.trim() || undefined;
   const seen = new Set(input.seen ?? []);
   const lead = [...(input.leadRows ?? [])];
-  const info: Array<{ facet?: SeenFacet; row: WaListRow }> = [];
 
-  // Brochure leads: the cheapest yes in the funnel.
-  if (facts?.mediaKinds?.includes('brochure')) {
-    info.push({
-      facet: 'brochure',
-      row: { id: 'answer_media', title: 'Send brochure', description: 'the full project PDF' },
-    });
-  }
-  // Total cost only when a unit resolves — landed cost is per-unit arithmetic,
-  // so the row is cut to the buyer's size (or the only size there is).
-  if (bhk && bhkMatchedUnit(units, bhk)) {
-    info.push({
-      facet: 'total',
-      row: { id: WA_MONEY_TOTAL, title: clip(`Total cost — ${bhk}`, 24), description: 'all charges counted in' },
-    });
-  } else if (units.length === 1) {
-    info.push({
-      facet: 'total',
-      row: { id: WA_MONEY_TOTAL, title: 'All-in cost', description: 'all charges counted in' },
-    });
-  }
-  if (facts?.mediaKinds?.includes('payment_plan')) {
-    info.push({
-      facet: 'plan',
-      row: { id: WA_MONEY_PLAN, title: 'Payment plan', description: 'the schedule, stage by stage' },
-    });
-  }
-  if (units.length > 0) {
-    info.push({
-      facet: 'emi',
-      row: { id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' },
-    });
-  }
-  // The size question, while it is still open — consumed by the answer, not by
-  // the seen ledger: once bhk lands the gate itself closes.
-  if (!bhk && units.length >= 2 && !lead.length) {
-    const kinds = [...new Set(units.map((u) => u.unitType.trim()).filter(Boolean))].slice(0, 4);
-    info.push({
-      row: {
-        id: WA_CONSOLE_SIZES,
-        title: 'Sizes & options',
-        ...(kinds.length ? { description: clip(kinds.join(' · '), 72) } : {}),
-      },
-    });
-  }
-  if (facts) {
-    const trust = [
-      facts.reraNumber?.trim() || facts.phases?.some((p) => p.reraNumber?.trim()) ? 'RERA' : '',
-      facts.khata?.trim() ? 'khata & title' : '',
-      facts.ecStatus?.trim() ? 'EC' : '',
-    ].filter(Boolean);
-    if (trust.length) {
-      info.push({
-        facet: 'trust',
-        row: { id: WA_NODE_TRUST, title: 'Trust & legal', description: clip(trust.join(' · '), 72) },
+  const hybrid: WaListRow[] = [];
+  // Landed cost is per-unit arithmetic, so the row exists only when a unit
+  // actually resolves for the size in hand.
+  if (!lead.length && !seen.has('total')) {
+    if (bhk && bhkMatchedUnit(units, bhk)) {
+      hybrid.push({
+        id: WA_MONEY_TOTAL,
+        title: clip(`Total cost — ${bhk}`, 24),
+        description: 'all charges counted in',
       });
-    }
-    if (locationHasData(facts.location)) {
-      const bits = [
-        facts.location?.schools?.length ? 'schools' : '',
-        facts.location?.hospitals?.length ? 'hospitals' : '',
-        'commute',
-      ].filter(Boolean);
-      info.push({
-        facet: 'place',
-        row: { id: WA_NODE_PLACE, title: 'Location', description: clip(bits.join(' · '), 72) },
-      });
-    }
-    if (facts.amenities?.length) {
-      info.push({
-        facet: 'life',
-        row: {
-          id: WA_NODE_LIFE,
-          title: 'Amenities',
-          description: clip(facts.amenities.slice(0, 3).join(', '), 72),
-        },
-      });
-    }
-    if (facts.possession?.trim() || facts.phases?.some((p) => p.possession?.trim())) {
-      info.push({
-        facet: 'time',
-        row: { id: WA_NODE_TIME, title: 'Possession', description: 'dates and status' },
-      });
-    }
-    // Returns rides only when the yield IS on the record — an investment
-    // product speaks it; a family apartment never volunteers it.
-    if (hasReturnsData(facts.marketIntel, facts.investment)) {
-      info.push({
-        facet: 'later',
-        row: { id: WA_NODE_LATER, title: 'Returns', description: 'yield, appreciation, exit' },
-      });
+    } else if (units.length === 1) {
+      hybrid.push({ id: WA_MONEY_TOTAL, title: 'All-in cost', description: 'all charges counted in' });
     }
   }
 
-  const unseen = info.filter((e) => !e.facet || !seen.has(e.facet));
-  // 8 info slots + the two standing doors = Meta's 10. Overflow drops from the
-  // tail, so Returns goes first — deterministic, never a shuffled menu.
-  const rows: WaListRow[] = [
-    ...[...lead, ...unseen.map((e) => e.row)].slice(0, 8),
+  const sections: WaListRow[] = [];
+  for (const node of WA_FILE_NODES) {
+    if (!sectionHasData(node, facts, units)) continue;
+    const hint = sectionHint(node, facts, units);
+    sections.push({
+      id: NODE_ID[node],
+      title: NODE_TITLE[node],
+      ...(hint ? { description: clip(hint, 72) } : {}),
+    });
+  }
+  // Returns is a section too, but only for a product that actually reports a
+  // yield — a family apartment never volunteers one.
+  if (hasReturnsData(facts?.marketIntel, facts?.investment)) {
+    sections.push({ id: WA_NODE_LATER, title: 'Returns', description: 'yield, appreciation, exit' });
+  }
+
+  // The three standing acts close every file screen. 10 rows is Meta's ceiling,
+  // so sections give way from the tail (Returns first) — never the way out.
+  const acts: WaListRow[] = [
     { id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' },
+    { id: WA_COMPARE, title: 'Compare with another' },
     { id: WA_MENU_PROJECTS, title: 'Switch project' },
   ];
-  return { rows, infoCount: lead.length + unseen.length };
+  const body = [...lead, ...hybrid, ...sections].slice(0, 10 - acts.length);
+  // infoCount is the "you're done" signal, and it counts ANSWERS the buyer has
+  // not seen — not sections. Sections never empty (that is the point of them),
+  // so counting rows would mean the console could never say "you've been
+  // through the full file" again.
+  const answerable: SeenFacet[] = [];
+  if (facts?.mediaKinds?.includes('brochure')) answerable.push('brochure');
+  if ((bhk && bhkMatchedUnit(units, bhk)) || units.length === 1) answerable.push('total');
+  if (facts?.mediaKinds?.includes('payment_plan')) answerable.push('plan');
+  if (units.length) answerable.push('emi');
+  for (const node of ['trust', 'place', 'life', 'time'] as const) {
+    if (sectionHasData(node, facts, units)) answerable.push(node);
+  }
+  if (hasReturnsData(facts?.marketIntel, facts?.investment)) answerable.push('later');
+  return {
+    rows: [...body, ...acts],
+    infoCount: lead.length + answerable.filter((f) => !seen.has(f)).length,
+  };
+}
+
+/**
+ * A section's own screen: which part of it do you want. Every sub-row is gated
+ * on the exact field its answer reads, the section's documents sit with the
+ * topics they belong to (the founder's "Trust amalgamated with the media"), and
+ * the way back is a row because WhatsApp has no back button.
+ */
+export function waNodeMenuRows(
+  node: WaFileNode,
+  input: WaConsoleRowsInput,
+): { rows: WaListRow[]; infoCount: number } {
+  const facts = input.facts;
+  const units = input.units ?? facts?.configurations ?? [];
+  const bhk = input.bhk?.trim() || undefined;
+  // Inside a section, a topic is a place and stays; an ANSWER that was already
+  // delivered does not come round again — the same law as the file's own rows.
+  const seen = new Set(input.seen ?? []);
+  const sub = (topic: string, title: string, hint?: string): WaListRow => ({
+    id: `${WA_SUB_PREFIX}${node}.${topic}`,
+    title: clip(title, 24),
+    ...(hint?.trim() ? { description: clip(hint.trim(), 72) } : {}),
+  });
+  const rows: WaListRow[] = [];
+  /** Document kinds a topic row above already sends. */
+  const covered = new Set<string>();
+
+  switch (node) {
+    case 'money': {
+      if (!seen.has('total')) {
+        if (bhk && bhkMatchedUnit(units, bhk)) {
+          rows.push({ id: WA_MONEY_TOTAL, title: clip(`Total cost — ${bhk}`, 24), description: 'all charges counted in' });
+        } else if (units.length) {
+          rows.push({ id: WA_MONEY_TOTAL, title: 'All-in cost', description: 'all charges counted in' });
+        }
+      }
+      if (units.length && !seen.has('emi')) {
+        rows.push({ id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' });
+      }
+      if (facts?.mediaKinds?.includes('payment_plan')) {
+        covered.add('payment_plan');
+        if (!seen.has('plan')) {
+          rows.push({ id: WA_MONEY_PLAN, title: 'Payment plan', description: 'the schedule, stage by stage' });
+        }
+      }
+      if (facts?.loanEligibility?.trim()) {
+        rows.push(sub('loan', 'Banks & loan', 'who has approved it, and how much'));
+      }
+      break;
+    }
+    case 'trust': {
+      const rera = facts?.reraNumber?.trim() || facts?.phases?.find((p) => p.reraNumber?.trim())?.reraNumber;
+      if (rera) rows.push(sub('rera', 'RERA registration', 'number, scope, applicability'));
+      if (facts?.khata?.trim()) rows.push(sub('khata', 'Khata & title', facts.khata));
+      if (facts?.ecStatus?.trim()) rows.push(sub('ec', 'Encumbrance (EC)', facts.ecStatus));
+      if (facts?.approvalAuthority?.trim() || facts?.naStatus?.trim()) {
+        rows.push(sub('approvals', 'Approvals & land use', 'authority, classification'));
+      }
+      break;
+    }
+    case 'place': {
+      const loc = facts?.location;
+      if (loc?.metroStations?.length || loc?.driveTimes?.length) {
+        rows.push(sub('metro', 'Metro & commute', 'how long to where you work'));
+      }
+      if (loc?.schools?.length) rows.push(sub('schools', 'Schools nearby', `${loc.schools.length} on file`));
+      if (loc?.hospitals?.length) rows.push(sub('hospitals', 'Hospitals nearby', `${loc.hospitals.length} on file`));
+      break;
+    }
+    case 'life': {
+      if (facts?.amenities?.length) {
+        rows.push(sub('amenities', 'Amenities', facts.amenities.slice(0, 3).join(' · ')));
+      }
+      const s = facts?.spec;
+      if (s) {
+        const bits = [
+          s.totalAcres ? `${NUM(s.totalAcres)} acres` : '',
+          s.towerCount ? `${s.towerCount} towers` : '',
+          s.openSpacePct ? `${s.openSpacePct}% open` : '',
+        ].filter(Boolean);
+        rows.push(sub('spec', 'Size & layout', bits.join(' · ')));
+      }
+      break;
+    }
+    case 'time': {
+      if (facts?.possession?.trim()) rows.push(sub('possession', 'Possession', facts.possession));
+      if (facts?.phases?.some((p) => p.possession?.trim())) {
+        rows.push(sub('phases', 'Phase schedule', 'what hands over when'));
+      }
+      break;
+    }
+    case 'unit': {
+      if (units.length) {
+        const kinds = [...new Set(units.map((u) => u.unitType.trim()).filter(Boolean))].slice(0, 4);
+        rows.push({
+          id: WA_CONSOLE_SIZES,
+          title: 'Sizes & options',
+          ...(kinds.length ? { description: clip(kinds.join(' · '), 72) } : {}),
+        });
+      }
+      break;
+    }
+  }
+
+  const docs = docRows(facts, node, bhk, covered);
+  const infoCount = rows.length + docs.length;
+  // 8 topic slots leaves the way back and one act inside Meta's 10.
+  const body = [...rows, ...docs].slice(0, 8);
+  return {
+    rows: [
+      ...body,
+      { id: WA_BACK_FILE, title: '← Back to the file' },
+      { id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' },
+    ],
+    infoCount,
+  };
 }
 
 function clip(s: string, n: number): string {
@@ -614,7 +962,13 @@ function stampProject(rows: readonly WaListRow[], projectId?: string): WaListRow
     // Legacy ids (visit_book, answer_media) stay unstamped: the speech-act
     // catalog resolves them by EXACT id, and their wire shape already shipped.
     id.startsWith(WA_NODE_PREFIX) ||
-    id === WA_MENU_NODE;
+    id === WA_MENU_NODE ||
+    // Sub-topics, documents and the way back are all "…of THIS project" too —
+    // a Trust sub-row tapped tomorrow must open tonight's project, not the
+    // book. Same law as the money rows: the id carries its context.
+    id.startsWith(WA_SUB_PREFIX) ||
+    id.startsWith(WA_DOC_PREFIX) ||
+    id === WA_BACK_FILE;
   return rows.map((r) =>
     stampable(r.id) ? { ...r, id: `${r.id}${WA_PROJECT_STAMP}${projectId}` } : r,
   );
@@ -819,18 +1173,29 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
     // book design's step 2, price-free, never a toll gate on the way to money.
     const leadRows =
       goal.kind === 'commit' && !bhk && units.length >= 2 ? waConfigLadderRows(units) : [];
-    const { rows } = waConsoleRows({
+    const consoleInput: WaConsoleRowsInput = {
       facts: input.focusFacts,
       units,
       ...(bhk ? { bhk } : {}),
       seen: projectSeenFacets(state, focus.projectId),
       leadRows,
-    });
+    };
+    // Which level of the file is this turn on? The tapped id says so — a
+    // section opens its own screen, a sub-topic or a document stays inside the
+    // section it belongs to (so the next question is one tap, not three), and
+    // "← Back to the file" or anything else returns to the sections.
+    const node = leadRows.length ? undefined : waNodeOf(input.actionId);
+    const { rows } = node
+      ? waNodeMenuRows(node, consoleInput)
+      : waConsoleRows(consoleInput);
     return {
       kind: 'list',
       button: 'More',
       sections: [
-        { title: waConsoleTitle(focus.projectName), rows: stampProject(rows, focus.projectId) },
+        {
+          title: node ? waNodeTitle(node) : waConsoleTitle(focus.projectName),
+          rows: stampProject(rows, focus.projectId),
+        },
       ],
     };
   }
