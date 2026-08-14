@@ -137,7 +137,7 @@ describe('chips consume what the buyer already said', () => {
     }
   });
 
-  it('price answer without a size keeps the ladder', () => {
+  it('price answer without a size offers the size question as ONE row, not a re-dump', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'answer', topic: 'price', projectId: 'cornerstone' },
       state: focusedState(),
@@ -147,7 +147,10 @@ describe('chips consume what the buyer already said', () => {
     });
     expect(packed.kind).toBe('list');
     if (packed.kind === 'list') {
-      expect(packed.sections[0]!.rows.some((r) => r.id.startsWith('wa.money.bhk.'))).toBe(true);
+      const ids = packed.sections[0]!.rows.map((r) => r.id);
+      expect(ids.some((id) => id.startsWith('wa.money.bhk.'))).toBe(false);
+      expect(ids.some((id) => id.startsWith('wa.console.sizes'))).toBe(true);
+      expect(ids.some((id) => id.startsWith('wa.money.emi'))).toBe(true);
     }
   });
 

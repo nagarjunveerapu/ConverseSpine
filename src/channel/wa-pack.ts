@@ -5,7 +5,8 @@
 import type { ConversationState, TurnGoal } from '../engine/types.js';
 import { HANDOFF_QUESTIONS } from '../engine/book-questions.js';
 import type { Extracted } from '../engine/types.js';
-import { currentShortlist, focusedRef } from '../engine/entity-store.js';
+import { currentShortlist, focusedRef, projectSeenFacets } from '../engine/entity-store.js';
+import type { SeenFacet } from '../engine/entity-store.js';
 import type { SuggestedAction } from '../engine/recovery-planner.js';
 
 export const WA_MENU_PROJECTS = 'wa.menu.projects';
@@ -37,6 +38,10 @@ export const WA_MONEY_MENU = 'wa.money.menu';
 export const WA_MONEY_TOTAL = 'wa.money.total';
 export const WA_MONEY_EMI = 'wa.money.emi';
 export const WA_MONEY_BHK_PREFIX = 'wa.money.bhk.';
+/** The mock's Money door, one row per real answer: the payment-plan document… */
+export const WA_MONEY_PLAN = 'wa.money.plan';
+/** …and the size question as a row of its own, drawn only while it is unanswered. */
+export const WA_CONSOLE_SIZES = 'wa.console.sizes';
 /** Separates a money row's id from the project it was cut for. */
 export const WA_PROJECT_STAMP = '@';
 /** Config rows we can show before the jobs + way back hit the 10-row ceiling. */
@@ -82,6 +87,12 @@ export function waCanonicalUtterance(actionId: string | undefined): string | und
   if (aid === WA_NODE_TIME) return 'when is possession';
   if (aid === WA_NODE_LATER) return 'what rental yield and returns can I expect';
   if (aid === WA_MENU_NODE) return 'tell me more about this project';
+  // Money rows speak the phrases the closed sets already parse — "all-in cost
+  // with all charges" is wantsCostBreakdown's own vocabulary, so a Total-cost
+  // tap reaches the landed-cost sheet instead of reprinting the board's price.
+  if (aid === WA_MONEY_TOTAL) return 'what is the all-in cost with all charges';
+  if (aid === WA_MONEY_PLAN) return 'share the payment plan';
+  if (aid === WA_CONSOLE_SIZES) return 'which units and sizes are available';
   if (aid.startsWith(WA_DAY_PREFIX)) {
     const day = aid.slice(WA_DAY_PREFIX.length).toLowerCase();
     return (WEEKDAY_NAMES as readonly string[]).includes(day) ? day : undefined;
@@ -297,50 +308,161 @@ export function hasReturnsData(
   return false;
 }
 
+/** The unit whose type carries the buyer's size — "2 BHK" matches "2 BHK Comfort" too. */
+function bhkMatchedUnit(
+  units: ReadonlyArray<{ unitType: string }>,
+  bhk: string,
+): { unitType: string } | undefined {
+  const n = /(\d+)/.exec(bhk)?.[1];
+  if (n) {
+    const re = new RegExp(`\\b${n}\\s*BHK`, 'i');
+    return units.find((u) => re.test(u.unitType));
+  }
+  // Non-BHK sizes (Villa / Plot) match on the word itself.
+  const w = bhk.trim().toLowerCase();
+  return w ? units.find((u) => u.unitType.toLowerCase().includes(w)) : undefined;
+}
+
+/** Section title: the project's own name when it fits Meta's 24, one fixed voice when it doesn't. */
+export function waConsoleTitle(projectName: string | undefined): string {
+  const name = projectName?.trim();
+  const composed = name ? `${name} — what to check` : '';
+  return composed && composed.length <= 24 ? composed : 'What to check';
+}
+
+export interface WaConsoleRowsInput {
+  facts?: WaNodeFacts;
+  /** The focused project's configs — money-row gates read these, never invent. */
+  units?: ReadonlyArray<{ unitType: string; priceDisplay?: string; sizeDisplay?: string }>;
+  /** The buyer's own size, already given — Total cost is cut to it, the size row dies. */
+  bhk?: string;
+  /** The seen ledger for THIS project — a delivered row is not offered again. */
+  seen?: ReadonlyArray<SeenFacet>;
+  /** Rows that outrank the file (commit-no-size leads with the config ladder). */
+  leadRows?: ReadonlyArray<WaListRow>;
+}
+
 /**
- * The node menu — the card's "what do you want to check?", cut from the
- * project's own record. Brochure leads: it is the cheapest yes in the funnel
- * and the thing buyers ask for long before they accept a visit.
+ * THE console menu — the mock's "what to check", built in exactly one place.
+ * Every row is gated on data the record actually holds, every delivered row is
+ * dropped by the seen ledger, and no row ever reprints a number the reply just
+ * said (descriptions carry no ₹). Money means the mock's money: total cost,
+ * payment plan, EMI — never a bare "Price". Book a visit and Switch project
+ * are standing doors; everything else earns its slot.
+ *
+ * infoCount is the all-seen signal: 0 means nothing unseen is left to offer —
+ * the caller can say "you've been through the full file" instead of a menu.
  */
-export function waNodeRows(facts: WaNodeFacts | undefined): WaListRow[] {
-  if (!facts) return [];
-  const rows: WaListRow[] = [];
-  if (facts.mediaKinds?.includes('brochure')) {
-    rows.push({ id: 'answer_media', title: 'Brochure', description: 'the full project PDF' });
-  }
-  const trust = [
-    facts.reraNumber?.trim() || facts.phases?.some((p) => p.reraNumber?.trim()) ? 'RERA' : '',
-    facts.khata?.trim() ? 'khata & title' : '',
-    facts.ecStatus?.trim() ? 'EC' : '',
-  ].filter(Boolean);
-  if (trust.length) {
-    rows.push({ id: WA_NODE_TRUST, title: 'Trust & legal', description: clip(trust.join(' · '), 72) });
-  }
-  if (locationHasData(facts.location)) {
-    const bits = [
-      facts.location?.schools?.length ? 'schools' : '',
-      facts.location?.hospitals?.length ? 'hospitals' : '',
-      'commute',
-    ].filter(Boolean);
-    rows.push({ id: WA_NODE_PLACE, title: 'Location', description: clip(bits.join(' · '), 72) });
-  }
-  if (facts.amenities?.length) {
-    rows.push({
-      id: WA_NODE_LIFE,
-      title: 'Amenities',
-      description: clip(facts.amenities.slice(0, 3).join(', '), 72),
+export function waConsoleRows(input: WaConsoleRowsInput): { rows: WaListRow[]; infoCount: number } {
+  const facts = input.facts;
+  const units = input.units ?? facts?.configurations ?? [];
+  const bhk = input.bhk?.trim() || undefined;
+  const seen = new Set(input.seen ?? []);
+  const lead = [...(input.leadRows ?? [])];
+  const info: Array<{ facet?: SeenFacet; row: WaListRow }> = [];
+
+  // Brochure leads: the cheapest yes in the funnel.
+  if (facts?.mediaKinds?.includes('brochure')) {
+    info.push({
+      facet: 'brochure',
+      row: { id: 'answer_media', title: 'Send brochure', description: 'the full project PDF' },
     });
   }
-  if (facts.possession?.trim() || facts.phases?.some((p) => p.possession?.trim())) {
-    rows.push({ id: WA_NODE_TIME, title: 'Possession', description: 'dates and status' });
+  // Total cost only when a unit resolves — landed cost is per-unit arithmetic,
+  // so the row is cut to the buyer's size (or the only size there is).
+  if (bhk && bhkMatchedUnit(units, bhk)) {
+    info.push({
+      facet: 'total',
+      row: { id: WA_MONEY_TOTAL, title: clip(`Total cost — ${bhk}`, 24), description: 'all charges counted in' },
+    });
+  } else if (units.length === 1) {
+    info.push({
+      facet: 'total',
+      row: { id: WA_MONEY_TOTAL, title: 'All-in cost', description: 'all charges counted in' },
+    });
   }
-  // Returns rides only when the yield IS on the record — an investment product
-  // speaks it; a family apartment never volunteers it.
-  if (hasReturnsData(facts.marketIntel, facts.investment)) {
-    rows.push({ id: WA_NODE_LATER, title: 'Returns', description: 'yield, appreciation, exit' });
+  if (facts?.mediaKinds?.includes('payment_plan')) {
+    info.push({
+      facet: 'plan',
+      row: { id: WA_MONEY_PLAN, title: 'Payment plan', description: 'the schedule, stage by stage' },
+    });
   }
-  rows.push({ id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' });
-  return rows;
+  if (units.length > 0) {
+    info.push({
+      facet: 'emi',
+      row: { id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' },
+    });
+  }
+  // The size question, while it is still open — consumed by the answer, not by
+  // the seen ledger: once bhk lands the gate itself closes.
+  if (!bhk && units.length >= 2 && !lead.length) {
+    const kinds = [...new Set(units.map((u) => u.unitType.trim()).filter(Boolean))].slice(0, 4);
+    info.push({
+      row: {
+        id: WA_CONSOLE_SIZES,
+        title: 'Sizes & options',
+        ...(kinds.length ? { description: clip(kinds.join(' · '), 72) } : {}),
+      },
+    });
+  }
+  if (facts) {
+    const trust = [
+      facts.reraNumber?.trim() || facts.phases?.some((p) => p.reraNumber?.trim()) ? 'RERA' : '',
+      facts.khata?.trim() ? 'khata & title' : '',
+      facts.ecStatus?.trim() ? 'EC' : '',
+    ].filter(Boolean);
+    if (trust.length) {
+      info.push({
+        facet: 'trust',
+        row: { id: WA_NODE_TRUST, title: 'Trust & legal', description: clip(trust.join(' · '), 72) },
+      });
+    }
+    if (locationHasData(facts.location)) {
+      const bits = [
+        facts.location?.schools?.length ? 'schools' : '',
+        facts.location?.hospitals?.length ? 'hospitals' : '',
+        'commute',
+      ].filter(Boolean);
+      info.push({
+        facet: 'place',
+        row: { id: WA_NODE_PLACE, title: 'Location', description: clip(bits.join(' · '), 72) },
+      });
+    }
+    if (facts.amenities?.length) {
+      info.push({
+        facet: 'life',
+        row: {
+          id: WA_NODE_LIFE,
+          title: 'Amenities',
+          description: clip(facts.amenities.slice(0, 3).join(', '), 72),
+        },
+      });
+    }
+    if (facts.possession?.trim() || facts.phases?.some((p) => p.possession?.trim())) {
+      info.push({
+        facet: 'time',
+        row: { id: WA_NODE_TIME, title: 'Possession', description: 'dates and status' },
+      });
+    }
+    // Returns rides only when the yield IS on the record — an investment
+    // product speaks it; a family apartment never volunteers it.
+    if (hasReturnsData(facts.marketIntel, facts.investment)) {
+      info.push({
+        facet: 'later',
+        row: { id: WA_NODE_LATER, title: 'Returns', description: 'yield, appreciation, exit' },
+      });
+    }
+  }
+
+  const unseen = info.filter((e) => !e.facet || !seen.has(e.facet));
+  // 8 info slots + the two standing doors = Meta's 10. Overflow drops from the
+  // tail, so Returns goes first — deterministic, never a shuffled menu.
+  const rows: WaListRow[] = [
+    ...[...lead, ...unseen.map((e) => e.row)].slice(0, 8),
+    { id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' },
+    { id: WA_MENU_PROJECTS, title: 'Switch project' },
+  ];
+  return { rows, infoCount: lead.length + unseen.length };
 }
 
 function clip(s: string, n: number): string {
@@ -424,19 +546,11 @@ function projectRows(
   }));
 }
 
-function jobButtons(
-  singleProject: boolean,
-  nodeMenuId?: string,
-): Array<{ id: string; title: string }> {
-  // When the focused project's record backs a node menu, the third slot opens
-  // it — Projects and Brochure move inside (way back / brochure rows). When
-  // the record isn't in hand this turn, the slot stays what it was: a More
-  // that opens onto nothing is the dishonest affordance this layer bans.
-  const escape = nodeMenuId
-    ? { id: nodeMenuId, title: 'More' }
-    : singleProject
-      ? { id: 'answer_media', title: 'Brochure' }
-      : { id: WA_MENU_PROJECTS, title: 'Projects' };
+function jobButtons(singleProject: boolean): Array<{ id: string; title: string }> {
+  // Unfocused answers only — every focused turn gets the console list instead.
+  const escape = singleProject
+    ? { id: 'answer_media', title: 'Brochure' }
+    : { id: WA_MENU_PROJECTS, title: 'Projects' };
   return [
     // "Price / EMI" promised two things and delivered one. A label names ONE
     // job, and this one opens the money menu — where EMI is a row of its own.
@@ -447,20 +561,20 @@ function jobButtons(
 }
 
 /**
- * The money menu, cut from the project's own configs. A buyer who taps Price
- * wants one of a small, knowable set of things — and which of them we can
- * actually answer depends on what the book holds for THIS project, so the rows
- * are derived, never a fixed list pasted onto every project.
+ * The size ladder for a commit with no size known — the project's own configs,
+ * price-free: a console row never prints a ₹ figure, the tapped answer does.
  */
-function moneyRows(units: WaPackInput['focusUnits']): WaListRow[] {
-  const rows: WaListRow[] = [{ id: WA_MONEY_TOTAL, title: 'Total price', description: 'the headline number' }];
+function waConfigLadderRows(
+  units: ReadonlyArray<{ unitType: string; priceDisplay?: string; sizeDisplay?: string }>,
+): WaListRow[] {
+  const rows: WaListRow[] = [];
   // Two configs can share a BHK count ("2 BHK" and "2 BHK Comfort"), so the
   // count alone is not an identity. WhatsApp rejects a list whose row ids
   // collide — and rejects it silently, taking the answer down with it.
-  const taken = new Set<string>(rows.map((r) => r.id));
-  // 7 configs is the most that still leaves room for the jobs and the way back
-  // inside Meta's 10-row ceiling — and the pick list promises this same count.
-  for (const u of (units ?? []).slice(0, WA_MAX_CONFIG_ROWS)) {
+  const taken = new Set<string>();
+  // 7 configs is the most that still leaves room for the standing doors inside
+  // Meta's 10-row ceiling — and the pick list promises this same count.
+  for (const u of units.slice(0, WA_MAX_CONFIG_ROWS)) {
     const bhk = /(\d+)\s*BHK/i.exec(u.unitType)?.[1];
     if (!bhk) continue;
     let id = `${WA_MONEY_BHK_PREFIX}${bhk}`;
@@ -473,10 +587,9 @@ function moneyRows(units: WaPackInput['focusUnits']): WaListRow[] {
     rows.push({
       id,
       title: clip(u.unitType, 24),
-      description: clip([u.sizeDisplay, u.priceDisplay].filter(Boolean).join(' · '), 72) || undefined,
+      ...(u.sizeDisplay?.trim() ? { description: clip(u.sizeDisplay, 72) } : {}),
     });
   }
-  rows.push({ id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' });
   return rows;
 }
 
@@ -493,6 +606,8 @@ function stampProject(rows: readonly WaListRow[], projectId?: string): WaListRow
   const stampable = (id: string) =>
     id === WA_MONEY_TOTAL ||
     id === WA_MONEY_EMI ||
+    id === WA_MONEY_PLAN ||
+    id === WA_CONSOLE_SIZES ||
     id.startsWith(WA_MONEY_BHK_PREFIX) ||
     // Node rows outlive the state that drew them the same way money rows do —
     // a "Trust & legal" tap from last night's card must answer THAT project.
@@ -693,145 +808,35 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
     };
   }
 
-  // Money answer → the money menu, so the next question is one tap and the
-  // rows say which of them this project can actually answer.
-  if (goal.kind === 'answer' && (goal.topic === 'price' || goal.topic === 'emi') && focus) {
-    // Never re-offer the row we just answered — that is what made the visit
-    // chrome loop forever, and it reads as "the bot didn't hear me".
-    const justAnswered = goal.topic === 'emi' ? WA_MONEY_EMI : WA_MONEY_TOTAL;
-    // The buyer already named a size (brief tap or typed): the size question is
-    // ANSWERED. Re-offering the ladder reads as "the bot didn't hear me" — the
-    // rows move on to what they haven't learned yet: EMI, then the nodes.
-    if (state.constraints?.bhk?.trim()) {
-      const next: WaListRow[] = [
-        ...(justAnswered !== WA_MONEY_EMI
-          ? [{ id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' }]
-          : [{ id: WA_MONEY_TOTAL, title: 'Total price', description: 'the headline number' }]),
-        ...waNodeRows(input.focusFacts),
-      ];
-      if (!next.some((r) => r.id === 'visit_book')) {
-        next.push({ id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' });
-      }
-      return {
-        kind: 'list',
-        button: 'What next',
-        sections: [
-          {
-            title: clip(focus.projectName ?? 'This project', 24),
-            rows: withWayBack(stampProject(next, focus.projectId)),
-          },
-        ],
-      };
-    }
-    const rows = stampProject(
-      moneyRows(input.focusUnits).filter((r) => r.id !== justAnswered),
-      focus.projectId,
-    );
-    if (rows.length > 1) {
-      return {
-        kind: 'list',
-        button: 'Money',
-        // 24 is the whole section title, not the name inside it — "Costs — "
-        // costs 8 of it, so a long name has to be clipped against the total.
-        sections: [{ title: clip(`Costs — ${focus.projectName ?? 'this project'}`, 24), rows: withWayBack(rows) }],
-      };
-    }
-  }
-
-  // Overview on a focused project → the node menu: "what do you want to
-  // check?", cut from what THIS project's record actually holds. This is the
-  // card's tap menu — Money rides the buttons everywhere, so the list carries
-  // the nodes money doesn't cover.
-  if (goal.kind === 'answer' && goal.topic === 'overview' && focus) {
-    const nodeRows = waNodeRows(input.focusFacts);
-    // More than the visit row alone — a menu of one job is not a menu.
-    if (nodeRows.length > 1) {
-      return {
-        kind: 'list',
-        button: 'What to check',
-        sections: [
-          {
-            title: clip(focus.projectName ?? 'This project', 24),
-            rows: withWayBack(stampProject(nodeRows, focus.projectId)),
-          },
-        ],
-      };
-    }
-  }
-
-  // Project pick with the size ALREADY known (brief tap or typed): the card
-  // never re-asks it. Rows go to the money answers for that size and the nodes
-  // the record can back — the mock's "next steps", not a second size ladder.
-  if (goal.kind === 'commit' && focus && state.constraints?.bhk?.trim()) {
-    const rows: WaListRow[] = [
-      {
-        id: WA_MONEY_TOTAL,
-        title: clip(`Price — ${state.constraints.bhk}`, 24),
-        description: 'the headline number',
-      },
-      { id: WA_MONEY_EMI, title: 'Monthly EMI', description: 'what it costs per month' },
-      ...waNodeRows(input.focusFacts),
-    ];
-    if (!rows.some((r) => r.id === 'visit_book')) {
-      rows.push({ id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' });
-    }
-    if (rows.length > 3) {
-      return {
-        kind: 'list',
-        button: 'What next',
-        sections: [
-          {
-            title: clip(focus.projectName ?? 'This project', 24),
-            rows: withWayBack(stampProject(rows, focus.projectId)),
-          },
-        ],
-      };
-    }
-  }
-
-  // Project pick → that project's OWN sizes. The book design's step 2 ("Tap
-  // Cornerstone → list BHK"), with one change: the two jobs ride the same list,
-  // so choosing a size is an option and never a toll gate on the way to price.
-  if (goal.kind === 'commit' && focus && !state.constraints?.bhk?.trim()) {
-    const configs = moneyRows(input.focusUnits).filter(
-      (r) => r.id !== WA_MONEY_TOTAL && r.id !== WA_MONEY_EMI,
-    );
-    if (configs.length >= 2) {
-      // The More row costs one config slot (6 + price + more + visit + way
-      // back = Meta's 10). The 7th config stays reachable via the money menu.
-      const rows: WaListRow[] = [
-        ...stampProject(configs.slice(0, WA_MAX_CONFIG_ROWS - 1), focus.projectId),
-        ...stampProject(
-          [
-            { id: WA_MONEY_TOTAL, title: 'Price for all sizes', description: 'the headline number' },
-            {
-              id: WA_MENU_NODE,
-              title: 'More about this project',
-              description: 'legal, location, possession…',
-            },
-          ],
-          focus.projectId,
-        ),
-        { id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' },
-      ];
-      return {
-        kind: 'list',
-        button: 'Pick a size',
-        sections: [{ title: clip(focus.projectName ?? 'This project', 24), rows: withWayBack(rows) }],
-      };
-    }
-  }
-
-  if (focus || handoffAnswer || goal.kind === 'answer' || goal.kind === 'commit' || goal.kind === 'shortlist_answer') {
-    // ≥2 rows beyond the visit row — a menu the record can actually fill.
-    const nodeMenuBacked = focus && waNodeRows(input.focusFacts).length > 2;
+  // THE console — every focused turn past the visit chrome gets ONE menu:
+  // "{name} — what to check". Four branch-grown menus ("Costs —", "What next",
+  // "Pick a size", the node list) drifted apart here; now one builder gates
+  // every row on the record and drops what the seen ledger says was delivered.
+  if (focus) {
+    const units = input.focusUnits ?? input.focusFacts?.configurations ?? [];
+    const bhk = state.constraints?.bhk?.trim() || undefined;
+    // A pick with the size still open leads with the project's OWN sizes — the
+    // book design's step 2, price-free, never a toll gate on the way to money.
+    const leadRows =
+      goal.kind === 'commit' && !bhk && units.length >= 2 ? waConfigLadderRows(units) : [];
+    const { rows } = waConsoleRows({
+      facts: input.focusFacts,
+      units,
+      ...(bhk ? { bhk } : {}),
+      seen: projectSeenFacets(state, focus.projectId),
+      leadRows,
+    });
     return {
-      kind: 'buttons',
-      buttons: jobButtons(
-        singleProject || bag.length <= 1,
-        nodeMenuBacked ? `${WA_MENU_NODE}${WA_PROJECT_STAMP}${focus.projectId}` : undefined,
-      ),
+      kind: 'list',
+      button: 'More',
+      sections: [
+        { title: waConsoleTitle(focus.projectName), rows: stampProject(rows, focus.projectId) },
+      ],
     };
+  }
+
+  if (handoffAnswer || goal.kind === 'answer' || goal.kind === 'commit' || goal.kind === 'shortlist_answer') {
+    return { kind: 'buttons', buttons: jobButtons(singleProject || bag.length <= 1) };
   }
 
   if (bag.length > 0) {
@@ -1041,6 +1046,30 @@ export function applyWaInteractiveExtract(
       speechAct: 'answer',
       askTopic: 'emi',
       askTopics: ['emi'],
+      transition: 'want_details',
+      isQuestion: false,
+    };
+  }
+  // Payment plan is a document send — the mirror of answer_media, with the
+  // asset kind naming which document the row promised.
+  if (aid === WA_MONEY_PLAN) {
+    return {
+      ...extracted,
+      speechAct: 'answer',
+      askTopic: 'media',
+      askTopics: ['media'],
+      mediaAssetKind: 'payment_plan',
+      transition: 'want_details',
+      isQuestion: false,
+    };
+  }
+  // The size row asks what's available — an availability answer, never a search.
+  if (aid === WA_CONSOLE_SIZES) {
+    return {
+      ...extracted,
+      speechAct: 'answer',
+      askTopic: 'availability',
+      askTopics: ['availability'],
       transition: 'want_details',
       isQuestion: false,
     };
