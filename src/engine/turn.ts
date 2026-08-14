@@ -25,12 +25,21 @@ import {
   isWaBriefActionId,
   packWhatsAppInteractive,
   packedToSuggestedActions,
+  splitProjectStamp,
   syncWaBriefFromGoal,
   waCanonicalUtterance,
+  waConsoleRows,
   waListPickKeepsCommit,
+  WA_MENU_NODE,
   WA_MENU_PROJECTS,
   WA_MENU_SEE,
   WA_MENU_KNOW,
+  WA_MONEY_TOTAL,
+  WA_NODE_LATER,
+  WA_NODE_LIFE,
+  WA_NODE_PLACE,
+  WA_NODE_TIME,
+  WA_NODE_TRUST,
   type WaPacked,
 } from '../channel/wa-pack.js';
 import { waConsoleCardReply, waConsoleNodeReply } from '../channel/wa-console.js';
@@ -41,7 +50,15 @@ import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
 import { searchLocalityWiden } from './locality-widen.js';
-import { currentShortlist, discussedList, discourseEntities, popFocus } from './entity-store.js';
+import {
+  currentShortlist,
+  discussedList,
+  discourseEntities,
+  markFacetSeen,
+  popFocus,
+  projectSeenFacets,
+  type SeenFacet,
+} from './entity-store.js';
 import {
   collapseCoverageMarkets,
   coverageCityCoverBit,
@@ -2524,7 +2541,9 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // A project pick opens that project's OWN sizes — the sub-option step in the
   // book design. Copy and chrome are decided from the same configs, fetched
   // before compose so the sentence can never promise rows the pack won't send.
-  let pickSizeUnits: Array<{ unitType: string; priceDisplay: string; sizeDisplay?: string }> | undefined;
+  let pickSizeUnits:
+    | Array<{ unitType: string; priceDisplay: string; priceMinInr: number; sizeDisplay?: string }>
+    | undefined;
   // The goal carries the picked id — state.focus is only committed later in
   // the turn, so reading focus here saw the PREVIOUS project (or none at all).
   const pickedProjectId =
@@ -2922,8 +2941,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // Console voice — a node tap's screen is authored from the same record the
   // honest menu gate read. Compose's closers, leftovers and config dumps never
   // ride a tap; free text keeps the engine's reply untouched.
+  /** The committed project's record, resolved for the card AND the pack site. */
+  let commitDetail: ProjectDetail | undefined;
+  let renderedCommitCard = false;
+  let authoredNode: string | undefined;
   if (skipBrief) {
-    const authoredNode = waConsoleNodeReply(input.action_id, goal, evidence.detail);
+    authoredNode = waConsoleNodeReply(input.action_id, goal, evidence.detail);
     if (authoredNode) reply = authoredNode;
     // The book screen — "See everything" / "Back to projects" opens the list,
     // and the words describe the book, not whatever goal the engine landed on.
@@ -2934,29 +2957,59 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // The project card. With a size already given, it states the buyer's fit —
     // the size is CONSUMED, spoken back as this project's answer. Without one,
     // it is the mock's card: one labelled line per node the record can back.
-    if (goal.kind === 'commit' && state.focus?.projectId) {
-      const pid = state.focus.projectId;
-      if (state.constraints?.bhk?.trim()) {
-        const units = pickSizeUnits?.length
+    // Gate on the GOAL's project: state.focus is only committed later in the
+    // turn, so reading it here missed the first pick every time (founder walk,
+    // 14 Aug — the pick answered in the old voice with a bare Price button).
+    if (goal.kind === 'commit' && goal.projectId) {
+      const pid = goal.projectId;
+      const name = goal.projectName ?? state.focus?.projectName ?? 'This project';
+      // A plain list-pick deliberately fetches no overview — resolve the record
+      // anyway (evidence → cache → one hydrate) so the card and the console
+      // menu are cut from what the project actually holds, not from silence.
+      commitDetail =
+        evidence.detail && evidence.detail.projectId === pid
+          ? evidence.detail
+          : state.projectCache?.[pid]?.projectId === pid
+            ? state.projectCache[pid]
+            : ((await hydrateProjectDetail(deps, state, pid).catch(() => null))?.detail ??
+              undefined);
+      // One config list for the card, the fit lines AND the console menu. An
+      // overview-fetched detail carries no configurations — graft them on so
+      // the cached record keeps feeding money rows on every later turn.
+      const commitUnits = commitDetail?.configurations?.length
+        ? commitDetail.configurations
+        : pickSizeUnits?.length
           ? pickSizeUnits
           : await deps.data.listUnits(pid).catch(() => []);
+      if (commitDetail && !commitDetail.configurations?.length && commitUnits.length) {
+        commitDetail = {
+          ...commitDetail,
+          configurations: commitUnits.map((u) => ({
+            unitType: u.unitType,
+            priceDisplay: u.priceDisplay,
+            priceMinInr: u.priceMinInr,
+            ...(u.sizeDisplay ? { sizeDisplay: u.sizeDisplay } : {}),
+          })),
+        };
+      }
+      if (state.constraints?.bhk?.trim()) {
         const wanted = /(\d+)/.exec(state.constraints.bhk)?.[1];
         const fit = wanted
-          ? units.filter((u) => new RegExp(`\\b${wanted}\\s*BHK`, 'i').test(u.unitType))
+          ? commitUnits.filter((u) => new RegExp(`\\b${wanted}\\s*BHK`, 'i').test(u.unitType))
           : [];
         if (fit.length) {
           const lines = fit
             .slice(0, 3)
             .map((u) => `• ${[u.unitType, u.sizeDisplay, u.priceDisplay].filter(Boolean).join(' · ')}`);
-          reply = `*${state.focus.projectName ?? 'This project'}* — your fit:\n${lines.join('\n')}\n\nPrice, EMI, the project file — or a visit?`;
+          reply = `*${name}* — your fit:\n${lines.join('\n')}\n\nWhat do you want to check?`;
+          renderedCommitCard = true;
         }
       } else {
-        const cardDetail =
-          evidence.detail && evidence.detail.projectId === pid
-            ? evidence.detail
-            : state.projectCache?.[pid];
-        const card = cardDetail ? waConsoleCardReply(cardDetail, pickSizeUnits) : undefined;
-        if (card) reply = card;
+        const card = commitDetail ? waConsoleCardReply(commitDetail, pickSizeUnits) : undefined;
+        if (card) {
+          reply = card;
+          renderedCommitCard = true;
+        }
       }
     }
   }
@@ -2984,6 +3037,95 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       ...state,
       visit: { ...state.visit, awaitingConfirm: false },
     };
+  }
+  // The commit's resolved record is durable project truth — cache it so the
+  // very next turn's menu and screens read it for free (answer turns get the
+  // same treatment below; commit was the gap that left focusFacts cold).
+  if (skipBrief && commitDetail && goal.kind === 'commit' && goal.projectId === commitDetail.projectId) {
+    const { faqs: _questionScoped, ...rawDurable } = commitDetail;
+    state = {
+      ...state,
+      projectCache: {
+        ...(state.projectCache ?? {}),
+        [commitDetail.projectId]: promoteDurableProjectDetail(rawDurable),
+      },
+    };
+  }
+  // The seen ledger — mark ONLY what this turn actually DELIVERED (never a
+  // miss), then let this same turn's menu drop it. Ordering is load-bearing:
+  // after applyGoalToState (the entity exists), before the reply is remembered
+  // and packed — so no one-turn special case exists anywhere.
+  if (skipBrief) {
+    const goalPid =
+      goal.kind === 'commit' || goal.kind === 'answer' ? goal.projectId : undefined;
+    const seenPid = goalPid ?? state.focus?.projectId;
+    if (seenPid) {
+      if (renderedCommitCard) state = markFacetSeen(state, seenPid, 'card');
+      if (authoredNode && input.action_id) {
+        const facetByNode: Record<string, SeenFacet> = {
+          [WA_NODE_TRUST]: 'trust',
+          [WA_NODE_PLACE]: 'place',
+          [WA_NODE_LIFE]: 'life',
+          [WA_NODE_TIME]: 'time',
+          [WA_NODE_LATER]: 'later',
+          [WA_MENU_NODE]: 'card',
+        };
+        const facet = facetByNode[splitProjectStamp(input.action_id.trim()).aid];
+        if (facet) state = markFacetSeen(state, seenPid, facet);
+      }
+      if (goal.kind === 'answer' && goal.topic === 'price') {
+        // 'total' means the all-in number was DELIVERED — a headline price is
+        // not it, unless the buyer tapped Total cost and pricing is all we had.
+        const tappedTotal =
+          !!input.action_id &&
+          splitProjectStamp(input.action_id.trim()).aid === WA_MONEY_TOTAL;
+        if (evidence.landedCost || (tappedTotal && evidence.pricing)) {
+          state = markFacetSeen(state, seenPid, 'total');
+        }
+      }
+      if (goal.kind === 'answer' && goal.topic === 'emi' && evidence.emi) {
+        state = markFacetSeen(state, seenPid, 'emi');
+      }
+      if (evidence.media?.allowed) {
+        const sentKind = normalizeMediaAssetKind(evidence.media.assetKind);
+        if (sentKind === 'brochure') state = markFacetSeen(state, seenPid, 'brochure');
+        if (sentKind === 'payment_plan') state = markFacetSeen(state, seenPid, 'plan');
+      }
+      // All seen → say so instead of drawing an empty file — the mock's ending.
+      // Mirrors the pack site's inputs; ≥2 seen facets keeps a bare stub record
+      // from claiming a tour that never happened.
+      const seenNow = projectSeenFacets(state, seenPid);
+      if (seenNow.length >= 2) {
+        const facts =
+          commitDetail?.projectId === seenPid
+            ? commitDetail
+            : evidence.detail?.projectId === seenPid
+              ? evidence.detail
+              : state.projectCache?.[seenPid];
+        const unitsNow =
+          (evidence.units?.length ? evidence.units : undefined) ??
+          (pickSizeUnits?.length ? pickSizeUnits : undefined) ??
+          facts?.configurations ??
+          [];
+        const { infoCount } = waConsoleRows({
+          ...(facts ? { facts } : {}),
+          units: unitsNow,
+          ...(state.constraints?.bhk?.trim() ? { bhk: state.constraints.bhk.trim() } : {}),
+          seen: seenNow,
+        });
+        const doneLine = 'the full file on';
+        if (
+          infoCount === 0 &&
+          facts &&
+          !reply.includes(doneLine) &&
+          !(state.lastReply ?? '').includes(doneLine)
+        ) {
+          const name =
+            state.focus?.projectId === seenPid ? state.focus.projectName : undefined;
+          reply = `${reply.trim()}\n\nYou've been through the full file on *${name ?? 'this one'}* — want me to set up a visit?`;
+        }
+      }
+    }
   }
   // W3 — remember the outbound line for the repeat guard, and its fingerprint
   // for the wider window.
@@ -3317,12 +3459,16 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       // menu must still know what the project holds.
       ...(() => {
         const pid = state.focus?.projectId;
+        // The commit block's resolved record wins — it is the record the card
+        // spoke from, so the menu is gated on exactly what the reply said.
         const facts =
-          evidence.detail && pid && evidence.detail.projectId === pid
-            ? evidence.detail
-            : pid
-              ? state.projectCache?.[pid]
-              : undefined;
+          commitDetail && pid && commitDetail.projectId === pid
+            ? commitDetail
+            : evidence.detail && pid && evidence.detail.projectId === pid
+              ? evidence.detail
+              : pid
+                ? state.projectCache?.[pid]
+                : undefined;
         return facts ? { focusFacts: facts } : {};
       })(),
       bookOpen: input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE,
@@ -4687,7 +4833,10 @@ async function gatherPriceEvidencePatch(args: {
   const rateAsk = required.includes('price_per_sqft');
   const areaAsk = required.includes('carpet_area') || required.includes('built_up_area');
   let units: UnitConfig[] = [];
-  if ((statutoryAsk && !unitType) || rateAsk || areaAsk) {
+  // A pure breakdown ask with no size named still needs a unit — landed cost
+  // is per-unit arithmetic, so fetch the configs and price the entry one.
+  // Without this, "what's the all-in cost" could never reach the cost sheet.
+  if (((statutoryAsk || breakdownAsk) && !unitType) || rateAsk || areaAsk) {
     units = await deps.data.listUnits(projectId).catch(() => []);
     if (areaAsk && units.length) {
       evidence = {

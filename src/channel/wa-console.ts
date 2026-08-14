@@ -97,21 +97,46 @@ function timeScreen(d: ProjectDetail): string | undefined {
   ]);
 }
 
+function rentInr(v: number): string {
+  if (v >= 1_00_000) return `₹${(v / 1_00_000).toFixed(1).replace(/\.0$/, '')} L`;
+  return `₹${Math.round(v / 1_000)}k`;
+}
+
+/**
+ * Returns — reads EXACTLY the fields hasReturnsData gates on (wa-pack.ts), so
+ * a drawn Returns row can never open onto an empty screen. The old version
+ * duck-typed keys (`rentalYield`, `appreciationSummary`…) that the real
+ * ProjectMarketIntel/ProjectInvestment shapes never carried.
+ */
 function laterScreen(d: ProjectDetail): string | undefined {
-  const inv = d.investment as Record<string, unknown> | undefined;
-  const intel = d.marketIntel as Record<string, unknown> | undefined;
-  const pick = (o: Record<string, unknown> | undefined, keys: string[]): string[] =>
-    o
-      ? keys
-          .filter((k) => typeof o[k] === 'string' && (o[k] as string).trim())
-          .map((k) => (o[k] as string).trim())
-      : [];
-  const bits = [
-    ...pick(intel, ['rentalYield', 'yield', 'appreciation', 'appreciationSummary', 'drivers']),
-    ...pick(inv, ['rentalYield', 'expectedYield', 'operator', 'model', 'summary']),
-  ];
-  if (!bits.length) return undefined;
-  return `*${d.name} — returns*\n${bits.slice(0, 4).join('\n')}`;
+  const intel = d.marketIntel;
+  const inv = d.investment;
+  const lines: Array<string | undefined> = [];
+  if (intel?.appreciation3yrPct !== undefined) {
+    lines.push(`*Appreciation:* +${intel.appreciation3yrPct}% over 3 yrs${intel.appreciation5yrPct !== undefined ? ` · +${intel.appreciation5yrPct}% over 5 yrs` : ''}`);
+  } else if (intel?.appreciation5yrPct !== undefined) {
+    lines.push(`*Appreciation:* +${intel.appreciation5yrPct}% over 5 yrs`);
+  }
+  if (intel?.corridorMaturity?.trim()) lines.push(`*Corridor:* ${intel.corridorMaturity.trim()}`);
+  for (const band of (intel?.rentBands ?? []).slice(0, 2)) {
+    const range = [band.rentMinInr, band.rentMaxInr]
+      .filter((v): v is number => typeof v === 'number' && v > 0)
+      .map(rentInr);
+    if (range.length) {
+      lines.push(`*Rent${band.unitType ? ` (${band.unitType})` : ''}:* ${range.join('–')}/month`);
+    }
+  }
+  for (const drv of (intel?.drivers ?? []).slice(0, 2)) {
+    if (drv.event?.trim()) lines.push(`• ${drv.event.trim()}${drv.date ? ` (${drv.date})` : ''}`);
+  }
+  if (inv?.expectedRoi?.trim()) lines.push(`*Expected ROI:* ${inv.expectedRoi.trim()}`);
+  if (inv?.revenueModel?.trim()) lines.push(`*Model:* ${inv.revenueModel.trim()}`);
+  if (inv?.operatorBrand?.trim()) lines.push(`*Operator:* ${inv.operatorBrand.trim()}`);
+  if (inv?.guaranteedPayment?.trim()) lines.push(`*Guaranteed:* ${inv.guaranteedPayment.trim()}`);
+  const body = lines.filter(Boolean).slice(0, 5);
+  if (!body.length) return undefined;
+  const tag = intel?.provenanceLabel?.trim() ? `\n_${intel.provenanceLabel.trim()}_` : '';
+  return `*${d.name} — returns*\n${body.join('\n')}${tag}`;
 }
 
 /**

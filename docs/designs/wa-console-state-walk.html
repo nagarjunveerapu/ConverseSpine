@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WA console — the state-driven walk (post-fix)</title>
+<style>
+  :root {
+    --bg: #0b141a;          /* WhatsApp dark canvas */
+    --panel: #111b21;
+    --bot: #202c33;         /* incoming bubble */
+    --buyer: #005c4b;       /* outgoing bubble */
+    --ink: #e9edef;
+    --ink-dim: #8696a0;
+    --accent: #00a884;
+    --sheet: #182229;
+    --line: #2a3942;
+    --dead: #f15c6d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 32px 16px 64px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; display: grid; gap: 28px; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header p { color: var(--ink-dim); margin-top: 6px; max-width: 60ch; }
+  header .law { color: var(--accent); font-size: 13px; margin-top: 10px; letter-spacing: .02em; }
+  .turn { display: grid; gap: 10px; }
+  .t-label {
+    color: var(--ink-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+  .bubble { max-width: 78%; padding: 9px 12px; border-radius: 8px; white-space: pre-wrap; }
+  .buyer { background: var(--buyer); justify-self: end; border-top-right-radius: 2px; }
+  .bot   { background: var(--bot);   justify-self: start; border-top-left-radius: 2px; }
+  .bubble b { font-weight: 600; }
+  .tap { font-size: 12px; color: var(--ink-dim); justify-self: end; }
+  .sheet {
+    justify-self: start; width: min(340px, 90%);
+    background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  }
+  .sheet .s-title {
+    padding: 9px 12px; font-size: 13px; color: var(--accent); font-weight: 600;
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet .row { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .sheet .row:last-child { border-bottom: 0; }
+  .sheet .row .r-t { font-size: 14px; }
+  .sheet .row .r-d { font-size: 12px; color: var(--ink-dim); }
+  .sheet .s-btn {
+    padding: 9px 12px; text-align: center; color: var(--accent); font-weight: 600; font-size: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .note { font-size: 13px; color: var(--ink-dim); max-width: 62ch; }
+  .note b { color: var(--ink); font-weight: 600; }
+  .note .gone { color: var(--dead); }
+  .note .kept { color: var(--accent); }
+  footer { color: var(--ink-dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>WA buyer console — the state-driven walk</h1>
+  <p>The founder's 14-Aug walk, replayed against the shipped state mechanics: one console
+     menu, money rows that mean money, and rows that stop being offered once delivered.
+     Every bot line below is asserted verbatim in <code>tests/wa-buyer-console-live.test.ts</code>.</p>
+  <div class="law">A row is drawn only when its data exists · a delivered row is not offered again · descriptions carry no ₹</div>
+</header>
+
+<section class="turn">
+  <div class="t-label">Turns 1–4 · the brief (unchanged)</div>
+  <div class="bubble buyer">Hi</div>
+  <div class="bubble bot">Welcome — three doors: <b>✨ Help me choose</b> · <b>See everything</b> · <b>I know the project</b></div>
+  <div class="tap">taps ✨ Help me choose → 2 BHK → Under ₹1 Cr</div>
+  <div class="bubble bot">Board: Brigade Cornerstone (₹45 L) · Brigade Eldorado (₹57.5 L) · … — pick rows, as before.</div>
+</section>
+
+<section class="turn">
+  <div class="t-label">Turn 5 · the pick — where the old build broke</div>
+  <div class="tap">taps Brigade Cornerstone</div>
+  <div class="bubble bot"><b>Brigade Cornerstone</b> — your fit:
+• 2 BHK · 720-1259 sqft · ₹45L—₹77L
+
+What do you want to check?</div>
+  <div class="sheet">
+    <div class="s-title">What to check</div>
+    <div class="row"><div class="r-t">Total cost — 2 BHK</div><div class="r-d">all charges counted in</div></div>
+    <div class="row"><div class="r-t">Monthly EMI</div><div class="r-d">what it costs per month</div></div>
+    <div class="row"><div class="r-t">Trust &amp; legal</div><div class="r-d">RERA · khata &amp; title</div></div>
+    <div class="row"><div class="r-t">Location</div><div class="r-d">commute</div></div>
+    <div class="row"><div class="r-t">Possession</div><div class="r-d">dates and status</div></div>
+    <div class="row"><div class="r-t">Book a visit</div><div class="r-d">pick a day and a time</div></div>
+    <div class="row"><div class="r-t">Switch project</div></div>
+    <div class="s-btn">More</div>
+  </div>
+  <p class="note"><span class="gone">Gone:</span> the old-voice line ("Price, a visit, or ask me anything"),
+     the bare <b>Price</b> button, the size ladder re-ask.
+     <span class="kept">New:</span> the size is <b>consumed</b> — money rows are cut to 2 BHK.</p>
+</section>
+
+<section class="turn">
+  <div class="t-label">Turn 6 · total cost — the tap that used to reprint the board's price</div>
+  <div class="tap">taps Total cost — 2 BHK</div>
+  <div class="bubble bot"><b>Cost breakdown — Brigade Cornerstone (2 BHK):</b> base ₹45 L; Stamp duty 5%; registration; GST — all-in ~₹52 L</div>
+  <div class="sheet">
+    <div class="s-title">What to check</div>
+    <div class="row"><div class="r-t">Monthly EMI</div><div class="r-d">what it costs per month</div></div>
+    <div class="row"><div class="r-t">Trust &amp; legal</div><div class="r-d">RERA · khata &amp; title</div></div>
+    <div class="row"><div class="r-t">Location</div><div class="r-d">commute</div></div>
+    <div class="row"><div class="r-t">Possession</div><div class="r-d">dates and status</div></div>
+    <div class="row"><div class="r-t">Book a visit</div><div class="r-d">pick a day and a time</div></div>
+    <div class="row"><div class="r-t">Switch project</div></div>
+    <div class="s-btn">More</div>
+  </div>
+  <p class="note">The answer is the <b>cost sheet</b>, not the board's price again — and the
+     <b>Total cost</b> row has already left the menu. Same turn, no special case.</p>
+</section>
+
+<section class="turn">
+  <div class="t-label">Turns 7–9 · the menu keeps shrinking</div>
+  <div class="tap">taps Monthly EMI → Trust &amp; legal → Location</div>
+  <div class="bubble bot">Each tap answers from the record; each answered row drops. The menu is
+the buyer's <b>unread</b> file, never a repeat.</div>
+</section>
+
+<section class="turn">
+  <div class="t-label">Turn 10 · the ending — "you're done"</div>
+  <div class="tap">taps Possession (the last unseen row)</div>
+  <div class="bubble bot"><b>Brigade Cornerstone — possession</b>
+<b>Possession:</b> Dec 2027
+
+You've been through the full file on <b>Brigade Cornerstone</b> — want me to set up a visit?</div>
+  <div class="sheet">
+    <div class="s-title">What to check</div>
+    <div class="row"><div class="r-t">Book a visit</div><div class="r-d">pick a day and a time</div></div>
+    <div class="row"><div class="r-t">Switch project</div></div>
+    <div class="s-btn">More</div>
+  </div>
+  <p class="note">Said once — the closing line never repeats on the next turn. The two standing
+     doors remain; nothing is re-offered.</p>
+</section>
+
+<footer>
+  Shipped on <code>feat/wa-buyer-console</code> (PR #197): seen ledger (entity-store) · honest Returns ·
+  <code>waConsoleRows</code> — one menu · turn wiring (first pick, landed cost, ledger marking).
+  Gate: typecheck + 1,530 tests green.
+</footer>
+
+</div>
+</body>
+</html>

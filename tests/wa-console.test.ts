@@ -49,6 +49,46 @@ describe('the console speaks the tap, nothing else', () => {
     expect(waConsoleNodeReply('wa.node.later@x', { kind: 'answer', topic: 'overview' }, sparse)).toBeUndefined();
   });
 
+  it('returns screen reads the same real intel/investment fields the menu gate does', () => {
+    const invested: ProjectDetail = {
+      projectId: 'est',
+      name: 'Ayana Estates',
+      microMarket: 'Sakleshpur',
+      marketIntel: {
+        displayName: 'Sakleshpur corridor',
+        appreciation3yrPct: 14,
+        rentBands: [{ unitType: '1 BHK Villa', rentMinInr: 25_000, rentMaxInr: 40_000 }],
+        drivers: [{ event: 'New highway interchange', date: '2027' }],
+        provenance: { source: '99acres', asOf: '2026-Q2', confidence: 0.9 },
+        provenanceLabel: '(99acres, 2026-Q2)',
+      },
+      investment: { expectedRoi: '8-12% from year 3', operatorBrand: 'Hosteller' },
+    };
+    const reply = waConsoleNodeReply('wa.node.later@est', { kind: 'answer', topic: 'overview' }, invested)!;
+    expect(reply).toContain('+14% over 3 yrs');
+    expect(reply).toContain('₹25k–₹40k/month');
+    expect(reply).toContain('New highway interchange (2027)');
+    expect(reply).toContain('8-12% from year 3');
+    expect(reply).toContain('_(99acres, 2026-Q2)_');
+  });
+
+  it('a displayName-only intel record renders no returns screen — same bar as the gate', () => {
+    const hollow: ProjectDetail = {
+      projectId: 'h',
+      name: 'H',
+      microMarket: '',
+      marketIntel: {
+        displayName: 'Somewhere corridor',
+        rentBands: [],
+        drivers: [],
+        provenance: { source: 'x', asOf: 'x', confidence: 0.5 },
+        provenanceLabel: '(x)',
+      },
+      investment: {},
+    };
+    expect(waConsoleNodeReply('wa.node.later@h', { kind: 'answer', topic: 'overview' }, hollow)).toBeUndefined();
+  });
+
   it('a stamp for another project never speaks this record', () => {
     expect(
       waConsoleNodeReply('wa.node.trust@brigade-orchards', { kind: 'answer', topic: 'legal' }, DETAIL),
@@ -97,7 +137,7 @@ describe('chips consume what the buyer already said', () => {
     }
   });
 
-  it('price answer without a size keeps the ladder', () => {
+  it('price answer without a size offers the size question as ONE row, not a re-dump', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'answer', topic: 'price', projectId: 'cornerstone' },
       state: focusedState(),
@@ -107,7 +147,10 @@ describe('chips consume what the buyer already said', () => {
     });
     expect(packed.kind).toBe('list');
     if (packed.kind === 'list') {
-      expect(packed.sections[0]!.rows.some((r) => r.id.startsWith('wa.money.bhk.'))).toBe(true);
+      const ids = packed.sections[0]!.rows.map((r) => r.id);
+      expect(ids.some((id) => id.startsWith('wa.money.bhk.'))).toBe(false);
+      expect(ids.some((id) => id.startsWith('wa.console.sizes'))).toBe(true);
+      expect(ids.some((id) => id.startsWith('wa.money.emi'))).toBe(true);
     }
   });
 

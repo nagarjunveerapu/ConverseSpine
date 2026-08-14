@@ -5,7 +5,7 @@ import {
   packWhatsAppInteractive,
   splitProjectStamp,
   waCanonicalUtterance,
-  waNodeRows,
+  waConsoleRows,
   WA_MENU_NODE,
   WA_MENU_PROJECTS,
   WA_MONEY_MENU,
@@ -41,16 +41,16 @@ const FULL_FACTS: WaNodeFacts = {
   possession: 'Jun 2028',
   amenities: ['clubhouse', 'pool', 'gym'],
   location: { connectivitySummary: '15 min from the airport' },
-  investment: { roiNote: '8-12% from year 3' },
+  investment: { expectedRoi: '8-12% from year 3' },
   mediaKinds: ['brochure', 'floor_plan'],
 };
 
 const emptyExtract = (): Extracted => ({ constraints: {} }) as unknown as Extracted;
 
-describe('waNodeRows — the honest node menu', () => {
-  it('draws every node the record can answer, brochure first', () => {
-    const ids = waNodeRows(FULL_FACTS).map((r) => r.id);
-    expect(ids).toEqual([
+describe('waConsoleRows — the honest console menu (node layer)', () => {
+  it('draws every node the record can answer, brochure first, doors last', () => {
+    const { rows, infoCount } = waConsoleRows({ facts: FULL_FACTS });
+    expect(rows.map((r) => r.id)).toEqual([
       'answer_media',
       WA_NODE_TRUST,
       WA_NODE_PLACE,
@@ -58,27 +58,37 @@ describe('waNodeRows — the honest node menu', () => {
       WA_NODE_TIME,
       WA_NODE_LATER,
       'visit_book',
+      WA_MENU_PROJECTS,
     ]);
+    expect(infoCount).toBe(6);
   });
 
   it('a node with nothing behind it is not drawn — no row, no badge', () => {
-    const ids = waNodeRows({
-      projectId: 'p1',
-      possession: 'Dec 2027',
-      // no rera/khata/ec, no amenities, no location, no investment, no media
-    }).map((r) => r.id);
-    expect(ids).toEqual([WA_NODE_TIME, 'visit_book']);
+    const { rows } = waConsoleRows({
+      facts: {
+        projectId: 'p1',
+        possession: 'Dec 2027',
+        // no rera/khata/ec, no amenities, no location, no investment, no media
+      },
+    });
+    expect(rows.map((r) => r.id)).toEqual([WA_NODE_TIME, 'visit_book', WA_MENU_PROJECTS]);
   });
 
-  it('Returns rides only when the yield is on the record', () => {
-    const family = waNodeRows({ projectId: 'p1', possession: 'Dec 2027', khata: 'A-Khata' });
-    expect(family.map((r) => r.id)).not.toContain(WA_NODE_LATER);
-    const estate = waNodeRows({ projectId: 'p2', marketIntel: { yield: '4%' } });
-    expect(estate.map((r) => r.id)).toContain(WA_NODE_LATER);
+  it('Returns rides only when REAL yield fields are on the record', () => {
+    const ids = (facts: WaNodeFacts) => waConsoleRows({ facts }).rows.map((r) => r.id);
+    expect(ids({ projectId: 'p1', possession: 'Dec 2027', khata: 'A-Khata' })).not.toContain(WA_NODE_LATER);
+    // The real ProjectMarketIntel/ProjectInvestment fields draw the row…
+    expect(ids({ projectId: 'p2', marketIntel: { appreciation3yrPct: 12 } })).toContain(WA_NODE_LATER);
+    expect(ids({ projectId: 'p3', investment: { expectedRoi: '4% net' } })).toContain(WA_NODE_LATER);
+    // …an empty or displayName-only intel object does not: the screen reads
+    // the same fields, and it would render nothing (the drawn-row-onto-nothing bug).
+    expect(ids({ projectId: 'p4', marketIntel: {}, investment: {} })).not.toContain(WA_NODE_LATER);
   });
 
-  it('no record, no menu', () => {
-    expect(waNodeRows(undefined)).toEqual([]);
+  it('no record: the standing doors stand, nothing is invented', () => {
+    const { rows, infoCount } = waConsoleRows({});
+    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_MENU_PROJECTS]);
+    expect(infoCount).toBe(0);
   });
 });
 
@@ -145,7 +155,7 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
     }
   });
 
-  it('a focused answer offers More only when the record backs it', () => {
+  it('a focused answer always gets the console list — never a bare Price button', () => {
     const withFacts = packWhatsAppInteractive({
       goal: { kind: 'answer', topic: 'legal', projectId: 'brigade-eldorado' },
       state: focused(),
@@ -153,31 +163,30 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
       singleProject: false,
       focusFacts: FULL_FACTS,
     });
-    expect(withFacts.kind).toBe('buttons');
-    if (withFacts.kind === 'buttons') {
-      expect(withFacts.buttons.map((b) => b.id)).toEqual([
-        WA_MONEY_MENU,
-        'visit_book',
-        `${WA_MENU_NODE}${WA_PROJECT_STAMP}brigade-eldorado`,
-      ]);
-      expect(withFacts.buttons[2]!.title).toBe('More');
+    expect(withFacts.kind).toBe('list');
+    if (withFacts.kind === 'list') {
+      expect(withFacts.button).toBe('More');
+      const aids = withFacts.sections[0]!.rows.map((r) => splitProjectStamp(r.id).aid);
+      expect(aids).toContain(WA_NODE_TRUST);
+      // The founder's flagged row: no WA_MONEY_MENU "Price" door on focused turns.
+      expect(aids).not.toContain(WA_MONEY_MENU);
     }
 
-    // Without the record in hand, the slot stays what it was — a More that
-    // opens onto nothing is the dishonest affordance this layer bans.
+    // A cold record cannot fill the file — the standing doors still stand,
+    // and nothing is invented to dress the menu up.
     const withoutFacts = packWhatsAppInteractive({
       goal: { kind: 'answer', topic: 'legal', projectId: 'brigade-eldorado' },
       state: focused(),
       catalogNames: CATALOG,
       singleProject: false,
     });
-    expect(withoutFacts.kind).toBe('buttons');
-    if (withoutFacts.kind === 'buttons') {
-      expect(withoutFacts.buttons[2]!.id).toBe(WA_MENU_PROJECTS);
+    expect(withoutFacts.kind).toBe('list');
+    if (withoutFacts.kind === 'list') {
+      expect(withoutFacts.sections[0]!.rows.map((r) => r.id)).toEqual(['visit_book', WA_MENU_PROJECTS]);
     }
   });
 
-  it('the project card carries More about this project inside 10 rows', () => {
+  it('a pick with no size leads with the price-free ladder inside 10 rows', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'commit', projectId: 'brigade-eldorado', projectName: 'Brigade Eldorado' },
       state: focused(),
@@ -197,7 +206,14 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
     if (packed.kind === 'list') {
       const rows = packed.sections[0]!.rows;
       expect(rows.length).toBeLessThanOrEqual(10);
-      expect(rows.map((r) => splitProjectStamp(r.id).aid)).toContain(WA_MENU_NODE);
+      const aids = rows.map((r) => splitProjectStamp(r.id).aid);
+      // Variant configs keep unique ids even at the same BHK count.
+      expect(aids).toContain('wa.money.bhk.2');
+      expect(aids).toContain('wa.money.bhk.2.comfort');
+      // No console row ever prints a ₹ figure — the tapped answer does.
+      for (const r of rows) expect(r.description ?? '').not.toContain('₹');
+      expect(rows[rows.length - 2]!.id).toBe('visit_book');
+      expect(rows[rows.length - 1]!.id).toBe(WA_MENU_PROJECTS);
     }
   });
 });

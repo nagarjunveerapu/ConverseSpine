@@ -56,7 +56,7 @@ describe('packWhatsAppInteractive', () => {
     }
   });
 
-  it('focused project packs Price / Visit / Projects — not a size list', () => {
+  it('a focused pick with a cold record keeps the standing doors — never a Price button', () => {
     const s = commitTo(initState('c', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
     const packed = packWhatsAppInteractive({
       goal: { kind: 'commit', projectId: 'brigade-eldorado', projectName: 'Brigade Eldorado' },
@@ -64,15 +64,19 @@ describe('packWhatsAppInteractive', () => {
       catalogNames: CATALOG,
       singleProject: false,
     });
-    expect(packed.kind).toBe('buttons');
-    if (packed.kind === 'buttons') {
-      expect(packed.buttons.map((b) => b.id)).toEqual([WA_MONEY_MENU, 'visit_book', WA_MENU_PROJECTS]);
-      // A label names ONE job. "Price / EMI" promised two and delivered price.
-      expect(packed.buttons[0]!.title).toBe('Price');
+    // One console even when the record is cold: the honest minimum is the two
+    // standing doors — not the old Price/Visit/Projects buttons whose bare
+    // Price row the founder flagged.
+    expect(packed.kind).toBe('list');
+    if (packed.kind === 'list') {
+      expect(packed.button).toBe('More');
+      const ids = packed.sections[0]!.rows.map((r) => r.id);
+      expect(ids).toEqual(['visit_book', WA_MENU_PROJECTS]);
+      expect(ids).not.toContain(WA_MONEY_MENU);
     }
   });
 
-  it('focused price answer with BHK moves on — EMI and visit, never the ladder again', () => {
+  it('focused price answer with BHK moves on — total cost and EMI, never the ladder again', () => {
     let s = commitTo(initState('c', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
     s = { ...s, constraints: { ...s.constraints, bhk: '3 BHK' } };
     const packed = packWhatsAppInteractive({
@@ -80,11 +84,18 @@ describe('packWhatsAppInteractive', () => {
       state: s,
       catalogNames: CATALOG,
       singleProject: false,
+      focusUnits: [
+        { unitType: '2 BHK', priceDisplay: '₹45 L', sizeDisplay: '740-1043 sqft' },
+        { unitType: '3 BHK', priceDisplay: '₹68 L', sizeDisplay: '1300 sqft' },
+      ],
     });
     expect(packed.kind).toBe('list');
     if (packed.kind === 'list') {
-      const ids = packed.sections[0]!.rows.map((r) => r.id);
+      const rows = packed.sections[0]!.rows;
+      const ids = rows.map((r) => r.id);
       expect(ids.some((id) => id.startsWith('wa.money.bhk.'))).toBe(false);
+      const total = rows.find((r) => r.id.startsWith('wa.money.total'));
+      expect(total?.title).toBe('Total cost — 3 BHK');
       expect(ids.some((id) => id.startsWith('wa.money.emi'))).toBe(true);
       expect(ids).toContain('visit_book');
       expect(ids[ids.length - 1]).toBe(WA_MENU_PROJECTS);
@@ -267,7 +278,15 @@ describe('money menu — WhatsApp delivery contract', () => {
   });
 
   it('a variant row still resolves to its BHK when tapped', () => {
-    const packed = moneyMenu();
+    // The ladder rides the size-open pick list now — that's where variants live.
+    const state = commitTo(initState('c', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'commit', projectId: 'brigade-eldorado', projectName: 'Brigade Eldorado' },
+      state,
+      catalogNames: CATALOG,
+      singleProject: false,
+      focusUnits: UNITS,
+    });
     if (packed.kind !== 'list') throw new Error('expected a list');
     const comfort = packed.sections
       .flatMap((s) => s.rows)
