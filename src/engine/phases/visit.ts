@@ -646,7 +646,15 @@ function step(input: {
   let slot = parseVisitSlot(input.text, input.now, slotOpts);
   const dayAnchor = parseDayAnchor(input.text, input.now, effectiveAnchorIso ?? undefined);
   const declined = !slot && !dayAnchor && DECLINE.test(input.text);
-  const askN = (input.prior.askCount ?? 0) + 1;
+  /**
+   * "Book a visit" is a REQUEST to book, not a failed attempt at a date. Tapping
+   * it while a day ask was already open counted as a second wrong answer, so the
+   * buyer who pressed the button got "I could not pin that to a date" — for a
+   * button that contains no date and never could. A fresh request starts the
+   * asking over.
+   */
+  const askedToBook = Boolean(input.wantVisit) && !slot && !dayAnchor;
+  const askN = askedToBook ? 1 : (input.prior.askCount ?? 0) + 1;
   let prefix = declined ? 'No problem — ' : '';
 
   let prior = { ...input.prior };

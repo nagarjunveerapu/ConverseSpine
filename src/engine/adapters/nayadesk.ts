@@ -856,6 +856,27 @@ export function nayadeskData(
       }
     },
 
+    async cancelSiteVisits(nd) {
+      try {
+        const r = await crm.siteVisitsItinerary(nd);
+        const plans = (r.plans ?? []) as Array<{ plan_id?: string }>;
+        let cancelled = 0;
+        for (const p of plans) {
+          if (!p.plan_id) continue;
+          // One failure must not strand the rest — a partial erase still erases
+          // everything it can reach.
+          const ok = await crm
+            .patchPlan(p.plan_id, { status: 'cancelled' })
+            .then(() => true)
+            .catch(() => false);
+          if (ok) cancelled += 1;
+        }
+        return cancelled;
+      } catch {
+        return 0;
+      }
+    },
+
     async builder(builderId) {
       try {
         const r = await crm.getBuilder(builderId);

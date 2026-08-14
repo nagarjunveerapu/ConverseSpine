@@ -442,6 +442,11 @@ export function fakeData(): EngineData & {
     async siteVisitsItinerary() {
       return visits.slice();
     },
+    async cancelSiteVisits() {
+      const n = visits.length;
+      visits.length = 0;
+      return n;
+    },
     async builder() {
       return { siteVisitHours: 'Mon–Sun, 9am–7pm', name: 'Lokations' };
     },

@@ -246,6 +246,12 @@ export interface ConversationState {
   affordability?: Affordability & { fromIncome: boolean };
   /** Opt-out confirmation/disambiguation is active. */
   stopConfirmPending?: boolean;
+  /**
+   * The buyer said STOP and it was honoured. Their memory is deleted, their
+   * visits are cancelled and this session was wiped — so nothing personal may
+   * be read back to them afterwards, however the next message is phrased.
+   */
+  optedOut?: boolean;
   /** Whether the pending turn confirms explicit deletion or clarifies contact scope. */
   stopConfirmMode?: 'delete_confirm' | 'contact_scope';
   /** Cached NayaDesk project facts for focused / shortlisted projects. */

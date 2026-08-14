@@ -10,6 +10,7 @@
  * Free text still falls through to compose untouched; this module only speaks
  * when the turn was a console tap it owns.
  */
+import { humanizeMediaKind } from '../engine/media-asset.js';
 import type { ProjectDetail, TurnGoal } from '../engine/types.js';
 import {
   splitProjectStamp,
@@ -17,6 +18,7 @@ import {
   WA_MENU_NODE,
   WA_NODE_LATER,
   WA_NODE_LIFE,
+  WA_NODE_MEDIA,
   WA_NODE_MONEY,
   WA_NODE_PLACE,
   WA_NODE_TIME,
@@ -33,6 +35,7 @@ const NODE_IDS = new Set([
   WA_NODE_LATER,
   WA_NODE_MONEY,
   WA_NODE_UNIT,
+  WA_NODE_MEDIA,
   WA_MENU_NODE,
   WA_BACK_FILE,
 ]);
@@ -104,6 +107,22 @@ function lifeScreen(d: ProjectDetail): string | undefined {
   // 80,000 sqft of amenities on 50 acres is a real answer, and refusing it
   // because a different column is empty is the gap talking, not the record.
   return specScreen(d);
+}
+
+/**
+ * What the project can put on your phone, counted honestly. A buyer asking for
+ * "the brochure" should never have to guess whether one exists — the shelf says
+ * what is on it, and every row below it sends the file it names.
+ */
+function mediaScreen(d: ProjectDetail): string | undefined {
+  const assets = d.mediaAssets ?? [];
+  if (!assets.length) return undefined;
+  const counts = new Map<string, number>();
+  for (const a of assets) counts.set(a.kind, (counts.get(a.kind) ?? 0) + 1);
+  const bits = [...counts.entries()].map(
+    ([kind, n]) => `${humanizeMediaKind(kind)}${n > 1 ? ` (${n})` : ''}`,
+  );
+  return `*${d.name} — what I can send you*\n${bits.join(' · ')}`;
 }
 
 function specScreen(d: ProjectDetail): string | undefined {
@@ -332,6 +351,8 @@ export function waConsoleNodeReply(
       return timeScreen(detail);
     case WA_NODE_LATER:
       return laterScreen(detail);
+    case WA_NODE_MEDIA:
+      return mediaScreen(detail);
     case WA_MENU_NODE:
       // "More about this project" opens the mock's card, not a bare prompt.
       return waConsoleCardReply(detail) ?? `*${detail.name}* — what would you like to check?`;
