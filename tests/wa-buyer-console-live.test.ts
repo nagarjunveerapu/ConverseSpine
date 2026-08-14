@@ -1,0 +1,186 @@
+import { describe, expect, it } from 'vitest';
+import {
+  splitProjectStamp,
+  WA_MENU_CHOOSE,
+  WA_MENU_PROJECTS,
+  WA_MONEY_TOTAL,
+  WA_NODE_TIME,
+  WA_NODE_TRUST,
+  WA_PROJECT_STAMP,
+} from '../src/channel/wa-pack.js';
+import { markFacetSeen, projectSeenFacets, recordEntities } from '../src/engine/entity-store.js';
+import { commitTo, initState } from '../src/engine/state.js';
+import { runEngineTurn } from '../src/engine/turn.js';
+import { fakeDeps, projectDetailFor } from './fakes.js';
+
+/**
+ * The founder's 14-Aug walk, asserted turn by turn — the regression this whole
+ * arc exists for. The old build answered the pick in the old voice with a bare
+ * Price button, and the Price tap reprinted the board's price. The console
+ * answers the pick with the buyer's fit, one menu titled off the mock, money
+ * rows that mean money (total cost / EMI), and rows that stop being offered
+ * once they were delivered.
+ */
+
+function harness(convId: string) {
+  const deps = { ...fakeDeps(), waProjectFirst: true };
+  const turn = (text: string, actionId?: string) =>
+    runEngineTurn(
+      {
+        convId,
+        builderId: 'lokations',
+        text,
+        buyerPhone: '+919999991180',
+        channel: 'whatsapp',
+        ...(actionId ? { action_id: actionId } : {}),
+      },
+      deps,
+    );
+  return { deps, turn };
+}
+
+function listRows(out: Awaited<ReturnType<typeof runEngineTurn>>) {
+  const packed = out.whatsappInteractive;
+  if (!packed || packed.kind !== 'list') return undefined;
+  return packed.sections[0]!.rows;
+}
+
+describe('founder walk 14 Aug — the console answers the pick', () => {
+  it('brief taps → pick → fit card + one console menu, never bare buttons', async () => {
+    const { turn } = harness('wa-founder-walk');
+
+    const hi = await turn('Hi');
+    expect(hi.whatsappInteractive?.kind).toBe('buttons');
+
+    const choose = await turn('Help me choose', WA_MENU_CHOOSE);
+    expect(choose.whatsappInteractive?.kind).toBe('list');
+
+    const size = await turn('2 BHK', 'wa.bhk.2_bhk');
+    expect(size.whatsappInteractive?.kind).toBe('list');
+
+    const budget = await turn('Under ₹80L', 'wa.budget.u_8000000');
+    expect(budget.whatsappInteractive?.kind).toBe('list');
+
+    // The pick — Bug A's turn. The reply is the buyer's fit ending on the
+    // console question, and the chrome is the ONE menu, not three buttons.
+    const pick = await turn('Brigade Cornerstone', 'wa.pick.cornerstone');
+    expect(pick.reply).toContain('*Brigade Cornerstone* — your fit:');
+    expect(pick.reply).toContain('2 BHK');
+    expect(pick.reply.trim().endsWith('What do you want to check?')).toBe(true);
+
+    const rows = listRows(pick);
+    expect(rows).toBeDefined();
+    expect(pick.whatsappInteractive!.kind === 'list' && pick.whatsappInteractive!.button).toBe('More');
+    const aids = rows!.map((r) => splitProjectStamp(r.id).aid);
+    // Money means the mock's money — cut to the size the buyer already gave.
+    const total = rows!.find((r) => splitProjectStamp(r.id).aid === WA_MONEY_TOTAL)!;
+    expect(total.title).toBe('Total cost — 2 BHK');
+    expect(splitProjectStamp(total.id).projectId).toBe('cornerstone');
+    expect(aids).toContain('wa.money.emi');
+    expect(aids).toContain(WA_NODE_TRUST);
+    // The founder's flagged rows are dead: no bare Price, no size re-ask.
+    expect(rows!.some((r) => r.title === 'Price')).toBe(false);
+    expect(aids.some((a) => a.startsWith('wa.money.bhk.'))).toBe(false);
+    expect(rows![rows!.length - 1]!.id).toBe(WA_MENU_PROJECTS);
+  });
+
+  it('the Total-cost tap reaches the landed cost, and the row drops from that same menu', async () => {
+    const { turn } = harness('wa-founder-walk-total');
+    await turn('Help me choose', WA_MENU_CHOOSE);
+    await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Under ₹80L', 'wa.budget.u_8000000');
+    await turn('Brigade Cornerstone', 'wa.pick.cornerstone');
+
+    const total = await turn('Total cost — 2 BHK', `${WA_MONEY_TOTAL}${WA_PROJECT_STAMP}cornerstone`);
+    // The board's price reprint is the bug; the cost sheet is the fix.
+    expect(total.reply).toContain('Stamp duty');
+    expect(projectSeenFacets(total.state, 'cornerstone')).toContain('total');
+
+    const rows = listRows(total)!;
+    const aids = rows.map((r) => splitProjectStamp(r.id).aid);
+    expect(aids).not.toContain(WA_MONEY_TOTAL);
+    expect(aids).toContain('wa.money.emi');
+  });
+
+  it('a single-config project offers All-in cost and prices its only unit', async () => {
+    const { turn } = harness('wa-single-config');
+    const opened = await turn('tell me about Ayana');
+    const rows = listRows(opened)!;
+    const allIn = rows.find((r) => splitProjectStamp(r.id).aid === WA_MONEY_TOTAL);
+    expect(allIn?.title).toBe('All-in cost');
+
+    const total = await turn('All-in cost', `${WA_MONEY_TOTAL}${WA_PROJECT_STAMP}ayana`);
+    // No size was ever named — the entry unit is fetched and priced (Defect E).
+    expect(total.reply).toContain('Stamp duty');
+    expect(projectSeenFacets(total.state, 'ayana')).toContain('total');
+  });
+
+  it('a pick with the size open leads with the price-free ladder, then one size row after', async () => {
+    const { turn } = harness('wa-sizes-open');
+    // A plain board pick, no size given — the ladder leads the console.
+    const opened = await turn('Brigade Eldorado', 'wa.pick.eldorado');
+    expect(opened.reply.trim().endsWith('What do you want to check?')).toBe(true);
+    const rows = listRows(opened)!;
+    const aids = rows.map((r) => splitProjectStamp(r.id).aid);
+    expect(aids).toContain('wa.money.bhk.2');
+    expect(aids).toContain('wa.money.bhk.3');
+    for (const r of rows) expect(r.description ?? '').not.toContain('₹');
+
+    // A node tap later: the ladder folds to ONE size row, and the delivered
+    // trust screen stops being offered on the very same turn's menu.
+    const trust = await turn('Trust & legal', `${WA_NODE_TRUST}${WA_PROJECT_STAMP}eldorado`);
+    expect(trust.reply).toMatch(/RERA|PRM\/KA/i);
+    const trustRows = listRows(trust)!;
+    const trustAids = trustRows.map((r) => splitProjectStamp(r.id).aid);
+    expect(trustAids).not.toContain(WA_NODE_TRUST);
+    expect(trustAids).toContain('wa.console.sizes');
+
+    const sizes = await turn('Sizes & options', `wa.console.sizes${WA_PROJECT_STAMP}eldorado`);
+    expect(sizes.reply).toContain('2 BHK');
+    expect(sizes.reply).toContain('3 BHK');
+  });
+
+  it('a delivered brochure is marked seen on the ledger', async () => {
+    const { turn } = harness('wa-brochure-seen');
+    await turn('tell me about Brigade Cornerstone');
+    const media = await turn('Brochure', 'answer_media');
+    expect(projectSeenFacets(media.state, 'cornerstone')).toContain('brochure');
+  });
+
+  it('all seen → "you\'ve been through the full file", said once', async () => {
+    const deps = { ...fakeDeps(), waProjectFirst: true };
+    const convId = 'wa-all-seen';
+    const detail = {
+      ...projectDetailFor('cornerstone')!,
+      configurations: [
+        { unitType: '2 BHK', priceDisplay: '₹52 L', priceMinInr: 5_200_000, sizeDisplay: '1050-1180 sqft' },
+        { unitType: '3 BHK', priceDisplay: '₹62 L', priceMinInr: 6_240_000, sizeDisplay: '1400-1550 sqft' },
+      ],
+    };
+    let s = commitTo(initState(convId, 'lokations'), 'cornerstone', 'Brigade Cornerstone');
+    s = recordEntities(s, [{ projectId: 'cornerstone', name: 'Brigade Cornerstone' }], 'discussed', 1);
+    s = { ...s, constraints: { ...s.constraints, bhk: '2 BHK' } };
+    s = { ...s, projectCache: { cornerstone: detail } };
+    // The buyer has toured everything except possession.
+    for (const f of ['total', 'emi', 'trust', 'place'] as const) {
+      s = markFacetSeen(s, 'cornerstone', f);
+    }
+    await deps.store.save(s);
+
+    const turn = (text: string, actionId?: string) =>
+      runEngineTurn(
+        { convId, builderId: 'lokations', text, buyerPhone: '+919999991181', channel: 'whatsapp', ...(actionId ? { action_id: actionId } : {}) },
+        deps,
+      );
+
+    // Possession delivers the last unseen row — the console says "you're done".
+    const time = await turn('Possession', `${WA_NODE_TIME}${WA_PROJECT_STAMP}cornerstone`);
+    expect(time.reply).toContain('the full file on *Brigade Cornerstone*');
+    const rows = listRows(time)!;
+    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_MENU_PROJECTS]);
+
+    // Said once: the next turn keeps the screen but not the closing line.
+    const again = await turn('Possession', `${WA_NODE_TIME}${WA_PROJECT_STAMP}cornerstone`);
+    expect(again.reply).not.toContain('the full file on');
+  });
+});
