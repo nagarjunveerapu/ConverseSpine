@@ -132,7 +132,7 @@ function catalogExtras(p: NdProjectSummary): Pick<
  */
 function mediaFields(
   rows: readonly NdMediaAssetRow[] | null | undefined,
-): Pick<ProjectDetail, 'mediaKinds' | 'mediaAssets'> {
+): Pick<ProjectDetail, 'mediaKinds' | 'mediaAssets' | 'filesFetched'> {
   const kinds = uniqueMediaKinds(rows);
   const assets = (rows ?? [])
     .filter((a) => a.asset_id?.trim() && a.asset_kind?.trim())
@@ -145,6 +145,11 @@ function mediaFields(
   return {
     ...(kinds ? { mediaKinds: kinds } : {}),
     ...(assets.length ? { mediaAssets: assets } : {}),
+    // Stamped here rather than at the call sites: this is the only function
+    // that sees the fetched rows, so the flag cannot drift from the files it
+    // reports. A project with genuinely no documents is still `filesFetched` —
+    // an empty shelf is an answer, an unasked question is not.
+    filesFetched: true,
   };
 }
 

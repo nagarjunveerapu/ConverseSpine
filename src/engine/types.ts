@@ -625,6 +625,18 @@ export interface ProjectDetail {
    * later becomes the focus picks up its full record.
    */
   identityOnly?: boolean;
+  /**
+   * This record was built by a fetch that ASKED Desk for the project's files.
+   * Absence means the question was never put — not that the project has none,
+   * which is why it cannot be inferred from `mediaAssets` being empty.
+   *
+   * The console gates its shelf on the files, so a card written before the
+   * asking is not a project file no matter how complete it looks. Eldorado
+   * carried configs, RERA and a location, passed every usability check, and
+   * served from L2 for six hours with its sixteen documents invisible
+   * (founder, 14 Aug — "I couldn't find any where the brochure").
+   */
+  filesFetched?: boolean;
   summary?: string;
   reraNumber?: string;
   possession?: string;

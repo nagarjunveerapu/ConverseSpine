@@ -74,6 +74,15 @@ export function promoteDurableProjectDetail(detail: ProjectDetail): ProjectDetai
 /** Name/RERA/price-band stubs must not count as hits — they thin overview replies. */
 export function isUsableProjectCard(detail: ProjectDetail | null | undefined): boolean {
   if (!detail || detail.identityOnly) return false;
+  // The card must have been asked for the project's files. Every check below
+  // this line is about whether the card can carry a reply; none of them notice
+  // a record that was never asked what documents exist, and such a card looks
+  // complete — Eldorado's had configs, RERA, price and a location. It passed,
+  // so the one fetch that carries media never ran, and sixteen documents
+  // stayed invisible for the six hours the L2 entry lived. Refusing it here
+  // heals on the next turn instead of waiting out the TTL, which is the same
+  // treatment the shell check below gives cards from older builds.
+  if (!detail.filesFetched) return false;
   // A card carrying units and NOTHING else is shell-shaped: listUnits answers
   // for any project, so this is what a promoted identity-only shell looks like
   // once the flag is gone. Cards written by older builds sit in L2 for up to
