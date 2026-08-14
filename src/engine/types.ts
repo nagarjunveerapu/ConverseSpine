@@ -651,6 +651,17 @@ export interface ProjectDetail {
   }>;
   /** Distinct media asset_kind values on the focused project (inventory gate). */
   mediaKinds?: string[];
+  /**
+   * The documents themselves, public tier only. `mediaKinds` says a brochure
+   * exists; this says WHICH files, and `unitTypeFilter` binds one to a single
+   * configuration — the floor plan for the 2 BHK the buyer already asked for.
+   */
+  mediaAssets?: ReadonlyArray<{
+    assetId: string;
+    kind: string;
+    title?: string;
+    unitTypeFilter?: string;
+  }>;
   location?: {
     connectivitySummary?: string;
     microMarketOverview?: string;

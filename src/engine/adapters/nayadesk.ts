@@ -3,6 +3,7 @@ import {
   type NayaDeskClient,
   type NdContextBundle,
   type NdLocationIntelRow,
+  type NdMediaAssetRow,
   type NdMarketIntel,
   type NdProjectSummary,
 } from '../../crm/nayadesk-client.js';
@@ -83,6 +84,29 @@ function catalogExtras(p: NdProjectSummary): Pick<
     ...(investment ? { investment } : {}),
     ...(visitLogistics ? { visitLogistics } : {}),
     ...(amenities ? { amenities } : {}),
+  };
+}
+
+/**
+ * Media the buyer may be offered: kinds gate the rows (existing honest-menu
+ * gates read `mediaKinds`), assets name the files so a document can be sent by
+ * id and a floor plan can be matched to the buyer's own configuration.
+ */
+function mediaFields(
+  rows: readonly NdMediaAssetRow[] | null | undefined,
+): Pick<ProjectDetail, 'mediaKinds' | 'mediaAssets'> {
+  const kinds = uniqueMediaKinds(rows);
+  const assets = (rows ?? [])
+    .filter((a) => a.asset_id?.trim() && a.asset_kind?.trim())
+    .map((a) => ({
+      assetId: a.asset_id!,
+      kind: a.asset_kind!,
+      ...(a.title?.trim() ? { title: a.title } : {}),
+      ...(a.unit_type_filter?.trim() ? { unitTypeFilter: a.unit_type_filter } : {}),
+    }));
+  return {
+    ...(kinds ? { mediaKinds: kinds } : {}),
+    ...(assets.length ? { mediaAssets: assets } : {}),
   };
 }
 
@@ -408,11 +432,21 @@ export function nayadeskData(
       // Isolate failures — a throwing conversationContext used to reject the
       // whole Promise.all and drop a successful getProject, forcing identityOnly
       // shells that poisoned L2 (proj miss every focused turn on dig).
-      const [ctx, fullProject, liRow] = await Promise.all([
+      const [ctx, fullProject, liRow, libraryMedia] = await Promise.all([
         crm.conversationContext(nd).catch(() => null),
         crm.getProject(projectId).catch(() => null),
         crm.getLocationIntelligence(projectId).catch(() => null),
+        // The library, fetched WITHOUT a conversation. Media used to arrive only
+        // on the focus-scoped bundle below, so a buyer who picked a project off
+        // the board was never offered its brochure — 16 public documents sat
+        // unmentioned on Eldorado, floor plan for their own size included.
+        crm.listProjectMedia(projectId).catch(() => [] as NdMediaAssetRow[]),
       ]);
+      // Entitlement stays with media/share + disclosure/evaluate; the menu only
+      // ever names public files.
+      const publicMedia = libraryMedia.filter(
+        (a) => (a.disclosure_tier ?? 'public') === 'public' && a.is_active !== 0,
+      );
 
       const p = ctx?.project;
       if (p && p.project_id === projectId) {
@@ -437,7 +471,9 @@ export function nayadeskData(
           // (pre-RERA phases can hold/EOI but not book).
           const phaseNote = phaseNoteFrom(ctx!.phase_journeys);
           const phaseMapped = mapPhasesFromJourneys(ctx!.phase_journeys);
-          const mediaKinds = uniqueMediaKinds(ctx!.media);
+          // The bundle's rows are already entitlement-filtered for this buyer,
+          // so they win; the library fills in when Desk sent none.
+          const media = mediaFields(ctx!.media?.length ? ctx!.media : publicMedia);
           const location =
             mapLocationIntel(liRow) ??
             mapLocationIntel(fullProject?.location_intelligence) ??
@@ -472,7 +508,7 @@ export function nayadeskData(
               ...(configurations.length ? { configurations } : {}),
               ...(phaseNote ? { phaseNote } : {}),
               ...(phaseMapped.phases?.length ? { phases: phaseMapped.phases } : {}),
-              ...(mediaKinds ? { mediaKinds } : {}),
+              ...media,
               ...(location ? { location } : {}),
               ...extras,
               ...(marketIntel ? { marketIntel } : {}),
@@ -516,6 +552,9 @@ export function nayadeskData(
             ecStatus: catalog.ec_status,
             loanEligibility: catalog.loan_eligibility,
             ...(location ? { location } : {}),
+            // The library is conversation-free, so this branch — the one a
+            // pick turn actually takes — can finally offer the documents.
+            ...mediaFields(publicMedia),
             ...extras,
             ...(marketIntel ? { marketIntel } : {}),
           },

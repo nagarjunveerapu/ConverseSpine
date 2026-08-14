@@ -89,6 +89,21 @@ export interface NdLocationIntelRow {
   upcoming_infra?: string;
 }
 
+/**
+ * A Desk media row. The context bundle serves these already tier-filtered for
+ * the buyer; the project-scoped list (see listProjectMedia) is unscoped, so the
+ * caller filters. `unit_type_filter` is what makes "the floor plan for YOUR
+ * 2 BHK" possible — it binds an asset to one configuration.
+ */
+export interface NdMediaAssetRow {
+  asset_id?: string;
+  asset_kind?: string;
+  title?: string;
+  unit_type_filter?: string;
+  disclosure_tier?: string;
+  is_active?: number;
+}
+
 export interface NdContextBundle {
   conversation: NdConversation;
   project: NdProjectSummary | null;
@@ -115,7 +130,7 @@ export interface NdContextBundle {
     primary: string;
   }>;
   /** Focused-project media metadata (kinds only — bytes via media/share). */
-  media?: Array<{ asset_kind?: string; title?: string; is_active?: number }>;
+  media?: NdMediaAssetRow[];
   location_intelligence?: NdLocationIntelRow | null;
   /** Approved corridor intel (Desk CRM activation) — null when absent/unapproved. */
   market_intel?: NdMarketIntel | null;
@@ -486,6 +501,22 @@ export class NayaDeskClient {
     no_match_reasoning?: string;
   }> {
     return this.call('POST', '/api/projects/search', req);
+  }
+
+  /**
+   * Project-scoped media list — the library the catalog holds, with NO
+   * conversation needed. Media otherwise reaches the engine only through
+   * conversationContext, which is scoped to whatever project Desk already has
+   * in focus, so a buyer picking a project off the board could never be offered
+   * its brochure. Rows come back across every disclosure tier (the route serves
+   * the library UI too) — the caller keeps public and leaves entitlement to
+   * media/share + disclosure/evaluate, which remain the authority on delivery.
+   */
+  listProjectMedia(project_id: string): Promise<NdMediaAssetRow[]> {
+    return this.call<{ assets: NdMediaAssetRow[] | null }>(
+      'GET',
+      `/api/projects/${encodeURIComponent(project_id)}/media`,
+    ).then((r) => r.assets ?? []);
   }
 
   /** Direct LI row — engine door (bot auth), same D1 as Overview LI card. */
