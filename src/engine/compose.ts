@@ -144,7 +144,7 @@ function relaxedLead(
 }
 import { affordabilityFromMonthlyText, isCostComponentAsk, isInventoryAsk } from './facts.js';
 import { INCOME_SERVICING_RATIO } from './emi.js';
-import { humanizeMediaKind } from './media-asset.js';
+import { humanizeMediaKind, normalizeMediaAssetKind } from './media-asset.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
 import { answerRequirements } from './answer-contract.js';
 import { speakStickyClarify } from './clarify-outstanding.js';
@@ -1276,11 +1276,26 @@ function fallbackReplyBody(req: ComposeRequest): string {
           projectName: pname,
         })}`;
       }
+      // A file that GOT SENT is not a miss. `floor_plan` and `payment_plan` are
+      // FAQ question keys as well as document kinds, so on a project with no FAQ
+      // rows the honest-miss below fired for the very PDF this turn had already
+      // attached: "I don't have that detail on file" shipped WITH the floor plan
+      // (Eldorado, verified on dev). Master plan read correctly only because it
+      // happens not to be an FAQ key. Drop the keys the share answered; whatever
+      // it did not answer still honest-misses, so a "floor plan and possession"
+      // ask keeps its miss on possession.
+      const sharedAssetKind =
+        ev.media?.allowed && ev.media.cdnUrl
+          ? (normalizeMediaAssetKind(ev.media.assetKind) ?? ev.media.assetKind)
+          : undefined;
+      const faqMissKeys = (ev.faqMiss?.keys ?? []).filter(
+        (k) => !sharedAssetKind || (normalizeMediaAssetKind(k) ?? k) !== sharedAssetKind,
+      );
       // FAQ miss with structured rescue — before overview card or chunk assembly.
-      if (ev.faqMiss?.keys.length && !ev.detail?.faqs?.length) {
+      if (faqMissKeys.length && !ev.detail?.faqs?.length) {
         const pname =
           ev.detail?.name || context.focusProjectName || 'this project';
-        if (ev.faqMiss.keys.includes('possession') && ev.detail?.possession) {
+        if (faqMissKeys.includes('possession') && ev.detail?.possession) {
           return `Possession at *${pname}* is ${formatPossession(ev.detail.possession)}.${closingCta({
             buyerText: context.buyerText,
             topics: ['availability'],
@@ -1288,7 +1303,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
           })}`;
         }
         if (
-          ev.faqMiss.keys.some((k) => /^(?:banks|loan_eligibility|loan)$/i.test(k)) &&
+          faqMissKeys.some((k) => /^(?:banks|loan_eligibility|loan)$/i.test(k)) &&
           ev.detail?.loanEligibility
         ) {
           return `For *${pname}*, home loan: ${ev.detail.loanEligibility}.${closingCta({
@@ -1300,7 +1315,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
         // RERA/khata live on ProjectDetail atoms — FAQ miss must not honest-miss
         // when Desk already carries the registration number (Meadows dig).
         if (
-          ev.faqMiss.keys.some((k) =>
+          faqMissKeys.some((k) =>
             /^(?:rera_status|rera_number|khata(?:_legal)?|legal_status)$/i.test(k),
           ) &&
           (ev.detail?.reraNumber?.trim() || ev.detail?.khata?.trim())
