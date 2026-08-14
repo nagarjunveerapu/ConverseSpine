@@ -675,6 +675,28 @@ export interface ProjectDetail {
   visitLogistics?: ProjectVisitLogistics;
   /** Parsed from project.spec_json when structured. */
   amenities?: string[];
+  /**
+   * The township's own numbers, off spec_json — 50 acres, 12 towers, 60% open
+   * space, 80,000 sqft of amenities. `amenities` wants a LIST that most catalog
+   * rows don't carry; these numbers are what the record can actually back, and
+   * they are what the Life section says instead of drawing nothing.
+   */
+  spec?: {
+    totalAcres?: number;
+    totalUnits?: number;
+    towerCount?: number;
+    floorsPerTower?: number;
+    openSpacePct?: number;
+    amenitiesSqft?: number;
+    waterSupply?: string;
+    powerBackup?: string;
+    constructionTech?: string;
+  };
+  /** Who approved the plans (BBMP / BDA / panchayat) — the Approvals sub-screen. */
+  approvalAuthority?: string;
+  /** Whether RERA registration is project-wide or phased, and whether it applies. */
+  registrationScope?: string;
+  reraApplicability?: string;
 }
 
 /** One named place from Desk location_intelligence — always Desk-verified, never invented. */

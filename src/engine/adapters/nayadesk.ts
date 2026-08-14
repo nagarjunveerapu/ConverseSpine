@@ -20,6 +20,7 @@ import {
   gateMarketIntel,
   mapAmenitiesFromSpec,
   mapInvestmentFromProject,
+  mapSpecFromProject,
   mapVisitLogisticsFromProject,
 } from '../market-intel.js';
 import { uniqueMediaKinds } from '../media-asset.js';
@@ -74,16 +75,53 @@ async function resolveMarketIntel(
 
 function catalogExtras(p: NdProjectSummary): Pick<
   ProjectDetail,
-  'investment' | 'visitLogistics' | 'amenities' | 'projectType'
+  | 'investment'
+  | 'visitLogistics'
+  | 'amenities'
+  | 'projectType'
+  | 'spec'
+  | 'approvalAuthority'
+  | 'registrationScope'
+  | 'reraApplicability'
 > {
-  const investment = mapInvestmentFromProject(p);
-  const visitLogistics = mapVisitLogisticsFromProject(p);
-  const amenities = mapAmenitiesFromSpec(p.spec_json);
+  // These are the file's trimmings — investment prose, visit logistics, the
+  // amenity list. The file itself is RERA, khata, possession, price, media. A
+  // mis-typed catalog column (parking_on_site arrives as 0/1, not text) once
+  // threw here, and because the throw surfaced as "no project detail" the buyer
+  // lost the whole file and saw four money rows for the entire conversation.
+  // Trimmings may go missing; the file may not.
+  let investment: ReturnType<typeof mapInvestmentFromProject>;
+  let visitLogistics: ReturnType<typeof mapVisitLogisticsFromProject>;
+  let amenities: ReturnType<typeof mapAmenitiesFromSpec>;
+  let spec: ReturnType<typeof mapSpecFromProject>;
+  try {
+    investment = mapInvestmentFromProject(p);
+    visitLogistics = mapVisitLogisticsFromProject(p);
+    amenities = mapAmenitiesFromSpec(p.spec_json);
+    // The Life section's own numbers — most rows have these even when the
+    // amenity LIST is a Desk catalog gap.
+    spec = mapSpecFromProject(p.spec_json);
+  } catch {
+    /* a bad column costs its own row, never the record */
+  }
+  const str = (v: unknown): string | undefined =>
+    typeof v === 'string' && v.trim() ? v.trim() : undefined;
+  const row = p as NdProjectSummary & {
+    approval_authority?: unknown;
+    registration_scope?: unknown;
+    rera_applicability?: unknown;
+  };
   return {
     ...(p.project_type ? { projectType: p.project_type } : {}),
     ...(investment ? { investment } : {}),
     ...(visitLogistics ? { visitLogistics } : {}),
     ...(amenities ? { amenities } : {}),
+    ...(spec ? { spec } : {}),
+    // Trust's Approvals sub-screen — these arrive on the catalog row today and
+    // were being dropped on the floor.
+    ...(str(row.approval_authority) ? { approvalAuthority: str(row.approval_authority)! } : {}),
+    ...(str(row.registration_scope) ? { registrationScope: str(row.registration_scope)! } : {}),
+    ...(str(row.rera_applicability) ? { reraApplicability: str(row.rera_applicability)! } : {}),
   };
 }
 

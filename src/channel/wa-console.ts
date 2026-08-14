@@ -13,19 +13,34 @@
 import type { ProjectDetail, TurnGoal } from '../engine/types.js';
 import {
   splitProjectStamp,
+  WA_BACK_FILE,
   WA_MENU_NODE,
   WA_NODE_LATER,
   WA_NODE_LIFE,
+  WA_NODE_MONEY,
   WA_NODE_PLACE,
   WA_NODE_TIME,
   WA_NODE_TRUST,
+  WA_NODE_UNIT,
+  WA_SUB_PREFIX,
 } from './wa-pack.js';
 
-const NODE_IDS = new Set([WA_NODE_TRUST, WA_NODE_PLACE, WA_NODE_LIFE, WA_NODE_TIME, WA_NODE_LATER, WA_MENU_NODE]);
+const NODE_IDS = new Set([
+  WA_NODE_TRUST,
+  WA_NODE_PLACE,
+  WA_NODE_LIFE,
+  WA_NODE_TIME,
+  WA_NODE_LATER,
+  WA_NODE_MONEY,
+  WA_NODE_UNIT,
+  WA_MENU_NODE,
+  WA_BACK_FILE,
+]);
 
 export function isWaNodeTap(actionId: string | undefined): boolean {
   if (!actionId) return false;
-  return NODE_IDS.has(splitProjectStamp(actionId.trim()).aid);
+  const { aid } = splitProjectStamp(actionId.trim());
+  return NODE_IDS.has(aid) || aid.startsWith(WA_SUB_PREFIX);
 }
 
 function line(label: string, value: string | undefined): string | undefined {
@@ -61,7 +76,8 @@ function trustScreen(d: ProjectDetail): string | undefined {
     line('Khata', d.khata),
     line('EC', d.ecStatus),
     line('NA status', d.naStatus),
-    line('Loan eligibility', d.loanEligibility),
+    // Loan eligibility is money, and Money now has a "Banks & loan" row that
+    // reads this same field. One fact, one place.
   ]);
 }
 
@@ -79,10 +95,32 @@ function placeScreen(d: ProjectDetail): string | undefined {
 }
 
 function lifeScreen(d: ProjectDetail): string | undefined {
-  if (!d.amenities?.length) return undefined;
-  const list = d.amenities.slice(0, 10).join(' · ');
-  const more = d.amenities.length > 10 ? ` — and ${d.amenities.length - 10} more` : '';
-  return `*${d.name} — amenities*\n${list}${more}`;
+  if (d.amenities?.length) {
+    const list = d.amenities.slice(0, 10).join(' · ');
+    const more = d.amenities.length > 10 ? ` — and ${d.amenities.length - 10} more` : '';
+    return `*${d.name} — amenities*\n${list}${more}`;
+  }
+  // Most catalog rows carry the township's NUMBERS but not an amenity list —
+  // 80,000 sqft of amenities on 50 acres is a real answer, and refusing it
+  // because a different column is empty is the gap talking, not the record.
+  return specScreen(d);
+}
+
+function specScreen(d: ProjectDetail): string | undefined {
+  const s = d.spec;
+  if (!s) return undefined;
+  const n = (v: number) => v.toLocaleString('en-IN');
+  return screen(`${d.name} — the township`, [
+    s.totalAcres ? `*Land:* ${n(s.totalAcres)} acres` : undefined,
+    s.towerCount
+      ? `*Towers:* ${s.towerCount}${s.floorsPerTower ? ` · ${s.floorsPerTower} floors each` : ''}`
+      : undefined,
+    s.totalUnits ? `*Homes:* ${n(s.totalUnits)}` : undefined,
+    s.openSpacePct ? `*Open space:* ${s.openSpacePct}%` : undefined,
+    s.amenitiesSqft ? `*Amenities:* ${n(s.amenitiesSqft)} sqft` : undefined,
+    line('Water', s.waterSupply),
+    line('Power backup', s.powerBackup),
+  ]);
 }
 
 function timeScreen(d: ProjectDetail): string | undefined {
@@ -137,6 +175,84 @@ function laterScreen(d: ProjectDetail): string | undefined {
   if (!body.length) return undefined;
   const tag = intel?.provenanceLabel?.trim() ? `\n_${intel.provenanceLabel.trim()}_` : '';
   return `*${d.name} — returns*\n${body.join('\n')}${tag}`;
+}
+
+/**
+ * One sub-topic, answered on its own. The screen reads EXACTLY the field the
+ * sub-row's gate read — the row for a khata says the khata, so a drawn row can
+ * never open onto "I don't have that". A topic the record cannot fill returns
+ * nothing and the engine's own reply stands.
+ */
+function subScreen(topic: string, d: ProjectDetail): string | undefined {
+  const loc = d.location;
+  switch (topic) {
+    case 'trust.rera': {
+      const phaseRera = (d.phases ?? [])
+        .filter((p) => p.reraNumber && p.reraNumber !== d.reraNumber)
+        .slice(0, 5)
+        .map((p) => `*${p.phaseLabel}:* ${p.reraNumber}`);
+      return screen(`${d.name} — RERA`, [
+        line('RERA', d.reraNumber),
+        ...phaseRera,
+        line('Registration', d.registrationScope),
+        line('Applicability', d.reraApplicability),
+      ]);
+    }
+    case 'trust.khata':
+      return screen(`${d.name} — khata & title`, [
+        line('Khata', d.khata),
+        line('Land', d.investment?.landClassification),
+      ]);
+    case 'trust.ec':
+      return screen(`${d.name} — encumbrance`, [line('EC', d.ecStatus)]);
+    case 'trust.approvals':
+      return screen(`${d.name} — approvals & land use`, [
+        line('Approving authority', d.approvalAuthority),
+        line('Land classification', d.investment?.landClassification),
+        line('NA status', d.naStatus),
+      ]);
+    case 'place.metro':
+      return screen(`${d.name} — commute`, [
+        pois('Metro', loc?.metroStations),
+        loc?.driveTimes?.length ? `*Drive times:* ${loc.driveTimes.slice(0, 4).join(' · ')}` : undefined,
+        loc?.connectivitySummary?.trim(),
+      ]);
+    case 'place.schools':
+      return screen(`${d.name} — schools`, [pois('Schools', loc?.schools)]);
+    case 'place.hospitals':
+      return screen(`${d.name} — hospitals`, [pois('Hospitals', loc?.hospitals)]);
+    case 'place.commute':
+      return screen(`${d.name} — commute`, [
+        loc?.driveTimes?.length ? `*Drive times:* ${loc.driveTimes.slice(0, 4).join(' · ')}` : undefined,
+        loc?.connectivitySummary?.trim(),
+      ]);
+    case 'life.amenities':
+      return lifeScreen(d);
+    case 'life.spec': {
+      const s = d.spec;
+      if (!s) return undefined;
+      const n = (v: number) => v.toLocaleString('en-IN');
+      return screen(`${d.name} — size & layout`, [
+        s.totalAcres ? `*Land:* ${n(s.totalAcres)} acres` : undefined,
+        s.towerCount
+          ? `*Towers:* ${s.towerCount}${s.floorsPerTower ? ` · ${s.floorsPerTower} floors each` : ''}`
+          : undefined,
+        s.totalUnits ? `*Homes:* ${n(s.totalUnits)}` : undefined,
+        s.openSpacePct ? `*Open space:* ${s.openSpacePct}%` : undefined,
+        s.amenitiesSqft ? `*Amenities:* ${n(s.amenitiesSqft)} sqft` : undefined,
+        line('Water', s.waterSupply),
+        line('Power backup', s.powerBackup),
+      ]);
+    }
+    case 'time.possession':
+      return screen(`${d.name} — possession`, [line('Possession', d.possession), d.phaseNote?.trim()]);
+    case 'time.phases':
+      return timeScreen(d);
+    case 'money.loan':
+      return screen(`${d.name} — banks & loan`, [line('Loan eligibility', d.loanEligibility)]);
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -201,7 +317,11 @@ export function waConsoleNodeReply(
   if (projectId && projectId !== detail.projectId) return undefined;
   if (goal.kind !== 'answer' && goal.kind !== 'commit') return undefined;
 
+  if (aid.startsWith(WA_SUB_PREFIX)) return subScreen(aid.slice(WA_SUB_PREFIX.length), detail);
+
   switch (aid) {
+    case WA_BACK_FILE:
+      return waConsoleCardReply(detail) ?? `*${detail.name}* — what would you like to check?`;
     case WA_NODE_TRUST:
       return trustScreen(detail);
     case WA_NODE_PLACE:

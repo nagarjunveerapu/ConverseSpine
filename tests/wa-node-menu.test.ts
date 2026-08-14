@@ -7,6 +7,7 @@ import {
   waCanonicalUtterance,
   waConsoleRows,
   WA_MENU_NODE,
+  WA_COMPARE,
   WA_MENU_PROJECTS,
   WA_MONEY_MENU,
   WA_NODE_LATER,
@@ -48,22 +49,23 @@ const FULL_FACTS: WaNodeFacts = {
 const emptyExtract = (): Extracted => ({ constraints: {} }) as unknown as Extracted;
 
 describe('waConsoleRows — the honest console menu (node layer)', () => {
-  it('draws every node the record can answer, brochure first, doors last', () => {
+  it('draws every section the record can answer, acts last', () => {
     const { rows, infoCount } = waConsoleRows({ facts: FULL_FACTS });
     expect(rows.map((r) => r.id)).toEqual([
-      'answer_media',
       WA_NODE_TRUST,
       WA_NODE_PLACE,
       WA_NODE_LIFE,
       WA_NODE_TIME,
       WA_NODE_LATER,
       'visit_book',
+      WA_COMPARE,
       WA_MENU_PROJECTS,
     ]);
+    // Unseen answers, not rows: brochure + trust/place/life/time + returns.
     expect(infoCount).toBe(6);
   });
 
-  it('a node with nothing behind it is not drawn — no row, no badge', () => {
+  it('a section with nothing behind it is not drawn — no row, no badge', () => {
     const { rows } = waConsoleRows({
       facts: {
         projectId: 'p1',
@@ -71,7 +73,7 @@ describe('waConsoleRows — the honest console menu (node layer)', () => {
         // no rera/khata/ec, no amenities, no location, no investment, no media
       },
     });
-    expect(rows.map((r) => r.id)).toEqual([WA_NODE_TIME, 'visit_book', WA_MENU_PROJECTS]);
+    expect(rows.map((r) => r.id)).toEqual([WA_NODE_TIME, 'visit_book', WA_COMPARE, WA_MENU_PROJECTS]);
   });
 
   it('Returns rides only when REAL yield fields are on the record', () => {
@@ -85,9 +87,9 @@ describe('waConsoleRows — the honest console menu (node layer)', () => {
     expect(ids({ projectId: 'p4', marketIntel: {}, investment: {} })).not.toContain(WA_NODE_LATER);
   });
 
-  it('no record: the standing doors stand, nothing is invented', () => {
+  it('no record: the standing acts stand, nothing is invented', () => {
     const { rows, infoCount } = waConsoleRows({});
-    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_MENU_PROJECTS]);
+    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_PROJECTS]);
     expect(infoCount).toBe(0);
   });
 });
@@ -146,7 +148,8 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
     if (packed.kind === 'list') {
       const rows = packed.sections[0]!.rows;
       expect(rows.length).toBeLessThanOrEqual(10);
-      expect(rows[0]!.id).toBe('answer_media'); // brochure leads — the cheapest yes
+      // The file leads with its sections; Trust is the first one this record backs.
+      expect(splitProjectStamp(rows[0]!.id).aid).toBe(WA_NODE_TRUST);
       expect(rows.map((r) => splitProjectStamp(r.id).aid)).toContain(WA_NODE_TRUST);
       const trust = rows.find((r) => splitProjectStamp(r.id).aid === WA_NODE_TRUST)!;
       expect(splitProjectStamp(trust.id).projectId).toBe('brigade-eldorado');
@@ -182,7 +185,11 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
     });
     expect(withoutFacts.kind).toBe('list');
     if (withoutFacts.kind === 'list') {
-      expect(withoutFacts.sections[0]!.rows.map((r) => r.id)).toEqual(['visit_book', WA_MENU_PROJECTS]);
+      expect(withoutFacts.sections[0]!.rows.map((r) => r.id)).toEqual([
+        'visit_book',
+        WA_COMPARE,
+        WA_MENU_PROJECTS,
+      ]);
     }
   });
 
@@ -212,8 +219,7 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
       expect(aids).toContain('wa.money.bhk.2.comfort');
       // No console row ever prints a ₹ figure — the tapped answer does.
       for (const r of rows) expect(r.description ?? '').not.toContain('₹');
-      expect(rows[rows.length - 2]!.id).toBe('visit_book');
-      expect(rows[rows.length - 1]!.id).toBe(WA_MENU_PROJECTS);
+      expect(rows.slice(-3).map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_PROJECTS]);
     }
   });
 });

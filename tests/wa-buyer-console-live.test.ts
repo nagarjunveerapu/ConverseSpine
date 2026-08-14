@@ -76,7 +76,8 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     const total = rows!.find((r) => splitProjectStamp(r.id).aid === WA_MONEY_TOTAL)!;
     expect(total.title).toBe('Total cost — 2 BHK');
     expect(splitProjectStamp(total.id).projectId).toBe('cornerstone');
-    expect(aids).toContain('wa.money.emi');
+    // EMI, the payment plan and the banks live one level down, inside Money.
+    expect(aids).toContain('wa.node.money');
     expect(aids).toContain(WA_NODE_TRUST);
     // The founder's flagged rows are dead: no bare Price, no size re-ask.
     expect(rows!.some((r) => r.title === 'Price')).toBe(false);
@@ -96,10 +97,13 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     expect(total.reply).toContain('Stamp duty');
     expect(projectSeenFacets(total.state, 'cornerstone')).toContain('total');
 
+    // The tap was a money row, so the buyer stays inside Money — the answered
+    // row is gone from it, and the way back is on the same screen.
     const rows = listRows(total)!;
     const aids = rows.map((r) => splitProjectStamp(r.id).aid);
     expect(aids).not.toContain(WA_MONEY_TOTAL);
     expect(aids).toContain('wa.money.emi');
+    expect(aids).toContain('wa.back.file');
   });
 
   it('a single-config project offers All-in cost and prices its only unit', async () => {
@@ -130,10 +134,17 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     // trust screen stops being offered on the very same turn's menu.
     const trust = await turn('Trust & legal', `${WA_NODE_TRUST}${WA_PROJECT_STAMP}eldorado`);
     expect(trust.reply).toMatch(/RERA|PRM\/KA/i);
+    // The tap opened Trust itself: its own topics, and the way back.
     const trustRows = listRows(trust)!;
     const trustAids = trustRows.map((r) => splitProjectStamp(r.id).aid);
     expect(trustAids).not.toContain(WA_NODE_TRUST);
-    expect(trustAids).toContain('wa.console.sizes');
+    expect(trustAids).toContain('wa.sub.trust.rera');
+    expect(trustAids).toContain('wa.back.file');
+
+    // Back to the file, and the sizes question is where it belongs: The unit.
+    const back = await turn('← Back to the file', `wa.back.file${WA_PROJECT_STAMP}eldorado`);
+    const backAids = listRows(back)!.map((r) => splitProjectStamp(r.id).aid);
+    expect(backAids).toContain('wa.node.unit');
 
     const sizes = await turn('Sizes & options', `wa.console.sizes${WA_PROJECT_STAMP}eldorado`);
     expect(sizes.reply).toContain('2 BHK');
@@ -176,8 +187,13 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     // Possession delivers the last unseen row — the console says "you're done".
     const time = await turn('Possession', `${WA_NODE_TIME}${WA_PROJECT_STAMP}cornerstone`);
     expect(time.reply).toContain('the full file on *Brigade Cornerstone*');
+    // The screen keeps the file — sections are places, and a place you have
+    // stood in is still a place. What ends is the offering of new answers.
+    // The tap opened Time, so this screen is Time's: whatever it can still
+    // answer, then the way back and the standing act. Never a dead end.
     const rows = listRows(time)!;
-    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_MENU_PROJECTS]);
+    expect(rows.map((r) => splitProjectStamp(r.id).aid)).toContain('wa.back.file');
+    expect(rows.map((r) => r.id)).toContain('visit_book');
 
     // Said once: the next turn keeps the screen but not the closing line.
     const again = await turn('Possession', `${WA_NODE_TIME}${WA_PROJECT_STAMP}cornerstone`);
