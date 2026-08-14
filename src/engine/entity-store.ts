@@ -15,6 +15,23 @@ import type { ConversationState, OfferedProject } from './types.js';
 
 export type EntityRole = 'offered' | 'discussed' | 'focused' | 'rejected' | 'queued';
 
+/**
+ * Console facets a buyer can be SHOWN for a project. The ledger records
+ * delivery, not offers: a facet is seen when its screen/answer actually went
+ * out, so a menu row that was drawn but never tapped keeps its place.
+ */
+export type SeenFacet =
+  | 'card'
+  | 'total'
+  | 'emi'
+  | 'plan'
+  | 'trust'
+  | 'place'
+  | 'life'
+  | 'time'
+  | 'later'
+  | 'brochure';
+
 export interface DiscourseEntityRecord {
   projectId: string;
   /** The project's real name. NEVER the slug — a cached slug is spoken to the
@@ -32,6 +49,12 @@ export interface DiscourseEntityRecord {
   dimensionGap?: OfferedProject['dimensionGap'];
   /** Rank within the current shortlist (0 = top search hit). */
   offeredRank?: number;
+  /**
+   * Console facets whose screen/answer was delivered for THIS project.
+   * Append-only; keyed by project so a focus switch needs no reset and a
+   * return to the project keeps its history.
+   */
+  seenFacets?: SeenFacet[];
 }
 
 /** Rank order: rejected sinks; everything else is ordered by the focus stack. */
@@ -124,12 +147,47 @@ export function clearOfferedExcept(
         firstSeenTurn: e.firstSeenTurn,
         lastTouchedTurn: e.lastTouchedTurn,
         ...(e.microMarket ? { microMarket: e.microMarket } : {}),
+        // The seen ledger is history, not card payload — a re-search must not
+        // make the console re-offer screens this buyer already read.
+        ...(e.seenFacets?.length ? { seenFacets: e.seenFacets } : {}),
       };
     } else {
       next[id] = e;
     }
   }
   return changed ? { ...state, entities: next } : state;
+}
+
+/**
+ * Mark a console facet as delivered for a project. Append-only and idempotent;
+ * a no-op when the project is unknown to the store (the caller's delivery path
+ * always runs after `applyGoalToState`, which records the entity).
+ */
+export function markFacetSeen(
+  state: ConversationState,
+  projectId: string | undefined,
+  facet: SeenFacet,
+): ConversationState {
+  if (!projectId) return state;
+  const entity = state.entities?.[projectId];
+  if (!entity) return state;
+  if (entity.seenFacets?.includes(facet)) return state;
+  return {
+    ...state,
+    entities: {
+      ...state.entities,
+      [projectId]: { ...entity, seenFacets: [...(entity.seenFacets ?? []), facet] },
+    },
+  };
+}
+
+/** Facets already delivered for a project — `[]` when none or unknown. */
+export function projectSeenFacets(
+  state: ConversationState,
+  projectId: string | undefined,
+): readonly SeenFacet[] {
+  if (!projectId) return [];
+  return state.entities?.[projectId]?.seenFacets ?? [];
 }
 
 /** Focus a project, pushing the previous focus down the stack (most recent first). */
