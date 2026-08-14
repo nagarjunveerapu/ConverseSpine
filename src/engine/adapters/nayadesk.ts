@@ -76,9 +76,22 @@ function catalogExtras(p: NdProjectSummary): Pick<
   ProjectDetail,
   'investment' | 'visitLogistics' | 'amenities' | 'projectType'
 > {
-  const investment = mapInvestmentFromProject(p);
-  const visitLogistics = mapVisitLogisticsFromProject(p);
-  const amenities = mapAmenitiesFromSpec(p.spec_json);
+  // These are the file's trimmings — investment prose, visit logistics, the
+  // amenity list. The file itself is RERA, khata, possession, price, media. A
+  // mis-typed catalog column (parking_on_site arrives as 0/1, not text) once
+  // threw here, and because the throw surfaced as "no project detail" the buyer
+  // lost the whole file and saw four money rows for the entire conversation.
+  // Trimmings may go missing; the file may not.
+  let investment: ReturnType<typeof mapInvestmentFromProject>;
+  let visitLogistics: ReturnType<typeof mapVisitLogisticsFromProject>;
+  let amenities: ReturnType<typeof mapAmenitiesFromSpec>;
+  try {
+    investment = mapInvestmentFromProject(p);
+    visitLogistics = mapVisitLogisticsFromProject(p);
+    amenities = mapAmenitiesFromSpec(p.spec_json);
+  } catch {
+    /* a bad column costs its own row, never the record */
+  }
   return {
     ...(p.project_type ? { projectType: p.project_type } : {}),
     ...(investment ? { investment } : {}),

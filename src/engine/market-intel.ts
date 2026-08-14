@@ -106,20 +106,24 @@ export function mapVisitLogisticsFromProject(p: {
   pickup_origin_cities?: string | null;
   pickup_radius_km?: number | null;
   pickup_cost_note?: string | null;
-  parking_on_site?: string | null;
-  food_offered?: string | null;
-  accommodation_offered?: string | null;
+  // 0/1 INTEGER columns on Desk, not prose — see offeredFlag.
+  parking_on_site?: string | number | boolean | null;
+  food_offered?: string | number | boolean | null;
+  accommodation_offered?: string | number | boolean | null;
   visit_duration_note?: string | null;
   site_visit_hours?: string | null;
 }): ProjectVisitLogistics | undefined {
+  const parking = offeredFlag(p.parking_on_site, 'available');
+  const food = offeredFlag(p.food_offered, 'provided');
+  const stay = offeredFlag(p.accommodation_offered, 'provided');
   const v: ProjectVisitLogistics = {
     ...(trim(p.pickup_mode) ? { pickupMode: trim(p.pickup_mode)! } : {}),
     ...(trim(p.pickup_origin_cities) ? { pickupOriginCities: trim(p.pickup_origin_cities)! } : {}),
     ...(typeof p.pickup_radius_km === 'number' ? { pickupRadiusKm: p.pickup_radius_km } : {}),
     ...(trim(p.pickup_cost_note) ? { pickupCostNote: trim(p.pickup_cost_note)! } : {}),
-    ...(trim(p.parking_on_site) ? { parkingOnSite: trim(p.parking_on_site)! } : {}),
-    ...(trim(p.food_offered) ? { foodOffered: trim(p.food_offered)! } : {}),
-    ...(trim(p.accommodation_offered) ? { accommodationOffered: trim(p.accommodation_offered)! } : {}),
+    ...(parking ? { parkingOnSite: parking } : {}),
+    ...(food ? { foodOffered: food } : {}),
+    ...(stay ? { accommodationOffered: stay } : {}),
     ...(trim(p.visit_duration_note) ? { visitDurationNote: trim(p.visit_duration_note)! } : {}),
     ...(trim(p.site_visit_hours) ? { siteVisitHours: trim(p.site_visit_hours)! } : {}),
   };
@@ -291,20 +295,41 @@ export function advisoryFactLines(
   return lines;
 }
 
-function trim(s: string | null | undefined): string | undefined {
-  const t = (s ?? '').trim();
+/**
+ * Catalog columns are typed by hand on this side and by SQLite on Desk's, and
+ * the two drifted: `parking_on_site` is an INTEGER 0/1 flag, not prose. The
+ * `.trim()` on that number threw inside catalogExtras, the throw was read as a
+ * data failure, and the ENTIRE project file — RERA, khata, possession, media —
+ * went missing on every turn of every conversation. Decoration must never be
+ * able to take the file down: anything that is not a string has no text to give.
+ */
+function trim(s: unknown): string | undefined {
+  if (typeof s !== 'string') return undefined;
+  const t = s.trim();
   return t || undefined;
 }
 
-function parseJsonStringArray(s: string | null | undefined): string[] {
-  if (!s?.trim()) return [];
+/**
+ * Desk stores "is this laid on for a visit" as an INTEGER 0/1. A 1 is a promise
+ * the builder made; a 0 is the column's default and says nothing — so it is
+ * omitted, never spoken as a No we cannot stand behind.
+ */
+function offeredFlag(v: unknown, word: string): string | undefined {
+  if (typeof v === 'number') return v > 0 ? word : undefined;
+  if (typeof v === 'boolean') return v ? word : undefined;
+  return trim(v);
+}
+
+function parseJsonStringArray(s: unknown): string[] {
+  const text = trim(s);
+  if (!text) return [];
   try {
-    const v = JSON.parse(s) as unknown;
+    const v = JSON.parse(text) as unknown;
     if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
   } catch {
     /* csv fallback */
   }
-  return s
+  return text
     .split(',')
     .map((x) => x.trim())
     .filter(Boolean);
