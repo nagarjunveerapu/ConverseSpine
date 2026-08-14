@@ -41,7 +41,7 @@ const FULL_FACTS: WaNodeFacts = {
   possession: 'Jun 2028',
   amenities: ['clubhouse', 'pool', 'gym'],
   location: { connectivitySummary: '15 min from the airport' },
-  investment: { roiNote: '8-12% from year 3' },
+  investment: { expectedRoi: '8-12% from year 3' },
   mediaKinds: ['brochure', 'floor_plan'],
 };
 
@@ -70,11 +70,18 @@ describe('waNodeRows — the honest node menu', () => {
     expect(ids).toEqual([WA_NODE_TIME, 'visit_book']);
   });
 
-  it('Returns rides only when the yield is on the record', () => {
+  it('Returns rides only when REAL yield fields are on the record', () => {
     const family = waNodeRows({ projectId: 'p1', possession: 'Dec 2027', khata: 'A-Khata' });
     expect(family.map((r) => r.id)).not.toContain(WA_NODE_LATER);
-    const estate = waNodeRows({ projectId: 'p2', marketIntel: { yield: '4%' } });
+    // The real ProjectMarketIntel/ProjectInvestment fields draw the row…
+    const estate = waNodeRows({ projectId: 'p2', marketIntel: { appreciation3yrPct: 12 } });
     expect(estate.map((r) => r.id)).toContain(WA_NODE_LATER);
+    const managed = waNodeRows({ projectId: 'p3', investment: { expectedRoi: '4% net' } });
+    expect(managed.map((r) => r.id)).toContain(WA_NODE_LATER);
+    // …an empty or displayName-only intel object does not: the screen reads
+    // the same fields, and it would render nothing (the drawn-row-onto-nothing bug).
+    const hollow = waNodeRows({ projectId: 'p4', marketIntel: {}, investment: {} });
+    expect(hollow.map((r) => r.id)).not.toContain(WA_NODE_LATER);
   });
 
   it('no record, no menu', () => {

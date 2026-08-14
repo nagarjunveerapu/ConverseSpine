@@ -234,9 +234,26 @@ export interface WaNodeFacts {
     hospitals?: readonly unknown[];
     metroStations?: readonly unknown[];
   };
-  investment?: object;
-  marketIntel?: object;
+  investment?: {
+    expectedRoi?: string;
+    revenueModel?: string;
+    operatorBrand?: string;
+    guaranteedPayment?: string;
+  };
+  marketIntel?: {
+    appreciation3yrPct?: number;
+    appreciation5yrPct?: number;
+    corridorMaturity?: string;
+    rentBands?: ReadonlyArray<unknown>;
+    drivers?: ReadonlyArray<unknown>;
+  };
   mediaKinds?: readonly string[];
+  /** The focused project's configs — money-row gates read these. */
+  configurations?: ReadonlyArray<{
+    unitType: string;
+    priceDisplay?: string;
+    sizeDisplay?: string;
+  }>;
 }
 
 function locationHasData(loc: WaNodeFacts['location']): boolean {
@@ -244,6 +261,40 @@ function locationHasData(loc: WaNodeFacts['location']): boolean {
   return Object.values(loc).some((v) =>
     Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim().length > 0 : Boolean(v),
   );
+}
+
+/**
+ * Returns row gate — typed against the REAL ProjectMarketIntel/ProjectInvestment
+ * fields. A bare `{}` or a displayName-only intel object must NOT draw the row:
+ * the screen reads these same fields, and a drawn row that opens onto nothing
+ * is the dishonest affordance this layer bans.
+ */
+export function hasReturnsData(
+  intel?: {
+    appreciation3yrPct?: number;
+    appreciation5yrPct?: number;
+    corridorMaturity?: string;
+    rentBands?: ReadonlyArray<unknown>;
+    drivers?: ReadonlyArray<unknown>;
+  },
+  inv?: {
+    expectedRoi?: string;
+    revenueModel?: string;
+    operatorBrand?: string;
+    guaranteedPayment?: string;
+  },
+): boolean {
+  if (intel) {
+    if (intel.appreciation3yrPct !== undefined || intel.appreciation5yrPct !== undefined) return true;
+    if (intel.corridorMaturity?.trim()) return true;
+    if (intel.rentBands?.length) return true;
+    if (intel.drivers?.length) return true;
+  }
+  if (inv) {
+    if (inv.expectedRoi?.trim() || inv.revenueModel?.trim()) return true;
+    if (inv.operatorBrand?.trim() || inv.guaranteedPayment?.trim()) return true;
+  }
+  return false;
 }
 
 /**
@@ -285,7 +336,7 @@ export function waNodeRows(facts: WaNodeFacts | undefined): WaListRow[] {
   }
   // Returns rides only when the yield IS on the record — an investment product
   // speaks it; a family apartment never volunteers it.
-  if (facts.investment || facts.marketIntel) {
+  if (hasReturnsData(facts.marketIntel, facts.investment)) {
     rows.push({ id: WA_NODE_LATER, title: 'Returns', description: 'yield, appreciation, exit' });
   }
   rows.push({ id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' });
