@@ -18,6 +18,7 @@ import {
   WA_MONEY_TOTAL,
   WA_NODE_LATER,
   WA_NODE_LIFE,
+  WA_NODE_MEDIA,
   WA_NODE_MONEY,
   WA_NODE_PLACE,
   WA_NODE_TIME,
@@ -80,13 +81,16 @@ describe('the file — the root menu is the project’s sections', () => {
       WA_NODE_TRUST,
       WA_NODE_PLACE,
       WA_NODE_LIFE,
-      WA_NODE_TIME,
       WA_NODE_UNIT,
+      // The brochure and every other file, one tap from the file itself —
+      // a buyer must not have to guess which section a document was filed in.
+      WA_NODE_MEDIA,
       'visit_book',
       WA_COMPARE,
       WA_MENU_PROJECTS,
     ]);
     expect(rows.find((r) => r.id === WA_MONEY_TOTAL)!.title).toBe('Total cost — 2 BHK');
+    expect(rows.find((r) => r.id === WA_NODE_MEDIA)!.title).toBe('Brochure & photos');
     // Returns gated on and then gave way from the tail — never the way out.
     // infoCount counts unseen ANSWERS, not rows: sections never empty, so
     // counting them would kill the "you've been through the full file" signal.
@@ -102,8 +106,22 @@ describe('the file — the root menu is the project’s sections', () => {
     expect(by(WA_NODE_TRUST).description).toContain('A-Khata');
     expect(by(WA_NODE_PLACE).description).toBe('metro · schools · hospitals');
     expect(by(WA_NODE_LIFE).description).toBe('80,000 sqft amenities · 50 acres');
-    expect(by(WA_NODE_TIME).description).toBe('Dec 2027');
     expect(by(WA_NODE_UNIT).description).toBe('sizes · floor plan');
+    expect(by(WA_NODE_MEDIA).description).toContain('file');
+  });
+
+  it('Time keeps its own line — it gives way at the root, never in the file', () => {
+    // Seven sections do not fit above the three standing acts, so Time is drawn
+    // last and drops first: its whole content is the possession line already
+    // printed on the card. On a record with fewer sections it stands.
+    const { rows } = waConsoleRows({
+      facts: { projectId: 'p', possession: 'Dec 2027' },
+      units: [],
+    });
+    expect(rows.find((r) => r.id === WA_NODE_TIME)!.description).toBe('Dec 2027');
+    const full = waConsoleRows({ facts: FULL_FACTS, units: UNITS, bhk: '2 BHK' });
+    expect(full.rows.map((r) => r.id)).not.toContain(WA_NODE_TIME);
+    expect(waNodeMenuRows('time', { facts: FULL_FACTS, units: UNITS }).infoCount).toBeGreaterThan(0);
   });
 
   it('a section the record cannot back is not drawn at all', () => {
@@ -155,7 +173,7 @@ describe('the file — the root menu is the project’s sections', () => {
     expect(waConsoleTitle('Eldorado')).toBe('Eldorado — the file');
     expect(waConsoleTitle('Brigade Cornerstone')).toBe('The file');
     expect(waConsoleTitle(undefined)).toBe('The file');
-    for (const n of ['money', 'trust', 'place', 'life', 'time', 'unit'] as const) {
+    for (const n of ['money', 'trust', 'place', 'life', 'time', 'unit', 'media'] as const) {
       expect(waNodeTitle(n).length).toBeLessThanOrEqual(24);
     }
   });
@@ -176,8 +194,10 @@ describe('a section’s own screen — which part, and the way back', () => {
       'visit_book',
     ]);
     expect(rows.find((r) => r.id === 'wa.sub.trust.khata')!.description).toBe('A-Khata');
+    // A row that will put a file on the phone says so — the buyer could not
+    // tell which rows answer in words and which ones send something.
     expect(rows.find((r) => r.id === 'wa.doc.ownership_certificate')!.description).toBe(
-      'document · 1 file',
+      '📎 sends 1 file',
     );
   });
 
@@ -194,7 +214,7 @@ describe('a section’s own screen — which part, and the way back', () => {
     const plan = rows.find((r) => r.id === 'wa.doc.floor_plan')!;
     expect(plan.title).toBe('Floor plan — 2 BHK');
     // Three plans on file, one of them this buyer's: the row promises one.
-    expect(plan.description).toBe('document · 1 file');
+    expect(plan.description).toBe('📎 sends 1 file');
     expect(rows.map((r) => r.id)).toContain(WA_CONSOLE_SIZES);
   });
 
@@ -231,6 +251,31 @@ describe('a section’s own screen — which part, and the way back', () => {
     expect(noBanks.rows.map((r) => r.id)).not.toContain('wa.sub.money.loan');
   });
 
+  it('the shelf holds every file, brochure first, whatever section it also sits under', () => {
+    const { rows } = waNodeMenuRows('media', { facts: FULL_FACTS, units: UNITS, bhk: '2 BHK' });
+    const ids = rows.map((r) => r.id);
+    // Documents still live with their topics; this screen is for the buyer who
+    // wants the files and should not have to guess where each one was filed.
+    expect(ids).toEqual([
+      'wa.doc.brochure',
+      'wa.doc.payment_plan',
+      'wa.doc.floor_plan',
+      'wa.doc.ownership_certificate',
+      WA_BACK_FILE,
+      'visit_book',
+    ]);
+    expect(rows[0]!.description).toBe('📎 sends 1 file');
+    expect(rows.find((r) => r.id === 'wa.doc.floor_plan')!.title).toBe('Floor plan — 2 BHK');
+  });
+
+  it('no files on the record, no shelf — the row is never drawn empty', () => {
+    const bare = { projectId: 'p', possession: 'Dec 2027' };
+    expect(waConsoleRows({ facts: bare, units: [] }).rows.map((r) => r.id)).not.toContain(
+      WA_NODE_MEDIA,
+    );
+    expect(waNodeMenuRows('media', { facts: bare, units: [] }).infoCount).toBe(0);
+  });
+
   it('an empty section still gives a way back — never a dead end', () => {
     const { rows, infoCount } = waNodeMenuRows('trust', { facts: { projectId: 'p' }, units: [] });
     expect(infoCount).toBe(0);
@@ -238,7 +283,7 @@ describe('a section’s own screen — which part, and the way back', () => {
   });
 
   it('every screen stays inside Meta’s 10 rows and 24/72 chars', () => {
-    for (const n of ['money', 'trust', 'place', 'life', 'time', 'unit'] as const) {
+    for (const n of ['money', 'trust', 'place', 'life', 'time', 'unit', 'media'] as const) {
       const { rows } = waNodeMenuRows(n, { facts: FULL_FACTS, units: UNITS, bhk: '2 BHK' });
       expect(rows.length).toBeLessThanOrEqual(10);
       for (const r of rows) {
@@ -368,6 +413,10 @@ describe('packWhatsAppInteractive — the console through the packer', () => {
     const aids = packed.sections[0]!.rows.map((r) => splitProjectStamp(r.id).aid);
     expect(aids).not.toContain(WA_MONEY_TOTAL);
     expect(aids).toContain(WA_NODE_MONEY);
-    expect(aids).toContain(WA_NODE_LATER);
+    // The money row it delivered gave its slot back to the file, so the tail
+    // section that had been squeezed out comes back into the list. Returns is
+    // last in the queue and still waits its turn.
+    expect(aids).toContain(WA_NODE_TIME);
+    expect(aids).not.toContain(WA_NODE_LATER);
   });
 });

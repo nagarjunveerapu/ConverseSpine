@@ -178,6 +178,13 @@ export interface EngineData {
     escalationPhone?: string;
   } | null>;
   siteVisitsItinerary(ndConversationId: string): Promise<readonly StoredVisit[]>;
+  /**
+   * Cancel every site visit still standing for this conversation, and answer
+   * how many. "I've removed your details" was a promise the bot could not keep
+   * — the visits lived in Desk, so the very next turn read them back. Erasure
+   * has to reach the records the buyer can still see.
+   */
+  cancelSiteVisits(ndConversationId: string): Promise<number>;
   builder(builderId: string): Promise<{ siteVisitHours: string; name?: string; escalationPhone?: string } | null>;
   recordVisit(
     ids: { ndConversationId: string; buyerPhone: string; builderId: string },

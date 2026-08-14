@@ -322,6 +322,13 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   if (isSessionResetText(trimmedText) && !input.action_id) {
     const keptNd = state.ndConversationId;
     const keptPhone = state.ndBuyerPhone ?? input.buyerPhone;
+    // "Starting fresh" was only ever fresh on this side: the visits live in
+    // Desk, so an old booking kept clashing with the new walk two resets later.
+    // The slash command is the explicit wipe (a buyer typing "start over" is
+    // restarting the conversation, not cancelling visits they made).
+    if (keptNd && trimmedText.trim().toLowerCase() === '/reset') {
+      await deps.data.cancelSiteVisits(keptNd).catch(() => 0);
+    }
     state = freshSession(state);
     if (keptNd) state = withNdConversation(state, keptNd, keptPhone);
     const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
@@ -1977,9 +1984,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // delete: extraction can misread, and "removed your details" must never be false.
     const standaloneStop = isStandaloneStop(trimmedText);
     if (standaloneStop) {
+      // "I've removed your details" used to mean one thing: buyer-memory rows.
+      // The visits stayed booked and the session kept every preference, so the
+      // very next message read the buyer's own visit back to them. Erasure has
+      // to cover everything the buyer can still be shown — the cross-session
+      // memory, the visits standing in Desk, and this conversation's own state.
       await deps.crm.deleteBuyerMemory(nd).catch(() => {});
+      const cancelled = await deps.data.cancelSiteVisits(nd).catch(() => 0);
       const reply = "Understood — I've removed your details from our system. You won't hear from us again.";
-      state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };
+      const keptNd = state.ndConversationId;
+      const keptPhone = state.ndBuyerPhone ?? input.buyerPhone ?? '';
+      state = freshSession(state);
+      if (keptNd) state = withNdConversation(state, keptNd, keptPhone);
+      state = { ...state, phase: 'handoff', optedOut: true, turnCount: state.turnCount + 1 };
       await deps.store.save(state);
       await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
       await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop' }).catch(() => {});
@@ -1987,7 +2004,12 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         reply,
         state,
         debug: withIngressDebug(
-          { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
+          {
+            phase: 'handoff',
+            goal: { kind: 'handoff' },
+            tools: ['deleteBuyerMemory', `cancelSiteVisits:${cancelled}`],
+            grounding: 'pass',
+          },
           inputSource,
         ),
       };
@@ -2372,11 +2394,20 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
   // from state the moment it was made. Read the real booking back instead, once;
   // if the buyer genuinely wants a different day the next ask goes through, and
   // a day they NAME never reaches here (that is a propose, not an ask).
+  // …but only about THAT project. A buyer who books Eldorado and then presses
+  // "Book a visit" on Cornerstone gets their Eldorado booking read back at
+  // them — an answer to a question nobody asked, and the second visit is lost.
+  // The readback is for the project you already booked, not for the next one.
+  const askingAboutAnotherProject =
+    goal.kind === 'visit_ask' &&
+    Boolean(goal.state?.projectId) &&
+    goal.state.projectId !== state.lastBookedProjectId;
   if (
     goal.kind === 'visit_ask' &&
     (goal.ask === 'day' || goal.ask === 'time' || goal.ask === 'project') &&
     state.lastBookedProjectId &&
-    !state.visitRebookOffered
+    !state.visitRebookOffered &&
+    !askingAboutAnotherProject
   ) {
     goal = { kind: 'visit_recall' };
     state = { ...state, visitRebookOffered: true };

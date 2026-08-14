@@ -6,7 +6,7 @@ import type { ConversationState, TurnGoal } from '../engine/types.js';
 import { HANDOFF_QUESTIONS } from '../engine/book-questions.js';
 import type { Extracted } from '../engine/types.js';
 import { currentShortlist, focusedRef, projectSeenFacets } from '../engine/entity-store.js';
-import { humanizeMediaKind } from '../engine/media-asset.js';
+import { humanizeMediaKind, normalizeMediaAssetKind } from '../engine/media-asset.js';
 import type { SeenFacet } from '../engine/entity-store.js';
 import type { SuggestedAction } from '../engine/recovery-planner.js';
 
@@ -79,8 +79,18 @@ export const WA_BACK_FILE = 'wa.back.file';
 /** Put another project beside this one — the id the speech-act catalog knows. */
 export const WA_COMPARE = 'compare_projects';
 
-/** The file's sections, in the order the root menu draws them. */
-export const WA_FILE_NODES = ['money', 'trust', 'place', 'life', 'time', 'unit'] as const;
+/** Everything the project has on file, in one place — brochure and all. */
+export const WA_NODE_MEDIA = 'wa.node.media';
+
+/**
+ * The file's sections, in the order the root menu draws them.
+ *
+ * Time sits LAST because the root can hold seven body rows and the tail is what
+ * gives way — and Time's whole content (the possession line) is already printed
+ * on the card above the list, so it is the one section a buyer loses nothing by
+ * reaching one tap later.
+ */
+export const WA_FILE_NODES = ['money', 'trust', 'place', 'life', 'unit', 'media', 'time'] as const;
 export type WaFileNode = (typeof WA_FILE_NODES)[number];
 
 const NODE_ID: Record<WaFileNode, string> = {
@@ -90,6 +100,7 @@ const NODE_ID: Record<WaFileNode, string> = {
   life: WA_NODE_LIFE,
   time: WA_NODE_TIME,
   unit: WA_NODE_UNIT,
+  media: WA_NODE_MEDIA,
 };
 
 const NODE_TITLE: Record<WaFileNode, string> = {
@@ -99,6 +110,7 @@ const NODE_TITLE: Record<WaFileNode, string> = {
   life: 'Life',
   time: 'Time',
   unit: 'The unit',
+  media: 'Brochure & photos',
 };
 
 /**
@@ -170,6 +182,9 @@ export function waCanonicalUtterance(actionId: string | undefined): string | und
   if (aid === WA_MENU_NODE || aid === WA_BACK_FILE) return 'tell me more about this project';
   if (aid === WA_NODE_MONEY) return 'what does it cost';
   if (aid === WA_NODE_UNIT) return 'which units and sizes are available';
+  // The shelf is drawn by the packer and spoken by the console screen; the
+  // utterance only has to keep the engine on this project, not answer.
+  if (aid === WA_NODE_MEDIA) return 'tell me more about this project';
   // Sub-topics speak the same closed-set phrases their section does, cut to one
   // question. No new pattern is introduced anywhere — the id picks a sentence
   // the engine already parses (P7: the lane is the corpus, never a new regex).
@@ -475,6 +490,8 @@ export function waConsoleTitle(projectName: string | undefined): string {
 
 /** Inside a section: the section names itself, so the buyer knows where they are. */
 export function waNodeTitle(node: WaFileNode): string {
+  // The media shelf is a list of sends, not of things to check.
+  if (node === 'media') return 'Files I can send';
   const composed = `${NODE_TITLE[node]} — what to check`;
   return composed.length <= 24 ? composed : NODE_TITLE[node];
 }
@@ -526,15 +543,54 @@ function docRows(
           (a) => !a.unitTypeFilter || bhkMatchedUnit([{ unitType: a.unitTypeFilter }], bhk!),
         )
       : list;
-    const label = humanizeMediaKind(kind);
-    const title = mine?.unitTypeFilter
-      ? `${label[0]!.toUpperCase()}${label.slice(1)} — ${mine.unitTypeFilter}`
-      : `${label[0]!.toUpperCase()}${label.slice(1)}`;
-    rows.push({
-      id: `${WA_DOC_PREFIX}${kind}`,
-      title: clip(title, 24),
-      description: `document · ${sendable.length} file${sendable.length > 1 ? 's' : ''}`,
-    });
+    rows.push(docRow(kind, sendable.length, mine?.unitTypeFilter));
+  }
+  return rows;
+}
+
+/**
+ * A row that will put a file on the buyer's phone must SAY so — "document · 1
+ * file" read like a label, not a promise, and the buyer could not tell which
+ * rows answer in words and which ones send something. The paperclip is the tell.
+ */
+function docRow(kind: string, files: number, unitTypeFilter?: string): WaListRow {
+  const label = humanizeMediaKind(kind);
+  const title = unitTypeFilter
+    ? `${label[0]!.toUpperCase()}${label.slice(1)} — ${unitTypeFilter}`
+    : `${label[0]!.toUpperCase()}${label.slice(1)}`;
+  const noun = kind === 'site_image' ? 'photo' : 'file';
+  return {
+    id: `${WA_DOC_PREFIX}${kind}`,
+    title: clip(title, 24),
+    description: `📎 sends ${files} ${noun}${files > 1 ? 's' : ''}`,
+  };
+}
+
+/**
+ * The whole shelf: every kind of file the project holds, in one screen. The
+ * documents still sit with their topics — this is the buyer who wants "just
+ * send me the brochure and the plans" and should not have to guess which
+ * section a file was filed under.
+ */
+function allDocRows(facts: WaNodeFacts | undefined, bhk?: string): WaListRow[] {
+  const assets = facts?.mediaAssets ?? [];
+  if (!assets.length) return [];
+  const byKind = new Map<string, typeof assets>();
+  for (const a of assets) byKind.set(a.kind, [...(byKind.get(a.kind) ?? []), a]);
+  // Brochure first — it is the one file every buyer asks for by name.
+  const order = [...byKind.keys()].sort(
+    (a, b) => (a === 'brochure' ? -1 : 0) - (b === 'brochure' ? -1 : 0),
+  );
+  const rows: WaListRow[] = [];
+  for (const kind of order) {
+    const list = byKind.get(kind)!;
+    const mine = bhk
+      ? list.find((a) => a.unitTypeFilter && bhkMatchedUnit([{ unitType: a.unitTypeFilter }], bhk))
+      : undefined;
+    const sendable = mine
+      ? list.filter((a) => !a.unitTypeFilter || bhkMatchedUnit([{ unitType: a.unitTypeFilter }], bhk!))
+      : list;
+    rows.push(docRow(kind, sendable.length, mine?.unitTypeFilter));
   }
   return rows;
 }
@@ -586,6 +642,10 @@ function sectionHint(
       ].filter(Boolean);
       return bits.length ? bits.join(' · ') : undefined;
     }
+    case 'media': {
+      const n = facts?.mediaAssets?.length ?? 0;
+      return n ? `everything on file — ${n} file${n > 1 ? 's' : ''} to send you` : undefined;
+    }
   }
 }
 
@@ -616,6 +676,8 @@ function sectionHasData(
       return Boolean(facts?.possession?.trim() || facts?.phases?.some((p) => p.possession?.trim()));
     case 'unit':
       return units.length > 0;
+    case 'media':
+      return Boolean(facts?.mediaAssets?.length);
   }
 }
 
@@ -797,9 +859,13 @@ export function waNodeMenuRows(
       }
       break;
     }
+    // Media is not a topic with sub-topics — it is the shelf. Every file the
+    // project has, in one screen, whichever section it also sits under.
+    case 'media':
+      break;
   }
 
-  const docs = docRows(facts, node, bhk, covered);
+  const docs = node === 'media' ? allDocRows(facts, bhk) : docRows(facts, node, bhk, covered);
   const infoCount = rows.length + docs.length;
   // 8 topic slots leaves the way back and one act inside Meta's 10.
   const body = [...rows, ...docs].slice(0, 8);
@@ -1380,7 +1446,11 @@ export function applyWaInteractiveExtract(
     };
   }
   if (aid === 'visit_book') {
-    return { ...extracted, speechAct: 'visit_book', transition: 'want_visit' };
+    // The recall flag outranks booking in the visit machine, so a buyer who
+    // already had one visit on the books tapped "Book a visit" for a SECOND
+    // project and was read the first one back instead. A tap that says book
+    // means book.
+    return { ...extracted, speechAct: 'visit_book', transition: 'want_visit', recall: false };
   }
   // Legacy id from the screens that labelled this button "Price / EMI". Old
   // WhatsApp messages stay tappable forever, so the promise those words made is
@@ -1465,6 +1535,24 @@ export function applyWaInteractiveExtract(
       mediaAssetKind: 'brochure',
       transition: 'want_details',
     };
+  }
+  // A document row IS the ask — the id names the asset kind, so the send must
+  // not depend on the canonical sentence surviving a phrase match. It didn't:
+  // "share the ownership certificate" matches no media phrase, so tapping the
+  // certificate returned a project blurb and no file. The id is the request.
+  if (aid.startsWith(WA_DOC_PREFIX)) {
+    const kind = normalizeMediaAssetKind(aid.slice(WA_DOC_PREFIX.length));
+    if (kind) {
+      return {
+        ...extracted,
+        speechAct: 'answer',
+        askTopic: 'media',
+        askTopics: ['media'],
+        mediaAssetKind: kind,
+        transition: 'want_details',
+        isQuestion: false,
+      };
+    }
   }
   if (aid.startsWith(WA_DAY_PREFIX) || aid.startsWith(WA_WINDOW_PREFIX) || aid === WA_TRIP_ALL) {
     return {
