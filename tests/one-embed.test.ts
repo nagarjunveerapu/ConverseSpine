@@ -176,4 +176,43 @@ describe('one turn, one embed', () => {
     });
     expect(calls).toBe(0);
   });
+
+  it('refuses a whole batch when the response length does not match', async () => {
+    // Results are matched by POSITION. A short data array has an unknown
+    // offset, so taking the prefix would give text[0] another text's vector —
+    // a project bound from a question nobody asked, with nothing thrown. One
+    // text per call could not do this; batching can.
+    const short = {
+      async run(_m: string, input: { text: string[] }) {
+        return { data: input.text.slice(1).map((t) => [t.length, 0.5]) };
+      },
+    };
+    const { vectors, cache } = await cachedEmbedMany(
+      { ...env, AI: short as never },
+      ['alpha', 'bravo', 'charlie'],
+    );
+
+    expect(vectors).toEqual([null, null, null]);
+    expect(cache).toBe('miss');
+    // And nothing misaligned was written to KV for a later turn to trust.
+    expect(kv.store.size).toBe(0);
+  });
+
+  it('drops null and empty rows without shifting the ones beside them', async () => {
+    // A per-row failure is different from a length mismatch: the offsets are
+    // still known, so the good vectors stay usable.
+    const holey = {
+      async run(_m: string, input: { text: string[] }) {
+        return { data: input.text.map((t, i) => (i === 1 ? null : [t.length, 0.5])) };
+      },
+    };
+    const { vectors } = await cachedEmbedMany(
+      { ...env, AI: holey as never },
+      ['alpha', 'bravo', 'charlie!'],
+    );
+
+    expect(vectors[0]).toEqual([5, 0.5]);
+    expect(vectors[1]).toBeNull();
+    expect(vectors[2]).toEqual([8, 0.5]);
+  });
 });
