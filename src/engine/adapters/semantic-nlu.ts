@@ -75,25 +75,42 @@ function cosine(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
+/**
+ * Embed one or many texts through the L3 door.
+ *
+ * Was: cache only when exactly one text, and only when a caller remembered to
+ * pass `cacheEnv` — so the batch lane re-embedded twenty-five static micro
+ * markets on every buyer turn, and the project-identity lane (the busiest one)
+ * simply never passed the env and so never cached at all. Now every text is
+ * looked up individually and whatever is left goes out in a single call, which
+ * is the same shape for one text or twenty-five.
+ *
+ * Returns `[]` when nothing embedded, matching the previous contract; callers
+ * that need positional alignment check `vectors.length === texts.length`.
+ */
 async function embedTexts(
   ai: Env['AI'],
   texts: string[],
   model?: string,
-  /** Optional L3 cache for single-text embeds (enrich + routing share). */
+  /** L3 cache. Optional only so tests can drive the raw path. */
   cacheEnv?: Pick<Env, 'TURN_CACHE' | 'SIL_INTENT_PROJECTION'>,
 ): Promise<number[][]> {
   if (!ai || texts.length === 0) return [];
-  // Single-query path — reuse L3 when present (batch location embeds skip cache).
-  if (texts.length === 1 && cacheEnv?.TURN_CACHE) {
-    const { cachedEmbedOne } = await import('../../cache/embed.js');
-    const { vector } = await cachedEmbedOne(
-      { AI: ai, TURN_CACHE: cacheEnv.TURN_CACHE, SIL_EMBED_MODEL: model, SIL_INTENT_PROJECTION: cacheEnv.SIL_INTENT_PROJECTION },
-      texts[0]!,
-    );
-    return vector ? [vector] : [];
-  }
-  const resp = (await ai.run((model || DEFAULT_EMBED_MODEL) as never, { text: texts })) as { data?: number[][] };
-  return resp.data ?? [];
+  const { cachedEmbedMany } = await import('../../cache/embed.js');
+  const { vectors } = await cachedEmbedMany(
+    {
+      AI: ai,
+      SIL_EMBED_MODEL: model,
+      ...(cacheEnv?.TURN_CACHE ? { TURN_CACHE: cacheEnv.TURN_CACHE } : {}),
+      ...(cacheEnv?.SIL_INTENT_PROJECTION
+        ? { SIL_INTENT_PROJECTION: cacheEnv.SIL_INTENT_PROJECTION }
+        : {}),
+    },
+    texts,
+  );
+  // A partial batch would silently misalign the location scan below, which
+  // reads vectors[i] against microMarkets[i-1]. All-or-nothing is safer.
+  return vectors.every((v) => v?.length) ? (vectors as number[][]) : [];
 }
 
 /** Collect distinct projects from Vectorize matches above threshold. */
@@ -120,20 +137,48 @@ export function collectNamedProjectsFromMatches(
     .map(([projectId, { name }]) => ({ projectId, name }));
 }
 
+type VectorMatch = { score?: number; metadata?: Record<string, unknown> };
+
+/**
+ * Resolve every text against PROJECT_VECTORS: one embed call for all of them,
+ * then the Vectorize lookups concurrently.
+ *
+ * This used to be one text at a time inside a `for await`, so "compare A and B"
+ * paid two embeds and two round trips end to end when it needed one embed and
+ * two parallel round trips.
+ */
+async function queryProjectVectorsMany(
+  env: Env,
+  texts: readonly string[],
+  builderId: string,
+): Promise<VectorMatch[]> {
+  if (texts.length === 0 || !env.PROJECT_VECTORS) return [];
+  // `env` was not passed to the embed before, so the project-identity lane —
+  // the one that runs on almost every turn — was the only lane paying full
+  // price for an embed it had usually already made.
+  const vectors = await embedTexts(env.AI!, [...texts], env.SIL_EMBED_MODEL, env);
+  if (vectors.length !== texts.length) return [];
+  const perText = await Promise.all(
+    vectors.map((query) =>
+      env
+        .PROJECT_VECTORS!.query(query, {
+          topK: 8,
+          returnMetadata: 'all',
+          filter: { builder_id: builderId },
+        })
+        .then((r) => r?.matches ?? [])
+        .catch(() => [] as VectorMatch[]),
+    ),
+  );
+  return perText.flat();
+}
+
 async function queryProjectVectors(
   env: Env,
   text: string,
   builderId: string,
-): Promise<ReadonlyArray<{ score?: number; metadata?: Record<string, unknown> }>> {
-  const vectors = await embedTexts(env.AI!, [text], env.SIL_EMBED_MODEL);
-  const query = vectors[0];
-  if (!query || !env.PROJECT_VECTORS) return [];
-  const results = await env.PROJECT_VECTORS.query(query, {
-    topK: 8,
-    returnMetadata: 'all',
-    filter: { builder_id: builderId },
-  }).catch(() => null);
-  return results?.matches ?? [];
+): Promise<ReadonlyArray<VectorMatch>> {
+  return queryProjectVectorsMany(env, [text], builderId);
 }
 
 /** Strip compare/visit lead-in so each clause embeds a project name, not the verb. */
@@ -165,12 +210,12 @@ async function resolveNamedProjectsFromVectors(
           .filter((p) => p.length >= 3)
       : [text];
 
-  const allMatches: Array<{ score?: number; metadata?: Record<string, unknown> }> = [];
-  for (const clause of clauses.slice(0, 3)) {
-    const embedClause = clauseForProjectEmbed(clause);
-    if (embedClause.length < 3) continue;
-    allMatches.push(...(await queryProjectVectors(env, embedClause, builderId)));
-  }
+  const embedClauses = clauses
+    .slice(0, 3)
+    .map(clauseForProjectEmbed)
+    .filter((c) => c.length >= 3);
+
+  const allMatches = await queryProjectVectorsMany(env, embedClauses, builderId);
 
   const named = collectNamedProjectsFromMatches(allMatches);
   return multiProject ? named.slice(0, 3) : named.slice(0, 1);
@@ -381,7 +426,11 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
           text.trim();
         if (locHint.length >= 3) {
           const batch = [locHint, ...ctx.microMarkets.slice(0, 24)];
-          const vectors = await embedTexts(env.AI, batch, env.SIL_EMBED_MODEL);
+          // The 24 markets are the same list on every turn of every
+          // conversation — the only text here that changes is the hint. Passing
+          // `env` means the tail of this batch is a cache read after the first
+          // turn, and the call carries one text instead of twenty-five.
+          const vectors = await embedTexts(env.AI, batch, env.SIL_EMBED_MODEL, env);
           if (vectors.length === batch.length) {
             const q = vectors[0]!;
             let bestIdx = -1;

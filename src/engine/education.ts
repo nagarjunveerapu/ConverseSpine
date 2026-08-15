@@ -1,8 +1,7 @@
 import type { Env } from '../env.js';
 import type { NayaDeskClient } from '../crm/nayadesk-client.js';
+import { cachedEmbedOne } from '../cache/embed.js';
 import { EDUCATION_TAU } from '../rebuild/education-index.js';
-
-const DEFAULT_EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 
 export interface EducationEvidence {
   entryId: string;
@@ -41,7 +40,10 @@ export async function educationSearch(
   text: string,
   opts: {
     jurisdiction?: 'india' | 'karnataka';
-    env?: Pick<Env, 'AI' | 'EDUCATION_VECTORS' | 'SIL_EMBED_MODEL'>;
+    env?: Pick<
+      Env,
+      'AI' | 'EDUCATION_VECTORS' | 'SIL_EMBED_MODEL' | 'TURN_CACHE' | 'SIL_INTENT_PROJECTION'
+    >;
   } = {},
 ): Promise<EducationEvidence | null> {
   const q = text.trim();
@@ -51,9 +53,9 @@ export async function educationSearch(
 
   if (env?.AI && env.EDUCATION_VECTORS) {
     try {
-      const model = env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
-      const embedded = (await env.AI.run(model as never, { text: [q] })) as { data?: number[][] };
-      const vector = embedded.data?.[0];
+      // Was a raw AI.run, so a buyer asking a legal question paid a second full
+      // embed for text the routing lane had usually already embedded this turn.
+      const { vector } = await cachedEmbedOne(env, q);
       if (vector?.length) {
         const results = await env.EDUCATION_VECTORS.query(vector, {
           topK: 8,
