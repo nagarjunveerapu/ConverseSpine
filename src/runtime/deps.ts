@@ -1,5 +1,6 @@
 import type { Env } from '../env.js';
 import { NayaDeskClient } from '../crm/nayadesk-client.js';
+import { meterAi, newEmbedMeter } from '../cache/embed-meter.js';
 import { makeEngineLlm } from '../engine/adapters/llm.js';
 import { makeSemanticNlu } from '../engine/adapters/semantic-nlu.js';
 import { nayadeskCrm, nayadeskData } from '../engine/adapters/nayadesk.js';
@@ -136,19 +137,28 @@ export class ConverseRuntime {
     // shared projectCardMemo was cross-chat poisoning L2 hit/miss + thinning
     // overview when a stub card lingered from another conversation.
     const cacheStats: import('../cache/turn-cache.js').CacheStats = {};
+    // Same reasoning as cacheStats: fresh every turn, because a warm isolate
+    // reuses ConverseRuntime and a shared counter would report the isolate's
+    // lifetime instead of this buyer's turn. `semantic` is rebuilt here rather
+    // than reused from `base` for the same reason — makeSemanticNlu closes over
+    // the env it was handed, so the constructor-time one holds the raw binding.
+    const embedMeter = newEmbedMeter();
+    const AI = this.env.AI ? meterAi(this.env.AI, embedMeter) : this.env.AI;
     return {
       ...base,
       cacheStats,
+      embedMeter,
       projectCardMemo: new Map(),
+      semantic: makeSemanticNlu({ ...this.env, AI }),
       data: nayadeskData(this.crm, {
-        AI: this.env.AI,
+        AI,
         EDUCATION_VECTORS: this.env.EDUCATION_VECTORS,
         SIL_EMBED_MODEL: this.env.SIL_EMBED_MODEL,
         TURN_CACHE: this.env.TURN_CACHE,
         cacheStats,
       }),
       ...(base.routingEnv
-        ? { routingEnv: { ...base.routingEnv, cacheStats } }
+        ? { routingEnv: { ...base.routingEnv, AI, cacheStats } }
         : {}),
     };
   }

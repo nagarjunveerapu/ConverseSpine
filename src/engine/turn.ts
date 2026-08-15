@@ -3423,6 +3423,17 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         ...(postComposeMs !== undefined ? { post_compose_ms: postComposeMs } : {}),
         ...(storeSaveMs !== undefined ? { store_save_ms: storeSaveMs } : {}),
         ...(crmPreMs > 0 ? { crm_pre_ms: crmPreMs } : {}),
+        // Cuts across the phases above rather than sitting between them: the
+        // embed lanes fire inside pre_extract, routing and mid. Reported as a
+        // total because the question it answers is "how many times did this one
+        // turn go to Workers AI", not "which phase paid for it".
+        ...(deps.embedMeter && deps.embedMeter.calls > 0
+          ? {
+              embed_ms: deps.embedMeter.ms,
+              embed_calls: deps.embedMeter.calls,
+              embed_texts: deps.embedMeter.texts,
+            }
+          : {}),
         total_ms: deps.clock.nowMs() - turnStartedMs,
       },
       ...(deps.cacheStats && Object.keys(deps.cacheStats).length

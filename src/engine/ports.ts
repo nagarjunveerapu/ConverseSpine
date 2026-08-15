@@ -468,6 +468,8 @@ export interface EngineDeps {
   projectEtag?: (projectId: string) => Promise<{ etag: string; latest_updated_at: number } | null>;
   /** Mutable per-turn cache hit/miss bag (debug). */
   cacheStats?: import('../cache/turn-cache.js').CacheStats;
+  /** Mutable per-turn Workers AI embed counter — fills `timings.embed_ms`. */
+  embedMeter?: import('../cache/embed-meter.js').EmbedMeter;
   /**
    * Same-turn project detail memo — media+legal packed asks hydrate twice;
    * memo avoids a second Desk RTT within one turn (not persisted).

@@ -1085,7 +1085,12 @@ export interface TurnDebug {
     /** Sync CRM before waitUntil (ensureLead / setStage) — nests inside pre/post. */
     crm_pre_ms?: number;
     total_ms?: number;
+    /** Wall clock inside Workers AI embed calls this turn (all lanes). */
     embed_ms?: number;
+    /** `AI.run` count — embedding is priced per call, so this is the lever. */
+    embed_calls?: number;
+    /** Strings embedded across those calls — proves batching, not dropping. */
+    embed_texts?: number;
     desk_ms?: number;
   };
   /** L1–L4 TURN_CACHE hit/miss. */

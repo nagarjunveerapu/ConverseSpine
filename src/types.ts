@@ -190,6 +190,8 @@ export interface TurnResult {
       crm_pre_ms?: number;
       total_ms?: number;
       embed_ms?: number;
+      embed_calls?: number;
+      embed_texts?: number;
       desk_ms?: number;
     };
     cache?: {
