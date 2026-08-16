@@ -25,6 +25,16 @@ export interface Env {
    * the behaviour before the projection existed. See nlu/intent-projection.ts.
    */
   SIL_INTENT_PROJECTION?: string;
+  /**
+   * The INTENT_VECTORS index this deployment writes to, named so the rebuild
+   * manifest can be keyed on it. The Vectorize binding does not expose its own
+   * index name, and four envs share one TURN_CACHE namespace — so without this
+   * two envs on the same projection share a manifest across DIFFERENT indices,
+   * and the second one's rebuild reports "unchanged" against vectors it has
+   * never written. Must equal the env's own `index_name`, enforced by
+   * tests/intent-projection-space.test.ts. Absent = the legacy space-only key.
+   */
+  SIL_INTENT_INDEX?: string;
   /** Override the intent bind threshold. Each space has its own; 0.78 is the
    *  raw-model value and does NOT transfer to a projected space. */
   SIL_ROUTING_TAU?: string;

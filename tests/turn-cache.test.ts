@@ -28,8 +28,22 @@ describe('turn-cache keys', () => {
     expect(embKey('p256', 'What is the price?')).toBe(
       `emb:p256:${hashKey('what is the price?')}`,
     );
-    expect(intentQueryKey('p256', 'What is the price?', 'brigade-group')).toBe(
-      `ivq:p256:${hashKey('what is the price?')}:brigade-group`,
+    expect(intentQueryKey('p256', 'idx-a', 'What is the price?', 'brigade-group')).toBe(
+      `ivq:p256:idx-a:${hashKey('what is the price?')}:brigade-group`,
     );
+  });
+
+  it('the intent-query cache is per index, not just per projection', () => {
+    // This caches the RESULT of querying one index, and dev/projdev/ctrldev/
+    // local share a single TURN_CACHE namespace. Measured 16 Aug 2026 before
+    // the index went into the key: two arms on two different indices, asked the
+    // same novel phrasing in either order, returned the SAME score to eight
+    // decimal places — the second arm never queried its own index at all.
+    const q = 'do the towers here have piped gas connection already';
+    expect(intentQueryKey('p256', 'naya-intent-p256-f6665e0b79-full-dev', q, 'b')).not.toBe(
+      intentQueryKey('p256', 'naya-intent-p256-f6665e0b79-canon-dev', q, 'b'),
+    );
+    // …while the same index still hits, or the cache stops being a cache.
+    expect(intentQueryKey('p256', 'idx-a', q, 'b')).toBe(intentQueryKey('p256', 'idx-a', q, 'b'));
   });
 });

@@ -16,6 +16,7 @@ import {
   fairHousingRouting,
 } from './fair-housing.js';
 import { projectIntentVector, routingTau } from '../../nlu/intent-projection.js';
+import { getQueryCanonicalizer } from '../../nlu/vocab.js';
 import { attachAnswerTopics } from './answer-topics.js';
 import { DEFERRABLE_ANSWER_TOPICS, projectRoutingFromSpeechAct } from './from-speech-act.js';
 import type { TurnRoutingInput, TurnRoutingResult } from './types.js';
@@ -114,16 +115,27 @@ export async function embedderRouting(
     | 'SIL_ROUTING_TAU'
     | 'FAILURE_ROUTING'
     | 'SIL_STATE_TOKENS'
+    | 'SIL_CANONICAL_EMBED'
+    | 'SIL_INTENT_INDEX'
     | 'TURN_CACHE'
   >,
   input: TurnRoutingInput,
 ): Promise<EmbedderOutcome> {
   if (!env.AI || !env.INTENT_VECTORS) return { result: null, fired: false };
 
-  const queryText = buildRoutingQuery(input, env);
+  // Same masking the corpus got, from the vocab the CURRENT index was built
+  // with (pinned in KV), or the query lands in a different space than the rows
+  // it is being compared against — which cosine reports as plausible numbers.
+  const canon =
+    env.SIL_CANONICAL_EMBED === 'true'
+      ? await getQueryCanonicalizer(env as unknown as Env)
+      : undefined;
+  const queryText = buildRoutingQuery(input, env, canon);
   const model = env.SIL_EMBED_MODEL || DEFAULT_EMBED_MODEL;
   const tau = routingTau(env);
   const projectionId = env.SIL_INTENT_PROJECTION || 'raw';
+  // The result cache is per index — four envs share one KV namespace.
+  const indexName = env.SIL_INTENT_INDEX || '_';
   const statsEnv = env as typeof env & { cacheStats?: { emb?: 'hit' | 'miss' | 'skip' } };
 
   // SIL Phase 0 — keep every match (deduped by id: the global query re-returns
@@ -138,6 +150,7 @@ export async function embedderRouting(
     const cachedMatches = await getIntentQueryMatches(
       env.TURN_CACHE,
       projectionId,
+      indexName,
       queryText,
       input.builder_id,
     );
@@ -247,6 +260,7 @@ export async function embedderRouting(
       await putIntentQueryMatches(
         env.TURN_CACHE,
         projectionId,
+        indexName,
         queryText,
         input.builder_id,
         matches,
