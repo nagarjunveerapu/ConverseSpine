@@ -292,7 +292,14 @@ export function nayadeskData(
   crm: NayaDeskClient,
   env?: Pick<
     import('../../env.js').Env,
-    'AI' | 'EDUCATION_VECTORS' | 'SIL_EMBED_MODEL' | 'TURN_CACHE'
+    | 'AI'
+    | 'EDUCATION_VECTORS'
+    | 'SIL_EMBED_MODEL'
+    // Carried so the education lane hashes its L3 entries into the same
+    // namespace as routing and enrich. Without it education writes under
+    // 'raw' and stores a second copy of a vector the turn already has.
+    | 'SIL_INTENT_PROJECTION'
+    | 'TURN_CACHE'
   > & { cacheStats?: CacheStats },
 ): EngineData {
   const kv = env?.TURN_CACHE;
