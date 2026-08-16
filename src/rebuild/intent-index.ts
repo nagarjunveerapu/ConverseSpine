@@ -108,12 +108,30 @@ export interface RebuildReport {
 }
 
 /**
- * FNV-1a over the EMBEDDED content — cheap, deterministic, no crypto. Keyed on
- * the canonical form (what actually gets embedded), so flipping raw→canonical
- * invalidates every manifest entry and forces a clean re-embed on next rebuild.
+ * FNV-1a over the EMBEDDED content — cheap, deterministic, no crypto.
+ *
+ * This comment used to promise that flipping raw→canonical invalidated every
+ * manifest entry. It did not: the body canonicalizes either way, so both modes
+ * hashed identically, planRebuild found nothing changed, and the flip
+ * re-embedded NOTHING — while the query side flipped the same instant
+ * (semantic-nlu.ts reads the env var per turn). A canonical query against a raw
+ * index is two different vector spaces: recognition degrades with no error
+ * anywhere. The RebuildOptions note ("requires a manifest reset, documented in
+ * the PR") was the only thing standing between us and that, and a cutover that
+ * depends on remembering is the one that gets forgotten.
+ *
+ * Same failure the `space` key already guards below — canonical mode simply was
+ * not in the key. tests/canonical-cutover.test.ts pins it.
  */
-export function contentHash(r: RegistryRow): string {
-  const s = `${canonicalize(r.phrasing)}${r.intent_kind}${r.is_negative ? 1 : 0}${r.discourse_state ?? ''}`;
+export function contentHash(r: RegistryRow, canonicalMode = false): string {
+  const body = `${canonicalize(r.phrasing)}${r.intent_kind}${r.is_negative ? 1 : 0}${r.discourse_state ?? ''}`;
+  // Part of the key because it changes what is embedded. It lives in the HASH
+  // rather than the manifest key so it invalidates in BOTH directions: a
+  // rollback to raw has to re-embed too, and a per-mode manifest key would
+  // have left canonical vectors in place under a stale legacy manifest still
+  // calling them raw. The legacy branch is byte-identical to what it produced
+  // before, so merging this alone re-embeds nothing — only the flip pays.
+  const s = canonicalMode ? `c:${body}` : body;
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -216,7 +234,7 @@ export function planRebuild(
       })
     : baseEligible;
   const eligibleIds = new Set(eligible.map((r) => r.id));
-  const changed = eligible.filter((r) => manifest[r.id] !== contentHash(r));
+  const changed = eligible.filter((r) => manifest[r.id] !== contentHash(r, !!opts.canonicalMode));
   const toRemove = Object.keys(manifest).filter((id) => !eligibleIds.has(id));
   return { eligible, changed, toRemove };
 }
@@ -339,7 +357,7 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
       for (let k = 0; k < upserts.length; k += UPSERT_BATCH) {
         await env.INTENT_VECTORS.upsert(upserts.slice(k, k + UPSERT_BATCH) as never);
       }
-      for (const r of batch) manifest[r.id] = contentHash(r);
+      for (const r of batch) manifest[r.id] = contentHash(r, canonicalMode);
       base.pushed += upserts.length;
     } catch (e) {
       base.errors.push(`embed_batch_${i}:${(e as Error).message}`);
