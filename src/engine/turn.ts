@@ -182,7 +182,7 @@ import {
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
 import { arbitrateFocusPivot, isImplausibleLocationCapture } from './turn-intent/pivot-arbiter.js';
-import { isNonPlaceUtterance, isPlausiblePlaceLabel } from './placeability.js';
+import { isAttentionNudge, isNonPlaceUtterance, isPlausiblePlaceLabel } from './placeability.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
@@ -3810,10 +3810,20 @@ async function decideGoalAsync(
   // Ignore askTopics: embedder often nearest-neighbours get_brochure on smash.
   // When the hard brief is already filled, bare "ok" must advance — not re-probe.
   // Project-first WA: "hi" / "ok" must re-offer the book, not "couldn't make sense".
+  //
+  // …and so must every other channel. This is the THIRD copy of that gate, and
+  // the only one the shipped turn actually reaches — fixing the two inside
+  // discover left "hi" on advisor_web still answered with "I couldn't make
+  // sense of that", because control never got that far. The good behaviour was
+  // written once and then fenced behind `skipBrief`, exactly as bookLevelAnswer
+  // was: the WhatsApp buyer got a greeting, the web buyer got told they were
+  // unintelligible. isAttentionNudge is the existing knock/smash split — a
+  // knock deserves an answer, smash deserves "I couldn't make sense of that".
   if (
     !skipBrief &&
     s.phase === 'discover' &&
     isNonPlaceUtterance(text) &&
+    !isAttentionNudge(text) &&
     !discover.hasNarrowingConstraint(ex.constraints) &&
     !(ex.namedProjects?.length) &&
     ex.transition !== 'want_visit'

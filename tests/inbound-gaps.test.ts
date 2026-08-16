@@ -50,6 +50,23 @@ describe('F1 · a greeting is a knock, not noise', () => {
     const g = decide(cold(), ex({ isQuestion: false }), 'asdf asdf');
     expect(g.kind).toBe('clarify_intent');
   });
+
+  // At the TURN level, because the unit tests above were green while the
+  // shipped reply was unchanged: there is a third copy of this gate in
+  // turn.ts, reached before discover, and it had the same hole. A greeting
+  // has to survive the whole path, not just the phase that ends up agreeing.
+  it('a whole turn greets a knock and still refuses smash', async () => {
+    const deps = fakeDeps();
+    const say = (convId: string, text: string) =>
+      runEngineTurn(
+        { convId, builderId: 'lokations', text, buyerPhone: '+919900001001', channel: 'advisor_web' },
+        deps,
+      );
+    const knock = await say('f1-knock', 'hi');
+    expect(knock.reply).not.toMatch(/couldn't make sense/i);
+    const smash = await say('f1-smash', 'asdf asdf');
+    expect(smash.reply).toMatch(/couldn't make sense/i);
+  });
 });
 
 describe('F2 · a purpose answer is not a place', () => {
