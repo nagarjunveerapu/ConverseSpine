@@ -159,7 +159,12 @@ function relaxedLead(
     ? `I couldn't match ${phrase} tightly — here's the closest I can stand behind`
     : `Couldn't nail ${phrase} exactly — here's what we do have`;
 }
-import { affordabilityFromMonthlyText, isCostComponentAsk, isInventoryAsk } from './facts.js';
+import {
+  affordabilityFromMonthlyText,
+  detectPropertyTypes,
+  isCostComponentAsk,
+  isInventoryAsk,
+} from './facts.js';
 import { INCOME_SERVICING_RATIO } from './emi.js';
 import { humanizeMediaKind, normalizeMediaAssetKind } from './media-asset.js';
 import { resolveFaqQuestionKeys } from './faq-keys.js';
@@ -1359,6 +1364,26 @@ function fallbackReplyBody(req: ComposeRequest): string {
             projectName: pname,
           })}`;
         }
+        // A category error is not a data gap. Brigade Eldorado is an APARTMENT
+        // project; asked "what plot sizes do you have" it reported an empty
+        // field — "I don't have that detail on file for *Brigade Eldorado*
+        // yet" — when the truth is that plots are the wrong noun for it. The
+        // field is not missing; the question does not apply.
+        const catMiss = categoryMismatchLine(
+          {
+            projectType: ev.detail?.projectType,
+            category: askedInventoryCategory(context.buyerText),
+          },
+          ev.units ?? [],
+          pname,
+        );
+        if (catMiss) {
+          return `${catMiss}.${closingCta({
+            buyerText: context.buyerText,
+            topics,
+            projectName: pname,
+          })}`;
+        }
         return `I don't have that detail on file for *${pname}* yet.${closingCta({
           buyerText: context.buyerText,
           topics,
@@ -1493,6 +1518,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
           summarizeUnitConfigs(ev.units, multiTopic ? undefined : context.focusProjectName, {
             ...askedConfigFamily(context.buyerText, context.constraints),
             projectType: ev.detail?.projectType,
+            category: askedInventoryCategory(context.buyerText),
           }),
         );
       }
@@ -1636,6 +1662,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
         const askedCfg: AskedConfig = {
           ...askedConfigFamily(context.buyerText, context.constraints),
           projectType: ev.detail?.projectType,
+          category: askedInventoryCategory(context.buyerText),
         };
         // AB-1 — an inventory ask ("is there any inventory left?") wants the
         // availability FACT. A config card list without it is a non-answer.
@@ -1688,6 +1715,20 @@ function fallbackReplyBody(req: ComposeRequest): string {
           const pos = formatPossession(ev.detail.possession);
           return `Possession at *${pname}* is ${pos}.${cta({ projectName: pname })}`;
         }
+        // A category error is not a data gap. Brigade Eldorado is an APARTMENT
+        // project; asked "what plot sizes do you have" it reported an empty
+        // field — "I don't have that detail on file for *Brigade Eldorado*
+        // yet" — when the truth is that plots are the wrong noun for it. The
+        // field is not missing; the question does not apply.
+        const catMiss = categoryMismatchLine(
+          {
+            projectType: ev.detail?.projectType,
+            category: askedInventoryCategory(context.buyerText),
+          },
+          ev.units ?? [],
+          pname,
+        );
+        if (catMiss) return `${catMiss}.${cta({ projectName: pname })}`;
         return `I don't have that detail on file for *${pname}* yet.${cta({ projectName: pname })}`;
       }
       if (ev.detail) {
@@ -1970,6 +2011,87 @@ export interface AskedConfig {
   inBhkTerms?: boolean;
   /** Raw catalog project_type — supplies the REASON a BHK ask has no answer. */
   projectType?: string;
+  /**
+   * The inventory category the buyer named on THIS turn ("plot", "apartment",
+   * "villa", "plantation") — the input to noticing they named the wrong one.
+   */
+  category?: string;
+}
+
+/**
+ * The inventory category named on this turn, from the buyer's own words.
+ *
+ * `detectPropertyTypes` is the existing authority for that — the same one the
+ * search constraint uses — so this reads it rather than inventing a second
+ * vocabulary. Two categories in one breath ("apartments or villas") is a
+ * question about the range, not a claim about either, so it yields nothing.
+ */
+export function askedInventoryCategory(buyerText?: string): string | undefined {
+  const t = (buyerText ?? '').trim();
+  if (!t) return undefined;
+  const found = detectPropertyTypes(t);
+  if (!found || found.includes(',')) return undefined;
+  return found;
+}
+
+/**
+ * What this project actually holds — from its type AND its unit rows.
+ *
+ * The rows are the harder evidence: Ayana is filed as
+ * `managed_plantation_estate` and its book lists "5,000 sqft Plot", so it holds
+ * plots whichever string you read. Deliberately generous — a "3 BHK Villa" row
+ * counts as both — because this set exists to license saying NO, and a no may
+ * only be said about a category the book clearly does not contain.
+ */
+function inventoryCategoriesOf(
+  projectType: string | undefined,
+  units: ReadonlyArray<UnitConfigRow>,
+): Set<string> {
+  const out = new Set<string>();
+  const t = (projectType ?? '').toLowerCase();
+  if (t.includes('plantation') || t.includes('farm')) {
+    out.add('plantation');
+    out.add('plot');
+  }
+  if (t.includes('plot')) out.add('plot');
+  if (t.includes('villa')) out.add('villa');
+  if (t.includes('apartment') || t.includes('flat')) out.add('apartment');
+  for (const u of units) {
+    const s = (u.unitType ?? '').toLowerCase();
+    if (/\bplots?\b|\bacres?\b|\bsites?\b/.test(s)) out.add('plot');
+    if (/\bvillas?\b/.test(s)) out.add('villa');
+    if (/\bbhk\b|\bstudio\b|\bpenthouse\b/.test(s)) out.add('apartment');
+  }
+  return out;
+}
+
+/** How the buyer would say it back. */
+function categoryPlural(category: string): string {
+  if (category === 'plantation') return 'plantation estates';
+  if (category === 'apartment') return 'apartments';
+  if (category === 'villa') return 'villas';
+  if (category === 'plot') return 'plots';
+  return category;
+}
+
+/**
+ * The buyer named a category this project does not have — a category error, not
+ * a missing field. Returns the correction, or undefined when there is no
+ * mismatch to report (or too little known about the project to claim one).
+ */
+export function categoryMismatchLine(
+  asked: AskedConfig | undefined,
+  units: ReadonlyArray<UnitConfigRow>,
+  projectName?: string,
+): string | undefined {
+  const category = asked?.category;
+  if (!category) return undefined;
+  const held = inventoryCategoriesOf(asked?.projectType, units);
+  if (!held.size || held.has(category)) return undefined;
+  const who = projectName ? `*${projectName}*` : 'This project';
+  const kind = humanizeProjectType(asked?.projectType);
+  const article = /^[aeiou]/i.test(kind) ? 'an' : 'a';
+  return `${who} is ${article} *${kind}* — there are no ${categoryPlural(category)} there`;
 }
 
 /**
@@ -2041,6 +2163,16 @@ export function summarizeUnitConfigs(
   // catalog fact, so grounding passed, and the answer was still untrue. A reply
   // may only claim a fit it can point at — so the two ways the ask has no fit are
   // answered BEFORE any of them (founder, 16 Aug).
+  // The wrong NOUN for this project, which the summary used to answer with the
+  // right noun and a verdict word in front: Brigade Cornerstone, an apartment
+  // project, answered "what is the plot area" with "Yes — 4 sizes on file
+  // (1 BHK, 2 BHK, 3 BHK, Studio)", and Ayana answered "what apartments are
+  // available" with "Yes — 3 sizes on file (5,000 sqft Plot …)". Both true
+  // rows, neither an answer. First, name the category (founder, 16 Aug: treat
+  // it as a recognition problem).
+  const mismatch = categoryMismatchLine(asked, units, projectName);
+  if (mismatch) return `${mismatch}. On file: ${onFile()}`;
+
   const bhkFamilies = families.filter(([f]) => /^\d+ BHK$/.test(f));
   if (asked?.inBhkTerms && !bhkFamilies.length) {
     const who = projectName ? `*${projectName}*` : 'This project';
