@@ -167,7 +167,7 @@ import {
 } from './facts.js';
 import { INCOME_SERVICING_RATIO } from './emi.js';
 import { humanizeMediaKind, normalizeMediaAssetKind } from './media-asset.js';
-import { resolveFaqQuestionKeys } from './faq-keys.js';
+import { looksLikeAQuestion, resolveFaqQuestionKeys } from './faq-keys.js';
 import { answerRequirements } from './answer-contract.js';
 import { speakStickyClarify } from './clarify-outstanding.js';
 
@@ -1509,10 +1509,24 @@ function fallbackReplyBody(req: ComposeRequest): string {
       // a FAQ would shadow them, OR when multi-topic already owns the reply (media +
       // availability). Without this, "2BHK configs" that also co-fetches a unit image
       // collapsed to media-only because multi-topic returns before single-topic handlers.
+      // A possession question is answered by the timeline, not by the config card.
+      // "is it ready to move in?" returned "Yes — 5 sizes on file (…). RERA-committed
+      // possession is March 2027" — a config list, a verdict word, and then the fact
+      // that contradicts it, in one message. The single-topic path has guarded this
+      // for a while; this chunked path never did, so the guard only ran when NO FAQ
+      // was present. That is why a genuinely-ready project answered correctly and a
+      // 2027 one did not: they differed by a FAQ row, not by the question.
+      // There is no `configurations` FAQ key to test against — "what
+      // configurations deliver by possession?" resolves to ['possession'] alone —
+      // so this suppresses the list for a combined ask too. That is the same
+      // trade the single-topic guard already makes, and the closer it hands back
+      // is exactly the offer: "Want the configurations that deliver in that
+      // window, or pricing next?"
       if (
         topics.includes('availability') &&
         ev.units?.length &&
-        (faqPresent || multiTopic)
+        (faqPresent || multiTopic) &&
+        !isPossessionAsk(context.buyerText)
       ) {
         chunks.push(
           summarizeUnitConfigs(ev.units, multiTopic ? undefined : context.focusProjectName, {
@@ -2481,15 +2495,6 @@ function emiSnapshotLine(e: import('./types.js').EmiEvidence): string {
  * language reserves for asking. Deliberately narrow: when in doubt this returns
  * true and the buyer gets the file answer, which is the safer of the two.
  */
-function looksLikeAQuestion(text?: string): boolean {
-  const t = (text ?? '').trim();
-  if (!t) return true;
-  if (t.includes('?')) return true;
-  return /^(?:what|when|where|which|who|whom|whose|why|how|is|are|was|were|do|does|did|can|could|will|would|should|shall|may|any|tell me|show me|send|give me|share)\b/i.test(
-    t,
-  );
-}
-
 function perSqftLine(ps: NonNullable<EvidenceSet['perSqft']>, projectName: string): string {
   if (!ps.rows.length) return '';
   const body = ps.rows

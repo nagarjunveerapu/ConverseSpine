@@ -58,6 +58,16 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:possession(?:\s+date)?|possession\s+kab|when(?:'s| is)?\s+(?:possession|handover|completion)|(?:what\s+is\s+the\s+)?completion(?:\s+date)?|handover(?:\s+date)?|delivery\s+(?:date|timeline)|ready\s+to\s+move(?:\s+in)?|kab\s+(?:possession|handover|milega)|kab\s+milega|milega\s+batao)\b|कब\s*मिलेगा|ಪೊಸೆಷನ್|పొసెషన్/i,
   },
   {
+    // "move in", "shift in", "check in" are never locative — they ask whether the
+    // project is READY (founder, 16 Aug). Untreated, "can i move in right away?"
+    // resolved to NO key, fell through to the locality capture, and the "in" —
+    // a verb particle, not a preposition of place — yielded a place called
+    // *right*: "I don't have homes in *right*". The ask was possession all along,
+    // so this is the possession lane's gap, not a deny-list for the extractor.
+    key: 'possession',
+    re: /\b(?:mov(?:e|ing)|shift(?:ing)?|check(?:ing)?)\s+in(?:to)?\b(?!\s+with)|\bwhen\s+can\s+(?:i|we)\s+(?:move|shift)\b/i,
+  },
+  {
     // Focused menu chip — bare "when" → possession on the open project.
     key: 'possession',
     re: /^when\s*[?.!]?\s*$/i,
@@ -398,6 +408,28 @@ export function resolveFaqQuestionKeys(
 /** True when the utterance is a FAQ-shaped ask (not a generic overview). */
 export function isFaqShapedAsk(text: string): boolean {
   return resolveFaqQuestionKeys(text).length > 0;
+}
+
+/**
+ * Is this sentence asking, or telling?
+ *
+ * Lived in compose.ts, where it kept the engine from answering "2027 is too late
+ * for me" with "I don't have that on file". The extractors need the same
+ * distinction for the opposite reason — a preference may only be recorded from a
+ * buyer who STATED one. "Is it ready to move in?" is a question about one
+ * project, and reading it as a standing filter is how a March 2027 project came
+ * to answer it with "Yes".
+ *
+ * Here rather than in compose because compose imports facts, so facts cannot
+ * import compose. This module is a leaf and already owns ask-shape predicates.
+ */
+export function looksLikeAQuestion(text?: string): boolean {
+  const t = (text ?? '').trim();
+  if (!t) return true;
+  if (t.includes('?')) return true;
+  return /^(?:what|when|where|which|who|whom|whose|why|how|is|are|was|were|do|does|did|can|could|will|would|should|shall|may|any|tell me|show me|send|give me|share)\b/i.test(
+    t,
+  );
 }
 
 /**
