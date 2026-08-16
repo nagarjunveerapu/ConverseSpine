@@ -365,9 +365,39 @@ export function decide(
     return { kind: 'clarify_intent' };
   }
   if (ex.smalltalk) return { kind: 'smalltalk' };
-  if (!d.oriented) return { kind: 'orient' };
+  // The buyer asked something real that no project can be attached to yet — no
+  // pick, no shortlist, no brief. The ask used to die here: orient and probe
+  // took no topic, so "what's the RERA number?" and "hi" produced the identical
+  // reply. The topic rides along so compose can say where that fact lives
+  // before asking its one question. Exactly one topic, mirroring the
+  // book-level rule above: with two, the lead would assert a confident answer
+  // to whichever one won the tie.
+  const bookTopic = coldAskTopic(ex);
+  if (!d.oriented) {
+    // Orient asks a question, so it must ask the SAME question the probe ladder
+    // would — including skipping one the buyer has already been asked. Compose
+    // kept its own constraints-only copy of this ladder, which re-asked budget
+    // after a decline; the authority travels with the goal now.
+    const slot = firstMissingSlot(s);
+    return {
+      kind: 'orient',
+      ...(bookTopic ? { askedTopic: bookTopic } : {}),
+      ...(slot ? { probeSlot: slot } : {}),
+    };
+  }
   if (firstMissingSlot(s) === undefined || d.ignoredProbes >= 3) return { kind: 'recommend' };
-  return { kind: 'probe', slot: nextSlot(s) };
+  return { kind: 'probe', slot: nextSlot(s), ...(bookTopic ? { askedTopic: bookTopic } : {}) };
+}
+
+/**
+ * The single topic a subject-less turn asked about, if exactly one.
+ *
+ * `compare` is excluded on purpose: comparing needs two projects, so there is
+ * nothing the book can honestly say about it before anything is on the board.
+ */
+function coldAskTopic(ex: Extracted): import('../types.js').AnswerTopic | undefined {
+  const asked = (ex.askTopic ? [ex.askTopic] : (ex.askTopics ?? [])).filter((t) => t !== 'compare');
+  return asked.length === 1 ? asked[0] : undefined;
 }
 
 /** True when turn-0 content must not be swallowed by the welcome greet. */
