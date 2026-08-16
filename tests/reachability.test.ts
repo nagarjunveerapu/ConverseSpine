@@ -1,11 +1,13 @@
 /**
  * Nothing in `src/` may be unreachable from every real entry point.
  *
- * This repo carries two generations of the engine. The live one is
- * `src/engine/` + `src/advisor/` + `src/channel/wa-pack.ts`. An earlier one —
- * `src/turn/`, `src/compose/`, `src/graphs/`, `src/nlu/extractors.ts` — is still
- * on disk, still typechecks, still has passing tests, and cannot affect a single
- * buyer reply. Nothing marks it.
+ * These files are not an older engine that aged out. They arrived in the very
+ * first commit (ca98f80, 2026-07-06) alongside the engine that shipped, and
+ * **no source file has ever imported them** — the reference count at that commit
+ * is identical to the count today. A tool-registry / LLM-composer / NLU-pipeline
+ * scaffold was laid down, the deterministic `src/engine` path was the one that
+ * got wired, and the scaffold was never removed. It still typechecks and still
+ * has passing tests, and it cannot affect a single buyer reply.
  *
  * That is not tidiness. `src/nlu/extractors.ts` holds two per-tenant project-name
  * regexes:
@@ -20,22 +22,24 @@
  * So this test draws the line where it actually is:
  *
  *   dead        reachable from nothing at all → must be empty
- *   test-only   reachable only from its own tests → must match SUPERSEDED
+ *   test-only   reachable only from its own tests → must match TEST_ONLY
  *
- * A new orphan fails the first assertion. Reviving or deleting part of the old
- * lane fails the second, which is the point: the list is the debt, written down.
+ * A new orphan fails the first assertion. Reviving or deleting part of the
+ * scaffold fails the second, which is the point: the list is the debt, written
+ * down rather than carried in someone's head.
  */
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * The earlier engine generation. Every file here is reachable ONLY from its own
- * tests — no deployed path, no script. Shrinking this list is the goal; growing
- * it needs a reason in the PR that does it.
+ * The rest of the never-wired scaffold. Every file here is reachable ONLY from
+ * its own tests — no deployed path, no script — and has been since the first
+ * commit. Shrinking this list is the goal; growing it needs a reason in the PR
+ * that does it.
  */
-const SUPERSEDED = [
-  'src/channel/wa-brief.ts', // superseded by channel/wa-pack.ts
+const TEST_ONLY = [
+  'src/channel/wa-brief.ts', // the live WhatsApp brief is channel/wa-pack.ts
   'src/compose/render.ts',
   'src/compose/templates.ts',
   'src/experience/copy.ts',
@@ -141,8 +145,8 @@ describe('src reachability', () => {
     expect(dead).toEqual([]);
   });
 
-  it('the superseded lane is exactly what is written down', () => {
+  it('the never-wired scaffold is exactly what is written down', () => {
     const testOnly = srcFiles.filter((f) => !live.has(f) && viaTests.has(f)).sort();
-    expect(testOnly).toEqual([...SUPERSEDED].sort());
+    expect(testOnly).toEqual([...TEST_ONLY].sort());
   });
 });
