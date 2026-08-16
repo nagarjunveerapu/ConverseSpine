@@ -65,8 +65,13 @@ function bookLevelAnswer(topic: AnswerTopic, ev: EvidenceSet): string {
       return max > min
         ? `Across the book, homes run ${formatInr(min)} – ${formatInr(max)}. `
         : `Homes here start at ${formatInr(min)}. `;
+    // Registration is per project, and NOT every project has one — a managed
+    // plantation on agricultural land sits outside RERA entirely. "Each project
+    // carries its own RERA registration" was the older line here and it is a
+    // false promise on part of the book, so the shape is "where it lives", not
+    // "everything has one".
     case 'legal':
-      return `Each project carries its own RERA registration and title papers — open one and I'll give you its number. `;
+      return `RERA and title papers are registered per project — name one and I'll give you exactly what's on file for it. `;
     case 'availability':
     case 'property_type':
       return `Sizes and live availability are per project. `;
@@ -74,6 +79,18 @@ function bookLevelAnswer(topic: AnswerTopic, ev: EvidenceSet): string {
       return `Floor plans and brochures are held per project. `;
     case 'amenities':
       return `Amenities differ by project. `;
+    case 'location':
+      return `We're spread across several corridors, and the answer changes by which one. `;
+    // The catch-all topic: delivery timeline, builder track record, payment
+    // plan and investment framing all land on `overview`, so this sentence has
+    // to be true of every one of them.
+    case 'overview':
+      return `That's held per project — name one and I'll pull what's on file. `;
+    // `education` is platform literacy ("what is khata?"), answerable WITHOUT a
+    // project. Saying "that's per project" about it would be a dodge, and a
+    // false one. `compare` needs two projects on the board to mean anything.
+    case 'education':
+    case 'compare':
     default:
       return '';
   }
@@ -894,13 +911,24 @@ function fallbackReplyBody(req: ComposeRequest): string {
       ]);
     }
     case 'orient': {
-      const types = ev.catalog?.projectTypes.join(', ') || 'homes';
+      // Was: `We've got ${ev.catalog.projectTypes.join(', ')} on the books` —
+      // the raw `project_type` column, so 447 replies opened with
+      // "apartment, villa, managed_plantation_estate". A buyer with no project
+      // and no brief is owed a question, not the catalog's enum values.
       const from =
         ev.catalog && ev.catalog.priceMinInr > 0 ? `, from ${formatInr(ev.catalog.priceMinInr)}` : '';
       const ack = briefAckPrefix(context.constraints);
-      const next = firstMissingProbeSlot(context.constraints);
+      // They asked something real. Say where that fact lives before asking —
+      // otherwise the ask is silently dropped and the probe reads as a dodge.
+      const lead = goal.askedTopic ? bookLevelAnswer(goal.askedTopic, ev) : '';
+      // discover.firstMissingSlot is the ladder's authority — it knows which
+      // probes were already ASKED, so it never re-asks a budget the buyer has
+      // already declined. firstMissingProbeSlot is the constraints-only
+      // fallback for the orient sites that have no state to hand.
+      const next = goal.probeSlot ?? firstMissingProbeSlot(context.constraints);
       const ask = next ? probeCopy(next) : 'Which area, budget, and size are you thinking?';
-      return `${ack}We've got ${types} on the books${from}. ${ask}`;
+      if (lead) return `${ack}${lead}${ask}`;
+      return `${ack}We've got homes on the books${from}. ${ask}`;
     }
     case 'clarify_intent': {
       if (context.waProjectFirst) {
@@ -954,7 +982,11 @@ function fallbackReplyBody(req: ComposeRequest): string {
         }
       }
       const ack = briefAckPrefix(context.constraints);
-      return `${ack}${probeCopy(goal.slot)}`;
+      // Same contract as orient: a probe that follows a real question answers
+      // it at book level first. Asking "which area?" straight back at "what's
+      // the RERA number?" is what reads as a dodge, not the question itself.
+      const lead = goal.askedTopic ? bookLevelAnswer(goal.askedTopic, ev) : '';
+      return `${ack}${lead}${probeCopy(goal.slot)}`;
     }
     case 'recommend':
     case 'ack_reject_recommend': {
@@ -2399,11 +2431,23 @@ export function briefAckPrefix(c: Constraints | undefined): string {
   return `Got it — ${bits.join(', ')}. `;
 }
 
-/** Next missing brief slot for orient ask (mirrors discover.firstMissingSlot axis). */
+/**
+ * Constraints-only FALLBACK for the orient sites that carry no state.
+ *
+ * `discover.firstMissingSlot` is the authority and reaches compose on
+ * `orient.probeSlot` — it additionally knows which probes were already asked,
+ * which is the whole difference: it answers `purpose` when a buyer has declined
+ * to give a budget, and it never re-asks the declined budget. This copy cannot
+ * know either of those things. It used to carry discover's purpose line too,
+ * but without the `asked` set the condition (`!c.purpose && c.budgetMaxInr ===
+ * undefined`) sat below an identical `budgetMaxInr === undefined` return and
+ * could never be true — three stages wearing four. Removed rather than
+ * "fixed": reordering it here would put a second, disagreeing ladder in the
+ * codebase, which is what caused the divergence in the first place.
+ */
 export function firstMissingProbeSlot(c: Constraints | undefined): ProbeKind | undefined {
   if (!c?.location?.trim()) return 'location';
   if (c.budgetMaxInr === undefined) return 'budget';
-  if (!c.purpose && c.budgetMaxInr === undefined) return 'purpose';
   // Align with discover: skip BHK for investment + non-apartment property types.
   const needsBhk =
     c.purpose !== 'investment' &&

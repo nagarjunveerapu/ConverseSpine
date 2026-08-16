@@ -182,7 +182,7 @@ import {
   shouldRunTurnIntent,
 } from './turn-intent/classify.js';
 import { arbitrateFocusPivot, isImplausibleLocationCapture } from './turn-intent/pivot-arbiter.js';
-import { isNonPlaceUtterance, isPlausiblePlaceLabel } from './placeability.js';
+import { isAttentionNudge, isNonPlaceUtterance, isPlausiblePlaceLabel } from './placeability.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
@@ -3810,10 +3810,20 @@ async function decideGoalAsync(
   // Ignore askTopics: embedder often nearest-neighbours get_brochure on smash.
   // When the hard brief is already filled, bare "ok" must advance — not re-probe.
   // Project-first WA: "hi" / "ok" must re-offer the book, not "couldn't make sense".
+  //
+  // …and so must every other channel. This is the THIRD copy of that gate, and
+  // the only one the shipped turn actually reaches — fixing the two inside
+  // discover left "hi" on advisor_web still answered with "I couldn't make
+  // sense of that", because control never got that far. The good behaviour was
+  // written once and then fenced behind `skipBrief`, exactly as bookLevelAnswer
+  // was: the WhatsApp buyer got a greeting, the web buyer got told they were
+  // unintelligible. isAttentionNudge is the existing knock/smash split — a
+  // knock deserves an answer, smash deserves "I couldn't make sense of that".
   if (
     !skipBrief &&
     s.phase === 'discover' &&
     isNonPlaceUtterance(text) &&
+    !isAttentionNudge(text) &&
     !discover.hasNarrowingConstraint(ex.constraints) &&
     !(ex.namedProjects?.length) &&
     ex.transition !== 'want_visit'
@@ -4335,6 +4345,27 @@ async function fetchRecommend(
       listed = padded.matches;
       padRelaxed = padded.relaxed;
     }
+    // Desk expands the buyer's area into neighbouring localities and hands them
+    // back as `expandedLocations`; filterSearchMatches (above) accepts a match on
+    // ANY of them. That is good retrieval and a SILENT widening: the buyer's own
+    // location is tried first, so a card that fails it and gets listed anyway
+    // only got in on the expansion — and it was listed unmarked, so the reply
+    // read as an exact-area fit. `area` is already a RelaxedDimension with copy
+    // behind it ("I couldn't match that area tightly"); it was simply never set
+    // on this path, which is the only path that can widen without an explicit
+    // offer. The two sites that widen deliberately (findNearbyTypeOffer) already
+    // declare it. Showing the wider list stays right; showing it silently is not.
+    const askedArea = s.constraints.location?.trim();
+    const listedOutsideAsked =
+      !!askedArea &&
+      listed.some(
+        (m) =>
+          !discover.matchMicroMarket(m.microMarket, askedArea) &&
+          !discover.deskLocationIdentityHit(m, [askedArea]),
+      );
+    const relaxedOut: RelaxedDimension[] = listedOutsideAsked
+      ? [...new Set<RelaxedDimension>([...padRelaxed, 'area'])]
+      : padRelaxed;
     // Thin exact board + location on brief → soft nearby offer (opt-in; not padded in).
     const nearbyOfferEv = await maybeNearbyOfferEvidence({
       listed,
@@ -4367,7 +4398,7 @@ async function fetchRecommend(
           tools: ['search'],
           matches: listed,
           ...(miss ? { nextSlot: miss } : {}),
-          ...(padRelaxed.length ? { relaxed: padRelaxed } : {}),
+          ...(relaxedOut.length ? { relaxed: relaxedOut } : {}),
           ...(nearbyOfferEv ?? {}),
         },
       };
@@ -4377,7 +4408,7 @@ async function fetchRecommend(
       evidence: {
         tools: ['search'],
         matches: listed,
-        ...(padRelaxed.length ? { relaxed: padRelaxed } : {}),
+        ...(relaxedOut.length ? { relaxed: relaxedOut } : {}),
         ...(nearbyOfferEv ?? {}),
       },
     };
@@ -4594,6 +4625,21 @@ async function fetchObjection(
     };
   }
   if (!(match?.reframeAngles?.length)) {
+    // …but not on the way in. A buyer who has not seen a project yet cannot be
+    // objecting to one, so a FIRST objection with no shortlist and no budget on
+    // file is far more likely a misread turn than a real stall — "under 1.5 cr",
+    // answering the budget probe, is stamped speechAct:'object' by the semantic
+    // lane (hasPriceObjectionCue says false) and ended the conversation with
+    // "I'll connect you with our sales team". Keep discovering; a real objection
+    // survives to the next turn, when objectionCount is no longer 1.
+    const earlyMisread =
+      count <= 1 && !s.constraints.budgetMaxInr && currentShortlist(s).length === 0;
+    if (earlyMisread) {
+      return {
+        goal: { kind: 'probe', slot: discover.firstMissingSlot(s) ?? 'budget' },
+        evidence: { tools: ['catalog'] },
+      };
+    }
     // Quality-factory Stage 7: no playbook → honest escalate (named latch when
     // Desk has escalation_phone). Never invent reframe angles from the model.
     return {

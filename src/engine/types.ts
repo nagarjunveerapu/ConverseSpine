@@ -351,7 +351,15 @@ export type FactKey =
 
 export type TurnGoal =
   | { kind: 'greet' }
-  | { kind: 'orient' }
+  /**
+   * `askedTopic` — same contract as `recommend.askedTopic` below, for the turn
+   * that has NO shortlist to show. A buyer who asks "what's the RERA number?"
+   * with no project and no brief cannot be answered and must not be dumped on:
+   * the honest reply says where that fact lives, then asks the one question
+   * that makes an answer possible. Carrying the topic here is what stops the
+   * ask from being silently discarded on the way to the probe.
+   */
+  | { kind: 'orient'; askedTopic?: AnswerTopic; probeSlot?: ProbeKind }
   /**
    * Below-threshold fallback: the buyer asked something the engine could not
    * confidently route, OR a generative goal was reached with no evidence to
@@ -364,7 +372,7 @@ export type TurnGoal =
    * lane; this is what must happen when coverage misses.
    */
   | { kind: 'clarify_intent' }
-  | { kind: 'probe'; slot: ProbeKind }
+  | { kind: 'probe'; slot: ProbeKind; askedTopic?: AnswerTopic }
   /**
    * `askedTopic` — the buyer asked something of the BOOK before picking a
    * project ("price?", "rera number first", "send the brochure"). The list is

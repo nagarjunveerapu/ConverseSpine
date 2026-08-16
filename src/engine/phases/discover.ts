@@ -314,10 +314,20 @@ export function decide(
   }
   // Keyboard smash / non-place noise — sticky clarify, never portfolio orient.
   // (ask_next_step must also refuse noise — see shouldConsumeAskNextStep.)
+  //
+  // `isNonPlaceUtterance` answers "could this be a place label?", and a
+  // greeting cannot — ATTENTION_FILLER lists hi/hey/hello/yo/hola/namaste, so
+  // every one of them reads as noise here. That is right for its own job and
+  // wrong for this gate: it sent "hi" to "I couldn't make sense of that" while
+  // letting "asdkjh" through. The knock guard already exists for exactly this
+  // (see isAttentionNudge — "smash deserves 'I couldn't make sense of that', a
+  // knock deserves an answer") and the clarify gate above already applies it;
+  // this one was missed. Turn 0 greets a knock, later turns re-offer the book.
   if (
     buyerText &&
     !opts?.skipBrief &&
     isNonPlaceUtterance(buyerText) &&
+    !isAttentionNudge(buyerText) &&
     !hasNarrowingConstraint(ex.constraints) &&
     !(ex.namedProjects?.length) &&
     ex.transition !== 'want_visit'
@@ -365,9 +375,59 @@ export function decide(
     return { kind: 'clarify_intent' };
   }
   if (ex.smalltalk) return { kind: 'smalltalk' };
-  if (!d.oriented) return { kind: 'orient' };
+  // The buyer asked something real that no project can be attached to yet — no
+  // pick, no shortlist, no brief. The ask used to die here: orient and probe
+  // took no topic, so "what's the RERA number?" and "hi" produced the identical
+  // reply. The topic rides along so compose can say where that fact lives
+  // before asking its one question. Exactly one topic, mirroring the
+  // book-level rule above: with two, the lead would assert a confident answer
+  // to whichever one won the tie.
+  const bookTopic = coldAskTopic(ex);
+  // An area ALONE is an answerable brief. "projects in whitefield" used to reach
+  // the ladder, which wants a budget before it lists anything, so the buyer got
+  // the catalog blurb and "What budget range are you working with?" — zero
+  // projects for the single most natural opening request. Location is the filter
+  // buyers volunteer first and the one the book cuts cleanest on; show what is
+  // actually there and let them refine from a real list. Budget still gets
+  // asked — after the buyer can see what they are budgeting for.
+  //
+  // ONLY when it stands alone. A buyer who has also given a size or a budget is
+  // visibly mid-brief and one slot from a complete answer, and the ladder asking
+  // for that slot is finishing, not dodging — see brief-ready.test.ts and
+  // clarify-intent.test.ts, which fix that behaviour deliberately. The defect
+  // was the opening move returning nothing, not the ladder existing.
+  const areaIsTheWholeBrief =
+    !!mergedC.location?.trim() &&
+    !mergedC.bhk &&
+    mergedC.budgetMaxInr === undefined &&
+    mergedC.budgetMinInr === undefined &&
+    !mergedC.propertyType;
+  if (areaIsTheWholeBrief) return { kind: 'recommend' };
+  if (!d.oriented) {
+    // Orient asks a question, so it must ask the SAME question the probe ladder
+    // would — including skipping one the buyer has already been asked. Compose
+    // kept its own constraints-only copy of this ladder, which re-asked budget
+    // after a decline; the authority travels with the goal now.
+    const slot = firstMissingSlot(s);
+    return {
+      kind: 'orient',
+      ...(bookTopic ? { askedTopic: bookTopic } : {}),
+      ...(slot ? { probeSlot: slot } : {}),
+    };
+  }
   if (firstMissingSlot(s) === undefined || d.ignoredProbes >= 3) return { kind: 'recommend' };
-  return { kind: 'probe', slot: nextSlot(s) };
+  return { kind: 'probe', slot: nextSlot(s), ...(bookTopic ? { askedTopic: bookTopic } : {}) };
+}
+
+/**
+ * The single topic a subject-less turn asked about, if exactly one.
+ *
+ * `compare` is excluded on purpose: comparing needs two projects, so there is
+ * nothing the book can honestly say about it before anything is on the board.
+ */
+function coldAskTopic(ex: Extracted): import('../types.js').AnswerTopic | undefined {
+  const asked = (ex.askTopic ? [ex.askTopic] : (ex.askTopics ?? [])).filter((t) => t !== 'compare');
+  return asked.length === 1 ? asked[0] : undefined;
 }
 
 /** True when turn-0 content must not be swallowed by the welcome greet. */
