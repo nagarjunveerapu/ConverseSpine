@@ -158,12 +158,15 @@ export async function hydrateProjectDetail(
   const nd = s.ndConversationId;
   if (!nd) return { detail: cached ?? null };
 
-  const fetch =
-    (await deps.data.projectDetail(s.builderId, nd, projectId).catch(
-      (): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }),
-    )) ?? ({ ok: false, reason: 'transport', latency_ms: 0 } as DataResult<never>);
+  // Detail and units are independent Desk calls; neither feeds the other.
+  const [fetch, units] = await Promise.all([
+    deps.data
+      .projectDetail(s.builderId, nd, projectId)
+      .catch((): DataResult<never> => ({ ok: false, reason: 'transport', latency_ms: 0 }))
+      .then((r) => r ?? ({ ok: false, reason: 'transport', latency_ms: 0 } as DataResult<never>)),
+    deps.data.listUnits(projectId).catch(() => []),
+  ]);
   const detail = fetch.ok ? fetch.value : null;
-  const units = await deps.data.listUnits(projectId).catch(() => []);
   const configurations = units
     .filter((u) => u.unitType)
     .map((u) => ({
@@ -243,9 +246,20 @@ export async function prefetchProjects(
   const cache = { ...(s.projectCache ?? {}) };
   let changed = false;
 
-  for (const projectId of projectIds) {
-    if (cache[projectId] && !cache[projectId]!.identityOnly) continue;
-    const { detail } = await hydrateProjectDetail(deps, { ...s, projectCache: cache }, projectId);
+  // Each project's hydration reads only its own cache entry, so the items are
+  // independent — hydrate them concurrently. Serially this cost 400–990 ms per
+  // project against Desk, paid before the awaited store.save, so a three-match
+  // recommend turn spent ~2.7 s here after the reply was already composed.
+  const ids = [...new Set(projectIds)].filter(
+    (projectId) => !(cache[projectId] && !cache[projectId]!.identityOnly),
+  );
+  const results = await Promise.all(
+    ids.map(async (projectId) => ({
+      projectId,
+      detail: (await hydrateProjectDetail(deps, { ...s, projectCache: cache }, projectId)).detail,
+    })),
+  );
+  for (const { projectId, detail } of results) {
     if (detail) {
       cache[projectId] = detail;
       changed = true;
