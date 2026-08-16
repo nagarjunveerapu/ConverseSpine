@@ -1688,7 +1688,30 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   }
   const bare = scan;
   if (extractDayWord(bare)) return undefined;
+  // The branches above all carry EVIDENCE that the capture is a place — the
+  // buyer said "in", "near", "looking in", "… area preferred". This last one
+  // has none: it guesses that any short unrecognised utterance is a locality,
+  // and every guard on it is a deny-list of things that turned out not to be.
+  // A place LABEL has a shape — it does not open with an infinitive marker and
+  // it does not end on a dangling preposition. "to live in", "for living in",
+  // "to stay in" fail on both counts; "Whitefield", "Sarjapur Road", "North
+  // Bangalore" fail on neither. This is the grammar of a label, not another
+  // list of non-places.
+  if (/^(?:to|for|as)\b/i.test(bare)) return undefined;
+  if (/\b(?:in|on|at|with|from|into|under)$/i.test(bare)) return undefined;
   if (/\b(?:tell me about|more about|details? on|info on|about)\b/i.test(bare)) return undefined;
+  // A purpose answer is not a place. "self use" survived the shape rules above
+  // and landed as locality "self use", OVERWRITING a Whitefield the buyer had
+  // already given — "I don't have apartments in *self use*". detectPurpose
+  // already owns live/stay/self-use/family/move-in and invest/rental/returns,
+  // so this is that authority speaking, not a new list of non-places.
+  //
+  // It sits HERE and not at the top of the function on purpose: a real brief
+  // mentions purpose and a place in one breath ("managed farmland mein invest
+  // karna hai, Coorg area preferred"), and those reach an evidence-bearing
+  // branch above. Only this last fallback — the one that guesses — has to
+  // yield, because a bare fragment cannot be both.
+  if (detectPurpose(bare)) return undefined;
   if (ctx?.phase === 'focused' || ctx?.phase === 'visit') return undefined;
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&

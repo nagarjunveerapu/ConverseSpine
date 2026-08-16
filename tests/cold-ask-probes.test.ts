@@ -121,7 +121,10 @@ describe('one probe ladder, one authority', () => {
     const s = {
       ...base,
       turnCount: 2,
-      constraints: { location: 'Whitefield' },
+      // Area + size, not area alone: an area on its own is now the whole brief
+      // and goes straight to a list (see "an area alone lists" below). This
+      // buyer is mid-ladder, which is where the re-ask loop lived.
+      constraints: { location: 'Whitefield', bhk: '3 BHK' },
       discover: { ...base.discover, asked: ['location', 'budget'] as const },
     };
     const g = decide(s, { constraints: {}, isQuestion: true, askTopic: 'legal' }, 'rera number?');

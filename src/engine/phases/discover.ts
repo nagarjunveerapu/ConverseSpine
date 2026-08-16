@@ -314,10 +314,20 @@ export function decide(
   }
   // Keyboard smash / non-place noise — sticky clarify, never portfolio orient.
   // (ask_next_step must also refuse noise — see shouldConsumeAskNextStep.)
+  //
+  // `isNonPlaceUtterance` answers "could this be a place label?", and a
+  // greeting cannot — ATTENTION_FILLER lists hi/hey/hello/yo/hola/namaste, so
+  // every one of them reads as noise here. That is right for its own job and
+  // wrong for this gate: it sent "hi" to "I couldn't make sense of that" while
+  // letting "asdkjh" through. The knock guard already exists for exactly this
+  // (see isAttentionNudge — "smash deserves 'I couldn't make sense of that', a
+  // knock deserves an answer") and the clarify gate above already applies it;
+  // this one was missed. Turn 0 greets a knock, later turns re-offer the book.
   if (
     buyerText &&
     !opts?.skipBrief &&
     isNonPlaceUtterance(buyerText) &&
+    !isAttentionNudge(buyerText) &&
     !hasNarrowingConstraint(ex.constraints) &&
     !(ex.namedProjects?.length) &&
     ex.transition !== 'want_visit'
@@ -373,6 +383,26 @@ export function decide(
   // book-level rule above: with two, the lead would assert a confident answer
   // to whichever one won the tie.
   const bookTopic = coldAskTopic(ex);
+  // An area ALONE is an answerable brief. "projects in whitefield" used to reach
+  // the ladder, which wants a budget before it lists anything, so the buyer got
+  // the catalog blurb and "What budget range are you working with?" — zero
+  // projects for the single most natural opening request. Location is the filter
+  // buyers volunteer first and the one the book cuts cleanest on; show what is
+  // actually there and let them refine from a real list. Budget still gets
+  // asked — after the buyer can see what they are budgeting for.
+  //
+  // ONLY when it stands alone. A buyer who has also given a size or a budget is
+  // visibly mid-brief and one slot from a complete answer, and the ladder asking
+  // for that slot is finishing, not dodging — see brief-ready.test.ts and
+  // clarify-intent.test.ts, which fix that behaviour deliberately. The defect
+  // was the opening move returning nothing, not the ladder existing.
+  const areaIsTheWholeBrief =
+    !!mergedC.location?.trim() &&
+    !mergedC.bhk &&
+    mergedC.budgetMaxInr === undefined &&
+    mergedC.budgetMinInr === undefined &&
+    !mergedC.propertyType;
+  if (areaIsTheWholeBrief) return { kind: 'recommend' };
   if (!d.oriented) {
     // Orient asks a question, so it must ask the SAME question the probe ladder
     // would — including skipping one the buyer has already been asked. Compose
