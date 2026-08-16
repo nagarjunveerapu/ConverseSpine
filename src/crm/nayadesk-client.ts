@@ -891,6 +891,7 @@ export class NayaDeskClient {
     lat?: number;
     lng?: number;
     radius_km?: number;
+    area_id?: string;
     area_name?: string;
     source?: 'area_registry' | 'cache' | 'geocoder' | 'gazetteer';
     reason?: 'geocoder_not_configured' | 'no_geocode_result';

@@ -507,10 +507,17 @@ export function fakeData(): EngineData & {
       return { status: 'unresolved' };
     },
     async resolveGeo(text) {
+      // Desk answers with HOW it resolved, and the engine now reads it: these
+      // three are area-registry rows, which is what the live endpoint returns
+      // for a served micro-market (measured against Desk dev, 16 Aug 2026).
+      // A bare {lat,lng} is not a shape production produces — every live
+      // response carried radius_km, and registry rows carried area_id.
       const key = text.trim().toLowerCase();
-      if (key.includes('yelahanka')) return { lat: 13.1007, lng: 77.5963 };
-      if (key.includes('whitefield')) return { lat: 12.969, lng: 77.749 };
-      if (key.includes('jayanagar')) return { lat: 12.9308, lng: 77.5838 };
+      const registry = (name: string, lat: number, lng: number) =>
+        ({ lat, lng, source: 'area_registry' as const, areaId: name, radiusKm: 3.2 });
+      if (key.includes('yelahanka')) return registry('yelahanka-bengaluru', 13.1007, 77.5963);
+      if (key.includes('whitefield')) return registry('whitefield-bengaluru', 12.969, 77.749);
+      if (key.includes('jayanagar')) return registry('jayanagar-bengaluru', 12.9308, 77.5838);
       return null;
     },
     async projectCoords(_builderId) {
