@@ -1,0 +1,113 @@
+{
+ "_provenance": {
+  "generated": "2026-08-17",
+  "phrase_builder": "NayaDesk src/lib/vectorize_project.ts projectPhrases @ 672c658 (PR #486 merge, the build the live dev index holds)",
+  "catalog": "dev D1 projects census 16 Aug 2026 (active rows only); tenant corpora = full active name list per builder",
+  "regenerate": "NayaDesk worktree at main: projectPhrases(row, corpus) per row, corpus = ALL active names of the row tenant (self included), exactly as fetchTenantNames returns them",
+  "note": "These are the real second-tenant phrase sets the live dev index holds (417-vector census, 16 Aug 2026). Utterance expectations and score bars live in tests/embed-gate-second-tenant.test.ts with the calibration that chose them."
+ },
+ "model": "@cf/baai/bge-base-en-v1.5",
+ "rows": [
+  {
+   "project_id": "northgate-phase-next",
+   "builder_id": "northgate-devco",
+   "name": "Northgate Quarter · Phase Next",
+   "micro_market": "",
+   "phrases": [
+    "Northgate Quarter · Phase Next",
+    "Quarter · Phase Next",
+    "Quarter",
+    "uQarter",
+    "uQarter · Phase Next",
+    "Qaurter",
+    "Qaurter · Phase Next",
+    "Qurater",
+    "Qurater · Phase Next",
+    "Quatrer",
+    "Quatrer · Phase Next"
+   ]
+  },
+  {
+   "project_id": "northgate-mixed",
+   "builder_id": "northgate-devco",
+   "name": "Northgate Quarter",
+   "micro_market": "Hennur",
+   "phrases": [
+    "Northgate Quarter",
+    "Quarter",
+    "uQarter",
+    "Qaurter",
+    "Qurater",
+    "Quatrer",
+    "Northgate Quarter Hennur",
+    "Quarter Hennur",
+    "Northgate Quarter Hennur Road, North Bengaluru, Karnataka 560077"
+   ]
+  },
+  {
+   "project_id": "verdant-coorg-hills",
+   "builder_id": "verdant-estates",
+   "name": "Verdant Coorg Hills",
+   "micro_market": "Coorg",
+   "phrases": [
+    "Verdant Coorg Hills",
+    "Coorg Hills",
+    "Coorg",
+    "Verdant Coorg Hills Coorg",
+    "Coorg Hills Coorg",
+    "Verdant Coorg Hills Suntikoppa, Kodagu, Karnataka 571237"
+   ]
+  },
+  {
+   "project_id": "harbour-quay-one",
+   "builder_id": "harbour-works",
+   "name": "Harbour Quay One",
+   "micro_market": "ORR Bellandur",
+   "phrases": [
+    "Harbour Quay One",
+    "Quay One",
+    "Quay",
+    "Harbour Quay One ORR Bellandur",
+    "Quay One ORR Bellandur",
+    "Harbour Quay One Outer Ring Road, Bellandur, Bengaluru 560103"
+   ]
+  },
+  {
+   "project_id": "brigade-eldorado",
+   "builder_id": "brigade-group",
+   "name": "Brigade Eldorado",
+   "micro_market": "Aerospace Park / Devanahalli Corridor",
+   "phrases": [
+    "Brigade Eldorado",
+    "Eldorado",
+    "lEdorado",
+    "Edlorado",
+    "Elodrado",
+    "Eldroado",
+    "Brigade Eldorado Aerospace Park / Devanahalli Corridor",
+    "Eldorado Aerospace Park / Devanahalli Corridor",
+    "Brigade Eldorado Brigade Eldorado, Bagalur Road, Huvinayakanahalli, Aerospace Park, North Bangalore 562149"
+   ]
+  },
+  {
+   "project_id": "brigade-cornerstone-utopia",
+   "builder_id": "brigade-group",
+   "name": "Brigade Cornerstone Utopia",
+   "micro_market": "Whitefield",
+   "phrases": [
+    "Brigade Cornerstone Utopia",
+    "Cornerstone Utopia",
+    "Cornerstone",
+    "oCrnerstone",
+    "oCrnerstone Utopia",
+    "Cronerstone",
+    "Cronerstone Utopia",
+    "Conrerstone",
+    "Conrerstone Utopia",
+    "Corenrstone",
+    "Corenrstone Utopia",
+    "Brigade Cornerstone Utopia Whitefield"
+   ]
+  }
+ ]
+}
