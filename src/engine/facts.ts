@@ -10,7 +10,7 @@ import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 import { answerRequirements } from './answer-contract.js';
 import { affordabilityFromEmi, INCOME_SERVICING_RATIO } from './emi.js';
-import { resolveFaqQuestionKeys } from './faq-keys.js';
+import { looksLikeAQuestion, resolveFaqQuestionKeys } from './faq-keys.js';
 import { discourseOffered, currentShortlist, discussedList } from './entity-store.js';
 import { isPlausiblePlaceLabel } from './placeability.js';
 import {
@@ -962,7 +962,17 @@ export function detectSoftPrefs(
     Extracted['constraints'],
     'readyToMove' | 'nearAirport' | 'commuteHub' | 'priorityFocus' | 'schoolsMentioned' | 'walkabilityMentioned' | 'valueMentioned'
   > = {};
-  if (/\bready\s+to\s+move\b|\bpreferably\s+ready\b/i.test(text)) out.readyToMove = true;
+  // "Is it ready to move in?" is a QUESTION about one project, not a standing
+  // preference for ready inventory. Recorded as a filter it survives the turn and
+  // steers every later search — and it is how a March 2027 project came to answer
+  // that question with "Yes" (26-probe honesty read, 16 Aug). A preference may
+  // only be taken from a buyer who stated one.
+  if (
+    !looksLikeAQuestion(text) &&
+    /\bready\s+to\s+move\b|\bpreferably\s+ready\b/i.test(text)
+  ) {
+    out.readyToMove = true;
+  }
   if (/\bnear(?:\s+the)?\s+airport\b|\bairport\s+(?:side|corridor|road)\b/i.test(text)) {
     out.nearAirport = true;
   }

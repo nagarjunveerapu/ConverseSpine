@@ -401,6 +401,28 @@ export function isFaqShapedAsk(text: string): boolean {
 }
 
 /**
+ * Is this sentence asking, or telling?
+ *
+ * Lived in compose.ts, where it kept the engine from answering "2027 is too late
+ * for me" with "I don't have that on file". The extractors need the same
+ * distinction for the opposite reason — a preference may only be recorded from a
+ * buyer who STATED one. "Is it ready to move in?" is a question about one
+ * project, and reading it as a standing filter is how a March 2027 project came
+ * to answer it with "Yes".
+ *
+ * Here rather than in compose because compose imports facts, so facts cannot
+ * import compose. This module is a leaf and already owns ask-shape predicates.
+ */
+export function looksLikeAQuestion(text?: string): boolean {
+  const t = (text ?? '').trim();
+  if (!t) return true;
+  if (t.includes('?')) return true;
+  return /^(?:what|when|where|which|who|whom|whose|why|how|is|are|was|were|do|does|did|can|could|will|would|should|shall|may|any|tell me|show me|send|give me|share)\b/i.test(
+    t,
+  );
+}
+
+/**
  * Taught sub-intent → FAQ key. A human taught this phrasing family a facet on
  * the Understanding board (Desk mirrors it into vector metadata); when THIS
  * turn's embed bind carried one, compose pins that exact Desk FAQ row on the
