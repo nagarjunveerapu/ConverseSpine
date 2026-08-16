@@ -11,6 +11,11 @@ enabled = true
 
 [vars]
 LOG_LEVEL = "info"
+# Names the INTENT_VECTORS index below, so the rebuild manifest is keyed per
+# index and not just per vector space. Four envs share one TURN_CACHE; without
+# this, two of them on the same projection diff against each other's writes.
+# tests/intent-projection-space.test.ts holds this equal to index_name.
+SIL_INTENT_INDEX = "naya-intent-phrasings"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"
@@ -109,9 +114,33 @@ LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
 SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
 # Master switch for the canonical intent-embed schema (entity-masked corpus +
-# query in lockstep, ships the v2 + mined corpus). "false" = legacy raw (rebuild
-# stays a no-op today). Flip to "true" only WITH a manifest-reset full rebuild.
+# query in lockstep, ships the v2 + mined corpus).
+#
+# It is TWO changes on one switch, which is why it gets its own index. It swaps
+# what is embedded (raw phrasing → entity-masked) AND which rows are eligible:
+# the legacy gate is audit_status='clean' alone, the canonical gate also admits
+# machine_v2, mined_yantra_v1 and desk_promoted. Measured on the live registry
+# 16 Aug 2026: 8,727 eligible → 19,266. A 2.2x corpus, not just a re-embed —
+# and the lane that finally carries Desk-taught phrasings, which are fetched
+# only in canonical mode.
+#
+# Safe to flip here ONLY because SIL_INTENT_INDEX points at a fresh index: the
+# manifest starts empty, so all 19,266 rows embed, and no raw vector survives
+# alongside them. CS #210 put the mode in the content hash so the flip also
+# invalidates row-wise; both guards now say the same thing.
+# MEASURED 16 Aug 2026, and NOT flipped as a result. The canonical index was
+# built (naya-intent-p256-f6665e0b79-canon-dev, 19,404 vectors) and probed
+# against this one over the same six conversations. Entity masking turns "tell
+# me about Brigade Eldorado" into "tell me about <project>", which binds
+# find_projects instead of get_project_info — the most common opener, taught
+# four times as get_project_info. 8 of 20 turns changed intent, only 2 changed
+# the REPLY, and neither improved. Flip this to "true" together with
+# SIL_INTENT_INDEX below, once the corpus can separate a named-project ask from
+# a discovery ask without the name. The canon index is kept, already full.
 SIL_CANONICAL_EMBED = "false"
+# The index this env writes to and queries. Keys the rebuild manifest — see
+# intentManifestKey. Must equal [[env.dev.vectorize]] index_name.
+SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-full-dev"
 # Phase 2 — discourse state tokens on state-dependent embed queries + rebuild expand.
 # Query gated to ask_next_step/confirm/deixis so fact intents stay raw↔raw.
 SIL_STATE_TOKENS = "true"
@@ -155,11 +184,23 @@ class_name = "TurnDebouncer"
 
 [[env.dev.vectorize]]
 binding = "INTENT_VECTORS"
-# Dev now serves the LEARNED metric. This index is not a rebuild from the git
-# registry — it is the previous dev index (naya-intent-phrasings-dev) with every
-# vector multiplied by the projection, same ids and same metadata. Rebuilding
-# from source would have dropped the ~3k Desk-taught and legacy rows whose text
-# is not in the registry. See scripts/sil-project-existing-index.py.
+# Dev serves the LEARNED metric, CANONICALLY embedded, from an index built by
+# rebuilding the registry rather than by projecting the old one.
+#
+# The predecessor (naya-intent-p256-f6665e0b79-full-dev) was the pre-projection
+# dev index with every vector multiplied by the matrix — same ids, same
+# metadata — because a rebuild from source would have dropped the ~3k
+# Desk-taught and legacy rows whose text is not in the registry. That trade
+# stopped working at the canonical cutover: a canonical rebuild only re-embeds
+# rows the registry still has, so those ~14k unmanaged vectors (23,110 in the
+# index vs 8,727 in the manifest, measured 16 Aug 2026) would have stayed in
+# RAW space inside an index every query now searches canonically. Two spaces,
+# one index, no error anywhere — they can still win a nearest neighbour.
+#
+# So the cutover builds a NEW index instead of converting this one. The old
+# index is left untouched and fully valid, which makes rollback a config revert
+# with no re-embed: SIL_INTENT_INDEX keys the manifest, so pointing back at the
+# old name lands on the manifest that still describes it exactly.
 #
 # The name carries the projection id on purpose: tests/intent-projection-space
 # fails the build if the configured index and SIL_INTENT_PROJECTION disagree.
@@ -222,6 +263,9 @@ binding = "AI"
 remote = true
 
 [env.ctrldev.vars]
+# Keys the rebuild manifest to this env's own index — see intentManifestKey.
+# Must equal this env's INTENT_VECTORS index_name.
+SIL_INTENT_INDEX = "naya-intent-ident-ctrl-dev"
 NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
 ADVISOR_BUILDER_ID = "naya-advisor"
 LOG_LEVEL = "info"
@@ -281,6 +325,9 @@ binding = "AI"
 remote = true
 
 [env.projdev.vars]
+# Keys the rebuild manifest to this env's own index — see intentManifestKey.
+# Must equal this env's INTENT_VECTORS index_name.
+SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-dev"
 NAYADESK_URL = "https://nayadesk-dev.nagarjun-arjun.workers.dev"
 ADVISOR_BUILDER_ID = "naya-advisor"
 LOG_LEVEL = "info"
@@ -338,6 +385,9 @@ index_name = "naya-buyer-education"
 binding = "AI"
 
 [env.prod.vars]
+# Keys the rebuild manifest to this env's own index — see intentManifestKey.
+# Must equal this env's INTENT_VECTORS index_name.
+SIL_INTENT_INDEX = "naya-intent-phrasings"
 LOG_LEVEL = "info"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
@@ -400,6 +450,9 @@ binding = "AI"
 remote = true
 
 [env.local.vars]
+# Keys the rebuild manifest to this env's own index — see intentManifestKey.
+# Must equal this env's INTENT_VECTORS index_name.
+SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-full-dev"
 NAYADESK_URL = "http://localhost:8787"
 ADVISOR_BUILDER_ID = "naya-advisor"
 LOG_LEVEL = "info"

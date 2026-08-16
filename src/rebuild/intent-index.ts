@@ -35,6 +35,38 @@ const VOCAB_VERSION_KEY = 'sil:intent-manifest:vocab-version';
 const EMBED_BATCH = 96; // Workers AI text-array headroom
 const UPSERT_BATCH = 500;
 
+/**
+ * Which manifest describes the vectors this deployment is about to diff against.
+ *
+ * The manifest is per vector SPACE, because switching the intent projection on
+ * (or re-training it) leaves every row marked "unchanged" and the new index
+ * stays empty while the query side confidently searches it.
+ *
+ * It is ALSO per INDEX, and that half was missing. dev, projdev, ctrldev and
+ * local share one TURN_CACHE namespace; dev and projdev share the projection
+ * `p256-f6665e0b79` while pointing at two different Vectorize indices. They
+ * therefore shared one manifest describing only dev's writes — measured 16 Aug
+ * 2026: 8,727 entries, dev's index at 23,110 vectors (11 Aug), projdev's at
+ * 10,646 and last written 23 Jul. A rebuild on projdev reads dev's manifest,
+ * finds everything "unchanged", pushes nothing, and returns ok:true while its
+ * index stays 12,464 vectors behind. Same failure mode as the space bug — a
+ * green report over an index nobody filled.
+ *
+ * The Vectorize binding does not expose its own index name, so the env has to
+ * carry it; tests/intent-projection-space.test.ts holds it equal to the env's
+ * configured `index_name` so it cannot drift into a lie.
+ *
+ * Unset reproduces the legacy key byte for byte, which is what makes a rollback
+ * free: point the config back at the old index and its manifest still describes
+ * exactly the vectors that are in it.
+ */
+export function intentManifestKey(env: Env): string {
+  const space = intentSpaceId(env);
+  const base = space === 'identity' ? MANIFEST_KEY : `${MANIFEST_KEY}:${space}`;
+  const index = env.SIL_INTENT_INDEX?.trim();
+  return index ? `${base}:${index}` : base;
+}
+
 export interface RegistryRow {
   id: string;
   phrasing: string;
@@ -296,12 +328,8 @@ export async function rebuildIntentIndex(env: Env, opts: RebuildOptions = {}): P
       base.errors.push(`desk_promoted_fetch:${(e as Error).message}`);
     }
   }
-  // The manifest is per vector SPACE. Without this, switching the intent
-  // projection on (or re-training it) leaves every row marked "unchanged", so
-  // the new index would stay empty while the query side confidently searched
-  // it. Keying on the space id makes a space change force a full re-embed.
   const space = intentSpaceId(env);
-  const manifestKey = space === 'identity' ? MANIFEST_KEY : `${MANIFEST_KEY}:${space}`;
+  const manifestKey = intentManifestKey(env);
   let manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(manifestKey)) || '{}');
   if (canonicalMode) {
     const prevVocab = await env.TURN_CACHE.get(VOCAB_VERSION_KEY);

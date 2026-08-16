@@ -114,9 +114,30 @@ export function embKey(projectionId: string, text: string): string {
   return `emb:${projectionId || 'raw'}:${hashKey(normText(text))}`;
 }
 
-/** Intent Vectorize result cache — keyed by projected query text + builder. */
-export function intentQueryKey(projectionId: string, queryText: string, builderId: string): string {
-  return `ivq:${projectionId || 'raw'}:${hashKey(normText(queryText))}:${builderId || '_'}`;
+/**
+ * Intent Vectorize result cache — keyed by index + projected query text + builder.
+ *
+ * The INDEX is part of the key because this caches the RESULT of querying one,
+ * and dev/projdev/ctrldev/local share a single TURN_CACHE namespace while
+ * pointing at four different indices. Without it, whichever env asks a phrasing
+ * first owns the verdict for six hours and the others never query their own
+ * index at all — measured 16 Aug 2026 on two novel phrasings, both directions:
+ * the second arm returned the first arm's score to eight decimal places.
+ *
+ * That also made an A/B between two indices impossible to run and impossible to
+ * see, because agreement is exactly what a successful cutover would look like.
+ *
+ * The embed mode is deliberately NOT in the key: canonicalization changes the
+ * query TEXT, which is already hashed in, and where it changes nothing the
+ * result is genuinely the same. The index is the part text cannot express.
+ */
+export function intentQueryKey(
+  projectionId: string,
+  indexName: string,
+  queryText: string,
+  builderId: string,
+): string {
+  return `ivq:${projectionId || 'raw'}:${indexName || '_'}:${hashKey(normText(queryText))}:${builderId || '_'}`;
 }
 
 export function searchKey(builderId: string, constraintHash: string): string {
@@ -267,12 +288,13 @@ export async function putEmbedVector(
 export async function getIntentQueryMatches(
   kv: KVNamespace | undefined,
   projectionId: string,
+  indexName: string,
   queryText: string,
   builderId: string,
 ): Promise<IntentMatchRow[] | null> {
   const entry = await kvGetJson<IntentQueryCacheEntry>(
     kv,
-    intentQueryKey(projectionId, queryText, builderId),
+    intentQueryKey(projectionId, indexName, queryText, builderId),
   );
   return entry?.matches?.length ? entry.matches : null;
 }
@@ -280,6 +302,7 @@ export async function getIntentQueryMatches(
 export async function putIntentQueryMatches(
   kv: KVNamespace | undefined,
   projectionId: string,
+  indexName: string,
   queryText: string,
   builderId: string,
   matches: IntentMatchRow[],
@@ -287,7 +310,7 @@ export async function putIntentQueryMatches(
   if (!matches.length) return;
   await kvPutJson(
     kv,
-    intentQueryKey(projectionId, queryText, builderId),
+    intentQueryKey(projectionId, indexName, queryText, builderId),
     { matches, savedAt: Date.now() } satisfies IntentQueryCacheEntry,
     INTENT_QUERY_TTL,
   );

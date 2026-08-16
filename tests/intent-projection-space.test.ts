@@ -140,4 +140,41 @@ describe('intent projection — no call site can bypass it', () => {
       }
     }
   });
+
+  it('every env names its own index, so the rebuild manifest is per index', () => {
+    // The rebuild manifest is keyed on SIL_INTENT_INDEX (see intentManifestKey).
+    // The Vectorize binding cannot report its own name, so the var is the only
+    // link — and a var that disagrees with the binding is worse than no var at
+    // all: it would key the manifest to an index nobody writes. Four envs share
+    // one TURN_CACHE, so a missing or stale value silently reunites two envs on
+    // one manifest, which is exactly the bug this guards.
+    const toml = readFileSync('wrangler.toml', 'utf8');
+    const blocks = toml.split(/\n(?=\[)/);
+    const seen = new Map<string, string>();
+    for (const b of blocks) {
+      if (!b.includes('INTENT_VECTORS')) continue;
+      const name = /index_name\s*=\s*"([^"]+)"/.exec(b)?.[1];
+      if (!name) continue;
+      const envName = /\[\[env\.(\w+)\.vectorize\]\]/.exec(b)?.[1];
+      const varsBlock = envName
+        ? new RegExp(`\\[env\\.${envName}\\.vars\\]([\\s\\S]*?)(?=\\n\\[|$)`).exec(toml)?.[1]
+        : /\[vars\]([\s\S]*?)(?=\n\[|$)/.exec(toml)?.[1];
+      const declared = varsBlock
+        ? /SIL_INTENT_INDEX\s*=\s*"([^"]+)"/.exec(varsBlock)?.[1]
+        : undefined;
+      const label = envName ?? 'top-level';
+      expect(declared, `${label}: binds INTENT_VECTORS but declares no SIL_INTENT_INDEX`).toBeDefined();
+      expect(declared, `${label}: SIL_INTENT_INDEX must equal its own index_name`).toBe(name);
+      // Two envs may legitimately point at one index (dev and local do), but
+      // then they SHOULD share a manifest — what must never happen is one name
+      // standing for two indices.
+      const prior = seen.get(declared!);
+      expect(prior === undefined || prior === name, `${label}: ${declared} names two indices`).toBe(
+        true,
+      );
+      seen.set(declared!, name);
+    }
+    expect(seen.size, 'no INTENT_VECTORS binding found — the guard would pass vacuously')
+      .toBeGreaterThan(0);
+  });
 });

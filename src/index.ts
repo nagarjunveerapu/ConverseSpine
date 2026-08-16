@@ -152,10 +152,16 @@ export default {
         if (!env.BOT_SHARED_SECRET || secret !== env.BOT_SHARED_SECRET) {
           return json({ error: 'forbidden' }, 403);
         }
-        let dryRun = false;
+        // Accept the query param as well as the body. `?dryRun=1` with an empty
+        // body used to parse as dry_run:false and run the full rebuild — an
+        // operator asking for a preview got 19,404 live embeds instead, and the
+        // only tell was a missing `reason: "dry_run"` in the report. A preview
+        // that silently isn't one is the wrong way round for a footgun.
+        const q = url.searchParams;
+        let dryRun = q.get('dry_run') !== null || q.get('dryRun') !== null;
         try {
           const body = (await request.json()) as { dry_run?: boolean };
-          dryRun = !!body?.dry_run;
+          dryRun = dryRun || !!body?.dry_run;
         } catch {
           /* empty body ok */
         }
