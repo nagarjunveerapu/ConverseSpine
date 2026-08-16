@@ -50,9 +50,29 @@ describe('visit-slot', () => {
     expect(formatVisitTimeLabel(10, 0)).toBe('10:00 AM');
   });
 
+  // A hardcoded "future" date is only future until it isn't: this test was
+  // pinned to 2026-08-15 and went red the morning that became yesterday,
+  // taking every open PR with it. reparseVisitTime compares the slot against
+  // Date.now() and takes no clock argument (unlike parseVisitSlot and
+  // parseDayAnchor, which both accept `now`), so the date has to be derived
+  // rather than injected. Computed in IST, because the day label the assertion
+  // reads comes from toIstParts — a UTC-derived Saturday is a Friday in CI.
+  function nextSaturdayIst(hour: number): string {
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const nowIst = new Date(Date.now() + IST_OFFSET_MS);
+    // 6 = Saturday. `|| 7` keeps it strictly future when today IS Saturday,
+    // so midnight on the target day is never already past.
+    const daysAhead = (6 - nowIst.getUTCDay() + 7) % 7 || 7;
+    const target = new Date(nowIst.getTime() + daysAhead * 86_400_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return (
+      `${target.getUTCFullYear()}-${pad(target.getUTCMonth() + 1)}-` +
+      `${pad(target.getUTCDate())}T${pad(hour)}:00:00+05:30`
+    );
+  }
+
   it('reparseVisitTime keeps day and changes time', () => {
-    // Use a fixed future Saturday so CI "now" cannot reject the slot as past.
-    const retimed = reparseVisitTime('2026-08-15T11:00:00+05:30', '12 AM');
+    const retimed = reparseVisitTime(nextSaturdayIst(11), '12 AM');
     expect(retimed?.humanLabel).toMatch(/Saturday at 12:00 AM/);
     expect(retimed?.proposedIso).toContain('T00:00:00+05:30');
   });
