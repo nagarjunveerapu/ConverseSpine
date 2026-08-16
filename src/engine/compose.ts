@@ -1490,7 +1490,10 @@ function fallbackReplyBody(req: ComposeRequest): string {
         (faqPresent || multiTopic)
       ) {
         chunks.push(
-          summarizeUnitConfigs(ev.units, multiTopic ? undefined : context.focusProjectName),
+          summarizeUnitConfigs(ev.units, multiTopic ? undefined : context.focusProjectName, {
+            ...askedConfigFamily(context.buyerText, context.constraints),
+            projectType: ev.detail?.projectType,
+          }),
         );
       }
       if (faqPresent && topics.includes('emi') && ev.emi) {
@@ -1628,6 +1631,12 @@ function fallbackReplyBody(req: ComposeRequest): string {
       }
       if (goal.topic === 'availability' && ev.units?.length) {
         const pname = ev.detail?.name ?? context.focusProjectName;
+        // What the buyer asked for, so the summary can answer no. Without it the
+        // config copy opens "Yes —" whatever the book holds.
+        const askedCfg: AskedConfig = {
+          ...askedConfigFamily(context.buyerText, context.constraints),
+          projectType: ev.detail?.projectType,
+        };
         // AB-1 — an inventory ask ("is there any inventory left?") wants the
         // availability FACT. A config card list without it is a non-answer.
         let facts: string;
@@ -1644,10 +1653,10 @@ function fallbackReplyBody(req: ComposeRequest): string {
             // sends 0 for every config when a project has no unit rows at all.
             // Never claim sold out without positive evidence; route the exact
             // count to the team instead.
-            facts = `${summarizeUnitConfigs(ev.units, pname)} Exact unit-level counts are confirmed by our team.`;
+            facts = `${summarizeUnitConfigs(ev.units, pname, askedCfg)} Exact unit-level counts are confirmed by our team.`;
           }
         } else {
-          facts = `${summarizeUnitConfigs(ev.units, pname)}.`;
+          facts = `${summarizeUnitConfigs(ev.units, pname, askedCfg)}.`;
         }
         // Unit-typed site image / floor plan co-fetched with BHK-scoped
         // availability. It is its OWN sentence and it goes before the question —
@@ -1946,19 +1955,62 @@ function joinWithAnd(parts: readonly string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
+interface UnitConfigRow {
+  unitType: string;
+  priceDisplay: string;
+  sizeDisplay?: string;
+  holdableUnits?: number;
+}
+
+/** What the buyer asked for on THIS turn — the input to answering yes or no. */
+export interface AskedConfig {
+  /** Normalised family the buyer named ("5 BHK"), when they named one. */
+  family?: string;
+  /** The buyer put the question in BHK terms at all ("what BHK options…"). */
+  inBhkTerms?: boolean;
+  /** Raw catalog project_type — supplies the REASON a BHK ask has no answer. */
+  projectType?: string;
+}
+
+/**
+ * The config family asked for on this turn, from the buyer's own words.
+ *
+ * `constraints.bhk` is sticky — it survives from the turn that set it, so on its
+ * own it would answer a later generic "what's available" with a "No — 5 BHK
+ * isn't on file" nobody asked for. The turn's text is therefore the authority
+ * for WHETHER a config was asked; the constraint only normalises spelled-out
+ * numbers ("five bhk") the text regex cannot.
+ */
+export function askedConfigFamily(
+  buyerText: string | undefined,
+  constraints?: { bhk?: string },
+): { family?: string; inBhkTerms: boolean } {
+  const t = (buyerText ?? '').toLowerCase();
+  if (!/\bbhk\b|\bbedrooms?\b|\bbed\s?rooms?\b/.test(t)) return { inBhkTerms: false };
+  const fromText = /(\d+)\s*(?:bhk|bed\s?rooms?)/.exec(t)?.[1];
+  const fromConstraint = /(\d+)/.exec(constraints?.bhk ?? '')?.[1];
+  const n = fromText ?? fromConstraint;
+  return { family: n ? `${n} BHK` : undefined, inBhkTerms: true };
+}
+
+/** What a project of this type IS listed as, when its book holds no BHK rows. */
+function configNounFor(projectType?: string): string | undefined {
+  const s = (projectType ?? '').toLowerCase();
+  if (!s) return undefined;
+  if (s.includes('plot') || s.includes('plantation') || s.includes('farm')) return 'plots';
+  if (s.includes('villa')) return 'villas';
+  return undefined;
+}
+
 export function summarizeUnitConfigs(
-  units: ReadonlyArray<{
-    unitType: string;
-    priceDisplay: string;
-    sizeDisplay?: string;
-    holdableUnits?: number;
-  }>,
+  units: ReadonlyArray<UnitConfigRow>,
   projectName?: string,
+  asked?: AskedConfig,
 ): string {
   const lead = projectName ? `For *${projectName}*: ` : '';
   if (!units.length) return `${lead}configurations aren't published yet`;
 
-  type UnitRow = (typeof units)[number];
+  type UnitRow = UnitConfigRow;
   const byFamily = new Map<string, UnitRow[]>();
   for (const u of units) {
     const m = /(\d+)\s*bhk/i.exec(u.unitType);
@@ -1969,6 +2021,39 @@ export function summarizeUnitConfigs(
   }
 
   const families = [...byFamily.entries()];
+  const sizesOf = (rows: UnitRow[]): string =>
+    joinWithAnd(rows.map((r) => r.sizeDisplay).filter((s): s is string => !!s).slice(0, 3));
+  /** The inventory half, with no verdict word in front of it. */
+  const onFile = (): string =>
+    families
+      .slice(0, 4)
+      .map(([family, rows]) => {
+        const sizes = sizesOf(rows);
+        if (rows.length === 1) {
+          return sizes ? `${family} — ${sizes}` : formatUnitConfigLine(rows[0]!);
+        }
+        return `${family} — ${rows.length} layouts${sizes ? `, ${sizes}` : ''}`;
+      })
+      .join('. ');
+
+  // Ayana is a managed plantation estate. Asked "is 5 BHK available there?" every
+  // branch below used to open "Yes —" and then list plots: every token a real
+  // catalog fact, so grounding passed, and the answer was still untrue. A reply
+  // may only claim a fit it can point at — so the two ways the ask has no fit are
+  // answered BEFORE any of them (founder, 16 Aug).
+  const bhkFamilies = families.filter(([f]) => /^\d+ BHK$/.test(f));
+  if (asked?.inBhkTerms && !bhkFamilies.length) {
+    const who = projectName ? `*${projectName}*` : 'This project';
+    const noun = configNounFor(asked.projectType);
+    const because = noun
+      ? `is a *${humanizeProjectType(asked.projectType)}* — its inventory is listed as ${noun}, not BHK`
+      : `isn't listed by BHK`;
+    return `${who} ${because}. On file: ${onFile()}`;
+  }
+  if (asked?.family && !byFamily.has(asked.family)) {
+    return `No — *${asked.family}* isn't on file${projectName ? ` at *${projectName}*` : ''}. What is: ${onFile()}. Exact availability depends on live inventory`;
+  }
+
   if (families.length === 1 && families[0]![1].length === 1) {
     const u = families[0]![1][0]!;
     return `${lead}${formatUnitConfigLine(u)}`;
@@ -1977,9 +2062,6 @@ export function summarizeUnitConfigs(
   // "2 2 BHK variants on file. 2 BHK: 2 variants ranges from …" — the head and
   // the line said the same thing twice, and the count collided with the size
   // name. One family gets ONE sentence; the sizes are the useful half.
-  const sizesOf = (rows: UnitRow[]): string =>
-    joinWithAnd(rows.map((r) => r.sizeDisplay).filter((s): s is string => !!s).slice(0, 3));
-
   if (families.length === 1) {
     const [family, rows] = families[0]!;
     const sizes = sizesOf(rows);
