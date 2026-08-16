@@ -1019,7 +1019,16 @@ export function nayadeskData(
       try {
         const r = await crm.resolveGeo(text);
         if (!r.resolved || r.lat == null || r.lng == null) return null;
-        return { lat: r.lat, lng: r.lng };
+        // Carry Desk's own account of HOW it resolved. Dropping these was the
+        // reason the engine could not tell "Whitefield, from the area registry"
+        // from "the geocoder shrugged and returned the centroid of India".
+        return {
+          lat: r.lat,
+          lng: r.lng,
+          ...(r.source ? { source: r.source } : {}),
+          ...(r.area_id ? { areaId: r.area_id } : {}),
+          ...(r.radius_km != null ? { radiusKm: r.radius_km } : {}),
+        };
       } catch {
         return null;
       }

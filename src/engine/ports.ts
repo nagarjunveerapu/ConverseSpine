@@ -226,7 +226,20 @@ export interface EngineData {
     | { status: 'unresolved' }
     | { status: 'unavailable' }
   >;
-  resolveGeo(text: string): Promise<{ lat: number; lng: number } | null>;
+  resolveGeo(text: string): Promise<{
+    lat: number;
+    lng: number;
+    /**
+     * How Desk arrived at the answer. `area_registry` is the authority — the
+     * Desk registry holds this label as an area. The other sources are a
+     * geocoder, which answers ANY string: "immediately" and "floor is
+     * available" both resolve, to the centroid of India.
+     */
+    source?: 'area_registry' | 'cache' | 'geocoder' | 'gazetteer';
+    areaId?: string;
+    /** Bounding-box radius. The scale is what betrays a geocoder shrug. */
+    radiusKm?: number;
+  } | null>;
   projectCoords(builderId: string): Promise<
     ReadonlyArray<{ projectId: string; lat: number; lng: number; microMarket?: string }>
   >;

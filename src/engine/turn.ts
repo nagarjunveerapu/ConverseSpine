@@ -63,6 +63,7 @@ import {
   collapseCoverageMarkets,
   coverageCityCoverBit,
   coverageCoverBit,
+  deskKnowsAsPlace,
   coverageOrderOptsFrom,
   inventoryNoun,
   isOutsideServedInventory,
@@ -1401,9 +1402,20 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
             ? { lat: resolved.value.lat, lng: resolved.value.lng }
             : null;
         const coordRows = await deps.data.projectCoords(state.builderId).catch(() => []);
+        // `resolved` came from the same Desk endpoint, which answers ANY string:
+        // "immediately" and "floor is available" both resolve, to the centroid
+        // of India — which is of course outside served inventory, so the ask
+        // arrived here and was named back as a town. Re-ask for the full answer
+        // (source / area_id / radius) and let the registry decide whether there
+        // is a place here at all. Serviceability is a separate question that
+        // already works: "I don't have homes in *Pune*" stays.
+        const askedGeo = askPoint
+          ? await deps.data.resolveGeo(locationCandidate.trim()).catch(() => null)
+          : null;
         if (
           askPoint &&
           looksLikePlaceFramedAsk(input.text) &&
+          deskKnowsAsPlace(askedGeo) &&
           isOutsideServedInventory(askPoint, coordRows)
         ) {
           const asked = locationCandidate.trim();
@@ -3982,6 +3994,39 @@ async function fetchRecommend(
     }
     if (failure.subject === 'area') {
       const loc = s.constraints.location?.trim() || 'that area';
+      // Desk is the authority on whether there is a PLACE here at all — the
+      // question nothing asked before naming one back to the buyer. Ayana ·
+      // "can i move in next month?" produced "I don't have homes in *next*";
+      // Brigade Calista · "can i move in right away?" produced "*right*". A
+      // town invented out of the buyer's own sentence.
+      //
+      // This is the SECOND of two copies of that decision in one fallback
+      // chain — the locality-validation stage holds the other. Gating either
+      // alone measures 6/11 phantoms, exactly the ungated number, because the
+      // turn simply falls through to the copy that is still open. Both, 0/11.
+      // Do not remove one because it "looks unreachable": that was measured.
+      //
+      // Serviceability is a different question and already has an answer —
+      // "I don't have homes in *Pune*" is honest, and is verified to survive.
+      if (!deskKnowsAsPlace(await deps.data.resolveGeo(loc).catch(() => null))) {
+        // Drop it and answer the rest of the brief. The caller purges the
+        // constraint from state on droppedLocation, so the phantom cannot
+        // stick and steer the next search.
+        if (out) out.droppedLocation = loc;
+        const { locations: _phantomLoc, ...filtersSansPhantom } = filters;
+        const rescued = await searchWithFilters(deps, s.builderId, filtersSansPhantom);
+        if (rescued.matches.length) {
+          return {
+            goal:
+              base.kind === 'recommend' || base.kind === 'ack_reject_recommend'
+                ? base
+                : { kind: 'recommend' },
+            evidence: { tools: ['search'], matches: rawToMatches(rescued.matches) },
+          };
+        }
+        // Nothing to show — decline without naming a place that does not exist.
+        return { goal: { kind: 'no_fit' }, evidence: { tools: ['search'], failure } };
+      }
       // Locality intelligence: nearby / in-city inventory with disclosed widen.
       // Ladder still returned area no_match (no silent release); this is recovery.
       const cat = await deps.data.catalog(s.builderId).catch(() => null);

@@ -317,3 +317,54 @@ export function outsideServedReply(
   const coverBit = coverageCoverBit(markets, opts);
   return `I don't have ${noun} in *${loc}* — ${coverBit}. Want to adjust budget, area, or property type?`;
 }
+
+/**
+ * Desk's geo answer, as the engine now sees it.
+ * `null` = Desk could not resolve the text at all.
+ */
+export type DeskGeo = {
+  lat: number;
+  lng: number;
+  source?: 'area_registry' | 'cache' | 'geocoder' | 'gazetteer';
+  areaId?: string;
+  radiusKm?: number;
+} | null;
+
+/**
+ * Widest and narrowest a resolved LABEL may be before we will name it back to a
+ * buyer as a place. Set from measurement against Desk dev, 16 Aug 2026, not
+ * from taste — every real place measured lands inside, every phantom outside:
+ *
+ *   Pune 18.3 · Delhi 31.1 · Hyderabad 37.5 · Mumbai 38   ← real, unserved
+ *   "next" 0.2 (a building in Chennai)                     ← a POI, not an area
+ *   "right" · "next month" · "immediately" ·
+ *   "floor is available" · "self use"      all 2457        ← the centroid of
+ *                                                             India: the
+ *                                                             geocoder shrug
+ *
+ * These bounds apply ONLY to the geocoder path. Budigere Cross is a served
+ * micro-market with a 0.2 km radius — identical to the phantom "next" — so the
+ * registry has to be consulted first or a real area gets thrown away.
+ */
+const LOCALITY_RADIUS_MIN_KM = 1;
+const LOCALITY_RADIUS_MAX_KM = 150;
+
+/**
+ * Is this label a PLACE, on the Desk's authority?
+ *
+ * Not "do we serve it" — `recognized_locations` already answers that, and the
+ * answer for Pune is no. This asks the prior question, the one nothing asked
+ * before: is there a place here at all. Saying "I don't have homes in *Pune*"
+ * is honest; saying "I don't have homes in *right*" invents a town out of the
+ * buyer's own sentence.
+ *
+ * The Desk area registry is the authority and wins outright. Below it sits a
+ * geocoder that resolves ANY string — `resolved: true` for "self use" — so its
+ * answers are only trusted at a scale a locality can actually have.
+ */
+export function deskKnowsAsPlace(geo: DeskGeo): boolean {
+  if (!geo) return false;
+  if (geo.areaId || geo.source === 'area_registry') return true;
+  if (geo.radiusKm == null) return false;
+  return geo.radiusKm >= LOCALITY_RADIUS_MIN_KM && geo.radiusKm <= LOCALITY_RADIUS_MAX_KM;
+}
