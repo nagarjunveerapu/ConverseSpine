@@ -58,6 +58,16 @@ const FAQ_KEY_PATTERNS: ReadonlyArray<{ key: string; re: RegExp }> = [
     re: /\b(?:possession(?:\s+date)?|possession\s+kab|when(?:'s| is)?\s+(?:possession|handover|completion)|(?:what\s+is\s+the\s+)?completion(?:\s+date)?|handover(?:\s+date)?|delivery\s+(?:date|timeline)|ready\s+to\s+move(?:\s+in)?|kab\s+(?:possession|handover|milega)|kab\s+milega|milega\s+batao)\b|कब\s*मिलेगा|ಪೊಸೆಷನ್|పొసెషన్/i,
   },
   {
+    // "move in", "shift in", "check in" are never locative — they ask whether the
+    // project is READY (founder, 16 Aug). Untreated, "can i move in right away?"
+    // resolved to NO key, fell through to the locality capture, and the "in" —
+    // a verb particle, not a preposition of place — yielded a place called
+    // *right*: "I don't have homes in *right*". The ask was possession all along,
+    // so this is the possession lane's gap, not a deny-list for the extractor.
+    key: 'possession',
+    re: /\b(?:mov(?:e|ing)|shift(?:ing)?|check(?:ing)?)\s+in(?:to)?\b(?!\s+with)|\bwhen\s+can\s+(?:i|we)\s+(?:move|shift)\b/i,
+  },
+  {
     // Focused menu chip — bare "when" → possession on the open project.
     key: 'possession',
     re: /^when\s*[?.!]?\s*$/i,

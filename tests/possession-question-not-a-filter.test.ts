@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { fallbackReply } from '../src/engine/compose.js';
 import { detectSoftPrefs } from '../src/engine/facts.js';
-import { looksLikeAQuestion } from '../src/engine/faq-keys.js';
+import { looksLikeAQuestion, resolveFaqQuestionKeys } from '../src/engine/faq-keys.js';
 import type { EvidenceSet } from '../src/engine/types.js';
 
 const NAME = 'Brigade Buena Vista';
@@ -103,6 +103,62 @@ describe('a question is not a standing preference', () => {
     // Only readyToMove is gated — a question naming the airport is still a
     // location signal, and narrowing more than the defect requires is its own bug.
     expect(detectSoftPrefs('is it near the airport?').nearAirport).toBe(true);
+  });
+});
+
+/**
+ * "Move in", "shift in", "check in" ask when the project is READY — the founder's
+ * reading, 16 Aug. Before this, only "ready to move in" carried a possession key.
+ * "can i move in right away?" carried none, fell past the possession lane, and the
+ * loose locality capture read the verb particle as a preposition of place:
+ *
+ *   Ayana · "can i move in next month?"
+ *   → "I don't have homes in *next* — I currently cover Whitefield, Sarjapur…"
+ *
+ * Measured on deployed dev, 16 Aug 2026.
+ */
+describe('a readiness ask in move-in words is a possession ask', () => {
+  it('resolves every move-in phrasing to the possession key', () => {
+    for (const t of [
+      'can i move in right away?',
+      'can i move in next month?',
+      'when can i move in',
+      'how soon can i move in',
+      'can i move into it now',
+      'moving in this year?',
+      'can i shift in next month',
+      'when can we shift',
+      'can i check in immediately',
+    ]) {
+      expect.soft(resolveFaqQuestionKeys(t), t).toContain('possession');
+    }
+  });
+
+  it('does not read an ordinary "in" as a readiness ask', () => {
+    // The particle only counts when it follows the verb. A preposition of place,
+    // a phase, a tower — and "check in WITH you", which is scheduling, not
+    // possession — must all stay out of the possession lane.
+    for (const t of [
+      'show me projects in whitefield',
+      'what is the price in phase 2',
+      'is 3 BHK available in tower B',
+      'schools in the area',
+      'can i check in with you next week',
+    ]) {
+      expect.soft(resolveFaqQuestionKeys(t), t).not.toContain('possession');
+    }
+  });
+
+  it('answers "can i move in right away?" with the timeline, not the config list', () => {
+    const reply = ask('can i move in right away?');
+    expect(reply).toContain('March 2027');
+    expect(reply).not.toMatch(/\d+\s+sizes on file/i);
+  });
+
+  it('still refuses to record a filter from the question', () => {
+    for (const t of ['can i move in right away?', 'when can i move in']) {
+      expect.soft(detectSoftPrefs(t).readyToMove, t).not.toBe(true);
+    }
   });
 });
 
