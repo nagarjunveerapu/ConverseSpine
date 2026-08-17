@@ -113,6 +113,24 @@ function toMatch(p: P): Match {
   };
 }
 
+/**
+ * Which of the asked locations Desk would call SERVED — the real
+ * `recognized_locations` contract. A place we do not serve returns [] whether
+ * it is Mumbai or the word "next"; that ambiguity is the point of the fixture.
+ */
+function recognizedAmong(locations: string | undefined): string[] {
+  if (!locations) return [];
+  const markets = LOKATIONS.map((p) => p.market.toLowerCase());
+  return locations
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((loc) => {
+      const l = loc.toLowerCase();
+      return markets.some((m) => m.includes(l) || l.includes(m)) || l.includes('bangalore') || l.includes('bengaluru');
+    });
+}
+
 function filterCatalog(f: SearchFilters): P[] {
   let ms = LOKATIONS.slice();
   if (f.searchText) {
@@ -249,15 +267,25 @@ export function fakeData(): EngineData & {
     fail,
     faqOverrides,
     async search(_b, f) {
-      return { matches: filterCatalog(f).map((p) => ({
-        project_id: p.id,
-        name: p.name,
-        micro_market: p.market,
-        starting_price_inr: p.priceInr,
-        starting_price_display: p.display,
-        match_reasons: ['fits'],
-        project_type: p.type,
-      })) };
+      return {
+        matches: filterCatalog(f).map((p) => ({
+          project_id: p.id,
+          name: p.name,
+          micro_market: p.market,
+          starting_price_inr: p.priceInr,
+          starting_price_display: p.display,
+          match_reasons: ['fits'],
+          project_type: p.type,
+        })),
+        // Desk answers SERVICEABILITY here, not "is this a real place" —
+        // measured against Desk dev 17 Aug 2026: Mumbai, Andheri and Pune all
+        // come back `recognized_locations: []`, exactly like the noise word
+        // "next". Omitting the field let every offline test skip the branch
+        // that reads it, which is how a real city came to be treated as
+        // dialogue noise. The fixture must model the contract, not a
+        // convenient version of it.
+        recognizedLocations: recognizedAmong(f.locations),
+      };
     },
     async catalog(): Promise<CatalogEnvelope> {
       const prices = LOKATIONS.map((p) => p.priceInr);
