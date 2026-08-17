@@ -275,6 +275,12 @@ def main() -> None:
     ap.add_argument("--proxy", required=True, help="wrangler dev AI proxy base URL")
     ap.add_argument("--negatives", default="", help="JSON file of real no-name utterances")
     ap.add_argument("--out", default="u12-bakeoff.json")
+    ap.add_argument(
+        "--extra-models",
+        default="",
+        help="comma-separated Workers AI embedding models to add as raw (no-prefix) arms, "
+        "e.g. @cf/baai/bge-large-en-v1.5,@cf/google/embeddinggemma-300m",
+    )
     args = ap.parse_args()
 
     queries = build_queries()
@@ -291,6 +297,11 @@ def main() -> None:
         ("bge-base (+query prefix)", BASE, BGE_QUERY_PREFIX),
         ("bge-m3", M3, ""),
     ]
+    for m in filter(None, (s.strip() for s in args.extra_models.split(","))):
+        # Raw text, same as the as-deployed arm. Some of these models document
+        # their own query prefixes; a candidate that only wins WITH its prefix
+        # can earn a bespoke arm later — the first question is the level field.
+        arms.append((m.split("/")[-1], m, ""))
     results = []
     for label, model, prefix in arms:
         print(f"── {label}", file=sys.stderr)

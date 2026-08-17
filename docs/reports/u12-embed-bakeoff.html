@@ -1,4 +1,4 @@
-<title>U12 — bge-m3 vs bge-base: the bake-off, and the audit that shrank it</title>
+<title>U12 — the embedder bake-off: names, intents, and two revised verdicts</title>
 <style>
   :root {
     --ground: #F3F6F8;
@@ -130,9 +130,9 @@
   </header>
 
   <div class="verdict">
-    <div class="head">Verdict: adopt bge-m3 — for a smaller and better-evidenced reason than the headline.</div>
-    <p class="kicker">Not because of multilingual retrieval. Because at a matched operating point it false-binds on <strong>0.8%</strong> of real negative turns where the deployed model binds <strong>9.2%</strong> — an eleven-fold cut in the bot confidently naming a project nobody asked about.</p>
-    <p>Cost is a full re-index: 1024 dims against 768. That is why this had to be decided <em>before</em> U9 finishes calibrating bands, not after.</p>
+    <div class="head">Verdict, revised twice by measurement: hold the m3 cutover — the field is m3 vs embeddinggemma, settled by a projection-level tiebreak.</div>
+    <p class="kicker">Round one (names): m3 false-binds on <strong>0.8%</strong> of real negative turns where the deployed model binds <strong>9.2%</strong> — an eleven-fold cut, and the original reason to adopt. Round two, run at the founder's question — <em>which model figures out the intents clearly?</em> — reordered the field: on the real 13.5k intent corpus <strong>m3 is worse than the deployed model</strong> (0.579 vs 0.624 raw floor, and 5/10 on opt_out where base gets 8/10), while <strong>embeddinggemma-300m beats the deployed model on both jobs at once</strong> (names 0.984 / 3.3% false-bind · intent 0.672).</p>
+    <p>The two finalists split the two jobs. The tiebreak is to train the learned projection on each finalist's vectors offline and compare finished systems, not floors. Until that runs, no cutover. Gemma carries a practical edge either way: 768 dims — the migration is half of m3's.</p>
   </div>
 
   <section class="col">
@@ -287,16 +287,53 @@
     </div>
   </section>
 
+  <section>
+    <div class="col"><h2>Round two: the intent test, and the model it dethroned</h2>
+    <p>After the name verdict shipped, the founder asked the question that mattered: <em>which models figure out the intents clearly?</em> Names are half the job. The other half is hearing what the buyer <strong>wants</strong> — price, a visit, the legal papers, <em>stop messaging me</em> — and nothing above measured it.</p>
+    <p>So a second harness (<code>scripts/u12-intent-bakeoff.py</code>) ran all five models on the real 13.5k intent corpus: ~1,150 phrasings indexed, ~290 held-out real phrasings as incoming messages, nearest-match classification across 30 intents — the same mechanics as the live SIL lane. Plus the corpus's own 94 <strong>trap sentences</strong>, each written to be mistaken for a neighbouring intent ("yes, Saturday 12pm works fine" is a confirmation that smells like a booking request).</p></div>
+    <div class="tableshell">
+      <table>
+        <thead><tr>
+          <th>model</th><th class="num">intent acc@1</th><th class="num">margin</th>
+          <th class="num">traps: right</th><th class="num">traps: fell in</th>
+          <th class="num">names acc</th><th class="num">names false-bind @90%</th>
+        </tr></thead>
+        <tbody>
+          <tr class="win"><td>embeddinggemma-300m</td><td class="num good">0.672</td><td class="num">0.173</td><td class="num">0.638</td><td class="num lose">0.259</td><td class="num">0.984</td><td class="num">3.3%</td></tr>
+          <tr><td>bge-base (deployed)</td><td class="num">0.624</td><td class="num">0.102</td><td class="num">0.621</td><td class="num">0.172</td><td class="num">0.952</td><td class="num lose">9.2%</td></tr>
+          <tr><td>bge-m3</td><td class="num lose">0.579</td><td class="num">0.139</td><td class="num">0.586</td><td class="num">0.155</td><td class="num good">1.000</td><td class="num good">0.8%</td></tr>
+          <tr><td>bge-large-en-v1.5</td><td class="num">0.593</td><td class="num">0.101</td><td class="num">0.621</td><td class="num">0.207</td><td class="num">0.962</td><td class="num lose">12.5%</td></tr>
+          <tr><td>qwen3-embedding-0.6b</td><td class="num lose">0.566</td><td class="num">0.125</td><td class="num lose">0.431</td><td class="num">0.155</td><td class="num lose">0.823</td><td class="num lose">22.5%</td></tr>
+        </tbody>
+        <caption>Intent: raw nearest-neighbour floor, no learned projection — floor against floor, ranking is the signal. Names: from the six-arm run, translit excluded.</caption>
+      </table>
+    </div>
+    <div class="col">
+      <div class="note alarm">
+        <div class="label">m3 regresses intent — and where it loses is not random</div>
+        <p>On <code>get_availability</code> m3 got 1 of 10 where the deployed model gets 5. On <code>opt_out</code> — a buyer asking the bot to stop messaging them — m3 got 5 of 10 against the deployed model's 8. A missed opt-out is a compliance failure, not a quality bug. m3 buys its Hinglish gain (0.633 vs 0.612) by giving up English (0.552 vs 0.630), and English is most of the traffic.</p>
+      </div>
+      <div class="note flat">
+        <div class="label">embeddinggemma beats the deployed model on both jobs at once</div>
+        <p>Intent 0.672 against 0.624, balanced across English (0.672) and Hinglish (0.673). Names 0.984 with a third of the deployed false-binds. And it emits <strong>768 dims — the same shape as today</strong>, so the indexes keep their dimensions and the projection keeps its 256×768 shape (still retrained, but not reshaped). Its one measured weakness: when it is wrong on a trap row it falls into the designed trap most often (0.259). Every model, gemma included, read "yes, Saturday 12pm works fine" as a booking request — traps are the ask-back lane's job (U10), not the embedder's.</p>
+      </div>
+      <p><strong>The tiebreak, before any cutover:</strong> production intent does not run on this raw floor — the learned projection sits on top (it took real-turn intent 28% → 64% in the current space) and is retrained for whichever model wins. So the decision-grade test is to fit the projection on m3's and gemma's vectors offline and compare finished systems: post-projection intent accuracy and trap behaviour, next to the name numbers already in hand. Zero live risk; the corpus is local.</p>
+      <p>Also settled by this round: <strong>bge-large</strong> (more false-binds than today at barely better accuracy) and <strong>qwen3-embedding-0.6b</strong> (worst or near-worst on every column, and the worst trap performance at 0.431) are out. Newer is not better by default — that is why the harness exists.</p>
+    </div>
+  </section>
+
   <section class="col">
     <h2>What this changes about the plan</h2>
     <div class="note flat">
-      <div class="label">Sequencing — U12 has to land before U9 completes</div>
-      <p>U9's job is calibrating the margin bands. Between the two models the mean margin moves 0.200 → 0.330 and the 95% threshold moves 0.052 → 0.150 — roughly <strong>2.9×</strong>. Every band calibrated in bge-base space is thrown away by a cutover. Calibrate once, in the space we are keeping.</p>
+      <div class="label">Sequencing — the model decision has to land before U9 completes</div>
+      <p>U9's job is calibrating the margin bands. Between models the mean margin moves up to <strong>2.9×</strong> (0.200 → 0.330 base→m3). Every band calibrated in the old space is thrown away by a cutover. Calibrate once, in the space we are keeping — whichever finalist wins the projection tiebreak.</p>
     </div>
     <ul>
-      <li><strong>U9</strong> — hold the <code>BANDS.rrf</code> calibration until the cutover lands, then calibrate in m3 space at the 90% operating point above.</li>
-      <li><strong>U11</strong> — auto-teaching project name variants writes into the index, so it follows the cutover rather than preceding it. Teaching into a space we are about to discard is wasted work.</li>
-      <li><strong>U10</strong> — unaffected. The reranker consumes candidates, not a fixed embedding space.</li>
+      <li><strong>U12c (new)</strong> — the tiebreak: fit the learned projection on m3 and gemma vectors offline, compare post-projection intent + trap performance. This is now the gate on everything below.</li>
+      <li><strong>U12b</strong> — the cutover executes whichever finalist wins. If gemma: indexes keep 768 dims and the projection keeps its shape; roughly half the migration.</li>
+      <li><strong>U9</strong> — hold the <code>BANDS.rrf</code> calibration until the cutover lands, then calibrate in the winner's space at the 90% operating point above.</li>
+      <li><strong>U11</strong> — auto-teaching name variants writes into the index, so it follows the cutover. Teaching into a space about to be discarded is wasted work.</li>
+      <li><strong>U10</strong> — unaffected, and more load-bearing than before: the trap rows show every embedder misreads "Saturday 12pm works fine" — that is the ask-back lane's case to catch.</li>
     </ul>
   </section>
 
@@ -312,8 +349,9 @@
 
   <hr>
   <p class="foot">
-    scripts/u12-embed-bakeoff.py · 31 projects · 200 queries · 120 real negatives · 3 arms<br>
-    real @cf/baai embedder via local wrangler dev --remote; no token handled by the harness<br>
+    names: scripts/u12-embed-bakeoff.py · 31 projects · 200 queries · 120 real negatives · 6 arms<br>
+    intent: scripts/u12-intent-bakeoff.py · 30 intents · ~1,150 indexed · ~290 held-out queries · 94 trap rows · 5 models<br>
+    real Workers AI embedders via local wrangler dev --remote; no token handled by the harness<br>
     corpus evidence: corpus/recovered-raw.jsonl (13,555) · turn_ledger on naya-db-dev (43,530) · 17 Aug 2026
   </p>
 
