@@ -191,6 +191,8 @@ export async function extractTurnAuthority(
         state.constraints.budgetMaxInr ||
         state.constraints.bhk,
     ),
+    // U8's lexical lane judges against the whole catalog, not the shortlist.
+    catalogNames: deps.catalogNames,
   });
 
   const mergedRaw = mergeExtractedAuthority(base, enriched, {
@@ -617,6 +619,14 @@ export function mergeExtractedAuthority(
 
   if (enriched.namedProjects?.length) {
     merged.namedProjects = enriched.namedProjects;
+  }
+
+  // `merged` spreads `base`, so anything the enrich step stamped is dropped
+  // unless it is carried here by name. The U8 shadow is stamped in enrich and
+  // read in ledger-write; without this line it would be computed on every turn,
+  // pass its own unit tests, and reach the ledger on none of them.
+  if (enriched.identityShadow) {
+    merged.identityShadow = enriched.identityShadow;
   }
 
   return merged;
