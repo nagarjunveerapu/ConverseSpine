@@ -5,7 +5,7 @@ import {
   diceSimilarity,
   fuseByReciprocalRank,
   normaliseForGrams,
-  PROVISIONAL_BANDS,
+  BANDS,
   rankSpans,
   RRF_K,
   shadowVerdict,
@@ -142,7 +142,7 @@ describe('reciprocal rank fusion', () => {
 
 describe('bands say what to do, not how sure we feel', () => {
   it('reports none when nothing was retrieved', () => {
-    const v = bandFor([], PROVISIONAL_BANDS);
+    const v = bandFor([], BANDS);
     expect(v.action).toBe('none');
     expect(v.band).toBe(0);
     expect(v.top).toBeNull();
@@ -150,7 +150,7 @@ describe('bands say what to do, not how sure we feel', () => {
 
   it('binds a lone candidate — nothing competes with it', () => {
     const fused = fuseByReciprocalRank(lane('brigade-eldorado'), []);
-    const v = bandFor(fused, PROVISIONAL_BANDS);
+    const v = bandFor(fused, BANDS);
     expect(v.margin).toBe(1);
     expect(v.action).toBe('bind');
   });
@@ -166,9 +166,9 @@ describe('bands say what to do, not how sure we feel', () => {
       lane('amrutha-heights', 'amruth-valley'),
       lane('amrutha-heights', 'amruth-valley'),
     );
-    const v = bandFor(fused, PROVISIONAL_BANDS);
+    const v = bandFor(fused, BANDS);
     expect(v.bothLanesAgree).toBe(true);
-    expect(v.margin).toBeLessThan(PROVISIONAL_BANDS.adjudicate);
+    expect(v.margin).toBeLessThan(BANDS.rrf.adjudicate);
     expect(v.action).toBe('ask');
   });
 
@@ -182,11 +182,11 @@ describe('bands say what to do, not how sure we feel', () => {
         lane('viva-greens', 'century-breeze'),
         lane('viva-greens', 'century-breeze'),
       ),
-      PROVISIONAL_BANDS,
+      BANDS,
     );
     const oneLaneRunnerUp = bandFor(
       fuseByReciprocalRank(lane('viva-greens', 'century-breeze'), lane('viva-greens')),
-      PROVISIONAL_BANDS,
+      BANDS,
     );
     expect(oneLaneRunnerUp.margin).toBeGreaterThan(bothFoundRunnerUp.margin * 10);
     expect(oneLaneRunnerUp.action).toBe('bind');
@@ -198,19 +198,19 @@ describe('bands say what to do, not how sure we feel', () => {
       lane('krishnaja-greens', 'viva-greens'),
       lane('viva-greens', 'krishnaja-greens'),
     );
-    const v = bandFor(fused, PROVISIONAL_BANDS);
+    const v = bandFor(fused, BANDS);
     expect(v.bothLanesAgree).toBe(false);
-    expect(v.margin).toBeLessThan(PROVISIONAL_BANDS.adjudicate);
+    expect(v.margin).toBeLessThan(BANDS.rrf.adjudicate);
     expect(v.action).toBe('ask');
   });
 
   it('escalates to adjudicate in the middle band', () => {
     const v = bandFor(
       [
-        { id: 'a', name: 'A', score: 0.02, ranks: { dense: 1, lexical: null } },
-        { id: 'b', name: 'B', score: 0.016, ranks: { dense: null, lexical: 1 } },
+        { id: 'a', name: 'A', score: 0.02, ranks: { dense: 1, lexical: null }, similarities: { dense: null, lexical: null } },
+        { id: 'b', name: 'B', score: 0.016, ranks: { dense: null, lexical: 1 }, similarities: { dense: null, lexical: null } },
       ],
-      PROVISIONAL_BANDS,
+      BANDS,
     );
     expect(v.margin).toBeCloseTo(0.2, 10);
     expect(v.action).toBe('adjudicate');
@@ -221,11 +221,130 @@ describe('bands say what to do, not how sure we feel', () => {
     // different band purely by changing the argument — otherwise a threshold
     // is hidden somewhere in here.
     const fused = [
-      { id: 'a', name: 'A', score: 0.02, ranks: { dense: 1, lexical: null } },
-      { id: 'b', name: 'B', score: 0.016, ranks: { dense: 2, lexical: null } },
+      { id: 'a', name: 'A', score: 0.02, ranks: { dense: 1, lexical: null }, similarities: { dense: null, lexical: null } },
+      { id: 'b', name: 'B', score: 0.016, ranks: { dense: 2, lexical: null }, similarities: { dense: null, lexical: null } },
     ];
-    expect(bandFor(fused, { bind: 0.1, adjudicate: 0.05 }).action).toBe('bind');
-    expect(bandFor(fused, { bind: 0.9, adjudicate: 0.5 }).action).toBe('ask');
+    const at = (bind: number, adjudicate: number) =>
+      bandFor(fused, { rrf: { bind, adjudicate }, singleLane: { bind, adjudicate } }).action;
+    expect(at(0.1, 0.05)).toBe('bind');
+    expect(at(0.9, 0.5)).toBe('ask');
+  });
+});
+
+describe('the margin measures the lane that actually ran (U9)', () => {
+  // U8 computed every margin over fused ranks. With one lane that pins the top
+  // two candidates to adjacent ranks, so the margin was the constant 0.01613
+  // no matter what the lane actually saw. Measured on 900 real dev utterances,
+  // 28 of the 29 strongest candidates collapsed into one band on that constant.
+  // These are the cases that constant could not tell apart.
+
+  it('separates an exact catalog hit from a builder brand both lanes would rank first', () => {
+    // Both are single-lane, both are "a project name is visible in the text",
+    // and under fused ranks both scored 0.01613 — identical. They are not
+    // remotely the same claim: one buyer named a project, the other named the
+    // developer of nine of them. Dev binds neither today; only one deserves it.
+    const named = shadowVerdict({
+      text: 'and krishnaja greens?',
+      catalog: CATALOG,
+      dense: [],
+      denseRan: false,
+    })!;
+    const brand = shadowVerdict({
+      text: 'is brigade a reliable builder',
+      catalog: CATALOG,
+      dense: [],
+      denseRan: false,
+    })!;
+
+    expect(named.margin).toBeGreaterThan(brand.margin);
+    expect(named.action).toBe('bind');
+    expect(brand.action).toBe('ask');
+    // The old constant, kept literal: if either row ever reads 0.01613 again
+    // the rank-basis has silently come back for the single-lane case.
+    expect(named.margin).not.toBeCloseTo(0.01613, 4);
+    expect(brand.margin).not.toBeCloseTo(0.01613, 4);
+  });
+
+  it('will not bind an ordinary adjective that overlaps a name — with 0.012 to spare', () => {
+    // The hole from U8, now measured rather than asserted. "green" is half of
+    // "Viva Greens" by trigram overlap, so this lands at margin 0.238 against a
+    // bind edge of 0.25. It does NOT bind, which is the safety property that
+    // matters — but the clearance is 0.012, the thinnest in the whole set, and
+    // it is thin because margin is the wrong instrument for this distinction.
+    // What actually separates "greens the adjective" from "Greens the name" is
+    // whether the token is a name-word at all: name-index.ts computes exactly
+    // that, and U11 is what would settle it. Until then nothing binds
+    // automatically, so the thin clearance costs nothing.
+    const v = shadowVerdict({
+      text: 'i want somewhere with green open spaces',
+      catalog: CATALOG,
+      dense: [],
+      denseRan: false,
+    })!;
+    expect(v.top).toBe('viva-greens');
+    expect(v.action).not.toBe('bind');
+    expect(v.margin).toBeLessThan(BANDS.singleLane.bind);
+  });
+
+  it('still binds the truncation the dense lane drifts on', () => {
+    // The case the whole two-lane design exists for must survive calibration.
+    const v = shadowVerdict({ text: 'tell me about eldorad', catalog: CATALOG, dense: [], denseRan: false })!;
+    expect(v.top).toBe('brigade-eldorado');
+    expect(v.action).toBe('bind');
+  });
+
+  it('sends a genuine two-way name collision to adjudicate, not to a guess', () => {
+    // Brigade Cornerstone vs Brigade Cornerstone Utopia. A buyer saying
+    // "cornerstone" has named something real and something ambiguous at once —
+    // the one case in the live set where asking back is the correct answer
+    // rather than a failure to understand.
+    const v = shadowVerdict({
+      text: 'cornerstone is smaller though right',
+      catalog: CATALOG,
+      dense: [],
+      denseRan: false,
+    })!;
+    expect(v.action).toBe('adjudicate');
+    expect(v.top).toBe('brigade-cornerstone');
+  });
+
+  it('names which comparison it used, because the two are not on one scale', () => {
+    const oneLane = shadowVerdict({
+      text: 'and krishnaja greens?',
+      catalog: CATALOG,
+      dense: [],
+      denseRan: false,
+    })!;
+    const twoLanes = shadowVerdict({
+      text: 'and krishnaja greens?',
+      catalog: CATALOG,
+      dense: lane('viva-greens', 'century-breeze'),
+      denseRan: true,
+    })!;
+    expect(oneLane.margin_basis).toBe('lexical_score');
+    expect(twoLanes.margin_basis).toBe('rrf');
+  });
+
+  it('falls back to the fused margin, and says so, when the sole lane has no scores', () => {
+    // The dense lane carries no similarity out of Vectorize today. A lane that
+    // cannot supply a score must not have one invented for it — the row says
+    // `rrf` so a reader knows this margin is the coarse one.
+    const fused = fuseByReciprocalRank(lane('brigade-eldorado', 'brigade-cornerstone'), []);
+    const v = bandFor(fused, BANDS);
+    expect(v.marginBasis).toBe('rrf');
+    expect(v.margin).toBeCloseTo(0.01613, 4);
+  });
+
+  it('keeps the fused margin when both lanes genuinely ran', () => {
+    // Rank fusion is still right where there are two rankings to disagree —
+    // this half of U8 is unchanged, and a top found by both lanes still beats a
+    // runner-up found by one.
+    const v = bandFor(
+      fuseByReciprocalRank(lane('viva-greens', 'century-breeze'), lane('viva-greens')),
+      BANDS,
+    );
+    expect(v.marginBasis).toBe('rrf');
+    expect(v.action).toBe('bind');
   });
 });
 

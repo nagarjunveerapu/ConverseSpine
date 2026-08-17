@@ -46,10 +46,13 @@
  *
  * ## Status
  *
- * Nothing branches on this yet, by design. U8 lands the arithmetic and the
- * shadow row; U9 reads the disagreements by hand and only then sets the band
- * edges — the defaults below are placeholders carrying no evidence, and they
- * are typed so a caller has to pass its own to mean anything by them.
+ * Nothing branches on this yet, by design. U8 landed the arithmetic and the
+ * shadow row; U9 read 900 distinct real utterances through it, checked each
+ * candidate against the deployed dev bot, and set the single-lane band edges
+ * from what came back. That reading also found a defect in U8's own margin —
+ * over fused ranks it is pinned to one constant whenever a single lane ran, so
+ * an exact catalog hit scored identically to a builder's brand name. `bandFor`
+ * now picks its comparison and records which one fired. See `BANDS`.
  */
 
 /** Below this a token is glue rather than a name — matches name-index.ts. */
@@ -214,11 +217,24 @@ export interface FusedCandidate {
   readonly score: number;
   /** 1-based position in each lane, or null where the lane did not return it. */
   readonly ranks: { readonly dense: number | null; readonly lexical: number | null };
+  /**
+   * Each lane's own raw score, carried through untouched. Fusion does not use
+   * these — it ranks — but `bandFor` needs them for the single-lane case, where
+   * ranks alone cannot express confidence. See the margin note there.
+   */
+  readonly similarities: { readonly dense: number | null; readonly lexical: number | null };
 }
 
 export interface Lane {
   readonly id: string;
   readonly name: string;
+  /**
+   * The lane's own score for this entry, if it has one. Optional because the
+   * dense lane does not currently carry scores out of Vectorize; a lane without
+   * them simply cannot supply a score-basis margin, which `bandFor` records
+   * rather than papering over.
+   */
+  readonly similarity?: number;
 }
 
 export function fuseByReciprocalRank(
@@ -226,23 +242,32 @@ export function fuseByReciprocalRank(
   lexical: readonly Lane[],
   k: number = RRF_K,
 ): FusedCandidate[] {
-  const acc = new Map<
-    string,
-    { name: string; score: number; dense: number | null; lexical: number | null }
-  >();
+  interface Acc {
+    name: string;
+    score: number;
+    dense: number | null;
+    lexical: number | null;
+    denseSim: number | null;
+    lexicalSim: number | null;
+  }
+  const acc = new Map<string, Acc>();
 
   const absorb = (lane: readonly Lane[], which: 'dense' | 'lexical') => {
+    const simKey = which === 'dense' ? 'denseSim' : 'lexicalSim';
     lane.forEach((entry, i) => {
       const rank = i + 1;
-      const prev = acc.get(entry.id) ?? {
+      const prev: Acc = acc.get(entry.id) ?? {
         name: entry.name,
         score: 0,
         dense: null,
         lexical: null,
+        denseSim: null,
+        lexicalSim: null,
       };
       // A lane listing the same id twice must not pay twice — keep its best.
       if (prev[which] !== null) return;
       prev[which] = rank;
+      prev[simKey] = typeof entry.similarity === 'number' ? entry.similarity : null;
       prev.score += 1 / (k + rank);
       // Prefer a non-empty name if the other lane carried one.
       if (!prev.name && entry.name) prev.name = entry.name;
@@ -259,6 +284,7 @@ export function fuseByReciprocalRank(
       name: v.name,
       score: v.score,
       ranks: { dense: v.dense, lexical: v.lexical },
+      similarities: { dense: v.denseSim, lexical: v.lexicalSim },
     }))
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 }
@@ -283,6 +309,8 @@ export interface BandVerdict {
    * comparable across turns; 1.0 when nothing else was retrieved at all.
    */
   readonly margin: number;
+  /** Which comparison produced `margin` — the two are on different scales. */
+  readonly marginBasis: MarginBasis;
   /**
    * True when both lanes independently put `top` first. Recorded for the shadow
    * log, and deliberately NOT consulted by the action — see `bandFor`.
@@ -298,28 +326,107 @@ export interface BandThresholds {
 }
 
 /**
- * PLACEHOLDERS. These carry no evidence and are not a calibration.
- *
- * U9 sets the real edges by running the corpus through the shadow lane and
- * reading every disagreement by hand — that reading IS the calibration, and it
- * cannot be done from here because the distribution of margins on real buyer
- * text is exactly the thing not yet known. Anything that consults these before
- * U9 is reporting a guess.
+ * Which comparison produced the margin. The two bases are on different scales
+ * and are NOT interchangeable, so every shadow row records the one that fired —
+ * a column mixing them silently would be unreadable, the same way `dense_ran`
+ * exists to stop "found nothing" being logged as "never ran".
  */
-export const PROVISIONAL_BANDS: BandThresholds = { bind: 0.3, adjudicate: 0.1 };
+export type MarginBasis = 'rrf' | 'dense_score' | 'lexical_score';
+
+export interface BandCalibration {
+  /** Both lanes returned candidates — margin is over fused ranks. */
+  readonly rrf: BandThresholds;
+  /** One lane returned candidates — margin is over that lane's own scores. */
+  readonly singleLane: BandThresholds;
+}
+
+/**
+ * `rrf` — NOT read from real rows, and cannot be yet: no shadow row has ever
+ * had both lanes populated (the dense lane only runs when the gate allows it).
+ * What these numbers do carry is the discrete lattice RRF actually produces at
+ * k=60. With two lanes the reachable margins are ~0 (each lane leads with a
+ * different name), ~0.016 (both lanes rank the same pair in the same order),
+ * ~0.508 (top found by both, runner-up by one), and 1.0 (nothing else at all).
+ * A 0.3/0.1 pair therefore encodes exactly one rule: *bind only when the top
+ * was found by strictly more lanes than the runner-up.* That is a defensible
+ * rule, not a tuned threshold, and it is why the pair survives U9 unchanged.
+ *
+ * `singleLane` — read from 900 distinct real utterances against the 21-project
+ * naya-advisor catalog, cross-checked against what the deployed dev bot did
+ * with each of them. The ordering the score gap produces:
+ *
+ *     0.091  "is brigade a reliable builder"   → ask  (builder brand, 9 projects share it)
+ *     0.104  "Cornerstone Utopia"              → adjudicate (vs Brigade Cornerstone)
+ *     0.189  "cornerstone is smaller though right" → adjudicate
+ *     0.294  "and krishnaja greens?"           → bind
+ *     0.300  bare "Brigade Eldorado" (928×)    → bind
+ *     0.750  "...we want to see eldorado. saturday" → bind
+ *
+ * 0.25/0.12 is the pair that separates that list correctly. The evidence for it
+ * is docs — see the U9 note in BOOK.html — not a number chosen for roundness.
+ */
+export const BANDS: BandCalibration = {
+  rrf: { bind: 0.3, adjudicate: 0.1 },
+  singleLane: { bind: 0.25, adjudicate: 0.12 },
+};
+
+/** @deprecated Kept so a caller passing one pair still compiles; prefer `BANDS`. */
+export const PROVISIONAL_BANDS: BandThresholds = BANDS.rrf;
 
 export function bandFor(
   fused: readonly FusedCandidate[],
-  thresholds: BandThresholds,
+  calibration: BandCalibration,
 ): BandVerdict {
   const top = fused[0] ?? null;
   const runnerUp = fused[1] ?? null;
 
   if (!top) {
-    return { band: 0, action: 'none', top: null, runnerUp: null, margin: 0, bothLanesAgree: false };
+    return {
+      band: 0,
+      action: 'none',
+      top: null,
+      runnerUp: null,
+      margin: 0,
+      marginBasis: 'rrf',
+      bothLanesAgree: false,
+    };
   }
 
-  const margin = runnerUp && top.score > 0 ? (top.score - runnerUp.score) / top.score : 1;
+  // WHICH COMPARISON, AND WHY IT IS NOT ALWAYS THE FUSED ONE.
+  //
+  // Fusing by rank is right for ORDERING: Vectorize scores are lossy, so their
+  // magnitudes cannot be trusted across turns. But a margin over ranks measures
+  // confidence only when there are two rankings to disagree. With one lane the
+  // top two candidates are always on ADJACENT ranks, so the fused margin is
+  // pinned at (1/61 − 1/62)/(1/61) = 0.01613 — the same number whether the
+  // match was exact or coincidental. Measured on 900 real utterances, 28 of the
+  // 29 strongest candidates landed in one band on that constant, including an
+  // exact catalog hit ("and krishnaja greens?", Dice 1.000) sitting beside a
+  // builder's brand name ("is brigade a reliable builder", Dice 0.700).
+  //
+  // The information was never missing — rank fusion discards it. So when only
+  // one lane ran, read the margin off that lane's own scores. That is still a
+  // comparison INSIDE one ranking, not against a constant someone chose, which
+  // is the property that makes a margin survive deployment where a tau does not.
+  const denseUsed = fused.some((c) => c.ranks.dense !== null);
+  const lexicalUsed = fused.some((c) => c.ranks.lexical !== null);
+  const soleLane: 'dense' | 'lexical' | null =
+    denseUsed && lexicalUsed ? null : denseUsed ? 'dense' : lexicalUsed ? 'lexical' : null;
+
+  const rrfMargin = runnerUp && top.score > 0 ? (top.score - runnerUp.score) / top.score : 1;
+  const topSim = soleLane ? top.similarities[soleLane] : null;
+
+  let margin = rrfMargin;
+  let marginBasis: MarginBasis = 'rrf';
+  // A lane with no scores to offer (the dense lane today) falls back to the
+  // fused margin and SAYS so, rather than inventing a number.
+  if (soleLane && typeof topSim === 'number' && topSim > 0) {
+    const runnerSim = runnerUp ? (runnerUp.similarities[soleLane] ?? 0) : 0;
+    margin = (topSim - runnerSim) / topSim;
+    marginBasis = soleLane === 'dense' ? 'dense_score' : 'lexical_score';
+  }
+
+  const thresholds = marginBasis === 'rrf' ? calibration.rrf : calibration.singleLane;
   const bothLanesAgree = top.ranks.dense === 1 && top.ranks.lexical === 1;
 
   // `bothLanesAgree` is REPORTED, not acted on. An earlier draft let agreement
@@ -340,12 +447,12 @@ export function bandFor(
   // text, which is exactly what the shadow row is being built to measure. U9
   // answers it from that reading; this module does not guess at it now.
   if (margin >= thresholds.bind) {
-    return { band: 1, action: 'bind', top, runnerUp, margin, bothLanesAgree };
+    return { band: 1, action: 'bind', top, runnerUp, margin, marginBasis, bothLanesAgree };
   }
   if (margin >= thresholds.adjudicate) {
-    return { band: 2, action: 'adjudicate', top, runnerUp, margin, bothLanesAgree };
+    return { band: 2, action: 'adjudicate', top, runnerUp, margin, marginBasis, bothLanesAgree };
   }
-  return { band: 3, action: 'ask', top, runnerUp, margin, bothLanesAgree };
+  return { band: 3, action: 'ask', top, runnerUp, margin, marginBasis, bothLanesAgree };
 }
 
 /**
@@ -356,6 +463,12 @@ export interface IdentityShadow {
   readonly band: 0 | 1 | 2 | 3;
   readonly action: BandAction;
   readonly margin: number;
+  /**
+   * Which comparison `margin` came from. A reader aggregating margins across
+   * rows MUST group by this: `rrf` margins live on a four-value lattice, score
+   * margins are continuous, and averaging them together is meaningless.
+   */
+  readonly margin_basis: MarginBasis;
   readonly both_lanes_agree: boolean;
   readonly top: string | null;
   readonly runner_up: string | null;
@@ -405,19 +518,20 @@ export function shadowVerdict(input: {
   readonly catalog: readonly CatalogEntry[];
   readonly dense: readonly Lane[];
   readonly denseRan: boolean;
-  readonly thresholds?: BandThresholds;
+  readonly calibration?: BandCalibration;
 }): IdentityShadowCore | null {
   const catalog = input.catalog.filter((c) => c?.id && c?.name);
   if (catalog.length === 0) return null;
 
   const lexicalHits = rankSpans(buildTrigramIndex(catalog), input.text);
   const fused = fuseByReciprocalRank(input.dense, lexicalHits);
-  const v = bandFor(fused, input.thresholds ?? PROVISIONAL_BANDS);
+  const v = bandFor(fused, input.calibration ?? BANDS);
 
   return {
     band: v.band,
     action: v.action,
     margin: v.margin,
+    margin_basis: v.marginBasis,
     both_lanes_agree: v.bothLanesAgree,
     top: v.top?.id ?? null,
     runner_up: v.runnerUp?.id ?? null,
