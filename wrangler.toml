@@ -371,7 +371,14 @@ class_name = "TurnDebouncer"
 
 [[env.prod.vectorize]]
 binding = "INTENT_VECTORS"
-index_name = "naya-intent-phrasings"
+# Prod's SIL index. naya-intent-phrasings — the name this pointed at — is the
+# pre-projection generation and was never filled here (0 vectors); dev has not
+# queried its equivalent since the learned metric landed. Pointing prod at a
+# 256-dim index carrying the projection id keeps the two facts that must agree
+# (index geometry, SIL_INTENT_PROJECTION) legible in one string, which is what
+# tests/intent-projection-space asserts. The old index is left untouched, so
+# rollback is a config revert with no re-embed.
+index_name = "naya-intent-p256-f6665e0b79-full"
 
 [[env.prod.vectorize]]
 binding = "PROJECT_VECTORS"
@@ -387,7 +394,27 @@ binding = "AI"
 [env.prod.vars]
 # Keys the rebuild manifest to this env's own index — see intentManifestKey.
 # Must equal this env's INTENT_VECTORS index_name.
-SIL_INTENT_INDEX = "naya-intent-phrasings"
+SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-full"
+# ── Understanding on prod, step 1: fill the index ────────────────────────
+# Everything here is dev's proven configuration, not a new arm. The registry is
+# the same public JSONL dev rebuilds from (22,703 rows); the legacy gate admits
+# audit_status='clean' minus quarantine/holdout, which measured 8,727 eligible
+# on 16 Aug — so prod gets the same corpus dev serves, embedded fresh into an
+# empty manifest.
+#
+# SIL_CANONICAL_EMBED stays "false" deliberately: the canonical arm was built
+# and probed on dev (see [env.dev.vars]) and DECLINED — entity masking turns a
+# named-project ask into a discovery ask. Prod must not adopt a mode dev
+# measured and rejected.
+#
+# SIL_EMBED_FIRST is deliberately NOT set here. Flipping the ladder while the
+# index is empty would embed every turn and match nothing. It goes on in step 2,
+# after a rebuild run proves the vector count, in its own change.
+SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
+SIL_CANONICAL_EMBED = "false"
+SIL_STATE_TOKENS = "true"
+SIL_INTENT_PROJECTION = "p256-f6665e0b79"
 LOG_LEVEL = "info"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
@@ -397,7 +424,8 @@ LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 # HTTP fallback if service binding is cold/misnamed (same pattern as dig).
 NAYADESK_URL = "https://nayadesk-prod.nagarjun-arjun.workers.dev"
 WA_PROJECT_FIRST = "off"
-# Milestone 1: FAILURE_*/SIL_*/CHIP_RANK_LIVE stay unset (off). Flag soak = milestone 2.
+# FAILURE_*/CHIP_RANK_LIVE/UNDERSTANDING_CAPTURE stay unset (= off) — each is a
+# separate rollout decision, not part of filling the intent index.
 # Cutover runbook: NayaDesk docs/PROD_CUTOVER.md
 
 # ── Fully local stack (env.local) ─────────────────────────────────────────
