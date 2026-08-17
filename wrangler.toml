@@ -428,6 +428,31 @@ WA_PROJECT_FIRST = "off"
 # separate rollout decision, not part of filling the intent index.
 # Cutover runbook: NayaDesk docs/PROD_CUTOVER.md
 
+# ── Understanding on prod, step 1b: give prod a clock ─────────────────────
+# PR #218 gave prod the index, the corpus URL and the geometry — and prod still
+# could not fill any of it, because prod had NO cron at all. `triggers` is not
+# inherited by a named environment and there is no top-level [triggers], so the
+# whole scheduled() handler was unreachable here: the intent index would never
+# rebuild and the education index would never build a first time.
+#
+# Daily, not dev's weekly ("30 3 * * 1"). The rebuild is incremental — it diffs
+# the registry against a KV manifest by id + contentHash and embeds only what
+# changed — so after the first fill a run costs a fetch and no embeddings. Weekly
+# would mean up to seven days between a corpus change and prod seeing it, for no
+# saving.
+#
+# 03:30 UTC = 09:00 IST, off the buyer peak. Not "30 22 * * *": that cron is
+# routed to auto-teach in scheduled(), which is a separate rollout decision
+# (UNDERSTANDING_AUTO_TEACH is unset here) — every other expression falls through
+# to rebuildIntentIndex + rebuildEducationIndex, which is what this is for.
+#
+# A run either completes or repeats: the manifest is persisted once at the end,
+# and upserts are idempotent, so a killed invocation loses progress but never
+# leaves a half-described index. Per-batch failures are collected and the loop
+# continues, so one bad batch retries on the next run instead of failing the fill.
+[env.prod.triggers]
+crons = ["30 3 * * *"]
+
 # ── Fully local stack (env.local) ─────────────────────────────────────────
 # Everything on one laptop: this Worker and NayaDesk both on localhost, against
 # NayaDesk's LOCAL D1 — so a database you just bootstrapped is the one the bot
