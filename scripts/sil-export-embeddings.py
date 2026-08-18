@@ -39,6 +39,35 @@ def post(texts, retries=4):
     raise RuntimeError(f"embed batch failed: {err}")
 
 
+def post_proxy(proxy, model, texts, retries=6):
+    """Embed via a local `wrangler dev --remote` proxy instead of the deployed
+    worker. The deployed /api/sil/embed always uses the DEPLOYED model; fitting
+    a projection for a candidate embedder needs that candidate's vectors, and
+    dev deploys from main only — so the proxy is the door for a not-yet-shipped
+    model. Response is the raw Workers AI shape (float lists, not base64)."""
+    body = json.dumps({"text": texts}).encode()
+    err = None
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(
+                f"{proxy}/{model}",
+                data=body,
+                # Cloudflare 403s the default urllib agent even on the tunnel.
+                headers={"Content-Type": "application/json", "User-Agent": "curl/8.7.1"},
+            )
+            with urllib.request.urlopen(req, timeout=180) as f:
+                out = json.load(f)
+            r = out["result"]
+            vecs = r.get("data") or r.get("response")
+            if not vecs or len(vecs) != len(texts):
+                raise RuntimeError(f"got {len(vecs or [])} vectors for {len(texts)} texts")
+            return vecs
+        except Exception as e:
+            err = e
+            time.sleep(2 + attempt * 4)
+    raise RuntimeError(f"proxy embed batch failed: {err}")
+
+
 def load_rows(registry):
     rows = []
     for line in open(registry):
@@ -78,7 +107,11 @@ def main():
     ap.add_argument("--batch", type=int, default=256, help="endpoint caps at 384")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="0 = all rows")
+    ap.add_argument("--proxy", default="", help="local Workers-AI proxy base, e.g. http://127.0.0.1:8799")
+    ap.add_argument("--model", default="@cf/baai/bge-m3", help="model when --proxy is set")
     a = ap.parse_args()
+    if a.proxy:
+        a.batch = min(a.batch, 96)  # Workers AI caps embedding batches at 100
 
     rows = load_rows(a.registry)
     if a.limit:
@@ -92,12 +125,18 @@ def main():
 
     def run(ix):
         nonlocal model, dims, done
-        out = post([r["text"] for r in batches[ix]])
-        model, dims = out.get("model"), out.get("dims")
-        arr = np.zeros((len(batches[ix]), dims), dtype=np.float32)
-        for j, b64 in enumerate(out.get("vectors") or []):
-            if b64:
-                arr[j] = np.frombuffer(base64.b64decode(b64), dtype="<f4")
+        texts = [r["text"] for r in batches[ix]]
+        if a.proxy:
+            floats = post_proxy(a.proxy, a.model, texts)
+            model, dims = a.model, len(floats[0])
+            arr = np.array(floats, dtype=np.float32)
+        else:
+            out = post(texts)
+            model, dims = out.get("model"), out.get("dims")
+            arr = np.zeros((len(texts), dims), dtype=np.float32)
+            for j, b64 in enumerate(out.get("vectors") or []):
+                if b64:
+                    arr[j] = np.frombuffer(base64.b64decode(b64), dtype="<f4")
         vecs[ix] = arr
         done += 1
         print(f"  {done}/{len(batches)} batches", end="\r", flush=True)

@@ -81,7 +81,27 @@ def unit(X):
     return X / np.maximum(np.linalg.norm(X, axis=1, keepdims=True), 1e-12)
 
 
-def embed(texts, retries=4):
+def embed(texts, retries=4, proxy="", model=""):
+    """Deployed worker by default; a local wrangler proxy when evaluating a
+    model that is not deployed yet — real turns must be embedded in the SAME
+    space as the exported corpus vectors or the replay compares nothing."""
+    if proxy:
+        body = json.dumps({"text": texts}).encode()
+        err = None
+        for attempt in range(retries):
+            try:
+                req = urllib.request.Request(
+                    f"{proxy}/{model}", data=body,
+                    headers={"Content-Type": "application/json", "User-Agent": "curl/8.7.1"},
+                )
+                with urllib.request.urlopen(req, timeout=180) as f:
+                    out = json.load(f)
+                r = out["result"]
+                return np.array(r.get("data") or r.get("response"), dtype=np.float64)
+            except Exception as e:
+                err = e
+                time.sleep(2 + attempt * 4)
+        raise RuntimeError(f"proxy embed failed: {err}")
     body = json.dumps({"texts": texts}).encode()
     err = None
     for attempt in range(retries):
@@ -149,6 +169,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--vec", default="/tmp/sil")
     ap.add_argument("--out", default="/tmp/sil")
+    ap.add_argument("--proxy", default="", help="local Workers-AI proxy base, e.g. http://127.0.0.1:8799")
+    ap.add_argument("--model", default="@cf/baai/bge-m3", help="model when --proxy is set")
     a = ap.parse_args()
 
     X = unit(np.load(Path(a.vec) / "vectors.npy").astype(np.float64))
@@ -211,7 +233,7 @@ def main():
     # ---------------- real conversation turns ----------------
     texts = [t for t, _ in REAL_TURNS]
     print(f"\nembedding {len(texts)} real turns ...")
-    Qr = embed(texts)
+    Qr = embed(texts, proxy=a.proxy, model=a.model)
     graded = [i for i, (_, acc) in enumerate(REAL_TURNS) if acc]
     real = {}
     for name, (Q, I) in {

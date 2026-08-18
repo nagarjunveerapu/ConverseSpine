@@ -8,7 +8,12 @@ import type { Env } from '../env.js';
 import { NayaDeskClient } from '../crm/nayadesk-client.js';
 
 const DEFAULT_MODEL = '@cf/baai/bge-base-en-v1.5';
-const MANIFEST_KEY = 'edu:manifest:v1';
+// Keyed per model: contentHash covers id+text only, so a model swap with a
+// static key would diff clean against the old manifest and push NOTHING into
+// the new index — a full index of stale-space vectors and no error anywhere.
+// (The intent rebuild survives this via SIL_INTENT_INDEX; this lane has no
+// name var, so the model is the space marker.) Old keys are orphaned, harmless.
+const MANIFEST_KEY_PREFIX = 'edu:manifest:v1';
 const EMBED_BATCH = 96;
 const UPSERT_BATCH = 500;
 const EDUCATION_TAU = 0.72;
@@ -89,7 +94,8 @@ export async function rebuildEducationIndex(env: Env): Promise<EducationRebuildR
     });
   }
 
-  const manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(MANIFEST_KEY)) || '{}');
+  const manifestKey = `${MANIFEST_KEY_PREFIX}:${model}`;
+  const manifest: Record<string, string> = JSON.parse((await env.TURN_CACHE.get(manifestKey)) || '{}');
   const eligibleIds = new Set(rows.map((r) => r.id));
   const changed = rows.filter((r) => manifest[r.id] !== contentHash(r.id, r.text));
   const toRemove = Object.keys(manifest).filter((id) => !eligibleIds.has(id));
@@ -130,7 +136,7 @@ export async function rebuildEducationIndex(env: Env): Promise<EducationRebuildR
     }
   }
 
-  await env.TURN_CACHE.put(MANIFEST_KEY, JSON.stringify(manifest));
+  await env.TURN_CACHE.put(manifestKey, JSON.stringify(manifest));
   base.ok = base.errors.length === 0;
   return base;
 }
