@@ -3,6 +3,7 @@
  * Surfaces facts only; never picks reply shape (phase machine owns goals).
  */
 import type { EngineLlm } from './ports.js';
+import { matchesCostTerm } from './cost-terms.js';
 import type { IngressSlotKey } from './ingress.js';
 import { hasTextOverride, isSlotWritable, stripTextOverride } from './ingress.js';
 import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic, LocationCategoryKey } from './types.js';
@@ -832,9 +833,17 @@ const COST_COMPONENT_SRC =
   '|floor\\s+rise|corpus|maintenance\\s+deposit|betterment\\s+charges?|infrastructure\\s+charges?|documentation\\s+charges?';
 const COST_COMPONENT_RE = new RegExp(`\\b(?:${COST_COMPONENT_SRC})\\b`, 'i');
 
-/** A cost-sheet component ask (stamp duty, registration charges, GST, …). */
-export function isCostComponentAsk(text: string): boolean {
-  return COST_COMPONENT_RE.test(text);
+/**
+ * A cost-sheet component ask (stamp duty, registration charges, GST, …).
+ *
+ * `terms` is the focused project's own cost vocabulary from the Desk catalog.
+ * When supplied it covers the long tail this regex never can — "floor rise?",
+ * "BESCOM charges?", "corner premium?" — per project, with no bot deploy. The
+ * regex stays as the floor for the common asks and for turns before any project
+ * is focused. See engine/cost-terms.ts.
+ */
+export function isCostComponentAsk(text: string, terms?: readonly string[]): boolean {
+  return COST_COMPONENT_RE.test(text) || matchesCostTerm(text, terms);
 }
 
 const TOPIC_PATTERNS: ReadonlyArray<{ topic: AnswerTopic; re: RegExp }> = [

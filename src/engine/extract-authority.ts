@@ -39,6 +39,7 @@ import {
   unionAskTopics,
 } from './facts.js';
 import { holdIntent } from './hold-intent.js';
+import { isCostComponentAsk } from './facts.js';
 import { hasNarrowingConstraint } from './phases/discover.js';
 import { stampNamedAndUnbound } from './named_bind.js';
 import {
@@ -384,7 +385,11 @@ export async function extractTurnAuthority(
         if (promoted.objection) {
           provenance.fields.objection = provenance.fields.objection ?? 'regex';
         }
-        return { extracted: promoted, provenance, chipResolution };
+        return {
+          extracted: ensurePriceTopicFloor(text, promoted, provenance, state.focus?.costTerms),
+          provenance,
+          chipResolution,
+        };
       }
     }
   }
@@ -425,7 +430,11 @@ export async function extractTurnAuthority(
       for (const label of proposal.labels) {
         provenance.fields[`recovery:${label}`] = 'llm';
       }
-      return { extracted: recovered, provenance, chipResolution };
+      return {
+        extracted: ensurePriceTopicFloor(text, recovered, provenance, state.focus?.costTerms),
+        provenance,
+        chipResolution,
+      };
     }
   }
 
@@ -442,7 +451,11 @@ export async function extractTurnAuthority(
     }
   }
 
-  return { extracted: merged, provenance, chipResolution };
+  return {
+    extracted: ensurePriceTopicFloor(text, merged, provenance, state.focus?.costTerms),
+    provenance,
+    chipResolution,
+  };
 }
 
 /** Seed act-local flags/topics from resolved chip path when extract left them empty. */
@@ -730,4 +743,27 @@ export function demoteVisitBookOnFreshSearch(
   resolution: ChipResolution,
 ): ChipResolution {
   return demoteNonSearchOnFreshSearch(text, state, resolution);
+}
+
+/**
+ * A cost-component ask must carry the `price` topic, or it grounds on nothing.
+ *
+ * When the match came from the focused project's Desk cost terms — "floor rise",
+ * "BESCOM charges" — neither the regex topic table nor the LLM has any way to
+ * know those words name a price. Without this floor the turn reaches routing
+ * with no topic and falls to no_fit, which is W7: the buyer asked about money
+ * and got a shrug. Additive only; an ask that already resolved a topic keeps it
+ * and merely gains `price` alongside.
+ */
+function ensurePriceTopicFloor(
+  text: string,
+  ex: Extracted,
+  provenance: ExtractProvenance,
+  terms: readonly string[] | undefined,
+): Extracted {
+  if (!isCostComponentAsk(text, terms)) return ex;
+  const topics = ex.askTopics ?? (ex.askTopic ? [ex.askTopic] : []);
+  if (topics.includes('price')) return ex;
+  provenance.fields.askTopics = 'regex';
+  return { ...ex, askTopics: [...topics, 'price'], askTopic: ex.askTopic ?? 'price' };
 }
