@@ -41,11 +41,14 @@ describe('a line sent three times inside the window', () => {
 
   it('stops asking and hands the buyer the wheel', async () => {
     const { turn } = harness('repeat-window-loop');
-    await turn('coorg, 50 Lakhs');
-    await turn('tell me about Ayana');
 
-    // A question the book cannot route, spaced so the one-line guard is not
-    // what catches it. Third send is the one that has to change.
+    // No opening brief. This used to start with "coorg, 50 Lakhs" / "tell me
+    // about Ayana", and the loop it produced depended on a bug: "agreement"
+    // was captured as a LOCATION and stuck, so every send came back as the same
+    // probe. Once the fixture began returning Desk's real `recognized_locations`
+    // the phantom is purged, the replies diverge and no loop forms — the test's
+    // premise was the defect, not its subject. The guard itself is unchanged
+    // and still has to fire on the third identical send.
     const one = await turn('is there a penalty clause in the agreement');
     await turn('what is the price');
     const two = await turn('is there a penalty clause in the agreement');

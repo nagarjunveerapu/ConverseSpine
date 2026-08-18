@@ -4110,18 +4110,31 @@ async function fetchRecommend(
     };
   }
 
-  // Provisional locality — the Desk is the locality authority (area registry +
-  // catalog identity + geocoder). Zero matches AND none of the sent locations
-  // recognized means the captured "place" is dialogue noise ("boarding a
-  // flight", "next option"), not an uncovered locality: drop it from this
-  // search and flag it for the state purge, then re-search the rest of the
-  // brief. A RECOGNIZED place with zero matches keeps the honest no_fit path
-  // (echoing "Mysuru" back is honest; echoing noise back is the defect).
+  // Provisional locality — drop a captured "place" that is dialogue noise
+  // ("boarding a flight", "next option") and re-search the rest of the brief,
+  // so noise cannot steer the search or get echoed back as a town.
+  //
+  // `recognizedLocations` CANNOT decide that. It answers a different question:
+  // Desk returns the subset of the asked locations we SERVE, so a real city we
+  // do not cover comes back exactly like the word "next" — measured against
+  // Desk dev, 17 Aug 2026:
+  //
+  //     Mumbai  → matches 0, recognized []        Pune  → matches 0, recognized []
+  //     next    → matches 0, recognized []        Bengaluru → matches 3, recognized ['Bengaluru']
+  //
+  // So this gate fired on every out-of-area city and silently dropped it. The
+  // deployed bot answered "2 BHK apartment in Mumbai under 1.5 Cr" with three
+  // Devanahalli projects and never said the word Mumbai — and the comment 100
+  // lines above, claiming "I don't have homes in *Pune*" survives, was false.
+  //
+  // Existence is `deskKnowsAsPlace`, which the phantom-drop already uses. Keep
+  // the cheap conditions first — a served area never reaches the geo call.
   if (
     filters.locations &&
     strictSearch.matches.length === 0 &&
     strictSearch.recognizedLocations !== undefined &&
-    strictSearch.recognizedLocations.length === 0
+    strictSearch.recognizedLocations.length === 0 &&
+    !deskKnowsAsPlace(await deps.data.resolveGeo(filters.locations).catch(() => null))
   ) {
     if (out) out.droppedLocation = filters.locations;
     const { locations: _junkLoc, ...withoutLocation } = filters;
