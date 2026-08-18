@@ -1,0 +1,358 @@
+<title>U12 — the embedder bake-off: names, intents, and two revised verdicts</title>
+<style>
+  :root {
+    --ground: #F3F6F8;
+    --panel: #FFFFFF;
+    --edge: #D5DEE4;
+    --edge-soft: #E4EBF0;
+    --ink: #14202B;
+    --ink-soft: #4A5C6B;
+    --ink-faint: #7B8B98;
+    --accent: #0B6E77;
+    --accent-soft: #E2F0F1;
+    --warn: #8A5A0E;
+    --warn-soft: #F7EEDC;
+    --good: #2C6E4B;
+    --alarm: #A03726;
+    --alarm-soft: #F9E8E4;
+    --shadow: 0 1px 2px rgba(20,32,43,.06), 0 8px 24px rgba(20,32,43,.05);
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0D151D;
+      --panel: #141F2A;
+      --edge: #2A3B49;
+      --edge-soft: #1E2C38;
+      --ink: #E4EDF3;
+      --ink-soft: #9FB2C0;
+      --ink-faint: #6D8292;
+      --accent: #4EC3CE;
+      --accent-soft: #10333A;
+      --warn: #D9A441;
+      --warn-soft: #33280F;
+      --good: #5CB183;
+      --alarm: #E58270;
+      --alarm-soft: #3A1E18;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0D151D; --panel: #141F2A; --edge: #2A3B49; --edge-soft: #1E2C38;
+    --ink: #E4EDF3; --ink-soft: #9FB2C0; --ink-faint: #6D8292;
+    --accent: #4EC3CE; --accent-soft: #10333A;
+    --warn: #D9A441; --warn-soft: #33280F; --good: #5CB183;
+    --alarm: #E58270; --alarm-soft: #3A1E18;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  }
+
+  body {
+    background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 16.5px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 60rem; margin: 0 auto; padding: 4rem 1.5rem 6rem; display: flex; flex-direction: column; gap: 2.75rem; }
+  .col { max-width: 42rem; display: flex; flex-direction: column; gap: 1.1rem; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  h1 { font-size: clamp(2rem, 4.4vw, 3rem); line-height: 1.08; letter-spacing: -.026em; font-weight: 700; text-wrap: balance; margin: .5rem 0 0; }
+  h2 { font-size: 1.42rem; letter-spacing: -.017em; font-weight: 680; text-wrap: balance; margin: 0; }
+  h3 { font-size: 1.02rem; letter-spacing: -.008em; font-weight: 650; margin: 0; }
+  .lede { font-size: 1.14rem; color: var(--ink-soft); text-wrap: pretty; }
+  p { margin: 0; text-wrap: pretty; }
+  a { color: var(--accent); }
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  hr { border: 0; border-top: 1px solid var(--edge-soft); margin: .5rem 0; }
+  strong { font-weight: 650; }
+  code { font-family: var(--mono); font-size: .87em; background: var(--edge-soft); padding: .1em .36em; border-radius: 4px; }
+
+  /* verdict */
+  .verdict {
+    background: var(--panel); border: 1px solid var(--edge); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 1.5rem 1.6rem; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: .85rem;
+  }
+  .verdict .head { font-size: 1.3rem; font-weight: 680; letter-spacing: -.015em; }
+  .verdict p { color: var(--ink-soft); }
+  .verdict .kicker { color: var(--ink); }
+
+  /* tables */
+  .tableshell { overflow-x: auto; border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .875rem; }
+  th, td { padding: .62rem .85rem; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--edge-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600; background: var(--edge-soft); border-bottom: 1px solid var(--edge);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  tr.win td { background: var(--accent-soft); }
+  tr.win td:first-child { font-weight: 650; }
+  td.lose { color: var(--alarm); }
+  td.good { color: var(--good); }
+  .struck { color: var(--ink-faint); }
+  .struck td.num { text-decoration: line-through; text-decoration-color: var(--warn); }
+  caption { caption-side: bottom; padding: .7rem .85rem; text-align: left; font-size: .8rem; color: var(--ink-faint); border-top: 1px solid var(--edge-soft); }
+
+  /* callouts */
+  .note { border-radius: 9px; padding: 1.05rem 1.2rem; display: flex; flex-direction: column; gap: .55rem; font-size: .95rem; }
+  .note .label { font-family: var(--mono); font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; font-weight: 650; }
+  .note.warn { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent); }
+  .note.warn .label { color: var(--warn); }
+  .note.alarm { background: var(--alarm-soft); border: 1px solid color-mix(in srgb, var(--alarm) 32%, transparent); }
+  .note.alarm .label { color: var(--alarm); }
+  .note.flat { background: var(--panel); border: 1px solid var(--edge); }
+  .note.flat .label { color: var(--accent); }
+
+  .quotes { display: flex; flex-direction: column; gap: .4rem; font-family: var(--mono); font-size: .82rem; }
+  .quotes div { display: flex; gap: .7rem; align-items: baseline; flex-wrap: wrap; }
+  .quotes .m { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .quotes .t { color: var(--ink); }
+  .quotes .p { color: var(--accent); }
+
+  ul { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: .5rem; }
+  li::marker { color: var(--ink-faint); }
+
+  .foot { color: var(--ink-faint); font-size: .84rem; font-family: var(--mono); line-height: 1.7; }
+</style>
+
+<div class="wrap">
+
+  <header class="col">
+    <div class="eyebrow">U12 · Understanding layer · 17 Aug 2026</div>
+    <h1>bge-m3 beat the incumbent on every family. Then I checked whether the reason was real.</h1>
+    <p class="lede">A bake-off against the live Workers AI embedder: 31 projects, 200 queries, 120 real negatives, three arms. m3 scored a clean sweep. The single family driving that sweep turned out to describe nobody — so this report throws it out and re-decides on what is left.</p>
+  </header>
+
+  <div class="verdict">
+    <div class="head">Final verdict, decided 18 Aug: <strong>bge-m3 is the model.</strong> The founder made the call with the full intent table on the record; the cutover (U12b) is executing.</div>
+    <p class="kicker">Round one (names): m3 false-binds on <strong>0.8%</strong> of real negative turns where the deployed model binds <strong>9.2%</strong> — an eleven-fold cut, and the reason to adopt. Round two, run at the founder's question — <em>which model figures out the intents clearly?</em> — surfaced the trade: on the real 13.5k intent corpus <strong>m3's raw floor is below the deployed model's</strong> (0.579 vs 0.624, and 5/10 on opt_out where base gets 8/10), while embeddinggemma-300m beat both raw floors (names 0.984 / 3.3% false-bind · intent 0.672).</p>
+    <p>The decision, with that table in hand: adopt m3 on the substantiated name evidence. The shipped intent lane never runs on the raw floor — a learned projection retrains per space, and its job in the m3 space is to win the intent floor back. That recovery is <em>measured</em> on the frozen holdout during the cutover, not assumed; the numbers land in the U12b record. The earlier proposed m3-vs-gemma projection tiebreak (U12c) is closed by this call.</p>
+  </div>
+
+  <section class="col">
+    <h2>What ran</h2>
+    <p>Three arms against the real <code>@cf/baai</code> embedder through a local <code>wrangler dev --remote</code> worker, so no token passed through the harness. Scoring is accuracy@1 and margin — never raw cosine, because the two models put scores on different scales and an absolute threshold tuned on one says nothing about the other.</p>
+    <p><code>margin = (top1 − top2) / top1</code>, separation inside a single model's own ranking.</p>
+    <p>bge-base is documented to want a query prefix; m3 is not. Production passes raw text at every call site, so bge-base runs <strong>both ways</strong> — as-deployed and best-practice — and m3 has to beat the better of the two. Handicapping the incumbent would have made the result worthless.</p>
+  </section>
+
+  <section>
+    <div class="col"><h2>The headline</h2>
+    <p>Accuracy@1 by query family. m3 is perfect everywhere.</p></div>
+    <div class="tableshell">
+      <table>
+        <thead><tr>
+          <th>arm</th><th class="num">acc@1</th><th class="num">margin</th>
+          <th class="num">exact<br>n=31</th><th class="num">short<br>n=31</th><th class="num">hinglish<br>n=62</th>
+          <th class="num">buried<br>n=31</th><th class="num">typo<br>n=31</th><th class="num">translit<br>n=14</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>bge-base (as deployed)</td><td class="num">0.900</td><td class="num">0.192</td><td class="num">1.000</td><td class="num">1.000</td><td class="num">0.968</td><td class="num">0.968</td><td class="num lose">0.806</td><td class="num lose">0.214</td></tr>
+          <tr><td>bge-base (+query prefix)</td><td class="num">0.910</td><td class="num">0.255</td><td class="num">1.000</td><td class="num">1.000</td><td class="num">0.984</td><td class="num">1.000</td><td class="num lose">0.806</td><td class="num lose">0.214</td></tr>
+          <tr class="win"><td>bge-m3</td><td class="num">1.000</td><td class="num">0.323</td><td class="num">1.000</td><td class="num">1.000</td><td class="num">1.000</td><td class="num">1.000</td><td class="num good">1.000</td><td class="num good">1.000</td></tr>
+        </tbody>
+        <caption>200 constructed queries over 31 real dev projects. Negatives scored separately, below.</caption>
+      </table>
+    </div>
+    <div class="col">
+    <p>Read naively this is a rout, and <code>translit</code> — project names written in Devanagari and Kannada — is three-quarters of the gap. That is exactly the multilingual claim bge-m3 is bought for. Which is why it needed checking rather than celebrating.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>Two things I checked before believing it</h2>
+
+    <div class="note alarm">
+      <div class="label">Correction — my first read of the negatives was backwards</div>
+      <p>m3's 90th-percentile margin on negatives is <em>higher</em> (0.119 vs 0.068), and I initially wrote that up as m3 being more prone to confident false binds. That was a scale artifact: m3 shifts the whole distribution up, positives and negatives together. Compared at a <em>matched operating point</em> — a threshold admitting the same share of true binds — the ordering reverses completely, and m3 is far safer. Raw percentile comparisons across models are the same mistake as comparing raw cosine.</p>
+    </div>
+
+    <div class="note warn">
+      <div class="label">Struck — the family that drove the headline describes nobody</div>
+      <p>If <code>translit</code> is going to justify a re-index, buyers have to actually type that way. They do not:</p>
+      <ul>
+        <li><code>corpus/recovered-raw.jsonl</code> — <strong>13,555 rows, zero Devanagari, zero Kannada.</strong> The 4,119 rows tagged <code>hi-en</code> are Hinglish in <em>Latin</em> script ("konsa better", "kaun better hai") — that is the <code>hinglish</code> family, where bge-base already scores 0.968.</li>
+        <li><code>turn_ledger</code> on dev — <strong>43,530 real turns.</strong> 512 carry non-ASCII, but sampling 400 shows 333 are em-dashes and ₹ signs, 26 emoji. Only 24 are Indic script.</li>
+        <li>Pulling every Indic turn: <strong>46 rows, and all of them are our own test traffic.</strong> The top phone is literally <code>+9190stress2026</code>; the rest are sequential generated numbers. <strong>Zero organic Indic buyers.</strong></li>
+      </ul>
+      <p>The family also tests the wrong shape. Of the 12 Indic turns that mix in Latin text, the pattern is the reverse of what I built: the project <em>name</em> stays in Latin and the <em>question</em> is Indic — <code>ಒಂದು ಪ್ರಶ್ನೆ: brochure ಕಳುಹಿಸಿ</code>. That loads the intent lane, not name retrieval, which is what this harness scores.</p>
+      <p>So <code>translit</code> is struck from the verdict. It stays in the harness — the day a tenant serves buyers who type that way, the measurement is already built — but it cannot count toward a decision until such a buyer exists.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col"><h2>What survives</h2>
+    <p>Same run, <code>translit</code> removed: 186 queries across the five families that reflect observed behaviour, scored against the 120 <strong>real</strong> ledger negatives. The threshold column is set per-arm to admit 95% of that arm's true binds, which is what makes the false-bind rates comparable.</p></div>
+    <div class="tableshell">
+      <table>
+        <thead><tr>
+          <th>arm</th><th class="num">acc@1</th><th class="num">margin</th><th class="num">misses</th>
+          <th class="num">threshold</th><th class="num">false-binds on 120 real negatives</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>bge-base (as deployed)</td><td class="num">0.952</td><td class="num">0.200</td><td class="num">9</td><td class="num">0.052</td><td class="num lose">23 &nbsp;=&nbsp; 19.2%</td></tr>
+          <tr><td>bge-base (+query prefix)</td><td class="num">0.962</td><td class="num">0.268</td><td class="num">7</td><td class="num">0.059</td><td class="num lose">30 &nbsp;=&nbsp; 25.0%</td></tr>
+          <tr class="win"><td>bge-m3</td><td class="num">1.000</td><td class="num">0.330</td><td class="num good">0</td><td class="num">0.150</td><td class="num good">4 &nbsp;=&nbsp; 3.3%</td></tr>
+        </tbody>
+        <caption>The positives are constructed; the negatives are real utterances pulled from the ledger. All three arms are scored identically.</caption>
+      </table>
+    </div>
+    <div class="col">
+      <p>The accuracy gap narrows from 10 points to <strong>4.8</strong> — and six of bge-base's nine remaining misses are a single family, <code>typo</code>. That one is not in doubt: buyers misspell constantly, and a typo is already known to eat the topic, not just the name.</p>
+      <p>The false-bind column is the finding that does not depend on anything I constructed.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col"><h2>Where the band belongs</h2>
+    <p>One operating point could be cherry-picked, so here is the whole sweep — false-bind rate on the real negatives as the recall target moves.</p></div>
+    <div class="tableshell">
+      <table>
+        <thead><tr>
+          <th>admit this share of true binds</th>
+          <th class="num">bge-base (as deployed)</th><th class="num">bge-base (+prefix)</th><th class="num">bge-m3</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>80%</td><td class="num">4.2%</td><td class="num">0.8%</td><td class="num good">0.0%</td></tr>
+          <tr><td>85%</td><td class="num">5.8%</td><td class="num">5.0%</td><td class="num good">0.0%</td></tr>
+          <tr class="win"><td>90%</td><td class="num">9.2%</td><td class="num">7.5%</td><td class="num good">0.8%</td></tr>
+          <tr><td>95%</td><td class="num">19.2%</td><td class="num">25.0%</td><td class="num">3.3%</td></tr>
+          <tr class="struck"><td>99%</td><td class="num">46.7%</td><td class="num">75.0%</td><td class="num">93.3%</td></tr>
+        </tbody>
+        <caption>m3 dominates from 80% through 95%. At 99% every arm collapses — m3 worst of all.</caption>
+      </table>
+    </div>
+    <div class="col">
+      <div class="note flat">
+        <div class="label">Calibration guidance for U9</div>
+        <p>Chasing 99% recall is not available at any price: on a 31-document pool the threshold falls below the noise and <em>every</em> model floods. Put the auto-bind band at <strong>90%</strong>, where m3 gives 0.8% against the incumbent's 9.2%, and let the reranker and ask-back lanes carry the last ten percent — which is what U10 is for.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>What m3 still gets wrong, and why it is not the embedder's problem</h2>
+    <p>The four negatives m3 binds at its 90% threshold are one category — turns carrying real intent but no project name at all:</p>
+    <div class="quotes">
+      <div><span class="m">0.169</span><span class="t">"force all same day Monday"</span><span class="p">→ Brigade Atmosphere</span></div>
+      <div><span class="m">0.166</span><span class="t">"okay i would like to visit this too"</span><span class="p">→ Desire Spaces</span></div>
+      <div><span class="m">0.153</span><span class="t">"is EC clear?"</span><span class="p">→ HV Echo Twin</span></div>
+      <div><span class="m">0.151</span><span class="t">"I want to visit"</span><span class="p">→ Desire Spaces</span></div>
+    </div>
+    <p>bge-base fails on exactly the same category — <code>"2 BHK configs"</code>, <code>"my visits?"</code>, <code>"Floor plan?"</code> — just far more often. A buyer saying "I want to visit" already has an active project in session; resolving a name there is the band's job and the session's, not the embedder's. Swapping models narrows this failure but does not remove it, and nothing in this report should be read as claiming otherwise.</p>
+    <p>On near-identical catalog neighbours — <code>Brigade Cornerstone</code> against <code>Brigade Cornerstone Utopia</code>, <code>Krishnaja Greens</code> against <code>Viva Greens</code> — both bge-base arms miss 4 of 28. m3 misses none.</p>
+  </section>
+
+  <section>
+    <div class="col"><h2>The prefix arm: declined</h2>
+    <p>Adding bge-base's documented query prefix looked like a free win — no migration, no re-index, +1 point of accuracy and a visibly fatter margin. It is not free.</p></div>
+    <div class="tableshell">
+      <table>
+        <thead><tr><th>bge-base, prefix on vs off</th><th class="num">acc@1</th><th class="num">margin</th><th class="num">false-bind @95%</th></tr></thead>
+        <tbody>
+          <tr><td>as deployed</td><td class="num">0.952</td><td class="num">0.200</td><td class="num">19.2%</td></tr>
+          <tr><td>+ query prefix</td><td class="num good">0.962</td><td class="num good">0.268</td><td class="num lose">25.0%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col"><p>The prefix inflates margins on <em>negatives</em> too, so it buys one point of accuracy and pays nearly six points of false-bind. Left off. This is the same trap as the raw-percentile reading above: a fatter margin is only good news if the negatives did not fatten with it.</p></div>
+  </section>
+
+  <section>
+    <div class="col"><h2>What it costs</h2>
+    <p>Latency is not the objection — measured through the same proxy, p50 over repeated calls:</p></div>
+    <div class="tableshell">
+      <table>
+        <thead><tr><th>model</th><th class="num">dims</th><th class="num">single p50</th><th class="num">single min</th><th class="num">batch of 32, p50</th></tr></thead>
+        <tbody>
+          <tr><td>bge-base-en-v1.5</td><td class="num">768</td><td class="num">137 ms</td><td class="num">125 ms</td><td class="num">248 ms</td></tr>
+          <tr><td>bge-m3</td><td class="num">1024</td><td class="num">146 ms</td><td class="num">137 ms</td><td class="num">307 ms</td></tr>
+        </tbody>
+        <caption>+9 ms on the single embed that sits on the critical path.</caption>
+      </table>
+    </div>
+    <div class="col">
+      <p>The real price is the dimension change. 1024 against 768 means:</p>
+      <ul>
+        <li>New Vectorize indexes for <strong>both</strong> <code>PROJECT_VECTORS</code> and <code>INTENT_VECTORS</code> — dimensions are fixed at creation, so neither can be migrated in place.</li>
+        <li>A full re-embed of both corpora: 431 project vectors and the 13.5k intent corpus.</li>
+        <li>Refitting the learned projection <code>p256-f6665e0b79</code>, a 256×768 matrix fitted to the current space. It becomes 256×1024 and must be retrained, not reshaped.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="col"><h2>Round two: the intent test, and the model it dethroned</h2>
+    <p>After the name verdict shipped, the founder asked the question that mattered: <em>which models figure out the intents clearly?</em> Names are half the job. The other half is hearing what the buyer <strong>wants</strong> — price, a visit, the legal papers, <em>stop messaging me</em> — and nothing above measured it.</p>
+    <p>So a second harness (<code>scripts/u12-intent-bakeoff.py</code>) ran all five models on the real 13.5k intent corpus: ~1,150 phrasings indexed, ~290 held-out real phrasings as incoming messages, nearest-match classification across 30 intents — the same mechanics as the live SIL lane. Plus the corpus's own 94 <strong>trap sentences</strong>, each written to be mistaken for a neighbouring intent ("yes, Saturday 12pm works fine" is a confirmation that smells like a booking request).</p></div>
+    <div class="tableshell">
+      <table>
+        <thead><tr>
+          <th>model</th><th class="num">intent acc@1</th><th class="num">margin</th>
+          <th class="num">traps: right</th><th class="num">traps: fell in</th>
+          <th class="num">names acc</th><th class="num">names false-bind @90%</th>
+        </tr></thead>
+        <tbody>
+          <tr class="win"><td>embeddinggemma-300m</td><td class="num good">0.672</td><td class="num">0.173</td><td class="num">0.638</td><td class="num lose">0.259</td><td class="num">0.984</td><td class="num">3.3%</td></tr>
+          <tr><td>bge-base (deployed)</td><td class="num">0.624</td><td class="num">0.102</td><td class="num">0.621</td><td class="num">0.172</td><td class="num">0.952</td><td class="num lose">9.2%</td></tr>
+          <tr><td>bge-m3</td><td class="num lose">0.579</td><td class="num">0.139</td><td class="num">0.586</td><td class="num">0.155</td><td class="num good">1.000</td><td class="num good">0.8%</td></tr>
+          <tr><td>bge-large-en-v1.5</td><td class="num">0.593</td><td class="num">0.101</td><td class="num">0.621</td><td class="num">0.207</td><td class="num">0.962</td><td class="num lose">12.5%</td></tr>
+          <tr><td>qwen3-embedding-0.6b</td><td class="num lose">0.566</td><td class="num">0.125</td><td class="num lose">0.431</td><td class="num">0.155</td><td class="num lose">0.823</td><td class="num lose">22.5%</td></tr>
+        </tbody>
+        <caption>Intent: raw nearest-neighbour floor, no learned projection — floor against floor, ranking is the signal. Names: from the six-arm run, translit excluded.</caption>
+      </table>
+    </div>
+    <div class="col">
+      <div class="note alarm">
+        <div class="label">m3 regresses intent — and where it loses is not random</div>
+        <p>On <code>get_availability</code> m3 got 1 of 10 where the deployed model gets 5. On <code>opt_out</code> — a buyer asking the bot to stop messaging them — m3 got 5 of 10 against the deployed model's 8. A missed opt-out is a compliance failure, not a quality bug. m3 buys its Hinglish gain (0.633 vs 0.612) by giving up English (0.552 vs 0.630), and English is most of the traffic.</p>
+      </div>
+      <div class="note flat">
+        <div class="label">embeddinggemma beats the deployed model on both jobs at once</div>
+        <p>Intent 0.672 against 0.624, balanced across English (0.672) and Hinglish (0.673). Names 0.984 with a third of the deployed false-binds. And it emits <strong>768 dims — the same shape as today</strong>, so the indexes keep their dimensions and the projection keeps its 256×768 shape (still retrained, but not reshaped). Its one measured weakness: when it is wrong on a trap row it falls into the designed trap most often (0.259). Every model, gemma included, read "yes, Saturday 12pm works fine" as a booking request — traps are the ask-back lane's job (U10), not the embedder's.</p>
+      </div>
+      <p><strong>The tiebreak, before any cutover:</strong> production intent does not run on this raw floor — the learned projection sits on top (it took real-turn intent 28% → 64% in the current space) and is retrained for whichever model wins. So the decision-grade test is to fit the projection on m3's and gemma's vectors offline and compare finished systems: post-projection intent accuracy and trap behaviour, next to the name numbers already in hand. Zero live risk; the corpus is local.</p>
+      <p>Also settled by this round: <strong>bge-large</strong> (more false-binds than today at barely better accuracy) and <strong>qwen3-embedding-0.6b</strong> (worst or near-worst on every column, and the worst trap performance at 0.431) are out. Newer is not better by default — that is why the harness exists.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>What this changes about the plan</h2>
+    <div class="note flat">
+      <div class="label">Sequencing — the model decision has to land before U9 completes</div>
+      <p>U9's job is calibrating the margin bands. Between models the mean margin moves up to <strong>2.9×</strong> (0.200 → 0.330 base→m3). Every band calibrated in the old space is thrown away by a cutover. Calibrate once, in the space we are keeping — whichever finalist wins the projection tiebreak.</p>
+    </div>
+    <ul>
+      <li><strong>U12c (new)</strong> — the tiebreak: fit the learned projection on m3 and gemma vectors offline, compare post-projection intent + trap performance. This is now the gate on everything below.</li>
+      <li><strong>U12b</strong> — the cutover executes whichever finalist wins. If gemma: indexes keep 768 dims and the projection keeps its shape; roughly half the migration.</li>
+      <li><strong>U9</strong> — hold the <code>BANDS.rrf</code> calibration until the cutover lands, then calibrate in the winner's space at the 90% operating point above.</li>
+      <li><strong>U11</strong> — auto-teaching name variants writes into the index, so it follows the cutover. Teaching into a space about to be discarded is wasted work.</li>
+      <li><strong>U10</strong> — unaffected, and more load-bearing than before: the trap rows show every embedder misreads "Saturday 12pm works fine" — that is the ask-back lane's case to catch.</li>
+    </ul>
+  </section>
+
+  <section class="col">
+    <h2>What this evidence is not</h2>
+    <ul>
+      <li><strong>The positives are constructed.</strong> The ledger cannot supply ground truth here — it records <code>also tell me about krishnaja greens</code> as binding <em>ayana</em>, a known wrong bind. All three arms face identical constructions, so the comparison is fair; the absolute numbers are not a field measurement.</li>
+      <li><strong>The negatives are real</strong>, and they carry the finding that matters. That asymmetry is deliberate.</li>
+      <li><strong>The pool is 31 documents.</strong> That is not a shortcut — retrieval is namespaced per builder, so ~31 is the true operating pool for this tenant. It does mean a perfect score is a weaker claim than it looks; m3 is not perfect, it is unbeaten on 186 constructed queries.</li>
+      <li><strong>One tenant, one day.</strong> Nothing here has been measured on prod traffic.</li>
+    </ul>
+  </section>
+
+  <hr>
+  <p class="foot">
+    names: scripts/u12-embed-bakeoff.py · 31 projects · 200 queries · 120 real negatives · 6 arms<br>
+    intent: scripts/u12-intent-bakeoff.py · 30 intents · ~1,150 indexed · ~290 held-out queries · 94 trap rows · 5 models<br>
+    real Workers AI embedders via local wrangler dev --remote; no token handled by the harness<br>
+    corpus evidence: corpus/recovered-raw.jsonl (13,555) · turn_ledger on naya-db-dev (43,530) · 17 Aug 2026
+  </p>
+
+</div>
