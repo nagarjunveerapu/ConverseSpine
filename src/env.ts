@@ -161,6 +161,13 @@ export interface Env {
   ADVISOR_BUILDER_ID?: string;
   /** Dev-only: enables the embedder-only measurement route. Never set in prod. */
   SIL_EVAL_ENABLED?: string;
+  /**
+   * Least-privilege key for the measurement doors (/api/sil/probe, /api/sil/embed)
+   * and nothing else — this is what the nightly embed-verify gate holds on prod,
+   * so BOT_SHARED_SECRET (which also HMACs Desk's signed media URLs) never has to
+   * be handed to CI or rotated for one. Optional; unset = only the bot secret opens them.
+   */
+  SIL_EVAL_SECRET?: string;
 
   META_VERIFY_TOKEN?: string;
   META_APP_SECRET?: string;

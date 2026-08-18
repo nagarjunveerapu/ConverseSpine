@@ -100,6 +100,45 @@ A metadata-schema change is the same procedure with a smaller blast radius:
 bump the index generation (new name), refill, verify; never mutate metadata
 shape inside a live index.
 
+## The measurement key (`SIL_EVAL_SECRET`)
+
+The nightly gate needs to read the engine's verdicts on prod. The obvious way —
+give CI `BOT_SHARED_SECRET` — is wrong, and the reason is not abstract:
+
+- Desk's `requireAuth` accepts the bot on an exact match of it, on **every buyer
+  turn**;
+- Desk's `lib/media_sign.ts` **HMACs signed media URLs with it**, TTL 24 h. Rotate
+  it and every brochure link already sent to a buyer on WhatsApp dies instantly,
+  with no way to re-sign what has been delivered.
+
+So a nightly read-only job would be holding the key that signs buyer downloads,
+and "just rotate it so CI has a copy" costs a Desk↔Spine outage plus a day of
+dead links. A measurement job gets a measurement key instead.
+
+`SIL_EVAL_SECRET` opens `/api/sil/probe` and `/api/sil/embed` and nothing else —
+not `/internal/agent-send`, not the rebuild routes, not the intent-vector writer,
+all of which keep their own `BOT_SHARED_SECRET` check. Both keys are accepted
+(constant-time), so dev keeps working on the bot secret it already has, and
+`silEvalAllowed` still 404s — never 401 — on a wrong key.
+
+`tests/sil-eval-scope.test.ts` scans `src/index.ts` and fails if the eval gate
+ever appears on a route outside `/api/sil/`, or if an `/internal/` route loses
+its own check. The narrow key stays narrow by test, not by memory.
+
+**To set it up (founder, once per env):**
+
+```
+# generate a value you keep — this is a fresh key, not a copy of anything
+openssl rand -hex 32
+
+# ConverseSpine repo
+npx wrangler secret put SIL_EVAL_SECRET --env prod     # and --env dev if you want it there too
+```
+
+Then add `SIL_EVAL_SECRET` to the matching GitHub **environment** (`production` /
+`dev`) — not repo secrets, which this repo does not use. Nothing else changes:
+`BOT_SHARED_SECRET` is never read, never rotated, no media link breaks.
+
 ## Gates & battery discipline
 
 - `golden.json` rows must pass on the **currently shipped** system — it's a

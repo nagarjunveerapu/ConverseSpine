@@ -103,12 +103,17 @@ function envConfig(envName) {
 }
 
 function secretFor(cfg) {
-  const s = process.env[cfg.secretVar] || process.env.BOT_SHARED_SECRET;
+  // SIL_EVAL_SECRET first: it opens only /api/sil/probe and /api/sil/embed, so
+  // it is the key this script should be holding. BOT_SHARED_SECRET stays as the
+  // fallback for local runs and dev, where it is already to hand — but it also
+  // HMACs Desk's signed media URLs, so prod should be measured with the narrow
+  // key rather than a copy of the one that signs buyer downloads.
+  const s = process.env.SIL_EVAL_SECRET || process.env[cfg.secretVar] || process.env.BOT_SHARED_SECRET;
   if (!s) {
     die(
-      `missing BOT_SHARED_SECRET (or ${cfg.secretVar}) for env "${cfg.name}".\n` +
-        `  Locally: export it, or run with BOT_SHARED_SECRET=$(grep …) prefixed.\n` +
-        `  In CI: it is a GitHub ENVIRONMENT secret (dev / production) — the job\n` +
+      `missing SIL_EVAL_SECRET / BOT_SHARED_SECRET (or ${cfg.secretVar}) for env "${cfg.name}".\n` +
+        `  Locally: export one, or run with BOT_SHARED_SECRET=$(grep …) prefixed.\n` +
+        `  In CI: these are GitHub ENVIRONMENT secrets (dev / production) — the job\n` +
         `  must declare "environment:", or every secret arrives as an empty string.`,
     );
   }
@@ -200,7 +205,7 @@ async function probe(cfg, secret, items) {
         status === 404
           ? `\n  The probe door refuses with 404 rather than 401, so this is one of two things:\n` +
             `    1. the deployed worker predates the secret-gated probe (check /health and the last deploy), or\n` +
-            `    2. the BOT_SHARED_SECRET here does not match the one on the deployed worker.\n` +
+            `    2. neither SIL_EVAL_SECRET nor BOT_SHARED_SECRET here matches the deployed worker.\n` +
             `  Tell them apart WITHOUT reading any secret: POST malformed JSON to /internal/cache-invalidate\n` +
             `  with no x-bot-secret header. 403 = the worker HAS a secret set (so it is case 2, a value\n` +
             `  mismatch); 400 invalid_json = the worker has no secret at all.`
