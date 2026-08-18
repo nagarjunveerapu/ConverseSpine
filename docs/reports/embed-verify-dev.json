@@ -1,6 +1,6 @@
 {
   "env": "dev",
-  "started": "2026-08-18T06:39:24.115Z",
+  "started": "2026-08-18T07:06:58.299Z",
   "model": "@cf/baai/bge-m3",
   "projection": "p32-1c003deba7",
   "tau": 0.8984,
@@ -256,18 +256,21 @@
     "graded": [],
     "ok": 0,
     "total": 0,
+    "mode": "bind at 0.65",
     "skipped": "CLOUDFLARE_API_TOKEN not set — index-query lanes need it"
   },
   "locations": {
     "graded": [],
     "ok": 0,
     "total": 0,
+    "mode": "retrieval only (no shipped bind gate on this index)",
     "skipped": "CLOUDFLARE_API_TOKEN not set — index-query lanes need it"
   },
   "education": {
     "graded": [],
     "ok": 0,
     "total": 0,
+    "mode": "bind at 0.72",
     "skipped": "CLOUDFLARE_API_TOKEN not set — index-query lanes need it"
   },
   "counts": {

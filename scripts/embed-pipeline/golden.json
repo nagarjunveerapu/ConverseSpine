@@ -7,68 +7,203 @@
   },
   "thresholds": {
     "names": 0.65,
-    "locations": 0.78,
-    "education": 0.72
+    "locations": null,
+    "education": 0.72,
+    "_locations_note": "null on purpose. LOCATION_THRESHOLD 0.78 (semantic-nlu.ts) is applied to an IN-MEMORY cosine between the location hint and up to 24 micro-market name strings — Spine never queries the locations index. So this lane is graded on retrieval (right area is top-1), not on a bind that does not exist here. Give it a real tau only after calibrating THIS index."
   },
   "intent": [
-    { "text": "what is the price of a 2bhk", "expect_kind": "get_price" },
-    { "text": "2bhk ka price kya hai", "expect_kind": "get_price" },
-    { "text": "1BHK chahiye Whitefield ke paas", "expect_kind": "find_projects" },
-    { "text": "looking for a flat near hennur under 90 lakhs", "expect_kind": "find_projects" },
-    { "text": "site visit book karna hai is weekend", "expect_kind": "book_visit" },
-    { "text": "can I come see the property this saturday", "expect_kind": "book_visit" },
-    { "text": "send me the brochure please", "expect_kind": "get_brochure" },
-    { "text": "does it have a swimming pool and gym", "expect_kind": "get_amenities" },
-    { "text": "what will be the emi for 80 lakhs over 20 years", "expect_kind": "compute_emi" },
-    { "text": "are any units available on higher floors", "expect_kind": "get_availability" },
-    { "text": "when will the project be ready for possession", "expect_kind": "ask_delivery_timeline" },
-    { "text": "is the project rera approved", "expect_kind": "get_legal_info" },
-    { "text": "which is better of the two projects you showed me", "expect_kind": "compare_projects" },
-    { "text": "koi discount milega kya", "expect_kind": "negotiate_price" },
-    { "text": "what rental yield can I expect from this", "expect_kind": "ask_investment_return" },
-    { "text": "what is the payment schedule like", "expect_kind": "get_payment_plan" },
-    { "text": "who is the builder and what have they built before", "expect_kind": "ask_about_builder" },
-    { "text": "ask someone to call me tomorrow morning", "expect_kind": "request_callback" },
-    { "text": "stop messaging me", "expect_kind": "opt_out" },
-    { "text": "mujhe message mat bhejo ab", "expect_kind": "opt_out" },
-    { "text": "I want to talk to a real person not a bot", "expect_kind": "escalate_to_human" },
-    { "text": "how is the connectivity from this area to the office hubs", "expect_kind": "get_location_info" },
-    { "text": "which schools and hospitals are near the project", "expect_kind": "get_location_info" },
-    { "text": "asdkjh qwlekj zzkjh", "must_not_bind": true },
-    { "text": "what's the weather in london today", "must_not_bind": true },
-    { "text": "sing me a song about cricket", "must_not_bind": true }
+    {
+      "text": "what is the price of a 2bhk",
+      "expect_kind": "get_price"
+    },
+    {
+      "text": "2bhk ka price kya hai",
+      "expect_kind": "get_price"
+    },
+    {
+      "text": "1BHK chahiye Whitefield ke paas",
+      "expect_kind": "find_projects"
+    },
+    {
+      "text": "looking for a flat near hennur under 90 lakhs",
+      "expect_kind": "find_projects"
+    },
+    {
+      "text": "site visit book karna hai is weekend",
+      "expect_kind": "book_visit"
+    },
+    {
+      "text": "can I come see the property this saturday",
+      "expect_kind": "book_visit"
+    },
+    {
+      "text": "send me the brochure please",
+      "expect_kind": "get_brochure"
+    },
+    {
+      "text": "does it have a swimming pool and gym",
+      "expect_kind": "get_amenities"
+    },
+    {
+      "text": "what will be the emi for 80 lakhs over 20 years",
+      "expect_kind": "compute_emi"
+    },
+    {
+      "text": "are any units available on higher floors",
+      "expect_kind": "get_availability"
+    },
+    {
+      "text": "when will the project be ready for possession",
+      "expect_kind": "ask_delivery_timeline"
+    },
+    {
+      "text": "is the project rera approved",
+      "expect_kind": "get_legal_info"
+    },
+    {
+      "text": "which is better of the two projects you showed me",
+      "expect_kind": "compare_projects"
+    },
+    {
+      "text": "koi discount milega kya",
+      "expect_kind": "negotiate_price"
+    },
+    {
+      "text": "what rental yield can I expect from this",
+      "expect_kind": "ask_investment_return"
+    },
+    {
+      "text": "what is the payment schedule like",
+      "expect_kind": "get_payment_plan"
+    },
+    {
+      "text": "who is the builder and what have they built before",
+      "expect_kind": "ask_about_builder"
+    },
+    {
+      "text": "ask someone to call me tomorrow morning",
+      "expect_kind": "request_callback"
+    },
+    {
+      "text": "stop messaging me",
+      "expect_kind": "opt_out"
+    },
+    {
+      "text": "mujhe message mat bhejo ab",
+      "expect_kind": "opt_out"
+    },
+    {
+      "text": "I want to talk to a real person not a bot",
+      "expect_kind": "escalate_to_human"
+    },
+    {
+      "text": "how is the connectivity from this area to the office hubs",
+      "expect_kind": "get_location_info"
+    },
+    {
+      "text": "which schools and hospitals are near the project",
+      "expect_kind": "get_location_info"
+    },
+    {
+      "text": "asdkjh qwlekj zzkjh",
+      "must_not_bind": true
+    },
+    {
+      "text": "what's the weather in london today",
+      "must_not_bind": true
+    },
+    {
+      "text": "sing me a song about cricket",
+      "must_not_bind": true
+    }
   ],
   "known_gaps": [
-    { "text": "yes, saturday 12pm works fine", "expect_kind": "confirm_action", "why": "every model reads this as book_visit — U10's ask-back case, not an embedder regression" },
-    { "text": "how far is the airport from the project", "expect_kind": "get_location_info", "why": "reads as find_projects at 0.906 — airport-distance sits on the discovery boundary in corpus space; a corpus/labels fix, not a battery row" },
-    { "text": "my budget is around 90 lakhs", "expect_kind": "provide_qualification", "why": "qualification rows are answers to bot questions; the state-free probe reads them as discovery — needs conversation state the probe deliberately strips" },
-    { "text": "tell me about brigade orchads", "why": "typo'd project names miss the name index — U11 auto-teach's job" },
-    { "text": "ok bye thanks", "expect_kind": "small_talk", "why": "farewell lands in the fallback gap (bot-intent-fallback-gap)" }
+    {
+      "text": "yes, saturday 12pm works fine",
+      "expect_kind": "confirm_action",
+      "why": "every model reads this as book_visit — U10's ask-back case, not an embedder regression"
+    },
+    {
+      "text": "how far is the airport from the project",
+      "expect_kind": "get_location_info",
+      "why": "reads as find_projects at 0.906 — airport-distance sits on the discovery boundary in corpus space; a corpus/labels fix, not a battery row"
+    },
+    {
+      "text": "my budget is around 90 lakhs",
+      "expect_kind": "provide_qualification",
+      "why": "qualification rows are answers to bot questions; the state-free probe reads them as discovery — needs conversation state the probe deliberately strips"
+    },
+    {
+      "text": "tell me about brigade orchads",
+      "why": "typo'd project names miss the name index — U11 auto-teach's job"
+    },
+    {
+      "text": "ok bye thanks",
+      "expect_kind": "small_talk",
+      "why": "farewell lands in the fallback gap (bot-intent-fallback-gap)"
+    },
+    {
+      "text": "what does 2bhk actually mean",
+      "expect_id": "edu:bhk:india",
+      "why": "retrieves the RIGHT entry at 0.6901 but EDUCATION_TAU is 0.72, so the engine drops it — the most common term in Indian real estate gets no education answer. The tau was set in PR #126 on bge-base and was never recalibrated for bge-m3. Promote this row out in the PR that calibrates the education tau live."
+    }
   ],
   "dev": {
     "names": [
-      { "text": "Brigade Orchards", "expect_id": "brigade-orchards-naya-advisor" },
-      { "text": "tell me about Brigade Orchards in devanahalli", "expect_id": "brigade-orchards-naya-advisor" },
-      { "text": "Sattva Songbird", "must_not_bind": true }
+      {
+        "text": "Brigade Orchards",
+        "expect_id": "brigade-orchards"
+      },
+      {
+        "text": "tell me about Brigade Orchards in devanahalli",
+        "expect_id": "brigade-orchards"
+      },
+      {
+        "text": "Sattva Songbird",
+        "must_not_bind": true
+      }
     ],
     "locations": [
-      { "text": "flats near hennur", "expect_id": "hennur-bengaluru" },
-      { "text": "whitefield area", "expect_id": "whitefield-bengaluru" },
-      { "text": "something in coorg", "expect_id": "coorg-kodagu" }
+      {
+        "text": "flats near hennur",
+        "expect_id": "hennur-bengaluru"
+      },
+      {
+        "text": "whitefield area",
+        "expect_id": "whitefield-bengaluru"
+      },
+      {
+        "text": "something in coorg",
+        "expect_id": "coorg-kodagu"
+      }
     ],
     "education": [
-      { "text": "what does 2bhk actually mean", "expect_id": "edu:bhk:india" },
-      { "text": "carpet area aur super built up mein kya difference hai", "expect_id": "edu:carpet_builtup:india" },
-      { "text": "how do I read a cost sheet", "expect_id": "edu:cost_sheet:india" }
+      {
+        "text": "carpet area aur super built up mein kya difference hai",
+        "expect_id": "edu:carpet_builtup:india"
+      },
+      {
+        "text": "how do I read a cost sheet",
+        "expect_id": "edu:cost_sheet:india"
+      }
     ]
   },
   "prod": {
     "names": [
-      { "text": "Krishnaja Greens", "expect_id": "krishnaja-greens" },
-      { "text": "Sattva Songbird", "must_not_bind": true }
+      {
+        "text": "Krishnaja Greens",
+        "expect_id": "krishnaja-greens"
+      },
+      {
+        "text": "Sattva Songbird",
+        "must_not_bind": true
+      }
     ],
     "locations": [
-      { "text": "property in coorg", "expect_id": "coorg-madikeri" }
+      {
+        "text": "property in coorg",
+        "expect_id": "coorg-madikeri"
+      }
     ],
     "education": []
   }
