@@ -982,6 +982,12 @@ export interface Extracted {
   mediaAssetKind?: string;
   namedProjects?: OfferedProject[];
   /**
+   * U8 shadow — what a lexical+dense fusion WOULD have resolved, and by what
+   * margin. Read by ledger-write only; nothing branches on it. U9 calibrates
+   * the band edges from these rows and only then does anything consult them.
+   */
+  identityShadow?: import('./hybrid-identity.js').IdentityShadowCore;
+  /**
    * Name-shaped tokens the buyer used that did not bind to any session/catalog
    * project. Distinguishes "named nothing" from "named something unbound" so
    * compare fall-through does not pool-guess the shortlist (SUBJECT PR-2).

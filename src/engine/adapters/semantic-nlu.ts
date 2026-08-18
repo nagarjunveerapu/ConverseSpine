@@ -4,6 +4,7 @@ import { detectTopics, isDetailAskTurn, isLocationCorrectionTurn, looksLikeConfi
 import { getQueryCanonicalizer } from '../../nlu/vocab.js';
 import { buyerCuedOtherProject, facetNameResidue } from '../project_switch.js';
 import { gapFillTau, projectIntentVector } from '../../nlu/intent-projection.js';
+import { shadowVerdict } from '../hybrid-identity.js';
 
 /** Default only — see classify.ts. env.SIL_EMBED_MODEL is the single source of
  *  truth so query-side and index-side can never drift apart. */
@@ -54,6 +55,12 @@ export interface SemanticContext {
   pendingOfferPricing?: boolean;
   /** Session already has search constraints (location/type/budget) — bare name after no_fit. */
   hasPriorConstraints?: boolean;
+  /**
+   * The builder's full catalog. U8's lexical lane is judged against all of it,
+   * not the shortlist — a name the shortlist never offered is precisely the
+   * case the second lane exists to catch. Already fetched for this turn.
+   */
+  catalogNames?: ReadonlyArray<{ projectId?: string; name: string }>;
 }
 
 export interface ProjectVectorMatch {
@@ -189,13 +196,20 @@ function clauseForProjectEmbed(clause: string): string {
     .trim();
 }
 
-/** Resolve project names from Vectorize — per-clause when compare/visit/multi-name lists. */
+/**
+ * Resolve project names from Vectorize — per-clause when compare/visit/multi-name lists.
+ *
+ * Returns the threshold-filtered pick that ships, AND the full ordered recall
+ * set behind it. The second one exists for the U8 shadow: the whole point of
+ * the margin work is that the absolute threshold throws away the ordering, so a
+ * shadow reading the filtered list would be reading the thing under review.
+ */
 async function resolveNamedProjectsFromVectors(
   env: Env,
   text: string,
   builderId: string,
   ex: Extracted,
-): Promise<OfferedProject[]> {
+): Promise<{ picked: OfferedProject[]; denseOrder: OfferedProject[] }> {
   const multiProject =
     ex.askTopic === 'compare' ||
     ex.transition === 'want_visit' ||
@@ -218,7 +232,10 @@ async function resolveNamedProjectsFromVectors(
   const allMatches = await queryProjectVectorsMany(env, embedClauses, builderId);
 
   const named = collectNamedProjectsFromMatches(allMatches);
-  return multiProject ? named.slice(0, 3) : named.slice(0, 1);
+  return {
+    picked: multiProject ? named.slice(0, 3) : named.slice(0, 1),
+    denseOrder: collectNamedProjectsFromMatches(allMatches, 0),
+  };
 }
 
 /** Buyer text likely references a project by name (not pure location/budget seed). */
@@ -453,14 +470,37 @@ export function makeSemanticNlu(env: Env): SemanticNluPort {
       }
 
       // PROJECT_VECTORS — which project (full builder catalog, not shortlist).
+      let denseOrder: OfferedProject[] = [];
+      let denseRan = false;
       if (
         env.PROJECT_VECTORS &&
         shouldQueryProjectVectors(text, next, ctx)
       ) {
-        const picked = await resolveNamedProjectsFromVectors(env, text, builderId, next);
-        if (picked.length > 0) {
-          next = { ...next, namedProjects: picked };
+        denseRan = true;
+        const resolved = await resolveNamedProjectsFromVectors(env, text, builderId, next);
+        denseOrder = resolved.denseOrder;
+        if (resolved.picked.length > 0) {
+          next = { ...next, namedProjects: resolved.picked };
         }
+      }
+
+      // U8 shadow — computed, recorded, never consulted.
+      //
+      // Deliberately OUTSIDE the gate above. The gate is the measured
+      // bottleneck, not the embedder, so a shadow that only ran when the gate
+      // said yes would be blind to the turns worth reading. The lexical lane is
+      // pure arithmetic over names already in memory and adds no embed call, so
+      // running it every turn costs nothing the stopwatch (U1) can see.
+      if (ctx.catalogNames?.length) {
+        const shadow = shadowVerdict({
+          text,
+          catalog: ctx.catalogNames
+            .filter((p) => p.projectId && p.name)
+            .map((p) => ({ id: p.projectId!, name: p.name })),
+          dense: denseOrder.map((p) => ({ id: p.projectId, name: p.name })),
+          denseRan,
+        });
+        if (shadow) next = { ...next, identityShadow: shadow };
       }
 
       return next;

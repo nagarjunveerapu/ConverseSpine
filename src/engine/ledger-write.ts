@@ -123,6 +123,22 @@ export function buildLedgerWritePayload(input: {
         }
       : {}),
     ...(switchIntent ? { switch_intent: switchIntent } : {}),
+    // SHADOW ONLY (U8) — what a lexical+dense fusion would have resolved, and
+    // by what margin. Nothing branches on it. It rides on resolved_intent
+    // because it is a claim about WHICH PROJECT the buyer named, so a reader
+    // comparing the shadow to what shipped needs one column, not a join:
+    // `named_projects` above is the truth this is scored against.
+    ...(ex.identityShadow
+      ? {
+          identity_shadow: {
+            ...ex.identityShadow,
+            // Read off the same `ex` as `named_projects` above, one field up,
+            // so the shadow is scored against what bound and not what was
+            // proposed three layers earlier.
+            shipped: (ex.namedProjects ?? []).map((p) => p.projectId),
+          },
+        }
+      : {}),
     // Full provenance object (deployed ledger), not wrangler-dev-only snapshot.
     ...(extractProvenance ? { extract_provenance: extractProvenance } : {}),
     ...(extractProvenance
