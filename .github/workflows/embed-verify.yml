@@ -10,8 +10,9 @@
 # place deploy-dev.yml and deploy-prod.yml read them — repo-level secrets are
 # not used in this repo, and a job that forgets `environment:` silently gets
 # empty strings. CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID already live
-# there; BOT_SHARED_SECRET must be added to each environment, matching that
-# env's deployed worker secret.
+# there; add SIL_EVAL_SECRET (preferred — it opens only the two read-only
+# probe routes) or BOT_SHARED_SECRET to each environment, matching that env's
+# deployed worker secret.
 name: Embed verify
 
 on:
@@ -44,6 +45,12 @@ jobs:
 
       - name: Verify ${{ matrix.env }}
         env:
+          # SIL_EVAL_SECRET opens the two read-only probe routes and nothing
+          # else — the right authority for a measurement job. BOT_SHARED_SECRET
+          # stays as the fallback (dev already has it), but prod should carry
+          # the narrow key: the bot secret also HMACs Desk's signed media URLs,
+          # so handing it to CI, or rotating it to do so, is buyer-visible.
+          SIL_EVAL_SECRET: ${{ secrets.SIL_EVAL_SECRET }}
           BOT_SHARED_SECRET: ${{ secrets.BOT_SHARED_SECRET }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

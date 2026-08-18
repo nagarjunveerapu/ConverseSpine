@@ -15,19 +15,43 @@ import type { Env } from '../env.js';
 import { embedderRouting } from '../engine/turn-routing/classify.js';
 import type { TurnRoutingInput } from '../engine/turn-routing/types.js';
 
+/** Constant-time string compare — this is an auth path now, not a debug flag. */
+function timingSafeEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 /**
  * Gate for the measurement doors (/api/sil/probe, /api/sil/embed): open on dev
- * via SIL_EVAL_ENABLED, and on any env to a caller holding the bot secret.
+ * via SIL_EVAL_ENABLED, and on any env to a caller holding a valid key.
  * Prod deliberately has no eval flag — but taus are calibrated per index
  * (Vectorize scores are lossy), so the env real buyers use must stay probeable
  * without opening a public door.
+ *
+ * TWO keys open it, and the difference matters operationally:
+ *
+ * - `SIL_EVAL_SECRET` — the least-privilege key. It opens these two read-only
+ *   routes and NOTHING else: not /internal/agent-send, not the rebuild routes,
+ *   not the intent-vector writer. This is what the nightly gate should hold.
+ * - `BOT_SHARED_SECRET` — kept for the dev workflow and local runs, where it is
+ *   already to hand.
+ *
+ * The split exists because BOT_SHARED_SECRET is not just an auth token on prod:
+ * Desk HMACs signed media URLs with it (24h TTL), so rotating it to hand a CI
+ * job a credential would kill every brochure link already sent to a buyer.
+ * A measurement job gets a measurement key.
  */
 export function silEvalAllowed(
-  env: Pick<Env, 'SIL_EVAL_ENABLED' | 'BOT_SHARED_SECRET'>,
+  env: Pick<Env, 'SIL_EVAL_ENABLED' | 'BOT_SHARED_SECRET' | 'SIL_EVAL_SECRET'>,
   request: Request,
 ): boolean {
   if (env.SIL_EVAL_ENABLED === 'true') return true;
-  return !!env.BOT_SHARED_SECRET && request.headers.get('x-bot-secret') === env.BOT_SHARED_SECRET;
+  const presented = request.headers.get('x-bot-secret');
+  if (!presented) return false;
+  if (env.SIL_EVAL_SECRET && timingSafeEq(presented, env.SIL_EVAL_SECRET)) return true;
+  return !!env.BOT_SHARED_SECRET && timingSafeEq(presented, env.BOT_SHARED_SECRET);
 }
 
 export interface SilProbeItem {

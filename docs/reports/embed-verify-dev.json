@@ -1,6 +1,6 @@
 {
   "env": "dev",
-  "started": "2026-08-18T07:06:58.299Z",
+  "started": "2026-08-18T07:29:16.387Z",
   "model": "@cf/baai/bge-m3",
   "projection": "p32-1c003deba7",
   "tau": 0.8984,

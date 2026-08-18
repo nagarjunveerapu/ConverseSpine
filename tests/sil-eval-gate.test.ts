@@ -29,4 +29,26 @@ describe('silEvalAllowed — the measurement doors', () => {
     expect(silEvalAllowed({ SIL_EVAL_ENABLED: '1' }, req())).toBe(false);
     expect(silEvalAllowed({ SIL_EVAL_ENABLED: 'false' }, req())).toBe(false);
   });
+
+  describe('SIL_EVAL_SECRET — the least-privilege measurement key', () => {
+    it('opens the door on its own, with no bot secret configured at all', () => {
+      expect(silEvalAllowed({ SIL_EVAL_SECRET: 'eval-key' }, req('eval-key'))).toBe(true);
+    });
+
+    it('opens alongside a DIFFERENT bot secret — the point is not having to share it', () => {
+      const env = { BOT_SHARED_SECRET: 'bot-key', SIL_EVAL_SECRET: 'eval-key' };
+      expect(silEvalAllowed(env, req('eval-key'))).toBe(true);
+      expect(silEvalAllowed(env, req('bot-key'))).toBe(true);
+      expect(silEvalAllowed(env, req('neither'))).toBe(false);
+    });
+
+    it('an empty eval key never opens the door', () => {
+      expect(silEvalAllowed({ SIL_EVAL_SECRET: '' }, req(''))).toBe(false);
+      expect(silEvalAllowed({ SIL_EVAL_SECRET: '' }, req('anything'))).toBe(false);
+    });
+
+    it('a missing header is refused before either key is consulted', () => {
+      expect(silEvalAllowed({ BOT_SHARED_SECRET: 'bot-key', SIL_EVAL_SECRET: 'eval-key' }, req())).toBe(false);
+    });
+  });
 });
