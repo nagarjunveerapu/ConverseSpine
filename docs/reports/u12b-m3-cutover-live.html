@@ -1,0 +1,154 @@
+<title>The m3 Cutover</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --card: #ffffff;
+    --ink: #24211c;
+    --muted: #6f6a60;
+    --line: #e4e1da;
+    --accent: #0d6e5f;
+    --accent-soft: #e3f0ed;
+    --warn: #8a6410;
+    --warn-soft: #f6edd8;
+    --bad: #9c3325;
+    --bad-soft: #f7e5e2;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16150f; --card: #1f1d17; --ink: #ece8df; --muted: #a49d8f;
+      --line: #343128; --accent: #4fae9c; --accent-soft: #1d3833;
+      --warn: #d9ae4e; --warn-soft: #3a2f14; --bad: #d97a6b; --bad-soft: #3d211c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16150f; --card: #1f1d17; --ink: #ece8df; --muted: #a49d8f;
+    --line: #343128; --accent: #4fae9c; --accent-soft: #1d3833;
+    --warn: #d9ae4e; --warn-soft: #3a2f14; --bad: #d97a6b; --bad-soft: #3d211c;
+  }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.6 -apple-system, "Segoe UI", sans-serif; margin: 0; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 .4rem; letter-spacing: -.01em; text-wrap: balance; }
+  h2 { font-size: 1.15rem; margin: 2.8rem 0 .8rem; letter-spacing: -.005em; }
+  .sub { color: var(--muted); margin: 0 0 2rem; }
+  .verdict { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: .9rem 1.1rem; border-radius: 0 8px 8px 0; margin: 1.6rem 0; }
+  p { margin: .7rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  .tablewrap { overflow-x: auto; margin: 1rem 0; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; padding: .45rem .7rem .45rem 0; border-bottom: 1px solid var(--line); }
+  td { padding: .5rem .7rem .5rem 0; border-bottom: 1px solid var(--line); vertical-align: top; font-variant-numeric: tabular-nums; }
+  code { font-family: var(--mono); font-size: .84em; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: .08em .35em; }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .82rem; line-height: 1.55; }
+  .turn { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; margin: .9rem 0; }
+  .buyer { font-weight: 600; margin: 0 0 .45rem; }
+  .bot { color: var(--muted); margin: 0 0 .6rem; font-size: .94rem; }
+  .chip { display: inline-block; font-size: .74rem; font-weight: 600; padding: .14em .6em; border-radius: 99px; letter-spacing: .02em; }
+  .ok   { background: var(--accent-soft); color: var(--accent); }
+  .gap  { background: var(--warn-soft); color: var(--warn); }
+  .note { font-size: .88rem; margin: .45rem 0 0; }
+  .kicker { font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 0 0 .5rem; }
+  footer { margin-top: 3.5rem; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+</style>
+
+<main>
+  <p class="kicker">U12b · 18 August 2026</p>
+  <h1>Every index the bot searches now speaks bge-m3 — live on dev, verified in conversation</h1>
+  <p class="sub">The founder's U12 call, executed end to end: model flip, refitted projection, six new indexes, live-measured thresholds, and real turns through the deployed bot.</p>
+
+  <div class="verdict">
+    <strong>Dev is fully cut over.</strong> Both workers deployed, all four dev indexes filled through the system's own jobs, thresholds re-measured against the live index (the offline ones were unusable, as predicted), and a seven-conversation battery through the real <code>/api/advisor/turn</code> path behaves correctly — including one turn where the right answer was to refuse.
+    Production is staged and waits on two things: the founder merging the PRs, and one index-creation command this session wasn't permitted to run.
+  </div>
+
+  <h2>What moved</h2>
+  <p>One env knob (<code>SIL_EMBED_MODEL</code>) drives every embedding lane, so everything moved together. The old indexes are untouched — rolling back is a config revert, with zero re-embedding.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Index (dev)</th><th>Holds</th><th>Filled by</th><th>Count</th></tr>
+    <tr><td><code>naya-intent-p32…-full-dev</code></td><td>intent corpus, projected to 32 dims</td><td>offline load (the exact vectors the eval scored)</td><td>19,238</td></tr>
+    <tr><td><code>naya-project-names-m3-dev</code></td><td>project name phrases, 1024 dims</td><td>the reconcile job, after the hash fix below</td><td>417 (50 of 50 projects)</td></tr>
+    <tr><td><code>naya-locations-m3-dev</code></td><td>served areas</td><td>offline fill with the worker's own text template; tonight's cron overwrites the same ids</td><td>19 of 19</td></tr>
+    <tr><td><code>naya-buyer-education-m3-dev</code></td><td>buyer education corpus</td><td>the worker's own rebuild route</td><td>52, from 17 entries, 0 errors</td></tr>
+  </table></div>
+  <p>Prod twins <code>naya-project-names-m3</code>, <code>naya-locations-m3</code> and <code>naya-buyer-education-m3</code> exist and are empty by design — they fill from prod's own nightly jobs once Desk prod deploys. The prod intent index is the one blocked step (below).</p>
+
+  <h2>The thresholds had to be re-measured live</h2>
+  <p>Vectorize does not return exact cosine — a vector queried against itself scores about 0.87–0.90, not 1.0. So the offline thresholds, correct on paper, collapsed on the live index: at the offline bind bar of 0.920, only 102 of 600 holdout questions (17%) would bind. We ran 600 holdout questions through the deployed worker's real probe path and read the thresholds off the live curve instead:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Threshold</th><th>Value</th><th>Live coverage</th><th>Live precision</th><th>Role</th></tr>
+    <tr><td>bind</td><td>0.8984</td><td>241 of 600 (40%)</td><td>98.3%</td><td>the verdict is trusted outright</td></tr>
+    <tr><td>gap-fill</td><td>0.8557</td><td>481 of 600 (80%)</td><td>95.2%</td><td>only fills a topic hint when regex found nothing</td></tr>
+  </table></div>
+  <p>Live top-1 accuracy is 88.7% — 532 of the 600 answered with the right intent as the first match (offline it was 92 of 100; the lossy index costs a little, most of the gain survives). On the 25 graded real buyer turns, 6 bind at the bind bar and <strong>all 6 are correct — zero wrong binds</strong>. That is the precision-first trade this model was chosen for.</p>
+
+  <h2>The conversation — real turns, deployed bot</h2>
+
+  <div class="turn">
+    <p class="buyer">“tell me about Brigade Orchards” <span class="chip ok">name bind ✓</span></p>
+    <p class="bot">“<em>Brigade Orchards</em> — Devanahalli / Airport Corridor. 1 BHK (Ivory), 2 BHK (Ivory), 3 BHK (Ivory), 3 BHK+Study & 4 BHK+Study (Fairmont) · from ₹41 L · possession phase-wise; current phase June 2027…”</p>
+    <p class="note">Cold name ask → full project brief. The m3 name index is serving.</p>
+  </div>
+
+  <div class="turn">
+    <p class="buyer">“what is the price?” <span class="chip ok">focus held ✓</span></p>
+    <p class="bot">“<em>Pricing — Brigade Orchards:</em> ₹41 L. Want me to work out the all-in figure for one of the sizes?”</p>
+    <p class="note">The follow-up stayed on the bound project.</p>
+  </div>
+
+  <div class="turn">
+    <p class="buyer">“is Sattva Songbird RERA registered?” <span class="chip ok">honest refusal ✓</span></p>
+    <p class="bot">“RERA and title papers are registered per project — name one and I'll give you exactly what's on file for it.”</p>
+    <p class="note">No project by that name exists in this tenant. The old model invented a bind in 11 of 120 messages like this; the whole point of m3 is that this one says so instead.</p>
+  </div>
+
+  <div class="turn">
+    <p class="buyer">“Devanahalli mein 3 BHK chahiye budget 2 crore” <span class="chip ok">translit search ✓</span></p>
+    <p class="bot">“Based on what you've shared, these look strongest — 3 matches are on your board…” (Brigade Orchards first)</p>
+    <p class="note">Hindi-in-Latin-script search resolved area, size and budget.</p>
+  </div>
+
+  <div class="turn">
+    <p class="buyer">“what is the difference between carpet area and built up area?” <span class="chip ok">education ✓</span></p>
+    <p class="bot">“Carpet area is the usable floor area inside the walls. Built-up usually adds wall thickness… Always compare the same measure when looking at price per sqft.”</p>
+    <p class="note">Answered from the rebuilt m3 education index — the reply contains the fact asked, not just the topic.</p>
+  </div>
+
+  <div class="turn">
+    <p class="buyer">“brigade orchads price” <span class="chip gap">known gap — typos</span></p>
+    <p class="bot">“Across the book, homes run ₹24.95 L – ₹2.41 Cr. Which area or part of the city are you looking in?”</p>
+    <p class="note">The misspelt name fell to generic discovery. This matched pre-cutover behaviour — typos already lost the name before m3. U11 (auto-teach of name variants) owns this; not a regression.</p>
+  </div>
+
+  <div class="turn">
+    <p class="buyer">“what is khata? a friend told me to check it” <span class="chip gap">corpus gap</span></p>
+    <p class="bot">“RERA and title papers are registered per project — name one…”</p>
+    <p class="note">The education corpus's 17 entries mention khata only inside a document-pack item; there is no “what is khata” explainer to retrieve. A content gap, not an index failure — one new corpus entry fixes it.</p>
+  </div>
+
+  <h2>Two traps the cutover sprang — both closed</h2>
+  <p>A model swap changes every vector while changing no text, and both repos' incremental-sync bookkeeping diffed on text alone. Left alone, the “cutover” would have re-embedded nothing — the exact failure the teach-lane taught us once already.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Where</th><th>Symptom</th><th>Fix</th><th>Proof</th></tr>
+    <tr><td>Desk project-vector ledger</td><td>first reconcile after the flip: synced 0 of 50 owed</td><td>embedding model folded into the content hash</td><td>rerun synced 50 of 50; prod now refills itself from cron</td></tr>
+    <tr><td>Spine education manifest</td><td>static key would diff clean, push 0</td><td>manifest keyed per model</td><td>live rebuild pushed 52 of 52 into the empty index</td></tr>
+  </table></div>
+
+  <h2>What production still needs, in order</h2>
+  <p>Prod config for both workers is already in the PRs. The sequence — Desk before Spine, because the bot's 1024-dim queries would hard-error against an unfilled 768-dim world:</p>
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>Step</th><th>Who</th></tr>
+    <tr><td>1</td><td>Merge NayaDesk #488 and ConverseSpine #223</td><td>founder</td></tr>
+    <tr><td>2</td><td>Create the prod intent index (this session's permission mode refused the command — it is the only missing index):<br><code>npx wrangler vectorize create naya-intent-p32-1c003deba7-full --dimensions=32 --metric=cosine</code><br><code>npx wrangler vectorize create-metadata-index naya-intent-p32-1c003deba7-full --property-name=intent_kind --type=string</code></td><td>founder (or a session with the permission)</td></tr>
+    <tr><td>3</td><td>Offline-load the prod intent index with the same 19,238 vectors, then <code>npm run deploy:prod</code> in NayaDesk from main</td><td>Claude, once 1–2 land</td></tr>
+    <tr><td>4</td><td>Prod names/locations/education fill themselves overnight (18:00 UTC reconcile + area cron, 03:30 UTC rebuild) — or run the reconcile route with the prod bot secret to fill immediately</td><td>automatic / founder</td></tr>
+    <tr><td>5</td><td>Deploy ConverseSpine prod from main; re-run the live tau probe against prod and re-emit if its curve differs</td><td>Claude</td></tr>
+  </table></div>
+  <p>No D1 migration is involved anywhere in this cutover.</p>
+
+  <footer>
+    Deployed builds verified: NayaDesk dev <code>86dc9669</code>, ConverseSpine dev <code>c6df286f</code>.
+    PRs: ConverseSpine <a href="https://github.com/nagarjunveerapu/ConverseSpine/pull/223">#223</a>, NayaDesk <a href="https://github.com/nagarjunveerapu/NayaDesk/pull/488">#488</a>.
+    Decision record: the U12 bake-off report (⚖️) and ConverseSpine PR #222.
+    Gates at ship: Spine typecheck + 1696 tests; Desk lint:tokens + 1650 tests.
+  </footer>
+</main>

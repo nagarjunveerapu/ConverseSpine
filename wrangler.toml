@@ -167,9 +167,11 @@ UNDERSTANDING_AUTO_TEACH = "false"
 # p32-1c003deba7 is the m3-space matrix (32x1024, fitted on 19,238 corpus rows;
 # scripts/sil-train-projection.py picked rank 32 — plain whitening — over the
 # old 256). Must match the bundled PROJECTION_ID or the Worker falls back to
-# raw vectors against a projected index. TAUS IN THE MATRIX ARE PROVISIONAL
-# offline values until sil-live-ab.py re-measures them against this deployment
-# — Vectorize scores are lossy; never trust an offline tau.
+# raw vectors against a projected index. Taus in the matrix are LIVE-calibrated
+# (18 Aug 2026, sil-live-ab against this dev deployment, n=600 holdout):
+# 0.8984 binds at 98.3% live precision / 40% coverage, 0.8557 gap-fills at
+# 95.2% / 80%. The offline taus (0.920/0.822) collapsed to 17% live coverage —
+# Vectorize scores are lossy; never trust an offline tau.
 SIL_INTENT_PROJECTION = "p32-1c003deba7"
 SIL_EMBED_FIRST = "true"
 # Visit open acts: teach-only on dig (no ask-team / force regex fallback).
