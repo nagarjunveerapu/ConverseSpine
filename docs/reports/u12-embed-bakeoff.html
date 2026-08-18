@@ -130,9 +130,9 @@
   </header>
 
   <div class="verdict">
-    <div class="head">Verdict, revised twice by measurement: hold the m3 cutover — the field is m3 vs embeddinggemma, settled by a projection-level tiebreak.</div>
-    <p class="kicker">Round one (names): m3 false-binds on <strong>0.8%</strong> of real negative turns where the deployed model binds <strong>9.2%</strong> — an eleven-fold cut, and the original reason to adopt. Round two, run at the founder's question — <em>which model figures out the intents clearly?</em> — reordered the field: on the real 13.5k intent corpus <strong>m3 is worse than the deployed model</strong> (0.579 vs 0.624 raw floor, and 5/10 on opt_out where base gets 8/10), while <strong>embeddinggemma-300m beats the deployed model on both jobs at once</strong> (names 0.984 / 3.3% false-bind · intent 0.672).</p>
-    <p>The two finalists split the two jobs. The tiebreak is to train the learned projection on each finalist's vectors offline and compare finished systems, not floors. Until that runs, no cutover. Gemma carries a practical edge either way: 768 dims — the migration is half of m3's.</p>
+    <div class="head">Final verdict, decided 18 Aug: <strong>bge-m3 is the model.</strong> The founder made the call with the full intent table on the record; the cutover (U12b) is executing.</div>
+    <p class="kicker">Round one (names): m3 false-binds on <strong>0.8%</strong> of real negative turns where the deployed model binds <strong>9.2%</strong> — an eleven-fold cut, and the reason to adopt. Round two, run at the founder's question — <em>which model figures out the intents clearly?</em> — surfaced the trade: on the real 13.5k intent corpus <strong>m3's raw floor is below the deployed model's</strong> (0.579 vs 0.624, and 5/10 on opt_out where base gets 8/10), while embeddinggemma-300m beat both raw floors (names 0.984 / 3.3% false-bind · intent 0.672).</p>
+    <p>The decision, with that table in hand: adopt m3 on the substantiated name evidence. The shipped intent lane never runs on the raw floor — a learned projection retrains per space, and its job in the m3 space is to win the intent floor back. That recovery is <em>measured</em> on the frozen holdout during the cutover, not assumed; the numbers land in the U12b record. The earlier proposed m3-vs-gemma projection tiebreak (U12c) is closed by this call.</p>
   </div>
 
   <section class="col">
