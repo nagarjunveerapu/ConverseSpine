@@ -6,9 +6,12 @@
 # Runs at 05:00 UTC: after Desk's 18:00 UTC reconcile cron and Spine prod's
 # 03:30 UTC education/intent rebuild, so it verifies the converged state.
 #
-# Secrets (repo settings → Actions):
-#   BOT_SHARED_SECRET_DEV / BOT_SHARED_SECRET_PROD — the workers' x-bot-secret
-#   CLOUDFLARE_API_TOKEN — Vectorize Read (the same token CI already holds)
+# Secrets come from the GitHub ENVIRONMENT (`dev` / `production`), the same
+# place deploy-dev.yml and deploy-prod.yml read them — repo-level secrets are
+# not used in this repo, and a job that forgets `environment:` silently gets
+# empty strings. CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID already live
+# there; BOT_SHARED_SECRET must be added to each environment, matching that
+# env's deployed worker secret.
 name: Embed verify
 
 on:
@@ -23,7 +26,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [dev, prod]
+        include:
+          # `env` is the wrangler.toml environment the pipeline measures;
+          # `gh_environment` is what GitHub calls the same thing (prod's is
+          # spelled "production" — they are not interchangeable).
+          - env: dev
+            gh_environment: dev
+          - env: prod
+            gh_environment: production
+    environment: ${{ matrix.gh_environment }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,9 +44,9 @@ jobs:
 
       - name: Verify ${{ matrix.env }}
         env:
-          BOT_SHARED_SECRET_DEV: ${{ secrets.BOT_SHARED_SECRET_DEV }}
-          BOT_SHARED_SECRET_PROD: ${{ secrets.BOT_SHARED_SECRET_PROD }}
+          BOT_SHARED_SECRET: ${{ secrets.BOT_SHARED_SECRET }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/embed-pipeline.mjs verify --env ${{ matrix.env }}
 
       - name: Upload report

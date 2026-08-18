@@ -1,10 +1,10 @@
 {
   "env": "dev",
-  "started": "2026-08-18T05:28:46.352Z",
+  "started": "2026-08-18T06:39:24.115Z",
   "model": "@cf/baai/bge-m3",
   "projection": "p32-1c003deba7",
-  "tau": 0.92,
-  "tauLow": 0.822,
+  "tau": 0.8984,
+  "tauLow": 0.8557,
   "intent": {
     "graded": [
       {
@@ -48,7 +48,7 @@
         "expect_kind": "book_visit",
         "got": "book_visit",
         "score": 0.9088365,
-        "bound": false,
+        "bound": true,
         "ok": true,
         "miss": ""
       },
@@ -102,7 +102,7 @@
         "expect_kind": "ask_delivery_timeline",
         "got": "ask_delivery_timeline",
         "score": 0.9113707,
-        "bound": false,
+        "bound": true,
         "ok": true,
         "miss": ""
       },
@@ -111,7 +111,7 @@
         "expect_kind": "get_legal_info",
         "got": "get_legal_info",
         "score": 0.908957,
-        "bound": false,
+        "bound": true,
         "ok": true,
         "miss": ""
       },
@@ -156,7 +156,7 @@
         "expect_kind": "ask_about_builder",
         "got": "ask_about_builder",
         "score": 0.90909094,
-        "bound": false,
+        "bound": true,
         "ok": true,
         "miss": ""
       },
@@ -174,7 +174,7 @@
         "expect_kind": "opt_out",
         "got": "opt_out",
         "score": 0.9039862,
-        "bound": false,
+        "bound": true,
         "ok": true,
         "miss": "unmapped_kind"
       },
@@ -243,13 +243,13 @@
       }
     ],
     "top1": 1,
-    "coverage": 0.30434782608695654,
+    "coverage": 0.5217391304347826,
     "precision": 1,
     "wrongBinds": 0,
     "counts": {
       "positives": 23,
       "negatives": 3,
-      "bound": 7
+      "bound": 12
     }
   },
   "names": {
@@ -292,5 +292,10 @@
       "processedUpToDatetime": "2026-08-18T04:05:24.345Z"
     }
   },
-  "breaches": []
+  "breaches": [],
+  "unmeasured": [
+    "names: CLOUDFLARE_API_TOKEN not set — index-query lanes need it",
+    "locations: CLOUDFLARE_API_TOKEN not set — index-query lanes need it",
+    "education: CLOUDFLARE_API_TOKEN not set — index-query lanes need it"
+  ]
 }
