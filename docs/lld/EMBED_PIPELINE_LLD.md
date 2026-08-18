@@ -111,6 +111,29 @@ shape inside a live index.
 - The 26-row battery is a **tripwire, not a benchmark** — real calibration
   uses `--set` with the 600-row holdout (`sil-live-ab` lineage).
 
+## What the first graded run found (18 Aug)
+
+The intent lane came back 23/23, 100% precision, 0 wrong binds. The three
+index lanes had never actually run before — no local Cloudflare token — and all
+three broke on first contact. Two were the battery's fault, one was not:
+
+| Lane | Result | Verdict |
+|---|---|---|
+| names | 1/3 | **Battery wrong.** Dev holds both the lokations catalog and the naya-advisor clone tenant; the rows expected `brigade-orchards-naya-advisor` while the index correctly returned `brigade-orchards` at 1.0 and 0.7376 (gate 0.65). Expectation corrected. |
+| locations | 0/3 | **Battery measured a lane that does not ship.** Right area on all three, at 0.5984–0.6445, graded against 0.78 — but `LOCATION_THRESHOLD` is applied in `semantic-nlu.ts` to an *in-memory* cosine between the location hint and up to 24 micro-market **name strings**. Spine never queries the locations index at all. Now graded on retrieval, and the report says so. |
+| education | 2/3 | **Real defect.** "what does 2bhk actually mean" retrieves `edu:bhk:india` at 0.6901 and `EDUCATION_TAU` is 0.72, so `education.ts:65` drops it — the most common term in Indian real estate returns no education answer. The tau was set in PR #126 against bge-base and never recalibrated for m3. Row moved to `known_gaps`; promote it out in the PR that calibrates this index live. |
+
+The pattern worth keeping: **a lane's tau is only meaningful against the index
+it was measured on.** The intent lane learned this the expensive way (offline
+0.920 → live 0.8984). Education inherited a pre-m3 number through the cutover
+untouched, and locations has a number that belongs to a different comparison
+entirely. A threshold of `null` in `golden.json` now means "this index has no
+shipped bind gate" — graded on retrieval, labelled as such in every report, and
+a `must_not_bind` trap in such a lane is a hard config error.
+
+`tests/golden-battery-shape.test.ts` gates the battery's structure, because
+every one of the above was a data mistake that no runtime test could catch.
+
 ## Operational notes
 
 - **CI secrets are GitHub ENVIRONMENT secrets, not repo secrets.** This repo

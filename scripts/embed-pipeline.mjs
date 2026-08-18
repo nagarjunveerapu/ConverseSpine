@@ -190,7 +190,23 @@ async function probe(cfg, secret, items) {
       headers: { 'x-bot-secret': secret },
       body: { items: batch.map(({ text, expected }) => ({ text, ...(expected ? { expected } : {}) })) },
     });
-    if (status !== 200) die(`probe ${cfg.name} HTTP ${status} — is the deployed worker on a build with the secret-gated probe?`);
+    if (status !== 200) {
+      // 404 is what silEvalAllowed returns when it refuses — indistinguishable
+      // from "route not deployed" by design, so spell out how to tell them
+      // apart instead of sending the reader to the wrong one. (Checking the
+      // build first cost an hour on 18 Aug; the build was fine, the secret
+      // was not.)
+      const hint =
+        status === 404
+          ? `\n  The probe door refuses with 404 rather than 401, so this is one of two things:\n` +
+            `    1. the deployed worker predates the secret-gated probe (check /health and the last deploy), or\n` +
+            `    2. the BOT_SHARED_SECRET here does not match the one on the deployed worker.\n` +
+            `  Tell them apart WITHOUT reading any secret: POST malformed JSON to /internal/cache-invalidate\n` +
+            `  with no x-bot-secret header. 403 = the worker HAS a secret set (so it is case 2, a value\n` +
+            `  mismatch); 400 invalid_json = the worker has no secret at all.`
+          : '';
+      die(`probe ${cfg.name} HTTP ${status}${hint}`);
+    }
     out.push(...json.results);
   }
   return out;
@@ -277,8 +293,15 @@ function gradeIntent(rows, results, tau) {
 }
 
 async function gradeVectorLane(cfg, secret, rows, index, threshold, idField) {
-  if (!rows?.length) return { graded: [], ok: 0, total: 0, skipped: 'no rows for this env' };
-  if (!process.env.CLOUDFLARE_API_TOKEN) return { graded: [], ok: 0, total: 0, skipped: 'CLOUDFLARE_API_TOKEN not set — index-query lanes need it' };
+  const mode = threshold === null || threshold === undefined ? 'retrieval only (no shipped bind gate on this index)' : `bind at ${threshold}`;
+  if (!rows?.length) return { graded: [], ok: 0, total: 0, mode, skipped: 'no rows for this env' };
+  // A must-not-bind trap needs a bind gate to be refused by. In retrieval-only
+  // mode there is none, so such a row could never pass — fail the battery's
+  // config loudly instead of shipping a row that is always red.
+  if ((threshold === null || threshold === undefined) && rows.some((r) => r.must_not_bind)) {
+    die(`${index}: a must_not_bind row cannot be graded with no threshold — give this lane a calibrated tau or drop the trap`);
+  }
+  if (!process.env.CLOUDFLARE_API_TOKEN) return { graded: [], ok: 0, total: 0, mode, skipped: 'CLOUDFLARE_API_TOKEN not set — index-query lanes need it' };
   const vecs = await embedTexts(cfg, secret, rows.map((r) => r.text));
   const graded = [];
   for (let i = 0; i < rows.length; i++) {
@@ -286,18 +309,23 @@ async function gradeVectorLane(cfg, secret, rows, index, threshold, idField) {
     const res = await vectorizeQuery(index, vecs[i], 3);
     if (res.error) {
       // A token that cannot read the index tells us nothing about quality.
-      if (isAuthError(res.error)) return { graded: [], ok: 0, total: 0, skipped: `cannot read ${index} — ${res.error}` };
+      if (isAuthError(res.error)) return { graded: [], ok: 0, total: 0, mode, skipped: `cannot read ${index} — ${res.error}` };
       graded.push({ ...row, ok: false, note: res.error });
       continue;
     }
     const top = res.matches?.[0];
     const got = top?.metadata?.[idField] ?? top?.id ?? '';
     const score = top?.score ?? 0;
-    const bound = score >= threshold;
+    // A null threshold means the shipped engine never binds off this index, so
+    // there is no tau to grade against — the honest assertion is retrieval:
+    // the right row is still the top match. Reported as "retrieval only" so a
+    // pass here never reads like a bind gate that isn't there.
+    const retrievalOnly = threshold === null || threshold === undefined;
+    const bound = retrievalOnly ? true : score >= threshold;
     const ok = row.must_not_bind ? !bound : bound && got === row.expect_id;
     graded.push({ ...row, got, score: Number(score.toFixed(4)), ok });
   }
-  return { graded, ok: graded.filter((g) => g.ok).length, total: graded.length };
+  return { graded, ok: graded.filter((g) => g.ok).length, total: graded.length, mode };
 }
 
 async function cmdVerify(cfg, { out }) {
@@ -346,7 +374,7 @@ async function cmdVerify(cfg, { out }) {
 
   console.log(`verify ${cfg.name} — intent top-1 ${(intent.top1 * 100).toFixed(1)}% (${intent.graded.filter((g) => !g.must_not_bind && g.ok).length} of ${intent.counts.positives}), precision@tau ${(intent.precision * 100).toFixed(1)}%, coverage ${(intent.coverage * 100).toFixed(1)}%, wrong binds ${intent.wrongBinds}`);
   for (const [lane, res] of [['names', names], ['locations', locations], ['education', education]]) {
-    console.log(`  ${lane.padEnd(10)} ${res.skipped ? `skipped — ${res.skipped}` : `${res.ok}/${res.total}`}`);
+    console.log(`  ${lane.padEnd(10)} ${res.skipped ? `skipped — ${res.skipped}` : `${res.ok}/${res.total}  [${res.mode}]`}`);
   }
   console.log(`  report: ${htmlPath}`);
   if (breaches.length) {
@@ -406,7 +434,8 @@ function renderReport(rep) {
   const pct = (x) => `${(x * 100).toFixed(1)}%`;
   const laneRows = (name, res) => {
     if (res.skipped) return `<tr><td>${name}</td><td colspan="3" class="muted">skipped — ${res.skipped}</td></tr>`;
-    return res.graded.map((g) => `<tr class="${g.ok ? 'ok' : 'bad'}"><td>${name}</td><td>${esc(g.text)}</td><td>${esc(String(g.got ?? ''))} @ ${g.score ?? ''}</td><td>${g.ok ? 'pass' : 'FAIL'}${g.note ? ` — ${esc(g.note)}` : ''}</td></tr>`).join('');
+    const label = `${name}<br><span class="muted" style="font-size:.85em">${esc(res.mode ?? '')}</span>`;
+    return res.graded.map((g) => `<tr class="${g.ok ? 'ok' : 'bad'}"><td>${label}</td><td>${esc(g.text)}</td><td>${esc(String(g.got ?? ''))} @ ${g.score ?? ''}</td><td>${g.ok ? 'pass' : 'FAIL'}${g.note ? ` — ${esc(g.note)}` : ''}</td></tr>`).join('');
   };
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const intentRows = rep.intent.graded.map((g) => `<tr class="${g.ok ? 'ok' : 'bad'}"><td>intent</td><td>${esc(g.text)}</td><td>${esc(g.got || '—')} @ ${g.score.toFixed(3)}${g.must_not_bind ? ' (must not bind)' : ` want ${esc(g.expect_kind)}`}</td><td>${g.ok ? 'pass' : 'FAIL'}</td></tr>`).join('');
