@@ -109,9 +109,14 @@ DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"
 LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 # SIL data pipeline — weekly intent-index rebuild from the git registry.
-# Model is a config: the bake-off decides it; default = current, so no change
-# until a model is chosen. Registry URL is the raw JSONL (raster to R2 later).
-SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+# Model is a config: the U12 bake-off decided it (PR #222) and the founder
+# called it 18 Aug 2026 — bge-m3, adopted on the name evidence (1/120 vs
+# 11/120 false-binds on real negatives at matched 90% recall). The raw intent
+# floor it gives up (0.579 vs 0.624) is won back by the p32 projection below:
+# holdout top-1 92.0%, real-turn correct&bound 88% vs the old system's 64%.
+# ONE model for every lane — intent, education, auto-teach, and the
+# PROJECT_VECTORS name queries — so all three indexes flip together below.
+SIL_EMBED_MODEL = "@cf/baai/bge-m3"
 SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
 # Master switch for the canonical intent-embed schema (entity-masked corpus +
 # query in lockstep, ships the v2 + mined corpus).
@@ -140,7 +145,7 @@ SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSp
 SIL_CANONICAL_EMBED = "false"
 # The index this env writes to and queries. Keys the rebuild manifest — see
 # intentManifestKey. Must equal [[env.dev.vectorize]] index_name.
-SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-full-dev"
+SIL_INTENT_INDEX = "naya-intent-p32-1c003deba7-full-dev"
 # Phase 2 — discourse state tokens on state-dependent embed queries + rebuild expand.
 # Query gated to ask_next_step/confirm/deixis so fact intents stay raw↔raw.
 SIL_STATE_TOKENS = "true"
@@ -158,7 +163,14 @@ UNDERSTANDING_AUTO_TEACH = "false"
 # fallback that catches what it declines. Both measured before flipping —
 # see PRs #115/#116/#117. Prod stays on the raw model and the old order until
 # its vector indexes are filled and this has soaked.
-SIL_INTENT_PROJECTION = "p256-f6665e0b79"
+#
+# p32-1c003deba7 is the m3-space matrix (32x1024, fitted on 19,238 corpus rows;
+# scripts/sil-train-projection.py picked rank 32 — plain whitening — over the
+# old 256). Must match the bundled PROJECTION_ID or the Worker falls back to
+# raw vectors against a projected index. TAUS IN THE MATRIX ARE PROVISIONAL
+# offline values until sil-live-ab.py re-measures them against this deployment
+# — Vectorize scores are lossy; never trust an offline tau.
+SIL_INTENT_PROJECTION = "p32-1c003deba7"
 SIL_EMBED_FIRST = "true"
 # Visit open acts: teach-only on dig (no ask-team / force regex fallback).
 # Ablation gate after visit-mv upsert — grow corpus if VIS-MV-04/06 fail.
@@ -204,17 +216,30 @@ binding = "INTENT_VECTORS"
 #
 # The name carries the projection id on purpose: tests/intent-projection-space
 # fails the build if the configured index and SIL_INTENT_PROJECTION disagree.
-index_name = "naya-intent-p256-f6665e0b79-full-dev"
+#
+# m3 cutover, 18 Aug 2026: a NEW index again (32-dim, the p32 projection's
+# output), loaded from the same exported vectors the offline eval scored, so
+# the live index IS the experiment. Predecessors left untouched — rollback to
+# bge-base is a config revert of this file, zero re-embeds.
+index_name = "naya-intent-p32-1c003deba7-full-dev"
 remote = true
 
 [[env.dev.vectorize]]
 binding = "PROJECT_VECTORS"
-index_name = "naya-project-names-dev"
+# 1024-dim, Desk-built with bge-m3 (Desk's EMBEDDING_MODEL flips in lockstep —
+# a 1024-dim query against the old 768-dim index is a hard error, not a bad
+# ranking). naya-project-names-dev is the bge-base predecessor, kept for
+# rollback.
+index_name = "naya-project-names-m3-dev"
 remote = true
 
 [[env.dev.vectorize]]
 binding = "EDUCATION_VECTORS"
-index_name = "naya-buyer-education-dev"
+# 1024-dim, raw m3 space (education vectors are never projected). Filled by
+# rebuildEducationIndex, whose manifest is keyed per model precisely so this
+# flip re-embeds everything instead of diffing clean against the old index's
+# manifest and pushing nothing.
+index_name = "naya-buyer-education-m3-dev"
 remote = true
 
 [env.dev.ai]
@@ -222,6 +247,12 @@ binding = "AI"
 remote = true
 
 # ── Learned-metric A/B control (ctrldev) ───────────────────────────────
+# STALE ARM since the m3 cutover (18 Aug 2026): frozen on bge-base + its
+# 768-dim identity index for the p256 measurement's sake. DO NOT REDEPLOY —
+# the bundled matrix is now m3-space, and this env's base model would disable
+# it correctly but the arm no longer measures anything current. Delete both
+# A/B envs once U9's band calibration has run in the m3 space.
+#
 # The BASELINE arm. Raw-model vectors (no SIL_INTENT_PROJECTION) over an index
 # holding EXACTLY the same 10,646 corpus rows as the projected arm.
 #
@@ -283,6 +314,11 @@ UNDERSTANDING_AUTO_TEACH = "false"
 # Deliberately absent: SIL_INTENT_PROJECTION. This arm is the raw model.
 
 # ── Learned-metric A/B (projdev) ───────────────────────────────────────
+# STALE ARM since the m3 cutover (18 Aug 2026): its SIL_INTENT_PROJECTION
+# names the retired p256 matrix, which the bundle no longer carries. A redeploy
+# would fall back to raw 768-dim vectors against a 256-dim index — a hard
+# dimension error on every query. DO NOT REDEPLOY; delete with ctrldev after U9.
+#
 # Identical to dev in every respect EXCEPT the intent vector space: the learned
 # projection is on, and INTENT_VECTORS points at the index built in that space.
 # Running it as its own worker rather than flipping dev keeps the raw-model
@@ -378,15 +414,26 @@ binding = "INTENT_VECTORS"
 # (index geometry, SIL_INTENT_PROJECTION) legible in one string, which is what
 # tests/intent-projection-space asserts. The old index is left untouched, so
 # rollback is a config revert with no re-embed.
-index_name = "naya-intent-p256-f6665e0b79-full"
+#
+# m3 cutover (18 Aug 2026): same discipline as dev — a NEW 32-dim index for the
+# p32 matrix, pre-loaded offline from the same vectors the offline eval scored,
+# then kept converged by the daily 03:30 UTC rebuild (fresh manifest — the
+# index name keys it). The p256 index stays for rollback.
+index_name = "naya-intent-p32-1c003deba7-full"
 
 [[env.prod.vectorize]]
 binding = "PROJECT_VECTORS"
-index_name = "naya-project-names"
+# 1024-dim, Desk-built with bge-m3. DEPLOY ORDER MATTERS: NayaDesk prod must
+# have flipped its EMBEDDING_MODEL and filled this index (lifecycle reconcile)
+# BEFORE this worker deploys, or every name query is a dimension error. The
+# 768-dim naya-project-names stays for rollback.
+index_name = "naya-project-names-m3"
 
 [[env.prod.vectorize]]
 binding = "EDUCATION_VECTORS"
-index_name = "naya-buyer-education"
+# 1024-dim raw m3 space; pre-loaded offline, converged by the daily rebuild
+# under the model-keyed education manifest.
+index_name = "naya-buyer-education-m3"
 
 [env.prod.ai]
 binding = "AI"
@@ -394,7 +441,7 @@ binding = "AI"
 [env.prod.vars]
 # Keys the rebuild manifest to this env's own index — see intentManifestKey.
 # Must equal this env's INTENT_VECTORS index_name.
-SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-full"
+SIL_INTENT_INDEX = "naya-intent-p32-1c003deba7-full"
 # ── Understanding on prod, step 1: fill the index ────────────────────────
 # Everything here is dev's proven configuration, not a new arm. The registry is
 # the same public JSONL dev rebuilds from (22,703 rows); the legacy gate admits
@@ -410,11 +457,13 @@ SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-full"
 # SIL_EMBED_FIRST is deliberately NOT set here. Flipping the ladder while the
 # index is empty would embed every turn and match nothing. It goes on in step 2,
 # after a rebuild run proves the vector count, in its own change.
-SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+# bge-m3 everywhere the worker embeds — decided by the U12 bake-off (PR #222),
+# founder's call 18 Aug 2026. Must match dev: one model, all lanes, all envs.
+SIL_EMBED_MODEL = "@cf/baai/bge-m3"
 SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
 SIL_CANONICAL_EMBED = "false"
 SIL_STATE_TOKENS = "true"
-SIL_INTENT_PROJECTION = "p256-f6665e0b79"
+SIL_INTENT_PROJECTION = "p32-1c003deba7"
 LOG_LEVEL = "info"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
@@ -485,17 +534,17 @@ class_name = "TurnDebouncer"
 
 [[env.local.vectorize]]
 binding = "INTENT_VECTORS"
-index_name = "naya-intent-p256-f6665e0b79-full-dev"
+index_name = "naya-intent-p32-1c003deba7-full-dev"
 remote = true
 
 [[env.local.vectorize]]
 binding = "PROJECT_VECTORS"
-index_name = "naya-project-names-dev"
+index_name = "naya-project-names-m3-dev"
 remote = true
 
 [[env.local.vectorize]]
 binding = "EDUCATION_VECTORS"
-index_name = "naya-buyer-education-dev"
+index_name = "naya-buyer-education-m3-dev"
 remote = true
 
 [env.local.ai]
@@ -505,7 +554,7 @@ remote = true
 [env.local.vars]
 # Keys the rebuild manifest to this env's own index — see intentManifestKey.
 # Must equal this env's INTENT_VECTORS index_name.
-SIL_INTENT_INDEX = "naya-intent-p256-f6665e0b79-full-dev"
+SIL_INTENT_INDEX = "naya-intent-p32-1c003deba7-full-dev"
 NAYADESK_URL = "http://localhost:8787"
 ADVISOR_BUILDER_ID = "naya-advisor"
 LOG_LEVEL = "info"
@@ -524,12 +573,12 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 DEFAULT_BUILDER_ID = "lokations"
 LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
-SIL_EMBED_MODEL = "@cf/baai/bge-base-en-v1.5"
+SIL_EMBED_MODEL = "@cf/baai/bge-m3"
 SIL_REGISTRY_URL = "https://raw.githubusercontent.com/nagarjunveerapu/ConverseSpine/main/corpus/intent-registry.jsonl"
 SIL_CANONICAL_EMBED = "false"
 SIL_STATE_TOKENS = "true"
 UNDERSTANDING_CAPTURE = "true"
 SIL_EVAL_ENABLED = "true"
 UNDERSTANDING_AUTO_TEACH = "false"
-SIL_INTENT_PROJECTION = "p256-f6665e0b79"
+SIL_INTENT_PROJECTION = "p32-1c003deba7"
 SIL_EMBED_FIRST = "true"
