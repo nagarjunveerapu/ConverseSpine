@@ -15,6 +15,21 @@ import type { Env } from '../env.js';
 import { embedderRouting } from '../engine/turn-routing/classify.js';
 import type { TurnRoutingInput } from '../engine/turn-routing/types.js';
 
+/**
+ * Gate for the measurement doors (/api/sil/probe, /api/sil/embed): open on dev
+ * via SIL_EVAL_ENABLED, and on any env to a caller holding the bot secret.
+ * Prod deliberately has no eval flag — but taus are calibrated per index
+ * (Vectorize scores are lossy), so the env real buyers use must stay probeable
+ * without opening a public door.
+ */
+export function silEvalAllowed(
+  env: Pick<Env, 'SIL_EVAL_ENABLED' | 'BOT_SHARED_SECRET'>,
+  request: Request,
+): boolean {
+  if (env.SIL_EVAL_ENABLED === 'true') return true;
+  return !!env.BOT_SHARED_SECRET && request.headers.get('x-bot-secret') === env.BOT_SHARED_SECRET;
+}
+
 export interface SilProbeItem {
   text: string;
   /** Ground-truth intent_kind from the corpus row, echoed back for scoring. */
