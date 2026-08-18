@@ -104,8 +104,22 @@ function envConfig(envName) {
 
 function secretFor(cfg) {
   const s = process.env[cfg.secretVar] || process.env.BOT_SHARED_SECRET;
-  if (!s) die(`missing ${cfg.secretVar} (or BOT_SHARED_SECRET) in the environment`);
+  if (!s) {
+    die(
+      `missing BOT_SHARED_SECRET (or ${cfg.secretVar}) for env "${cfg.name}".\n` +
+        `  Locally: export it, or run with BOT_SHARED_SECRET=$(grep …) prefixed.\n` +
+        `  In CI: it is a GitHub ENVIRONMENT secret (dev / production) — the job\n` +
+        `  must declare "environment:", or every secret arrives as an empty string.`,
+    );
+  }
   return s;
+}
+
+/** True when a Cloudflare API error is about permission, not about the data.
+ *  A token missing Vectorize Read must read as "could not measure", never as
+ *  "the lane regressed" — a red gate has to mean a quality problem. */
+function isAuthError(err) {
+  return /HTTP (401|403)\b|authentication|not authorized|permission|Unauthorized/i.test(String(err));
 }
 
 // ── plumbing ───────────────────────────────────────────────────────────────
@@ -270,7 +284,12 @@ async function gradeVectorLane(cfg, secret, rows, index, threshold, idField) {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const res = await vectorizeQuery(index, vecs[i], 3);
-    if (res.error) { graded.push({ ...row, ok: false, note: res.error }); continue; }
+    if (res.error) {
+      // A token that cannot read the index tells us nothing about quality.
+      if (isAuthError(res.error)) return { graded: [], ok: 0, total: 0, skipped: `cannot read ${index} — ${res.error}` };
+      graded.push({ ...row, ok: false, note: res.error });
+      continue;
+    }
     const top = res.matches?.[0];
     const got = top?.metadata?.[idField] ?? top?.id ?? '';
     const score = top?.score ?? 0;
@@ -312,7 +331,13 @@ async function cmdVerify(cfg, { out }) {
     if (!res.skipped && res.total && res.ok < res.total) breaches.push(`${lane}: ${res.ok}/${res.total} rows passed`);
   }
 
-  const report = { env: cfg.name, started, model: cfg.model, projection: cfg.projection, tau: cfg.tau, tauLow: cfg.tauLow, intent, names, locations, education, counts, breaches };
+  // A lane nobody could measure is not a lane that passed. Green-with-skips
+  // and green-with-everything-measured must never read the same.
+  const unmeasured = [['names', names], ['locations', locations], ['education', education]]
+    .filter(([, res]) => res.skipped)
+    .map(([lane, res]) => `${lane}: ${res.skipped}`);
+
+  const report = { env: cfg.name, started, model: cfg.model, projection: cfg.projection, tau: cfg.tau, tauLow: cfg.tauLow, intent, names, locations, education, counts, breaches, unmeasured };
   const jsonPath = join(ROOT, `docs/reports/embed-verify-${cfg.name}.json`);
   const htmlPath = out ?? join(ROOT, `docs/reports/embed-verify-${cfg.name}.html`);
   mkdirSync(dirname(jsonPath), { recursive: true });
@@ -328,7 +353,11 @@ async function cmdVerify(cfg, { out }) {
     console.error(`GATE BREACH:\n  - ${breaches.join('\n  - ')}`);
     process.exit(1);
   }
-  console.log('all gates green');
+  if (unmeasured.length) {
+    console.log(`gates green for what ran — NOT MEASURED:\n  - ${unmeasured.join('\n  - ')}`);
+  } else {
+    console.log('all gates green — every lane measured');
+  }
 }
 
 // ── calibrate ──────────────────────────────────────────────────────────────
@@ -396,7 +425,8 @@ tr.ok td:last-child{color:#1b7a3d} tr.bad td{background:#fdf0ef} tr.bad td:last-
 </style>
 <h1>Embedding verify — ${rep.env}</h1>
 <p class="muted">${rep.started} · model ${rep.model} · projection ${rep.projection ?? '—'} · taus ${rep.tau}/${rep.tauLow}</p>
-${rep.breaches.length ? `<div class="breach"><b>Gate breach</b><br>${rep.breaches.map(esc).join('<br>')}</div>` : '<div class="green"><b>All gates green.</b> Every lane answered the battery the way the shipped config promises.</div>'}
+${rep.breaches.length ? `<div class="breach"><b>Gate breach</b><br>${rep.breaches.map(esc).join('<br>')}</div>` : `<div class="green"><b>${rep.unmeasured?.length ? 'Gates green for what ran.' : 'All gates green.'}</b> ${rep.unmeasured?.length ? 'Some lanes could not be measured — see below.' : 'Every lane answered the battery the way the shipped config promises.'}</div>`}
+${rep.unmeasured?.length ? `<div class="breach" style="background:#fffaf0;border-color:#d8b06a;color:#7a5410"><b>Not measured</b><br>${rep.unmeasured.map(esc).join('<br>')}</div>` : ''}
 <div class="kpis">
 <div class="kpi"><b>${pct(rep.intent.top1)}</b>intent top-1 (${rep.intent.graded.filter((g) => !g.must_not_bind && g.ok).length} of ${rep.intent.counts.positives} right)</div>
 <div class="kpi"><b>${pct(rep.intent.precision)}</b>precision at bind tau (${rep.intent.counts.bound} rows bound)</div>

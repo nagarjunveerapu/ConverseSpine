@@ -113,9 +113,20 @@ shape inside a live index.
 
 ## Operational notes
 
-- Nightly CI needs `BOT_SHARED_SECRET_DEV/PROD` + `CLOUDFLARE_API_TOKEN` with
-  **Vectorize Read** (the CI token gained Workers AI Read for the embed gate;
-  Vectorize Read may still need adding).
+- **CI secrets are GitHub ENVIRONMENT secrets, not repo secrets.** This repo
+  has zero repo-level secrets; `deploy-dev.yml` declares `environment: dev` and
+  `deploy-prod.yml` declares `environment: production` (note the spelling — the
+  wrangler env is `prod`, the GitHub environment is `production`; they are not
+  interchangeable). A job that omits `environment:` gets every secret as an
+  empty string and fails at the first secret check — which is exactly how the
+  first dispatch of embed-verify failed. Each environment already holds
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; add `BOT_SHARED_SECRET`
+  (one name, per environment, matching that env's deployed worker secret).
+  The token also needs **Vectorize Read** for the names/locations/education
+  lanes — without it those lanes report as *not measured*, never as failed.
+- A lane that could not be measured is reported separately from a lane that
+  failed. Green-with-skips prints `NOT MEASURED` and says which lanes; only a
+  real quality regression exits non-zero.
 - `fill` never embeds locally; offline loads (tsx + the repo's own exported
   phrase functions) are the bootstrap exception, and the crons overwrite the
   same ids afterwards, so drift self-heals.
