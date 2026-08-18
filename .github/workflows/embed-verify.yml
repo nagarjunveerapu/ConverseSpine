@@ -1,0 +1,48 @@
+# Nightly graded verify of every embedding lane on the DEPLOYED dev and prod
+# workers — the golden battery from scripts/embed-pipeline/golden.json, graded
+# on answers (answer-contains-fact), not on-topic-ness. Red = a lane regressed
+# or an index drifted from its source of truth.
+#
+# Runs at 05:00 UTC: after Desk's 18:00 UTC reconcile cron and Spine prod's
+# 03:30 UTC education/intent rebuild, so it verifies the converged state.
+#
+# Secrets (repo settings → Actions):
+#   BOT_SHARED_SECRET_DEV / BOT_SHARED_SECRET_PROD — the workers' x-bot-secret
+#   CLOUDFLARE_API_TOKEN — Vectorize Read (the same token CI already holds)
+name: Embed verify
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify ${{ matrix.env }}
+        env:
+          BOT_SHARED_SECRET_DEV: ${{ secrets.BOT_SHARED_SECRET_DEV }}
+          BOT_SHARED_SECRET_PROD: ${{ secrets.BOT_SHARED_SECRET_PROD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/embed-pipeline.mjs verify --env ${{ matrix.env }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: embed-verify-${{ matrix.env }}
+          path: |
+            docs/reports/embed-verify-${{ matrix.env }}.html
+            docs/reports/embed-verify-${{ matrix.env }}.json

@@ -18,7 +18,7 @@ import { handleVerify } from './webhook/verify.js';
 import { handleWhatsAppWebhook } from './webhook/whatsapp.js';
 import { rebuildIntentIndex } from './rebuild/intent-index.js';
 import { rebuildEducationIndex } from './rebuild/education-index.js';
-import { runSilProbe } from './understanding/sil-probe.js';
+import { runSilProbe, silEvalAllowed } from './understanding/sil-probe.js';
 import { runSilEmbed } from './understanding/sil-embed.js';
 import {
   deleteIntentVectors,
@@ -120,11 +120,15 @@ export default {
         return json(result, 200);
       }
 
-      // Embedder-only measurement (dev-gated, never affects a turn). Runs the
-      // engine's own embedderRouting with the regex ladder bypassed, so the
-      // intent embedding can be scored against the held-out corpus split.
+      // Embedder-only measurement (never affects a turn). Runs the engine's own
+      // embedderRouting with the regex ladder bypassed, so the intent embedding
+      // can be scored against the held-out corpus split. Open on dev via
+      // SIL_EVAL_ENABLED; on prod (flag unset) it answers only to the bot
+      // secret — the pipeline's verify/calibrate stages need a measurement door
+      // on the env that real buyers use, because Vectorize scores are lossy and
+      // a tau proven on dev is unproven on prod until probed there.
       if (path === '/api/sil/probe' && method === 'POST') {
-        if (env.SIL_EVAL_ENABLED !== 'true') return json({ error: 'not_found' }, 404);
+        if (!silEvalAllowed(env, request)) return json({ error: 'not_found' }, 404);
         let body: unknown;
         try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
         const b = body as { builder_id?: string; items?: Array<{ text: string; expected?: string }> };
@@ -132,11 +136,12 @@ export default {
         return json({ status: 'ok', results });
       }
 
-      // Raw-vector export (dev-gated). Needed to FIT a better metric offline:
-      // a learned projection can only be trained against real vectors, and the
-      // same export makes a model bake-off a measurement instead of a guess.
+      // Raw-vector export (same gate as the probe). Needed to FIT a better
+      // metric offline: a learned projection can only be trained against real
+      // vectors, and the same export makes a model bake-off a measurement
+      // instead of a guess.
       if (path === '/api/sil/embed' && method === 'POST') {
-        if (env.SIL_EVAL_ENABLED !== 'true') return json({ error: 'not_found' }, 404);
+        if (!silEvalAllowed(env, request)) return json({ error: 'not_found' }, 404);
         let body: unknown;
         try { body = await request.json(); } catch { return json({ error: 'invalid_json' }, 400); }
         const b = body as { texts?: string[] };

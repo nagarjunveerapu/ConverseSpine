@@ -1,0 +1,296 @@
+{
+  "env": "dev",
+  "started": "2026-08-18T05:28:46.352Z",
+  "model": "@cf/baai/bge-m3",
+  "projection": "p32-1c003deba7",
+  "tau": 0.92,
+  "tauLow": 0.822,
+  "intent": {
+    "graded": [
+      {
+        "text": "what is the price of a 2bhk",
+        "expect_kind": "get_price",
+        "got": "get_price",
+        "score": 0.8314542,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "2bhk ka price kya hai",
+        "expect_kind": "get_price",
+        "got": "get_price",
+        "score": 0.87967956,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "1BHK chahiye Whitefield ke paas",
+        "expect_kind": "find_projects",
+        "got": "find_projects",
+        "score": 0.92051136,
+        "bound": true,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "looking for a flat near hennur under 90 lakhs",
+        "expect_kind": "find_projects",
+        "got": "find_projects",
+        "score": 0.8526181,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "site visit book karna hai is weekend",
+        "expect_kind": "book_visit",
+        "got": "book_visit",
+        "score": 0.9088365,
+        "bound": false,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "can I come see the property this saturday",
+        "expect_kind": "book_visit",
+        "got": "book_visit",
+        "score": 0.8692726,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "send me the brochure please",
+        "expect_kind": "get_brochure",
+        "got": "get_brochure",
+        "score": 0.92915463,
+        "bound": true,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "does it have a swimming pool and gym",
+        "expect_kind": "get_amenities",
+        "got": "get_amenities",
+        "score": 0.95021623,
+        "bound": true,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "what will be the emi for 80 lakhs over 20 years",
+        "expect_kind": "compute_emi",
+        "got": "compute_emi",
+        "score": 0.8124513,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "are any units available on higher floors",
+        "expect_kind": "get_availability",
+        "got": "get_availability",
+        "score": 0.81632215,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "when will the project be ready for possession",
+        "expect_kind": "ask_delivery_timeline",
+        "got": "ask_delivery_timeline",
+        "score": 0.9113707,
+        "bound": false,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "is the project rera approved",
+        "expect_kind": "get_legal_info",
+        "got": "get_legal_info",
+        "score": 0.908957,
+        "bound": false,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "which is better of the two projects you showed me",
+        "expect_kind": "compare_projects",
+        "got": "compare_projects",
+        "score": 0.8663651,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "koi discount milega kya",
+        "expect_kind": "negotiate_price",
+        "got": "negotiate_price",
+        "score": 0.92247456,
+        "bound": true,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "what rental yield can I expect from this",
+        "expect_kind": "ask_investment_return",
+        "got": "ask_investment_return",
+        "score": 0.8796701,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "what is the payment schedule like",
+        "expect_kind": "get_payment_plan",
+        "got": "get_payment_plan",
+        "score": 0.93243366,
+        "bound": true,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "who is the builder and what have they built before",
+        "expect_kind": "ask_about_builder",
+        "got": "ask_about_builder",
+        "score": 0.90909094,
+        "bound": false,
+        "ok": true,
+        "miss": ""
+      },
+      {
+        "text": "ask someone to call me tomorrow morning",
+        "expect_kind": "request_callback",
+        "got": "request_callback",
+        "score": 0.9450776,
+        "bound": true,
+        "ok": true,
+        "miss": "unmapped_kind"
+      },
+      {
+        "text": "stop messaging me",
+        "expect_kind": "opt_out",
+        "got": "opt_out",
+        "score": 0.9039862,
+        "bound": false,
+        "ok": true,
+        "miss": "unmapped_kind"
+      },
+      {
+        "text": "mujhe message mat bhejo ab",
+        "expect_kind": "opt_out",
+        "got": "opt_out",
+        "score": 0.7020659,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "I want to talk to a real person not a bot",
+        "expect_kind": "escalate_to_human",
+        "got": "escalate_to_human",
+        "score": 0.9253516,
+        "bound": true,
+        "ok": true,
+        "miss": "unmapped_kind"
+      },
+      {
+        "text": "how is the connectivity from this area to the office hubs",
+        "expect_kind": "get_location_info",
+        "got": "get_location_info",
+        "score": 0.85975695,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "which schools and hospitals are near the project",
+        "expect_kind": "get_location_info",
+        "got": "get_location_info",
+        "score": 0.8251701,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "asdkjh qwlekj zzkjh",
+        "must_not_bind": true,
+        "got": "opt_out",
+        "score": 0.6629699,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "what's the weather in london today",
+        "must_not_bind": true,
+        "got": "find_projects",
+        "score": 0.8010501,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      },
+      {
+        "text": "sing me a song about cricket",
+        "must_not_bind": true,
+        "got": "get_payment_plan",
+        "score": 0.6094834,
+        "bound": false,
+        "ok": true,
+        "miss": "below_tau"
+      }
+    ],
+    "top1": 1,
+    "coverage": 0.30434782608695654,
+    "precision": 1,
+    "wrongBinds": 0,
+    "counts": {
+      "positives": 23,
+      "negatives": 3,
+      "bound": 7
+    }
+  },
+  "names": {
+    "graded": [],
+    "ok": 0,
+    "total": 0,
+    "skipped": "CLOUDFLARE_API_TOKEN not set — index-query lanes need it"
+  },
+  "locations": {
+    "graded": [],
+    "ok": 0,
+    "total": 0,
+    "skipped": "CLOUDFLARE_API_TOKEN not set — index-query lanes need it"
+  },
+  "education": {
+    "graded": [],
+    "ok": 0,
+    "total": 0,
+    "skipped": "CLOUDFLARE_API_TOKEN not set — index-query lanes need it"
+  },
+  "counts": {
+    "intent": {
+      "dimensions": 32,
+      "vectorCount": 19238,
+      "processedUpToDatetime": "2026-08-18T03:41:54.156Z"
+    },
+    "names": {
+      "dimensions": 1024,
+      "vectorCount": 417,
+      "processedUpToDatetime": "2026-08-18T04:00:28.747Z"
+    },
+    "education": {
+      "dimensions": 1024,
+      "vectorCount": 52,
+      "processedUpToDatetime": "2026-08-18T04:06:31.603Z"
+    },
+    "locations": {
+      "dimensions": 1024,
+      "vectorCount": 19,
+      "processedUpToDatetime": "2026-08-18T04:05:24.345Z"
+    }
+  },
+  "breaches": []
+}
