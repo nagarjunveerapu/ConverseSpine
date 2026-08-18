@@ -388,13 +388,20 @@ failure from buyer text or low confidence. Ambiguous opt-out, EMI principal
 authority, and unsupported routing are instrumented by their owning phases once
 their contracts exist.
 
-**Production.** All `FAILURE_*` prod flags stay unset until MVP. Prod has no
-users pre-MVP; enabling behaviour there spends risk for no benefit. At MVP,
-enable in order — `FAILURE_LOG` first (observability, zero behaviour change),
-then `TOOLS` → `ROUTING` → `SEARCH` → `ANSWER`. `FAILURE_ANSWER` is never the
-first prod flag: its `no_data` path is invisible without `FAILURE_LOG`. Until
-then, soak Phase 4 on **dev only** (where all five flags may be on) and watch
-unmet `requires` / over-answer in the ledger.
+**Production.** Rollout order is `FAILURE_LOG` first (observability, zero
+behaviour change), then `TOOLS` → `ROUTING` → `SEARCH` → `ANSWER`.
+`FAILURE_ANSWER` is never the first prod flag: its `no_data` path is invisible
+without `FAILURE_LOG`.
+
+`FAILURE_LOG = "true"` on prod as of 18 Aug 2026. The earlier position — all
+five stay unset until MVP, because prod has no users and enabling spends risk
+for no benefit — held while prod was empty. A real tenant has been live since
+17 Aug 2026, which inverts the argument for phase 0 specifically: with no
+failure log, production can say a turn went badly but not what KIND of failure
+it was, and phase 0 changes no goal, no evidence, no state and no buyer-facing
+copy. The four behavioural flags keep the old posture: still unset, each its own
+decision, soaked on **dev** (where all five may be on) against unmet `requires`
+and over-answer in the ledger.
 
 **Runtime force-off (dev/prod once enabled).** Wrangler vars turn flags on.
 `TURN_CACHE` key `runtime:failure_flags` may force individual flags **off**

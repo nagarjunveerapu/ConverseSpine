@@ -45,7 +45,7 @@ import {
 import { waConsoleCardReply, waConsoleNodeReply } from '../channel/wa-console.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
-import { buildLedgerWritePayload } from './ledger-write.js';
+import { buildLedgerWritePayload, type ComposeTelemetry } from './ledger-write.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
@@ -3370,6 +3370,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       grounding,
       routing,
       failures,
+      // The same values `debug.timings` reports, but written where they
+      // survive the response. Without this the compose lane has no history
+      // and "retire the paid composer?" stays an opinion.
+      compose: {
+        llm_used: llmUsed,
+        ...(llmShed ? { llm_shed: true } : {}),
+        ...(composeTemplate ? { template: true } : {}),
+        ...(composeMs !== undefined ? { compose_ms: composeMs } : {}),
+        total_ms: deps.clock.nowMs() - turnStartedMs,
+        ...(deps.embedMeter && deps.embedMeter.calls > 0
+          ? { embed_calls: deps.embedMeter.calls, embed_ms: deps.embedMeter.ms }
+          : {}),
+      },
     }).catch(() => {});
     // Catalog Onboarding Watching — live ask grade (Desk owns fulfill/Problem).
     // Never block the buyer on ledger I/O; transport errors stay watching.
@@ -6233,6 +6246,7 @@ async function syncTelemetry(
     grounding?: string;
     routing?: TurnRoutingResult;
     failures?: readonly Failure[];
+    compose?: ComposeTelemetry;
   },
 ): Promise<void> {
   if (!nd) return;
@@ -6248,6 +6262,7 @@ async function syncTelemetry(
         grounding: opts.grounding,
         buyerText: input.text,
         ...(opts.failures?.length ? { failures: opts.failures } : {}),
+        ...(opts.compose ? { compose: opts.compose } : {}),
       })
     : null;
 
