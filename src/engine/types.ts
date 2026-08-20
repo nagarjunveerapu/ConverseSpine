@@ -116,6 +116,13 @@ export interface DiscoverState {
 export interface FocusState {
   projectId: string;
   projectName: string;
+  /**
+   * This project's cost vocabulary, cached when focus was taken. Present only
+   * once the Desk bundle has been read for this project, so cost-ask detection
+   * degrades to the universal regex on the very first focused turn rather than
+   * blocking on a fetch. See engine/cost-terms.ts.
+   */
+  costTerms?: readonly string[];
 }
 
 export interface QueuedVisit {

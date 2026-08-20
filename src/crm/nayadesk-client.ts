@@ -117,6 +117,13 @@ export interface NdContextBundle {
     holdable_units?: number;
   }>;
   faqs?: Array<{ question_key?: string; canonical_question?: string; approved_answer?: string }>;
+  /**
+   * Cost-sheet heads with the buyer phrases that name them (Desk #212). Desk has
+   * parsed and served these all along — this side simply never declared them, so
+   * the catalog's own cost vocabulary was dropped at the type boundary and cost
+   * asks fell back to a hardcoded regex. See engine/cost-terms.ts.
+   */
+  cost_sheet?: Array<{ label?: string; kind?: string; match_terms?: string[] }>;
   /** W7 — journey composer output per active phase (Desk Phase 1; was silently dropped). */
   phase_journeys?: Array<{
     phase_id: string;

@@ -45,7 +45,8 @@ import {
 import { waConsoleCardReply, waConsoleNodeReply } from '../channel/wa-console.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
-import { buildLedgerWritePayload } from './ledger-write.js';
+import { buildLedgerWritePayload, type ComposeTelemetry } from './ledger-write.js';
+import { costTermsFromCostSheet } from './cost-terms.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
 import { searchWithAuthorityRelaxation } from './search-outcome.js';
@@ -2482,8 +2483,11 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     };
   } else if (goal.kind === 'commit' && nd) {
     await deps.crm.commitProject(nd, goal.projectId).catch(() => {});
+    // Cache this project's cost vocabulary the moment focus is taken, for every
+    // commit — bare pick or pick-with-follow-up — so a later "floor rise?" is
+    // recognised against the builder's real heads and not a regex we wrote.
+    state = await cacheCostTerms(state, deps, nd, goal.projectId, goal.projectName);
     if (goal.followUp || goal.followUpTopics?.length) {
-      state = commitTo(state, goal.projectId, goal.projectName);
       const followTopics = goal.followUpTopics?.length
         ? goal.followUpTopics
         : goal.followUp
@@ -3370,6 +3374,19 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       grounding,
       routing,
       failures,
+      // The same values `debug.timings` reports, but written where they
+      // survive the response. Without this the compose lane has no history
+      // and "retire the paid composer?" stays an opinion.
+      compose: {
+        llm_used: llmUsed,
+        ...(llmShed ? { llm_shed: true } : {}),
+        ...(composeTemplate ? { template: true } : {}),
+        ...(composeMs !== undefined ? { compose_ms: composeMs } : {}),
+        total_ms: deps.clock.nowMs() - turnStartedMs,
+        ...(deps.embedMeter && deps.embedMeter.calls > 0
+          ? { embed_calls: deps.embedMeter.calls, embed_ms: deps.embedMeter.ms }
+          : {}),
+      },
     }).catch(() => {});
     // Catalog Onboarding Watching — live ask grade (Desk owns fulfill/Problem).
     // Never block the buyer on ledger I/O; transport errors stay watching.
@@ -6233,6 +6250,7 @@ async function syncTelemetry(
     grounding?: string;
     routing?: TurnRoutingResult;
     failures?: readonly Failure[];
+    compose?: ComposeTelemetry;
   },
 ): Promise<void> {
   if (!nd) return;
@@ -6248,6 +6266,7 @@ async function syncTelemetry(
         grounding: opts.grounding,
         buyerText: input.text,
         ...(opts.failures?.length ? { failures: opts.failures } : {}),
+        ...(opts.compose ? { compose: opts.compose } : {}),
       })
     : null;
 
@@ -6625,4 +6644,29 @@ function withIngressDebug(
       ? { chip_path_ids: extractProvenance.chip_path_ids }
       : {}),
   };
+}
+
+/**
+ * Read the focused project's cost heads off the Desk bundle and keep them on
+ * focus state.
+ *
+ * Deliberately fire-and-forget in spirit: the bundle call is already made on
+ * most turns and any failure just leaves `costTerms` unset, which drops cost-ask
+ * detection back to the universal regex — the behaviour before this existed.
+ * Never let a catalog read decide whether the buyer gets a reply.
+ */
+async function cacheCostTerms(
+  state: ConversationState,
+  deps: EngineDeps,
+  nd: string,
+  projectId: string,
+  projectName: string,
+): Promise<ConversationState> {
+  const next = commitTo(state, projectId, projectName);
+  const ctx = await deps.data.conversationContext(nd).catch(() => null);
+  // Desk scopes the bundle to its own focus — never adopt another project's sheet.
+  if (!ctx || ctx.project?.project_id !== projectId) return next;
+  const costTerms = costTermsFromCostSheet(ctx.cost_sheet);
+  if (!costTerms.length || !next.focus) return next;
+  return { ...next, focus: { ...next.focus, costTerms } };
 }

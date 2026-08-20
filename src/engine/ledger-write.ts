@@ -16,6 +16,34 @@ import type {
   TurnGoal,
 } from '../engine/types.js';
 
+/**
+ * What the compose lane cost this turn, and which path it took.
+ *
+ * Every one of these numbers is already computed on the main path and put in
+ * the HTTP debug response — and then dropped when the response returns. Nothing
+ * durable has ever recorded whether a reply was written by the paid model or by
+ * a voice template, so "is the paid composer worth it?" has no production
+ * answer: `llm_used` and `compose_template` are declared in engine types and
+ * appear in zero ledger rows, the same shape `routing_bind` had before P0a.
+ *
+ * `shed` is the one that only a ledger can show: the paid call was made and
+ * then abandoned (timeout or rate cap) and a template shipped anyway. That is
+ * money spent for a templated reply, and it is invisible per-turn.
+ */
+export interface ComposeTelemetry {
+  /** Sync paid model actually wrote this reply. */
+  llm_used: boolean;
+  /** Paid call timed out or was rate-capped → template shipped instead. */
+  llm_shed?: boolean;
+  /** Compose path used a voice template, not the LLM. */
+  template?: boolean;
+  compose_ms?: number;
+  total_ms?: number;
+  /** Workers AI calls this turn — embedding is priced per call. */
+  embed_calls?: number;
+  embed_ms?: number;
+}
+
 export interface LedgerWritePayload {
   snapshot_in: Record<string, unknown>;
   resolved_intent: Record<string, unknown>;
@@ -72,6 +100,8 @@ export function buildLedgerWritePayload(input: {
   failures?: readonly Failure[];
   /** Buyer text for over-answer telemetry (asked vs delivered). */
   buyerText?: string;
+  /** Compose-path cost + which lane wrote the reply. */
+  compose?: ComposeTelemetry;
 }): LedgerWritePayload {
   const {
     state,
@@ -83,6 +113,7 @@ export function buildLedgerWritePayload(input: {
     grounding,
     failures,
     buyerText,
+    compose,
   } = input;
 
   const snapshot_in: Record<string, unknown> = {
@@ -268,6 +299,11 @@ export function buildLedgerWritePayload(input: {
       ...(Object.keys(evidence.toolFailureReason ?? {}).length
         ? { tool_failures: evidence.toolFailureReason }
         : {}),
+      // Rides on `verify` because the question it exists to answer — "did the
+      // paid composer produce a BETTER reply?" — is scored against `grounding`
+      // and `over_answer` directly above it. One column, no join. `verify_json`
+      // is already free-form, so this costs no migration.
+      ...(compose ? { compose } : {}),
     },
     composer: 'converse_engine',
   };

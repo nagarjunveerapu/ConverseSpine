@@ -475,8 +475,17 @@ LANGFUSE_BASE_URL = "https://cloud.langfuse.com"
 # HTTP fallback if service binding is cold/misnamed (same pattern as dig).
 NAYADESK_URL = "https://nayadesk-prod.nagarjun-arjun.workers.dev"
 WA_PROJECT_FIRST = "off"
-# FAILURE_*/CHIP_RANK_LIVE/UNDERSTANDING_CAPTURE stay unset (= off) — each is a
-# separate rollout decision, not part of filling the intent index.
+# Failure-as-a-value, phase 0 ONLY. The LLD's rollout order is LOG first, then
+# TOOLS -> ROUTING -> SEARCH -> ANSWER, and LOG is the one that changes nothing
+# a buyer reads: it derives shadow failures and writes them to the turn ledger,
+# leaving goal, evidence, state and buyer-facing copy exactly as they are. Its
+# argument for staying off was "prod has no users pre-MVP, so enabling spends
+# risk for no benefit" — prod has had a real tenant since 17 Aug 2026, which
+# inverts it: without this we cannot say what KIND of failure production has,
+# only that a turn went badly.
+FAILURE_LOG = "true"
+# FAILURE_TOOLS/ROUTING/SEARCH/ANSWER, CHIP_RANK_LIVE and UNDERSTANDING_CAPTURE
+# stay unset (= off) — each changes behaviour and is its own rollout decision.
 # Cutover runbook: NayaDesk docs/PROD_CUTOVER.md
 
 # ── Understanding on prod, step 1b: give prod a clock ─────────────────────
