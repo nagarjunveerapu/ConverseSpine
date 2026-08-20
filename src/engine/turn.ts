@@ -86,6 +86,7 @@ import {
   keepsOneChannel,
   resolvePendingStop,
 } from './optout-confirm.js';
+import { performErasure } from './erasure-reply.js';
 import { intelGatedSubject, speakFailure } from './speak-failure.js';
 import { speakStickyClarify } from './clarify-outstanding.js';
 import { holdsFocusAgainstRelease } from './turn-routing/focus-hold.js';
@@ -259,6 +260,27 @@ export interface EngineTurnOutput {
   whatsappInteractive?: WaPacked;
   /** Structured media for Advisor cards / WhatsApp native send — never in prose. */
   mediaAttachments?: MediaAttachment[];
+}
+
+/**
+ * The state handed back on the turn that erased the buyer.
+ *
+ * The store copy is purged, but this object is still RETURNED — the advisor
+ * mapper reads `result.state` to build the HTTP response, so whatever is left
+ * on it goes back over the wire on the very turn we said everything was
+ * deleted. It has to be empty of the person: no focus, no shortlist, no brief,
+ * and no `ndConversationId`/`ndBuyerPhone` pointing back at Desk.
+ *
+ * `initState`, not `freshSession` — freshSession deliberately keeps the Desk
+ * conversation id and the buyer's phone so an ordinary restart stays attached
+ * to the same lead. That is right for "start over" and wrong for this.
+ */
+function erasedState(prev: ConversationState): ConversationState {
+  return {
+    ...initState(prev.convId, prev.builderId),
+    phase: 'handoff',
+    turnCount: prev.turnCount + 1,
+  };
 }
 
 export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
@@ -1889,17 +1911,28 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     } = state;
     state = stateSansPending as typeof state;
     if (resolution === 'delete' && nd) {
-      await deps.crm.deleteBuyerMemory(nd).catch(() => {});
-      const reply = "Done — I've removed your details from our system. You won't hear from us again.";
-      state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };
-      await deps.store.save(state);
-      await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
-      await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop' }).catch(() => {});
+      // This is the door a buyer reaches by asking in words and then
+      // confirming — the most deliberate delete request we get. It used to do
+      // the LEAST: one table cleared, visits left standing, session intact,
+      // and the same "removed your details" sentence as the branch below.
+      // Both doors now run the same erasure.
+      const run = await performErasure(deps, {
+        convId: state.convId,
+        builderId: state.builderId,
+        ndConversationId: nd,
+        buyerPhone: state.ndBuyerPhone ?? input.buyerPhone ?? '',
+        scope: 'all',
+      });
+      state = erasedState(state);
+      // No save, and no message rows: the state is purged and Desk refuses
+      // writes to an erased conversation (410). Appending the buyer's words
+      // back into the table we just swept is how a delete undoes itself.
+      if (!run.purged) await deps.store.save(state);
       return {
-        reply,
+        reply: run.reply,
         state,
         debug: withIngressDebug(
-          { phase: 'handoff', goal: { kind: 'handoff' }, tools: ['deleteBuyerMemory'], grounding: 'pass' },
+          { phase: 'handoff', goal: { kind: 'handoff' }, tools: run.tools, grounding: 'pass' },
           inputSource,
         ),
       };
@@ -1997,30 +2030,39 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // delete: extraction can misread, and "removed your details" must never be false.
     const standaloneStop = isStandaloneStop(trimmedText);
     if (standaloneStop) {
-      // "I've removed your details" used to mean one thing: buyer-memory rows.
-      // The visits stayed booked and the session kept every preference, so the
-      // very next message read the buyer's own visit back to them. Erasure has
-      // to cover everything the buyer can still be shown — the cross-session
-      // memory, the visits standing in Desk, and this conversation's own state.
-      await deps.crm.deleteBuyerMemory(nd).catch(() => {});
-      const cancelled = await deps.data.cancelSiteVisits(nd).catch(() => 0);
-      const reply = "Understood — I've removed your details from our system. You won't hear from us again.";
-      const keptNd = state.ndConversationId;
-      const keptPhone = state.ndBuyerPhone ?? input.buyerPhone ?? '';
-      state = freshSession(state);
-      if (keptNd) state = withNdConversation(state, keptNd, keptPhone);
-      state = { ...state, phase: 'handoff', optedOut: true, turnCount: state.turnCount + 1 };
-      await deps.store.save(state);
-      await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
-      await deps.crm.appendMessage(nd, 'outbound', reply, { replyKey: 'stop' }).catch(() => {});
+      // "I've removed your details" used to mean one thing: buyer-memory rows,
+      // which Desk's own memory mirror then wrote back at the end of the next
+      // turn — 10 of the last 11 completed erase requests on dev had the row
+      // return, one of them 68.7 hours later carrying a budget and a visit
+      // slot. Erasure now covers everything the buyer can still be shown, and
+      // the reply is assembled from what the sweep reports rather than stated
+      // in advance.
+      const buyerPhone = state.ndBuyerPhone ?? input.buyerPhone ?? '';
+      const run = await performErasure(deps, {
+        convId: state.convId,
+        builderId: state.builderId,
+        ndConversationId: nd,
+        buyerPhone,
+        scope: 'all',
+      });
+      // `freshSession` + `withNdConversation` used to stand here. Both were
+      // wrong once the state is really gone: the first WRITES a blank state
+      // over the record rather than removing it, and — read it — `freshSession`
+      // itself carries `ndConversationId` and `ndBuyerPhone` forward, so the
+      // Desk pointer and the phone number survived the erasure inside the very
+      // helper meant to clear them. `optedOut` went with them; nothing ever
+      // read it, and a flag on a state we no longer keep cannot silence
+      // anything. Suppression is Desk's tombstone, which every sender checks.
+      state = erasedState(state);
+      if (!run.purged) await deps.store.save(state);
       return {
-        reply,
+        reply: run.reply,
         state,
         debug: withIngressDebug(
           {
             phase: 'handoff',
             goal: { kind: 'handoff' },
-            tools: ['deleteBuyerMemory', `cancelSiteVisits:${cancelled}`],
+            tools: run.tools,
             grounding: 'pass',
           },
           inputSource,

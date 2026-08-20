@@ -646,7 +646,11 @@ export function fakeCrm(): EngineCrm & { calls: string[] } {
       calls.push(`lead:${phone}`);
       return { conversationId: `nd:${phone}` };
     },
-    async appendMessage() {},
+    async appendMessage(_nd, direction) {
+      // Recorded so a test can assert the ABSENCE of a write — erasure must
+      // not append the buyer's words back into the table it just swept.
+      calls.push(`msg:${direction}`);
+    },
     async updateFacts() {},
     async setPendingAction(_nd, pending) {
       calls.push(pending ? `pending:${pending.kind}` : 'pending:clear');
@@ -675,8 +679,22 @@ export function fakeCrm(): EngineCrm & { calls: string[] } {
     async postProfileObservations() {},
     async postChoiceEvent() {},
     async postChoiceResponse() {},
-    async deleteBuyerMemory(_nd) {
-      calls.push('delete-memory');
+    async eraseBuyer(_nd, scope) {
+      calls.push(`erase:${scope}`);
+      // A receipt shaped like Desk's, so a test can tell a real sweep from a
+      // silent no-op — and so the reply composer has counts to read.
+      return {
+        scope,
+        deleted: { messages: 4, buyer_memory: 1, buyer_facts: 2 },
+        redacted: { conversations: 1 },
+        retained: { bookings: 'a signed agreement is kept by law' },
+        retained_counts: {},
+        failed: [],
+        conversation_ids: [_nd],
+        unteach_phrasing_ids: [],
+        tombstone_written: true,
+        erased_at: 1_700_000_000_000,
+      };
     },
     async mirrorMemory() {},
   };
@@ -690,6 +708,9 @@ export function fakeStore(): EngineStore {
     },
     async save(s) {
       mem.set(s.convId, s);
+    },
+    async purge(convId) {
+      mem.delete(convId);
     },
     async logTurn() {},
   };

@@ -52,6 +52,26 @@ export class TurnDebouncer implements DurableObject {
         await this.state.storage.put(L0_STATE_KEY, body.state);
         return Response.json({ ok: true });
       }
+      // DPDP erasure. There was no way to delete this before — the DO had GET
+      // and PUT and nothing else, so a buyer who asked to be forgotten kept
+      // their whole conversation state in durable storage indefinitely, and
+      // the next turn read it back as if nothing had happened.
+      //
+      // deleteAll, not just the state key: this class is addressed two ways
+      // and each address holds something of the buyer's. `state:{convId}`
+      // holds l0_state; `builderId:phone` holds their phone number, the
+      // WhatsApp phone_number_id, and `inbox` — their raw message text,
+      // sitting unprocessed. Erasing one and leaving the other would be the
+      // same half-job this whole change exists to end.
+      //
+      // It also drops the wamid dedupe list, so a Meta retry of the erase
+      // message replays. That is safe and deliberate: erasure is idempotent
+      // (the tombstone upserts) and a duplicated erase is the harmless
+      // direction to fail in.
+      if (request.method === 'DELETE') {
+        await this.state.storage.deleteAll();
+        return Response.json({ ok: true, purged: true });
+      }
     }
     return Response.json({ error: 'not_found' }, { status: 404 });
   }

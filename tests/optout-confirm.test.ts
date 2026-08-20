@@ -56,9 +56,9 @@ describe('opt-out confirm flow', () => {
     const { deps, turn } = harness('stop-standalone');
     await turn('coorg, 50 Lakhs');
     const r = await turn('STOP');
-    expect(r.reply).toMatch(/removed your details/i);
+    expect(r.reply).toMatch(/deleted/i);
     expect(r.state.phase).toBe('handoff');
-    expect(deps.crm.calls).toContain('delete-memory');
+    expect(deps.crm.calls).toContain('erase:all');
   });
 
   it('sentence opt-out confirms first; "yes" then deletes', async () => {
@@ -67,12 +67,12 @@ describe('opt-out confirm flow', () => {
     const ask = await turn('please stop messaging me on whatsapp');
     expect(ask.reply).toMatch(/reply "yes"/i);
     expect(ask.state.stopConfirmPending).toBe(true);
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(deps.crm.calls).not.toContain('erase:all');
 
     const done = await turn('yes');
-    expect(done.reply).toMatch(/removed your details/i);
+    expect(done.reply).toMatch(/deleted/i);
     expect(done.state.phase).toBe('handoff');
-    expect(deps.crm.calls).toContain('delete-memory');
+    expect(deps.crm.calls).toContain('erase:all');
   });
 
   it('non-affirm after the confirm question clears the flag and continues', async () => {
@@ -83,7 +83,7 @@ describe('opt-out confirm flow', () => {
     expect(r.state.stopConfirmPending).toBeUndefined();
     expect(r.state.phase).not.toBe('handoff');
     expect(r.reply).toMatch(/Ayana/i);
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(deps.crm.calls).not.toContain('erase:all');
   });
 
   it('"stop asking questions" flows through the normal pipeline', async () => {
@@ -91,8 +91,8 @@ describe('opt-out confirm flow', () => {
     await turn('coorg, 50 Lakhs');
     const r = await turn('stop asking questions. rent probably. maybe live later. whatever');
     expect(r.state.phase).not.toBe('handoff');
-    expect(r.reply).not.toMatch(/removed your details|remove your details/i);
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(r.reply).not.toMatch(/\bdeleted\b|remove your details/i);
+    expect(deps.crm.calls).not.toContain('erase:all');
   });
 
   it('an affirm-flavored question is NOT consent — "ok what would YOU pick" never deletes', async () => {
@@ -101,8 +101,8 @@ describe('opt-out confirm flow', () => {
     await turn('please stop messaging me');
     const r = await turn('ok what would YOU pick. one answer');
     expect(r.state.phase).not.toBe('handoff');
-    expect(r.reply).not.toMatch(/removed your details/i);
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(r.reply).not.toMatch(/\bdeleted\b/i);
+    expect(deps.crm.calls).not.toContain('erase:all');
   });
 });
 
@@ -118,7 +118,7 @@ describe('Phase 1 destructive-intent gate', () => {
     expect(ask.reply).toMatch(/stop calling and keep chatting here/i);
     expect(ask.reply).toMatch(/stop all contact and delete your details/i);
     expect(ask.state.stopConfirmMode).toBe('contact_scope');
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(deps.crm.calls).not.toContain('erase:all');
     expect(actionPlan).toMatchObject({
       failures: [
         {
@@ -132,7 +132,7 @@ describe('Phase 1 destructive-intent gate', () => {
     const stillAmbiguous = await turn('yes');
     expect(stillAmbiguous.reply).toMatch(/stop calling and keep chatting here/i);
     expect(stillAmbiguous.state.stopConfirmPending).toBe(true);
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(deps.crm.calls).not.toContain('erase:all');
   });
 
   it('reads "no calls, message me here" as a channel choice, not an opt-out', async () => {
@@ -147,7 +147,7 @@ describe('Phase 1 destructive-intent gate', () => {
     expect(kept.reply).toMatch(/nothing gets deleted/i);
     expect(kept.reply).not.toMatch(/delete your details/i);
     expect(kept.state.stopConfirmPending).not.toBe(true);
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(deps.crm.calls).not.toContain('erase:all');
   });
 
   it('keeps the search when the buyer chooses chat-only', async () => {
@@ -158,7 +158,7 @@ describe('Phase 1 destructive-intent gate', () => {
     expect(kept.reply).toMatch(/keep your property search/i);
     expect(kept.reply).toMatch(/haven't deleted/i);
     expect(kept.state.phase).not.toBe('handoff');
-    expect(deps.crm.calls).not.toContain('delete-memory');
+    expect(deps.crm.calls).not.toContain('erase:all');
   });
 
   it('deletes only after the buyer explicitly chooses stop-all', async () => {
@@ -166,9 +166,9 @@ describe('Phase 1 destructive-intent gate', () => {
     await turn('coorg, 50 Lakhs');
     await turn('please stop messaging me');
     const deleted = await turn('stop all');
-    expect(deleted.reply).toMatch(/removed your details/i);
+    expect(deleted.reply).toMatch(/deleted/i);
     expect(deleted.state.phase).toBe('handoff');
-    expect(deps.crm.calls).toContain('delete-memory');
+    expect(deps.crm.calls).toContain('erase:all');
   });
 
   it('keeps direct delete-my-data on an aligned confirmation path', async () => {
@@ -179,6 +179,6 @@ describe('Phase 1 destructive-intent gate', () => {
     expect(ask.reply).toMatch(/reply "yes"/i);
     const deleted = await turn('yes');
     expect(deleted.state.phase).toBe('handoff');
-    expect(deps.crm.calls).toContain('delete-memory');
+    expect(deps.crm.calls).toContain('erase:all');
   });
 });

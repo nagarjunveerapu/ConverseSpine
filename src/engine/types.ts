@@ -254,11 +254,12 @@ export interface ConversationState {
   /** Opt-out confirmation/disambiguation is active. */
   stopConfirmPending?: boolean;
   /**
-   * The buyer said STOP and it was honoured. Their memory is deleted, their
-   * visits are cancelled and this session was wiped — so nothing personal may
-   * be read back to them afterwards, however the next message is phrased.
+   * Removed. `optedOut` was set by the STOP door and read by nothing: it
+   * described a session that was supposed to be silent, on a state object
+   * that no reader consulted before speaking. Silence is Desk's tombstone
+   * (`buyer_erasures`), which every sender checks and which survives the state
+   * being purged — which is what erasure now does to it.
    */
-  optedOut?: boolean;
   /** Whether the pending turn confirms explicit deletion or clarifies contact scope. */
   stopConfirmMode?: 'delete_confirm' | 'contact_scope';
   /** Cached NayaDesk project facts for focused / shortlisted projects. */
