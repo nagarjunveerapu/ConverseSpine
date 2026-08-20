@@ -1248,8 +1248,8 @@ export function nayadeskCrm(
         ...(responseIntent ? { response_intent: responseIntent } : {}),
       });
     },
-    async deleteBuyerMemory(conversationId) {
-      await crm.deleteBuyerMemory(conversationId);
+    async eraseBuyer(conversationId, scope) {
+      return crm.eraseBuyer(conversationId, scope);
     },
     async mirrorMemory(conversationId) {
       await crm.mirrorMemory(conversationId);

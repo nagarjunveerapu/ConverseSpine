@@ -56,6 +56,19 @@ async function doStatePut(
   }
 }
 
+async function doStateDelete(
+  ns: DurableObjectNamespace | undefined,
+  name: string,
+): Promise<void> {
+  if (!ns || !name) return;
+  try {
+    const stub = ns.get(ns.idFromName(name));
+    await stub.fetch('https://conversation-do/state', { method: 'DELETE' });
+  } catch {
+    /* non-fatal — see purge() */
+  }
+}
+
 export function kvStore(
   kv: KVNamespace | undefined,
   conversationDo?: DurableObjectNamespace,
@@ -92,6 +105,28 @@ export function kvStore(
         });
       } else {
         memory.set(state.convId, state);
+      }
+    },
+    /**
+     * Erasure. Both DO addresses and the KV key, because the buyer is in all
+     * three: `state:{convId}` holds l0_state, `{builderId}:{buyerPhone}` holds
+     * their phone number and their raw unsent messages, and KV holds the
+     * 30-day durable copy.
+     *
+     * Best-effort per store and never throws — a purge failure must not take
+     * down the turn that is telling the buyer they have been erased. Desk's
+     * tombstone is the authority either way, so a surviving Spine snapshot
+     * cannot write anything back: state-writes returns 410 on an erased shell.
+     */
+    async purge(convId, buyerKey) {
+      await doStateDelete(conversationDo, `state:${convId}`);
+      if (buyerKey?.builderId && buyerKey.buyerPhone) {
+        await doStateDelete(conversationDo, `${buyerKey.builderId}:${buyerKey.buyerPhone}`);
+      }
+      if (kv) {
+        await kv.delete(`${PREFIX}${convId}`).catch(() => {});
+      } else {
+        memory.delete(convId);
       }
     },
     async logTurn(_entry) {

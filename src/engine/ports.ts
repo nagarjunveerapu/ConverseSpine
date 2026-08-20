@@ -265,6 +265,33 @@ export interface EngineData {
   getProfile(builderId: string, buyerPhone: string): Promise<Record<string, unknown>>;
 }
 
+/** Per-table proof of an erasure run. See NayaDesk `src/lib/erasure.ts`. */
+export interface ErasureReceipt {
+  scope: 'all' | 'contact_only';
+  deleted: Record<string, number>;
+  redacted: Record<string, number>;
+  /** table → the stated reason it was kept. A buyer is owed this out loud. */
+  retained: Record<string, string>;
+  /**
+   * table → how many of THIS buyer's rows actually survived.
+   *
+   * `retained` is policy: it names bookings for every buyer alive, including
+   * the ones who never booked. Composing a reply from it tells a buyer we kept
+   * a signed agreement they never signed. Counts are the fact; use these.
+   *
+   * Optional because a Desk deployed before this shipped does not send it —
+   * Desk and Spine deploy separately. Absent reads as "we cannot show that
+   * anything was kept", which understates rather than invents.
+   */
+  retained_counts?: Record<string, number>;
+  /** Non-empty means partial. Never claim a clean sweep over a non-empty list. */
+  failed: string[];
+  conversation_ids: string[];
+  unteach_phrasing_ids: string[];
+  tombstone_written: boolean;
+  erased_at: number;
+}
+
 export interface EngineCrm {
   ensureLead(builderId: string, buyerPhone: string, channel?: string): Promise<{ conversationId: string } | null>;
   appendMessage(conversationId: string, direction: 'inbound' | 'outbound', content: string, meta?: { replyKey?: string }): Promise<void>;
@@ -350,7 +377,21 @@ export interface EngineCrm {
     engineStatus?: string,
   ): Promise<void>;
   postChoiceResponse(conversationId: string, responseText: string, responseIntent?: string): Promise<void>;
-  deleteBuyerMemory(conversationId: string): Promise<void>;
+  /**
+   * DPDP erasure. Returns the receipt so the reply is composed from what
+   * actually happened — null when Desk could not be reached or is too old to
+   * report, which is itself information the caller must not paper over.
+   *
+   * Replaces `deleteBuyerMemory`, which returned void: the bot could not know
+   * whether anything had been erased, so both stop branches said
+   * "I've removed your details from our system. You won't hear from us again."
+   * unconditionally. It cleared one table out of thirty-odd, cancelled nothing
+   * on the delete-confirm branch, and the next bot turn wrote the row back.
+   */
+  eraseBuyer(
+    conversationId: string,
+    scope: 'all' | 'contact_only',
+  ): Promise<ErasureReceipt | null>;
   mirrorMemory(conversationId: string): Promise<void>;
   /**
    * Understanding Flywheel Wave A — capture this turn into Desk's intent
@@ -397,6 +438,18 @@ export interface EngineCrm {
 export interface EngineStore {
   load(convId: string): Promise<import('./types.js').ConversationState | null>;
   save(state: import('./types.js').ConversationState): Promise<void>;
+  /**
+   * DPDP erasure — destroy every copy of this conversation's state.
+   *
+   * `freshSession()` was standing in for this and could not do the job: it
+   * returns a blank state object, which `save()` then WRITES to the DO and to
+   * KV. The record is not gone, it is overwritten with an empty one, and the
+   * KV key lives its full 30 days regardless.
+   *
+   * Optional so an in-memory or test store can omit it; callers must handle
+   * absence rather than assume the purge happened.
+   */
+  purge?(convId: string, buyerKey?: { builderId: string; buyerPhone: string }): Promise<void>;
   logTurn(entry: {
     convId: string;
     turnIndex: number;

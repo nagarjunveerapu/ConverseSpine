@@ -11,6 +11,37 @@ export class NayaDeskError extends Error {
   }
 }
 
+/**
+ * What Desk's erasure engine reports back. Mirrors `ErasureReceipt` in
+ * NayaDesk `src/lib/erasure.ts`; declared structurally here because the two
+ * repos share no types, only the wire.
+ *
+ * Read it, don't summarise it: `retained` is the half a buyer is owed an
+ * explanation for, and `failed` is the difference between "done" and "a person
+ * will finish this".
+ */
+export interface ErasureReceiptDto {
+  scope: 'all' | 'contact_only';
+  /** table → rows cleared. */
+  deleted: Record<string, number>;
+  /** table → rows kept, stripped of the person. */
+  redacted: Record<string, number>;
+  /** table → why it survived intact. */
+  retained: Record<string, string>;
+  /**
+   * table → how many of THIS buyer's rows survived. `retained` is the policy
+   * for every buyer; this is the fact for this one. Optional: a Desk deployed
+   * before the erasure engine does not send it.
+   */
+  retained_counts?: Record<string, number>;
+  /** Non-empty means the run was partial. Never claim completeness over this. */
+  failed: string[];
+  conversation_ids: string[];
+  unteach_phrasing_ids: string[];
+  tombstone_written: boolean;
+  erased_at: number;
+}
+
 export interface NdConversation {
   conversation_id: string;
   builder_id: string;
@@ -855,8 +886,43 @@ export class NayaDeskClient {
     );
   }
 
-  deleteBuyerMemory(conversation_id: string): Promise<{ ok: true; deleted: number }> {
-    return this.call('DELETE', `/api/leads/${encodeURIComponent(conversation_id)}/buyer-memory`);
+  /**
+   * DPDP erasure. Returns the receipt — per-table counts of what was cleared,
+   * redacted and kept — so the reply can be composed from what actually
+   * happened instead of a string literal that was true of no run.
+   *
+   * `scope`:
+   *   'all'          — forget me.
+   *   'contact_only' — stop contacting me, keep the record. A buyer saying
+   *                    "stop calling" has not asked to be forgotten.
+   *
+   * Falls back to the legacy DELETE when Desk has not shipped the new route
+   * yet. The two repos deploy independently, and of all the features to break
+   * on a deploy-order mismatch, "delete my data" is the wrong one — a 404 here
+   * would mean nothing is erased and the buyer is told it was.
+   */
+  async eraseBuyer(
+    conversation_id: string,
+    scope: 'all' | 'contact_only' = 'all',
+  ): Promise<ErasureReceiptDto | null> {
+    const id = encodeURIComponent(conversation_id);
+    try {
+      const res = await this.call<{ ok: boolean; receipt?: ErasureReceiptDto }>(
+        'POST', `/api/leads/${id}/erase`, { scope },
+      );
+      return res.receipt ?? null;
+    } catch (err) {
+      const status = err instanceof NayaDeskError ? err.status : 0;
+      if (status !== 404 && status !== 405) throw err;
+      // Old Desk. The legacy route always meant scope 'all'; a contact_only
+      // request cannot be honoured against it, so refuse rather than silently
+      // deleting more than the buyer asked for.
+      if (scope !== 'all') return null;
+      const legacy = await this.call<{ ok: true; deleted: number; receipt?: ErasureReceiptDto }>(
+        'DELETE', `/api/leads/${id}/buyer-memory`,
+      );
+      return legacy.receipt ?? null;
+    }
   }
 
   mirrorMemory(conversation_id: string): Promise<{ ok: true }> {

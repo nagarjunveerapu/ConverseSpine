@@ -38,7 +38,11 @@ describe('STOP erases what it says it erases', () => {
     expect(before.reply).toMatch(/Ayana/i);
 
     const stop = await turn('STOP');
-    expect(stop.reply).toContain("removed your details");
+    // Not a literal any more — the sentence is built from Desk's receipt, and
+    // the cancelled visit is named because the buyer needs to know their
+    // Saturday is off. The old reply promised removal and mentioned nothing.
+    expect(stop.reply).toContain('deleted');
+    expect(stop.reply).toMatch(/site visit is cancelled/i);
 
     const after = await turn('what are my visits?');
     expect(after.reply).not.toMatch(/Ayana/i);
@@ -51,7 +55,17 @@ describe('STOP erases what it says it erases', () => {
     await turn('tell me about Ayana');
     const stop = await turn('STOP');
     expect(stop.state.focus).toBeUndefined();
-    expect(stop.state.optedOut).toBe(true);
+    expect(stop.state.constraints.location, 'the brief outlived the erase').toBeUndefined();
+    // The state is RETURNED even though the store copy is purged — the advisor
+    // mapper builds its HTTP response out of it. So the Desk pointer and the
+    // phone must be gone from the object too, not only from storage.
+    // `freshSession`, which used to run here, carries both forward by design.
+    expect(stop.state.ndConversationId).toBeUndefined();
+    expect(stop.state.ndBuyerPhone).toBeUndefined();
+    // `optedOut` used to be asserted here. It was set by this door and read by
+    // no one — a flag standing in for silence that silenced nothing. Silence
+    // is Desk's tombstone now, so the honest assertion is that the state is
+    // gone from the store, not that a boolean was set on it.
   });
 
   it('/reset clears the visits it starts fresh from', async () => {
