@@ -83,9 +83,11 @@ import {
   contactScopeFailure,
   isExplicitDeleteIntent,
   isStandaloneStop,
+  isStandaloneDelete,
   keepsOneChannel,
   resolvePendingStop,
 } from './optout-confirm.js';
+import { CONSENT_NOTICE, owesConsentNotice } from './consent-line.js';
 import { performErasure } from './erasure-reply.js';
 import { intelGatedSubject, speakFailure } from './speak-failure.js';
 import { speakStickyClarify } from './clarify-outstanding.js';
@@ -260,6 +262,18 @@ export interface EngineTurnOutput {
   whatsappInteractive?: WaPacked;
   /** Structured media for Advisor cards / WhatsApp native send — never in prose. */
   mediaAttachments?: MediaAttachment[];
+  /**
+   * This turn erased the buyer, so the store copy of the state is gone.
+   * Anything that would write the state back — the consent stamp below is the
+   * first — has to know, or it resurrects the conversation we just purged.
+   */
+  erased?: boolean;
+  /**
+   * The one-time "STOP / DELETE" line, when this turn is the one that owes it.
+   * Delivered as its own message rather than glued to `reply`, so it cannot
+   * eat into WhatsApp's 1024-character interactive body.
+   */
+  consentNotice?: string;
 }
 
 /**
@@ -283,7 +297,52 @@ function erasedState(prev: ConversationState): ConversationState {
   };
 }
 
-export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
+/**
+ * The turn, plus the one thing that has to happen on exactly one turn.
+ *
+ * `runEngineTurnCore` has around forty return sites. A rule that applies to
+ * the FIRST reply and no other cannot live inside it without being written
+ * forty times and forgotten in half of them — that is the shape of the
+ * three-copies-one-gate bug we already paid for once. So it lives here, at the
+ * single exit, and reads the state that comes back: no stamp means this buyer
+ * has never been told, whatever the turn happened to be about.
+ *
+ * A conversation that predates this code has no stamp either, and gets the
+ * line on its next turn. That is correct, not a migration gap: those buyers
+ * were never told how to leave.
+ */
+export async function runEngineTurn(
+  input: EngineTurnInput,
+  deps: EngineDeps,
+): Promise<EngineTurnOutput> {
+  const out = await runEngineTurnCore(input, deps);
+  if (
+    !owesConsentNotice({
+      channel: input.channel ?? 'whatsapp',
+      ...(out.state.consentNoticedAt !== undefined
+        ? { consentNoticedAt: out.state.consentNoticedAt }
+        : {}),
+      ...(out.erased ? { erased: true } : {}),
+    })
+  ) {
+    return out;
+  }
+  const state = { ...out.state, consentNoticedAt: deps.clock.nowMs() };
+  await deps.store.save(state).catch(() => {});
+  // Written down as well as sent. "We told them" is the consent evidence, and
+  // evidence that exists only in a message we hoped got delivered is not
+  // evidence.
+  if (state.ndConversationId) {
+    await deps.crm
+      .appendMessage(state.ndConversationId, 'outbound', CONSENT_NOTICE, {
+        replyKey: 'consent_notice',
+      })
+      .catch(() => {});
+  }
+  return { ...out, state, consentNotice: CONSENT_NOTICE };
+}
+
+async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
   const turnStartedMs = deps.clock.nowMs();
   if (input.waitUntil && !deps.waitUntil) {
     deps = { ...deps, waitUntil: input.waitUntil };
@@ -1931,6 +1990,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       return {
         reply: run.reply,
         state,
+        erased: true,
         debug: withIngressDebug(
           { phase: 'handoff', goal: { kind: 'handoff' }, tools: run.tools, grounding: 'pass' },
           inputSource,
@@ -2028,8 +2088,14 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
     // Standalone SMS keyword is an unambiguous opt-out — act immediately. Anything
     // longer (a sentence mentioning contact/data) confirms before the destructive
     // delete: extraction can misread, and "removed your details" must never be false.
+    // The two advertised words, and they do different things. STOP stops the
+    // messages and keeps the record; DELETE removes everything. Neither asks
+    // for confirmation, because the greeting already told the buyer what each
+    // one does — a keyword you advertise has to work when it is typed.
+    const standaloneDelete = isStandaloneDelete(trimmedText);
     const standaloneStop = isStandaloneStop(trimmedText);
-    if (standaloneStop) {
+    if (standaloneDelete || standaloneStop) {
+      const scope: 'all' | 'contact_only' = standaloneDelete ? 'all' : 'contact_only';
       // "I've removed your details" used to mean one thing: buyer-memory rows,
       // which Desk's own memory mirror then wrote back at the end of the next
       // turn — 10 of the last 11 completed erase requests on dev had the row
@@ -2043,7 +2109,7 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
         builderId: state.builderId,
         ndConversationId: nd,
         buyerPhone,
-        scope: 'all',
+        scope,
       });
       // `freshSession` + `withNdConversation` used to stand here. Both were
       // wrong once the state is really gone: the first WRITES a blank state
@@ -2053,11 +2119,24 @@ export async function runEngineTurn(input: EngineTurnInput, deps: EngineDeps): P
       // helper meant to clear them. `optedOut` went with them; nothing ever
       // read it, and a flag on a state we no longer keep cannot silence
       // anything. Suppression is Desk's tombstone, which every sender checks.
-      state = erasedState(state);
-      if (!run.purged) await deps.store.save(state);
+      if (scope === 'all') {
+        state = erasedState(state);
+        if (!run.purged) await deps.store.save(state);
+      } else {
+        // STOP retains the record at Desk, so the thread stays too — and both
+        // sides of it are written down. An opt-out that leaves no trace of
+        // having been asked for is the one a staff member later overrides.
+        state = { ...state, phase: 'handoff', turnCount: state.turnCount + 1 };
+        await deps.store.save(state);
+        await deps.crm.appendMessage(nd, 'inbound', input.text).catch(() => {});
+        await deps.crm
+          .appendMessage(nd, 'outbound', run.reply, { replyKey: 'stop_contact_only' })
+          .catch(() => {});
+      }
       return {
         reply: run.reply,
         state,
+        ...(scope === 'all' ? { erased: true as const } : {}),
         debug: withIngressDebug(
           {
             phase: 'handoff',

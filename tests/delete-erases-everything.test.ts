@@ -3,6 +3,9 @@ import { runEngineTurn } from '../src/engine/turn.js';
 import { fakeDeps } from './fakes.js';
 
 /**
+ * The DELETE door. It was STOP until buyers were told what the words mean —
+ * see tests/stop-and-delete.test.ts for why the two had to separate.
+ *
  * "Understood — I've removed your details from our system."
  *
  * On the founder's own phone, the very next message was answered with:
@@ -30,14 +33,14 @@ async function bookAVisit(turn: (t: string) => Promise<{ reply: string }>) {
   await turn('yes');
 }
 
-describe('STOP erases what it says it erases', () => {
+describe('DELETE erases what it says it erases', () => {
   it('a booked visit does not survive the opt-out that claimed to remove it', async () => {
-    const { turn } = harness('stop-erase-1');
+    const { turn } = harness('delete-erase-1');
     await bookAVisit(turn);
     const before = await turn('what are my visits?');
     expect(before.reply).toMatch(/Ayana/i);
 
-    const stop = await turn('STOP');
+    const stop = await turn('DELETE');
     // Not a literal any more — the sentence is built from Desk's receipt, and
     // the cancelled visit is named because the buyer needs to know their
     // Saturday is off. The old reply promised removal and mentioned nothing.
@@ -50,10 +53,10 @@ describe('STOP erases what it says it erases', () => {
   });
 
   it('the session goes with it — the focus and the brief do not outlive the erase', async () => {
-    const { turn } = harness('stop-erase-2');
+    const { turn } = harness('delete-erase-2');
     await turn('coorg, 50 Lakhs');
     await turn('tell me about Ayana');
-    const stop = await turn('STOP');
+    const stop = await turn('DELETE');
     expect(stop.state.focus).toBeUndefined();
     expect(stop.state.constraints.location, 'the brief outlived the erase').toBeUndefined();
     // The state is RETURNED even though the store copy is purged — the advisor
