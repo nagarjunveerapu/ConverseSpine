@@ -1,5 +1,6 @@
 import {
   NayaDeskError,
+  parseShortlistIds,
   type NayaDeskClient,
   type NdContextBundle,
   type NdLocationIntelRow,
@@ -7,7 +8,7 @@ import {
   type NdMarketIntel,
   type NdProjectSummary,
 } from '../../crm/nayadesk-client.js';
-import type { DataResult, EngineCrm, EngineData, StoredVisit } from '../ports.js';
+import type { DataResult, DeskBrief, EngineCrm, EngineData, StoredVisit } from '../ports.js';
 import { dataAbsent, dataOk, dataTransport } from '../ports.js';
 import type { LocationPoi, LocationPoiCategories, ProjectDetail } from '../types.js';
 import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom, phaseNoteFrom } from '../compose.js';
@@ -970,6 +971,25 @@ export function nayadeskData(
         atMs: m.created_at,
       }));
       const returning = ctx?.returning_buyer;
+      // The conversation row was already in `ctx`. Every field below has been
+      // arriving on this call since the column existed; this function used to
+      // map recent_messages, returning_buyer and builder out of the bundle and
+      // drop the rest on the floor. Reading it costs nothing — no extra call,
+      // no extra latency — which is what makes the four-field blind spot a
+      // wiring omission rather than a trade-off anybody made.
+      const conv = ctx?.conversation;
+      const deskBrief: DeskBrief | undefined = conv
+        ? {
+            ...(conv.buyer_name?.trim() ? { buyerName: conv.buyer_name.trim() } : {}),
+            ...(conv.bhk_preference?.trim() ? { bhk: conv.bhk_preference.trim() } : {}),
+            ...(conv.budget_inr?.trim() ? { budget: conv.budget_inr.trim() } : {}),
+            ...(conv.location_pref?.trim() ? { location: conv.location_pref.trim() } : {}),
+            ...(conv.purpose?.trim() ? { purpose: conv.purpose.trim() } : {}),
+            ...(conv.project_id?.trim() ? { projectId: conv.project_id.trim() } : {}),
+            shortlistProjectIds: parseShortlistIds(conv.shortlist_project_ids),
+            selfRegistered: conv.source_detail === 'self_registered',
+          }
+        : undefined;
       return {
         ...(returning
           ? {
@@ -987,6 +1007,7 @@ export function nayadeskData(
         rejectedProjectIds: ledger?.rejected_project_ids ?? [],
         turnIndex: ledger?.next_turn_index ?? 1,
         ledgerPrior: ledger?.prior ?? null,
+        ...(deskBrief ? { deskBrief } : {}),
       };
     },
 

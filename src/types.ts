@@ -166,6 +166,12 @@ export interface TurnResult {
    * that gets silently truncated is worse than no notice.
    */
   consent_notice?: string;
+  /**
+   * One-time welcome for a buyer who registered themselves on Desk's form,
+   * present only on the turn that owes it. Sent BEFORE `reply_text` — see
+   * engine/welcome.ts for why it leads while `consent_notice` trails.
+   */
+  welcome_message?: string;
   /** Engine debug — NayaDesk Auto/Vault map tools → brain.tool_calls. */
   debug?: {
     phase?: string;

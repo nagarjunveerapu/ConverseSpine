@@ -1,16 +1,9 @@
 import type { TurnRuntime } from '../runtime/deps.js';
 import type { ConversationRow, MemoryView, ProjectRow, TurnLedgerRow } from '../types.js';
+import { parseShortlistIds } from './nayadesk-client.js';
 import type { NdConversation, NdProjectSummary, NdSearchMatch } from './nayadesk-client.js';
 
 let sessionConversationId: string | null = null;
-
-function parseShortlist(raw: string): string[] {
-  try {
-    return JSON.parse(raw || '[]') as string[];
-  } catch {
-    return [];
-  }
-}
 
 function parsePending(conv: NdConversation): MemoryView['pending'] {
   if (!conv.pending_action) return null;
@@ -90,7 +83,7 @@ export async function buildMemory(rt: TurnRuntime, conversationId: string): Prom
 
   const ctx = await rt.crm.conversationContext(conversationId);
   const conversation = mapConversation(ctx.conversation);
-  const shortlist = parseShortlist(ctx.conversation.shortlist_project_ids);
+  const shortlist = parseShortlistIds(ctx.conversation.shortlist_project_ids);
   const pending = parsePending(ctx.conversation);
 
   const memory: MemoryView = {

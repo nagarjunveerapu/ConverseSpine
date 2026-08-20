@@ -44,6 +44,13 @@ export interface IntentEffect {
   stop?: true;
   /** Wants a person: escalation, a callback, or a complaint to log. */
   wantsHuman?: true;
+  /**
+   * Asking about their OWN record — "what do you know about me", "what's on
+   * my shortlist", "which area did I say". Feeds the existing
+   * `ex.recallConstraints` path, which reads the brief back and shows the
+   * board. No new answer content: the read-back template already existed.
+   */
+  recallConstraints?: true;
 }
 
 /**
@@ -61,6 +68,26 @@ export interface IntentEffect {
  */
 export const INTENT_EFFECTS: Readonly<Record<string, IntentEffect>> = Object.freeze({
   opt_out: { stop: true },
+  /**
+   * "What do you know about me / what's my budget / what's on my shortlist."
+   *
+   * Extraction owns a NARROW slice of this already — `CONSTRAINT_RECALL_RE`
+   * matches "what was my budget", "which area did i pick" and about six other
+   * exact shapes. It does not match a buyer asking the general question, and
+   * across 22,703 corpus rows there was not one self-referential phrasing, so
+   * "what do you know about me" landed on the clarify floor.
+   *
+   * The fix is corpus, not another regex arm (P7). `recall_profile` is a new
+   * kind with no `INTENT_TO_TOPIC` row, so it arrives here as `unmapped_kind`
+   * — the seam that makes "nobody else owns this" mechanical. The moment the
+   * regex DOES match, extraction has already set the flag and the guard below
+   * makes this a no-op, so the two can never both decide.
+   *
+   * Note `about_data` deliberately stays unowned: "what personal data do you
+   * collect" is a privacy-policy question, and answering it with this buyer's
+   * budget would be a different wrong answer.
+   */
+  recall_profile: { recallConstraints: true },
   escalate_to_human: { wantsHuman: true },
   escalate: { wantsHuman: true },
   report_issue: { wantsHuman: true },
@@ -106,14 +133,14 @@ export function applyIntentAuthority(
   ex: Extracted,
   routing: TurnRoutingResult | undefined,
   text = '',
-): { ex: Extracted; wrote: Array<'stop' | 'wantsHuman'>; kind?: string } {
+): { ex: Extracted; wrote: Array<'stop' | 'wantsHuman' | 'recallConstraints'>; kind?: string } {
   if (!isUnclaimedIntent(routing)) return { ex, wrote: [] };
   const kind = routing!.bind!.top_kind!;
   const effect = INTENT_EFFECTS[kind];
   if (!effect) return { ex, wrote: [] };
 
   let next = ex;
-  const wrote: Array<'stop' | 'wantsHuman'> = [];
+  const wrote: Array<'stop' | 'wantsHuman' | 'recallConstraints'> = [];
   if (effect.stop && !next.stop) {
     // Soft CTA decline ("no thanks", "nahi chahiye") nearest-neighbors opt_out.
     // That must NOT open the delete/contact-scope confirm — stay focused.
@@ -123,6 +150,20 @@ export function applyIntentAuthority(
     if (!softDecline) {
       next = { ...next, stop: true };
       wrote.push('stop');
+    }
+  }
+  if (effect.recallConstraints && !next.recallConstraints) {
+    // A catalog/FAQ ask already owns the turn — "what's the price of my
+    // shortlist" is a price question that happens to say "my". Never let a
+    // profile read-back displace an answer the engine can actually give.
+    if (catalogAskOwns(next, text)) {
+      return { ex: next, wrote, kind };
+    }
+    // `recall` is the VISIT recall path ("when is my visit"), which owns its
+    // own answer. Extraction sets them mutually exclusive; keep it true here.
+    if (!next.recall) {
+      next = { ...next, recallConstraints: true };
+      wrote.push('recallConstraints');
     }
   }
   if (effect.wantsHuman && !next.wantsHuman) {

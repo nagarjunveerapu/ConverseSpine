@@ -20,6 +20,37 @@ export function dataTransport(latency_ms: number): DataResult<never> {
   return { ok: false, reason: 'transport', latency_ms };
 }
 
+/**
+ * The record Desk already holds about this buyer, as it comes off the wire.
+ *
+ * Deliberately raw: `budget` is whatever string a person or a form put in the
+ * column ("80 lakh", "₹1.2 Cr", ""), not a parsed number. Parsing belongs to
+ * the one place that already knows how — `parseBudgetToInr` — and a shape that
+ * pretended this was clean would be the third opinion on what a budget is.
+ *
+ * Everything is optional and everything can be empty. An empty brief is the
+ * normal state of a buyer who has said nothing yet, and must never be spoken
+ * as knowledge.
+ */
+export interface DeskBrief {
+  buyerName?: string;
+  bhk?: string;
+  /** Free text from the Desk column — parse before use, never render raw as a claim. */
+  budget?: string;
+  location?: string;
+  purpose?: string;
+  projectId?: string;
+  /** Desk's durable board. Spine writes this and had never read it back. */
+  shortlistProjectIds: string[];
+  /**
+   * The buyer filled Desk's own registration form — `source_detail` is
+   * `'self_registered'`. They have already told us things, in a different
+   * room, minutes ago; a greeting that asks for those things again tells them
+   * the form was a waste of their time.
+   */
+  selfRegistered: boolean;
+}
+
 export type SignalKind = 'location' | 'property_type' | 'purpose' | 'transition';
 
 export interface ExtractSignal {
@@ -217,6 +248,23 @@ export interface EngineData {
     turnIndex: number;
     /** P2b — raw Desk prior row (mapped in turn bootstrap). */
     ledgerPrior?: import('./ledger-read.js').LedgerPriorRow | null;
+    /**
+     * WHAT DESK ALREADY HOLDS ABOUT THIS BUYER.
+     *
+     * This adapter has always fetched the whole conversation row — one call,
+     * `SELECT *` on the Desk side — and then mapped three things out of the
+     * bundle and dropped the row. So `bhk_preference`, `budget_inr`,
+     * `location_pref`, `purpose` and `shortlist_project_ids` arrived on every
+     * cold turn and reached nothing.
+     *
+     * The engine WRITES all of those back to Desk (turn.ts ~6201/6467,
+     * adapters/nayadesk.ts ~1150). It has never read one of them. Which is why
+     * a buyer who filled Desk's registration form at the gate and then opened
+     * WhatsApp was met by a bot that knew nothing about them, and why
+     * "what's my budget" answered "I don't have your brief on file yet" while
+     * the brief sat in the row this function had already fetched.
+     */
+    deskBrief?: DeskBrief;
   }>;
   geoAreasInRegion(region: string, builderId: string): Promise<Array<{ name: string; distanceKm: number }>>;
   /** Desk-owned durable-locality boundary. Transport failure is not evidence

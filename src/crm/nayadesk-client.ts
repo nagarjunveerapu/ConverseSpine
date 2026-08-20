@@ -59,6 +59,51 @@ export interface NdConversation {
   project_state: 'discovery' | 'shortlist' | 'focused';
   shortlist_project_ids: string;
   turn_count: number;
+  /**
+   * How this lead came into being. `/api/conversation-context` returns the
+   * WHOLE `conversations` row (`SELECT *`), so these have been arriving on
+   * every turn since the columns existed — this interface simply never
+   * declared them, which is the only reason nothing could read them.
+   *
+   * That is the fourth time a conversation_context field has crossed the wire
+   * into a type that did not declare it. Optional because a Desk older than a
+   * given column sends nothing, and an absent field must read as "not known",
+   * never as "not self-registered".
+   */
+  source?: string;
+  /**
+   * `'self_registered'` means the BUYER typed this themselves — at a tablet or
+   * a QR code at the site office, on Desk's own form. Desk stamps it in
+   * `api/register.ts`, whose comment promises the bot will answer with
+   * "welcome, preferences read back, official-channel line". This is the field
+   * that has to reach the bot for that promise to be keepable.
+   */
+  source_detail?: string;
+  /** 0 until the number is proven. Never treat 0 as "verified long ago". */
+  contact_verified_at?: number;
+}
+
+/**
+ * `shortlist_project_ids` as a list.
+ *
+ * The column is a JSON array in a TEXT field, so a malformed value is a
+ * possibility rather than a theory. An unreadable board reads as an EMPTY
+ * board, never as a throw: a buyer asking "what's on my shortlist" gets
+ * "nothing yet" — which is wrong but harmless and recoverable — instead of a
+ * turn that dies on a JSON.parse.
+ *
+ * One parser, here, beside the field it parses. `crm/repository.ts` grew a
+ * private copy for the MemoryView lane before this existed; it now calls this.
+ */
+export function parseShortlistIds(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((v) => String(v).trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 export interface NdProjectSummary {

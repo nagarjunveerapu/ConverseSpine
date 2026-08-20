@@ -1840,22 +1840,50 @@ function fallbackReplyBody(req: ComposeRequest): string {
       const list = vs.map((v) => `*${v.projectName}* — ${v.label}${v.confirmed ? '' : ' (pending)'}`).join('; ');
       return `Your visits: ${list}. Our team will confirm details before the day.`;
     }
+    /**
+     * "What do you know about me?" — and the honest answer has to include the
+     * board. This template knew area, budget, size and purpose, and stopped
+     * there, while the engine had been writing `set_shortlist_project_ids` to
+     * Desk since the shortlist existed. So a buyer asking what was on their
+     * shortlist was told their budget.
+     *
+     * Purpose is read back in the buyer's words, not the column's: `self_use`
+     * is a database value, and quoting it back at somebody is the bot showing
+     * them its schema.
+     */
     case 'recall_constraints': {
       const c = context.constraints;
+      const purposeWord =
+        c.purpose === 'self_use' ? 'to live in' : c.purpose === 'investment' ? 'as an investment' : '';
       const bits = [
         c.location && `area *${c.location}*`,
         c.budgetMaxInr && `budget ~${formatInr(c.budgetMaxInr)}`,
         c.bhk && `*${c.bhk}*`,
-        c.purpose && `purpose ${c.purpose}`,
+        purposeWord && `buying ${purposeWord}`,
       ].filter(Boolean);
+      const shortlist = (context.shortlistNames ?? []).filter((n) => n.trim());
+      if (shortlist.length) {
+        bits.push(
+          `${shortlist.length === 1 ? 'saved' : 'shortlisted'}: ${shortlist
+            .map((n) => `*${n}*`)
+            .join(', ')}`,
+        );
+      }
       if (!bits.length) {
         return context.channel === 'advisor_web'
           ? "I don't have a brief on file yet — set area, budget, or size in preferences (or tell me here)."
           : "I don't have your brief on file yet — share area, budget, or BHK and I'll lock it in.";
       }
+      // Where it came from is part of the answer. Preferences typed on a form
+      // at a gate are the buyer's own words from ten minutes ago; saying so is
+      // what separates a read-back from the bot appearing to have inferred
+      // things about them.
+      const lead = context.selfRegistered
+        ? 'From what you filled in at the site office'
+        : 'Your brief so far';
       return context.channel === 'advisor_web'
-        ? `Your brief so far: ${bits.join(', ')}. It's on the board side — change a chip anytime, or ask me to refine.`
-        : `Your brief so far: ${bits.join(', ')}. Want me to show matches again, or open one by name?`;
+        ? `${lead}: ${bits.join(', ')}. It's on the board side — change a chip anytime, or ask me to refine.`
+        : `${lead}: ${bits.join(', ')}. Anything to change, or shall I pull up matches?`;
     }
     case 'handoff': {
       const phone = context.handoffPhone?.trim();
