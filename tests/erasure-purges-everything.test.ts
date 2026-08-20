@@ -134,7 +134,11 @@ describe('both doors do the same work', () => {
     const { deps, turn } = harness('erase-no-writeback');
     await turn('coorg, 50 Lakhs');
     const before = deps.crm.calls.filter((c) => c.startsWith('msg:')).length;
-    await turn('STOP');
+    // DELETE, not STOP. STOP is contact-only now and RETAINS the record, so it
+    // writes both sides of the exchange down on purpose — see
+    // tests/stop-and-delete.test.ts. Only the door that empties the table is
+    // forbidden from writing to it afterwards.
+    await turn('DELETE');
     const after = deps.crm.calls.filter((c) => c.startsWith('msg:')).length;
     expect(after, 'a message row was written after the erase').toBe(before);
   });

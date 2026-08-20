@@ -12,7 +12,7 @@ import {
 export async function deliverWhatsAppTurn(
   phoneNumberId: string,
   to: string,
-  result: Pick<TurnResult, 'reply_text' | 'whatsapp_actions' | 'whatsapp_interactive' | 'media_attachments'>,
+  result: Pick<TurnResult, 'reply_text' | 'whatsapp_actions' | 'whatsapp_interactive' | 'media_attachments' | 'consent_notice'>,
   token: string,
 ): Promise<void> {
   const packed = result.whatsapp_interactive;
@@ -32,6 +32,14 @@ export async function deliverWhatsAppTurn(
     );
   } else {
     await sendText(phoneNumberId, to, result.reply_text, token);
+  }
+  // The one-time "STOP / DELETE" line, as its own message. Not folded into the
+  // body above: that body is capped at 1024 characters when it is a list or a
+  // button set, and a notice about a legal right is the wrong thing to lose to
+  // a slice. Sent after the answer, so the buyer's actual question is what
+  // they read first.
+  if (result.consent_notice) {
+    await sendText(phoneNumberId, to, result.consent_notice, token);
   }
   const { deliverWhatsAppMediaAttachments } = await import('./deliver-media.js');
   await deliverWhatsAppMediaAttachments(phoneNumberId, to, result.media_attachments, token);

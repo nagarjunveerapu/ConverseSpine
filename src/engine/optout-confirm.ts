@@ -3,8 +3,37 @@ import type { Failure } from './outcome.js';
 export type StopConfirmMode = 'delete_confirm' | 'contact_scope';
 export type StopResolution = 'delete' | 'keep' | 'ambiguous' | 'other';
 
+/**
+ * The two words the buyer is TOLD about, at first contact — see
+ * `consentNotice` in ./consent-line.ts. Because we advertise them, they must
+ * behave exactly as advertised, and they must not mean the same thing.
+ *
+ * STOP stops the messages. It does not delete anything: a buyer who is done
+ * being contacted has not asked us to forget the visit they booked, and
+ * answering "stop texting me" by wiping their record was the second-worst
+ * reply in the corpus. `contact_only` is the scope Desk already had for it.
+ *
+ * Until now a bare STOP ran the full erasure and a bare DELETE matched
+ * nothing at all — it fell through to project search. The two words were
+ * backwards, and the destructive one was the one buyers actually type.
+ */
 export function isStandaloneStop(text: string): boolean {
   return /^(?:stop|unsubscribe)[.!]?\s*$/i.test(text.trim());
+}
+
+/**
+ * DELETE erases everything. Standalone only — "delete that message" and
+ * "delete the 2bhk from my shortlist" are ordinary sentences, and a word this
+ * destructive gets no fuzzy matching.
+ *
+ * No confirmation step, deliberately. The greeting said what this word does
+ * before the buyer typed it; asking "are you sure?" after advertising a
+ * keyword makes the advertised keyword a lie. Longer phrasings that only
+ * MIGHT mean deletion still go through the confirm ladder below, because
+ * there we are guessing and here we are not.
+ */
+export function isStandaloneDelete(text: string): boolean {
+  return /^(?:delete|erase)[.!]?\s*$/i.test(text.trim());
 }
 
 /**

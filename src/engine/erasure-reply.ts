@@ -65,7 +65,10 @@ export function composeErasureReply(
     return "Understood — I've stopped all messages and cancelled anything standing." +
       visitClause.replace(' Your', ' Your') +
       " I haven't deleted your details, so nothing is lost if you come back." +
-      ' Say "delete my data" if that\'s what you\'d like instead.';
+      // The advertised word, not a phrase to guess at. This sentence used to
+      // read 'Say "delete my data"' — which is the exact vocabulary problem
+      // the consent notice exists to end.
+      ' Reply DELETE if that\'s what you\'d like instead.';
   }
 
   // No receipt, no tombstone, or a table that threw — all the same thing to
@@ -177,8 +180,12 @@ export async function performErasure(
   // live out its 30 days. The DO is addressed two ways — `state:{convId}` for
   // L0, `{builderId}:{phone}` for the WhatsApp debouncer, which holds the
   // buyer's phone number and their raw un-processed messages — so both go.
+  // Only a real erasure purges. `contact_only` means "stop messaging me" —
+  // the record is retained by design at Desk, and throwing away the thread
+  // here would lose the buyer's context for a request that never asked for it.
+  // They can still write to us; silence is the tombstone's job, not amnesia's.
   let purged = false;
-  if (deps.store.purge) {
+  if (deps.store.purge && input.scope === 'all') {
     await deps.store
       .purge(input.convId, { builderId: input.builderId, buyerPhone: input.buyerPhone })
       .then(() => { purged = true; })

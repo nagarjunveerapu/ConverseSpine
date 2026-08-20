@@ -254,6 +254,16 @@ export interface ConversationState {
   /** Opt-out confirmation/disambiguation is active. */
   stopConfirmPending?: boolean;
   /**
+   * When the buyer was told how to leave — the STOP / DELETE line, sent once
+   * at first contact. Its presence is what stops it being repeated, and its
+   * value is the consent evidence: a regulator's question is "when did you
+   * tell them", not "did you intend to".
+   *
+   * Absent on a state this engine has erased, deliberately — see `erasedState`.
+   * A buyer who came back after being forgotten is a first contact again.
+   */
+  consentNoticedAt?: number;
+  /**
    * Removed. `optedOut` was set by the STOP door and read by nothing: it
    * described a session that was supposed to be silent, on a state object
    * that no reader consulted before speaking. Silence is Desk's tombstone

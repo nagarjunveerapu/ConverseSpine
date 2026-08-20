@@ -159,6 +159,13 @@ export interface TurnResult {
       };
   /** Named media for client cards / WhatsApp native send (URL not in reply_text). */
   media_attachments?: MediaAttachmentDto[];
+  /**
+   * One-time "Reply STOP … or DELETE …" line, present only on the turn that
+   * owes it. Its own message, not appended to `reply_text`: the first reply is
+   * often an interactive list whose body caps at 1024 characters, and a notice
+   * that gets silently truncated is worse than no notice.
+   */
+  consent_notice?: string;
   /** Engine debug — NayaDesk Auto/Vault map tools → brain.tool_calls. */
   debug?: {
     phase?: string;

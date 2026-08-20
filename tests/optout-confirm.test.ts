@@ -52,13 +52,30 @@ function phase1Harness(convId: string) {
 }
 
 describe('opt-out confirm flow', () => {
-  it('standalone STOP deletes immediately', async () => {
-    const { deps, turn } = harness('stop-standalone');
+  it('standalone DELETE deletes immediately', async () => {
+    // No confirmation, deliberately: the first greeting told this buyer that
+    // DELETE removes everything, and a keyword you advertise has to work when
+    // it is typed. The confirm ladder below is for phrasings we are GUESSING
+    // at — there we may be wrong, here we cannot be.
+    const { deps, turn } = harness('delete-standalone');
     await turn('coorg, 50 Lakhs');
-    const r = await turn('STOP');
+    const r = await turn('DELETE');
     expect(r.reply).toMatch(/deleted/i);
     expect(r.state.phase).toBe('handoff');
     expect(deps.crm.calls).toContain('erase:all');
+  });
+
+  it('standalone STOP stops the messages and keeps the record', async () => {
+    // The two words used to be one word doing the wrong thing: STOP ran the
+    // full erasure, and DELETE matched nothing at all and fell through to
+    // project search. A buyer who is done being contacted has not asked us to
+    // forget the visit they booked.
+    const { deps, turn } = harness('stop-standalone');
+    await turn('coorg, 50 Lakhs');
+    const r = await turn('STOP');
+    expect(deps.crm.calls).toContain('erase:contact_only');
+    expect(deps.crm.calls).not.toContain('erase:all');
+    expect(r.reply).toMatch(/haven't deleted your details/i);
   });
 
   it('sentence opt-out confirms first; "yes" then deletes', async () => {
