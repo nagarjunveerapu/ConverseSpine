@@ -18,7 +18,8 @@ import { describe, expect, it } from 'vitest';
 import { seedFromDeskBrief, resolveShortlistNames } from '../src/engine/desk-brief.js';
 import { owesWelcome, welcomeLine } from '../src/engine/welcome.js';
 import { fallbackReply } from '../src/engine/compose.js';
-import { initState } from '../src/engine/state.js';
+import { commitTo, initState } from '../src/engine/state.js';
+import { discussedList } from '../src/engine/entity-store.js';
 import { INTENT_EFFECTS, applyIntentAuthority } from '../src/engine/turn-routing/intent-authority.js';
 import { parseShortlistIds } from '../src/crm/nayadesk-client.js';
 import type { ComposeRequest, ConversationState, Extracted } from '../src/engine/types.js';
@@ -94,6 +95,68 @@ describe('seedFromDeskBrief — the record Desk already held', () => {
     const { state, seeded } = seedFromDeskBrief(before, undefined);
     expect(state).toBe(before);
     expect(seeded).toEqual([]);
+  });
+});
+
+describe('the project the buyer was already standing in', () => {
+  it('starts the bot focused on the project whose door they registered at', () => {
+    const { state, seeded } = seedFromDeskBrief(
+      cold(),
+      brief({ projectId: 'brigade-oasis', projectName: 'Brigade Oasis', selfRegistered: true }),
+    );
+    expect(state.phase).toBe('focused');
+    expect(state.focus).toEqual({ projectId: 'brigade-oasis', projectName: 'Brigade Oasis' });
+    expect(seeded).toContain('project');
+  });
+
+  it('will not speak an id as a name', () => {
+    // Desk sends the name only when its own has_project gate passes. No name
+    // means the lead is still browsing — and "about brigade-oasis —" is not an
+    // answer to anybody, so an unnamed id seeds nothing at all.
+    const { state, seeded } = seedFromDeskBrief(cold(), brief({ projectId: 'brigade-oasis' }));
+    expect(state.phase).toBe('discover');
+    expect(state.focus).toBeUndefined();
+    expect(seeded).not.toContain('project');
+  });
+
+  it('never overrules a focus this session already has', () => {
+    const live = commitTo(cold(), 'cornerstone-utopia', 'Cornerstone Utopia');
+    const { state, seeded } = seedFromDeskBrief(
+      live,
+      brief({ projectId: 'brigade-oasis', projectName: 'Brigade Oasis' }),
+    );
+    expect(state.focus?.projectId).toBe('cornerstone-utopia');
+    expect(seeded).not.toContain('project');
+  });
+
+  it('records it as discussed, the way an offered project would be', () => {
+    // Otherwise the salience and shortlist readers see a focus that nothing
+    // in the session ever mentioned.
+    const { state } = seedFromDeskBrief(
+      cold(),
+      brief({ projectId: 'brigade-oasis', projectName: 'Brigade Oasis' }),
+    );
+    expect(discussedList(state).some((p) => p.projectId === 'brigade-oasis')).toBe(true);
+  });
+
+  it('still seeds the brief around it', () => {
+    // The door stamps a project AND the form beside it; one must not cost the
+    // other.
+    const { state, seeded } = seedFromDeskBrief(
+      cold(),
+      brief({
+        projectId: 'brigade-oasis',
+        projectName: 'Brigade Oasis',
+        bhk: '3 BHK',
+        budget: '1.2 Cr',
+        buyerName: 'Ravi Kumar',
+      }),
+    );
+    expect(state.focus?.projectName).toBe('Brigade Oasis');
+    expect(state.constraints.bhk).toBe('3 BHK');
+    expect(state.constraints.budgetMaxInr).toBe(12_000_000);
+    expect(state.buyerName).toBe('Ravi Kumar');
+    expect(seeded).toEqual(expect.arrayContaining(['project', 'bhk', 'budget', 'buyerName']));
   });
 });
 

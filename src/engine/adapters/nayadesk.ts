@@ -985,7 +985,17 @@ export function nayadeskData(
             ...(conv.budget_inr?.trim() ? { budget: conv.budget_inr.trim() } : {}),
             ...(conv.location_pref?.trim() ? { location: conv.location_pref.trim() } : {}),
             ...(conv.purpose?.trim() ? { purpose: conv.purpose.trim() } : {}),
-            ...(conv.project_id?.trim() ? { projectId: conv.project_id.trim() } : {}),
+            // Paired on purpose. Desk sends `project` only when the row is
+            // focused and belongs to this tenant, so a named project here IS
+            // Desk's verdict that the buyer is on one — the door they
+            // registered at, or the project an agent attached on the walk-in
+            // sheet. Without a name we send neither field: half a project is
+            // worse than none.
+            ...(conv.project_id?.trim() &&
+            ctx?.project?.name?.trim() &&
+            ctx.project.project_id === conv.project_id.trim()
+              ? { projectId: conv.project_id.trim(), projectName: ctx.project.name.trim() }
+              : {}),
             shortlistProjectIds: parseShortlistIds(conv.shortlist_project_ids),
             selfRegistered: conv.source_detail === 'self_registered',
           }

@@ -31,6 +31,7 @@
  */
 import { parseBudgetToInr } from './facts.js';
 import type { DeskBrief } from './ports.js';
+import { commitTo } from './state.js';
 import type { ConversationState, Constraints } from './types.js';
 
 /** Desk's `purpose` column is free-form; only these two mean anything here. */
@@ -101,6 +102,25 @@ export function seedFromDeskBrief(
   ) {
     next = { ...next, deskShortlistIds: brief.shortlistProjectIds };
     seeded.push('shortlist');
+  }
+
+  // The project the buyer is already standing in.
+  //
+  // Someone who scanned the QR at Brigade Oasis' site office, or whom an agent
+  // put on that project in the walk-in sheet, opens WhatsApp already committed
+  // — and used to meet a bot in `discover`, which answered "which project are
+  // you looking at?" about the one whose gate they had just walked through.
+  //
+  // Desk decides, not us: the name only arrives when `project_state` is
+  // `'focused'` (see DeskBrief.projectName). Gap-fill like everything else —
+  // if this session has a focus of its own it wins, and a buyer who opens with
+  // a different ask is released by the ordinary pivot path, which is what that
+  // path is for. `commitTo` also records the project as discussed, so the
+  // shortlist and salience readers see it the same way they would if the bot
+  // had offered it.
+  if (brief.projectId && brief.projectName && next.phase === 'discover' && !next.focus) {
+    next = commitTo(next, brief.projectId, brief.projectName);
+    seeded.push('project');
   }
 
   if (brief.selfRegistered && !next.selfRegistered) {
