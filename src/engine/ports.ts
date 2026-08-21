@@ -39,7 +39,19 @@ export interface DeskBrief {
   budget?: string;
   location?: string;
   purpose?: string;
+  /**
+   * The project this lead is ON, and the name to say it by.
+   *
+   * Set together or not at all. `/api/conversation-context` returns the
+   * project row only when Desk's own `has_project` gate passes —
+   * `project_id !== '' && project_state === 'focused'` — and it re-reads the
+   * row `AND builder_id = ?`, so a name arriving here has already been
+   * checked for focus and for tenancy. A lead still browsing sends no name,
+   * and this side must not invent one: an id spoken as a name
+   * ("about proj_8f21c —") is not an answer to anybody.
+   */
   projectId?: string;
+  projectName?: string;
   /** Desk's durable board. Spine writes this and had never read it back. */
   shortlistProjectIds: string[];
   /**
