@@ -6583,10 +6583,12 @@ async function syncTelemetry(
     await deps.crm
       .postProfileObservations(state.builderId, buyerPhone, nd, observations)
       .catch((err) => {
+        // No buyerPhone. This was the one console.* in the turn path carrying a
+        // raw E.164 number, ungated, on prod. `nd` is the NayaDesk conversation
+        // id — it finds the same row and is not personal data by itself.
         console.error(
           '[syncTelemetry] postProfileObservations',
           nd,
-          buyerPhone,
           observations.map((o) => o.fact_key),
           err,
         );
