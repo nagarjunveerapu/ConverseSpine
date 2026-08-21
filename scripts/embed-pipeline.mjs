@@ -102,13 +102,33 @@ function envConfig(envName) {
   };
 }
 
+/**
+ * Which environment variable supplied the credential — the NAME, never a value.
+ *
+ * A 404 from the probe door says only "refused". Knowing that the run
+ * presented `BOT_SHARED_SECRET` because `SIL_EVAL_SECRET` was empty turns that
+ * into an actionable sentence, and it is the single most common way this job
+ * fails: the worker gets the narrow key and the CI environment never does.
+ */
+function secretSource(cfg) {
+  if (process.env.SIL_EVAL_SECRET?.trim()) return 'SIL_EVAL_SECRET';
+  if (process.env[cfg.secretVar]?.trim()) return cfg.secretVar;
+  if (process.env.BOT_SHARED_SECRET?.trim()) return 'BOT_SHARED_SECRET';
+  return '(none)';
+}
+
 function secretFor(cfg) {
   // SIL_EVAL_SECRET first: it opens only /api/sil/probe and /api/sil/embed, so
   // it is the key this script should be holding. BOT_SHARED_SECRET stays as the
   // fallback for local runs and dev, where it is already to hand — but it also
   // HMACs Desk's signed media URLs, so prod should be measured with the narrow
   // key rather than a copy of the one that signs buyer downloads.
-  const s = process.env.SIL_EVAL_SECRET || process.env[cfg.secretVar] || process.env.BOT_SHARED_SECRET;
+  const raw = process.env.SIL_EVAL_SECRET || process.env[cfg.secretVar] || process.env.BOT_SHARED_SECRET;
+  // Trimmed, because `silEvalAllowed` compares in constant time and returns
+  // false on a length mismatch first — so a secret pasted into the GitHub UI
+  // with a trailing newline fails EXACTLY like a wrong value, with no way to
+  // tell from the outside. Nothing legitimate has surrounding whitespace.
+  const s = (raw ?? '').trim();
   if (!s) {
     die(
       `missing SIL_EVAL_SECRET / BOT_SHARED_SECRET (or ${cfg.secretVar}) for env "${cfg.name}".\n` +
@@ -117,7 +137,75 @@ function secretFor(cfg) {
         `  must declare "environment:", or every secret arrives as an empty string.`,
     );
   }
+  if (raw !== s) {
+    console.warn(`embed-pipeline: ${secretSource(cfg)} had surrounding whitespace; trimmed.`);
+  }
   return s;
+}
+
+/**
+ * Why the probe door said no — answered, not guessed at.
+ *
+ * `silEvalAllowed` refuses with 404 so the door is invisible to a stranger,
+ * which also makes it invisible to us. But the two 404s are NOT identical, and
+ * that is the whole diagnosis:
+ *
+ *   src/index.ts:303  route miss  →  { error: 'not_found', path: '/…' }
+ *   src/index.ts:131  gate refusal → { error: 'not_found' }        // no path
+ *
+ * So ONE header-less request separates every case. This is checked with no
+ * credential at all, so it is safe to run and safe to print.
+ */
+async function diagnoseProbeDoor(cfg) {
+  let res;
+  try {
+    res = await http('POST', `${cfg.spine}/api/sil/probe`, { body: { items: [] }, timeoutMs: 20_000 });
+  } catch (err) {
+    return `  Could not reach ${cfg.spine} to diagnose further (${String(err).slice(0, 120)}).`;
+  }
+  if (res.status === 200) {
+    return (
+      `  The door is OPEN WITHOUT A CREDENTIAL on this worker (SIL_EVAL_ENABLED = "true"),\n` +
+      `  so the 404 above cannot be about the key. Something else changed — re-read the status.`
+    );
+  }
+  if (res.status === 404 && typeof res.json?.path === 'string') {
+    return (
+      `  /api/sil/probe IS NOT DEPLOYED on this worker: an unauthenticated request comes back\n` +
+      `  with a "path" field, which only the route-miss handler adds. Deploy the worker.\n` +
+      `    npx wrangler deployments list --env ${cfg.name}`
+    );
+  }
+  if (res.status === 404) {
+    const ghEnv = cfg.name === 'prod' ? 'production' : cfg.name;
+    const presented = secretSource(cfg);
+    // Two different bugs wear this same 404, and they need opposite fixes.
+    // Which one it is follows from WHICH key the run had to fall back to.
+    const remedy =
+      presented === 'SIL_EVAL_SECRET'
+        ? `  Both sides have the NAME, so the VALUES have drifted. Setting one without the other is\n` +
+          `  the usual cause; compare when each was last written (neither prints a value):\n` +
+          `    gh api repos/<owner>/ConverseSpine/environments/${ghEnv}/secrets \\\n` +
+          `      --jq '.secrets[] | select(.name=="SIL_EVAL_SECRET") | .updated_at'\n` +
+          `    npx wrangler deployments list --env ${cfg.name}   # look for "Source: Secret Change"\n` +
+          `  Whichever is older is the stale one. Push the newer value to the other side:\n` +
+          `    npx wrangler secret put SIL_EVAL_SECRET --env ${cfg.name}`
+        : `  It fell back to that key because SIL_EVAL_SECRET was empty. Compare the NAMES on the\n` +
+          `  worker (no values printed):\n` +
+          `    npx wrangler secret list --env ${cfg.name}\n` +
+          `  If the worker has SIL_EVAL_SECRET and CI does not, that is the bug: add SIL_EVAL_SECRET\n` +
+          `  to the GitHub environment "${ghEnv}" with the worker's value.`;
+    return (
+      `  /api/sil/probe IS deployed — the unauthenticated 404 carries no "path", so it came\n` +
+      `  from the gate, not the router. This is a CREDENTIAL MISMATCH.\n` +
+      `  This run presented ${presented}.\n` +
+      remedy + `\n` +
+      `  SIL_EVAL_SECRET is safe to rotate — it opens the two read-only probe routes and signs\n` +
+      `  nothing. BOT_SHARED_SECRET is not: Desk HMACs signed media URLs with it, so rotating that\n` +
+      `  one to feed CI would kill every brochure link already sent to a buyer.`
+    );
+  }
+  return `  Unauthenticated probe returned HTTP ${res.status}, which is not a shape this script knows.`;
 }
 
 /** True when a Cloudflare API error is about permission, not about the data.
@@ -196,20 +284,18 @@ async function probe(cfg, secret, items) {
       body: { items: batch.map(({ text, expected }) => ({ text, ...(expected ? { expected } : {}) })) },
     });
     if (status !== 200) {
-      // 404 is what silEvalAllowed returns when it refuses — indistinguishable
-      // from "route not deployed" by design, so spell out how to tell them
-      // apart instead of sending the reader to the wrong one. (Checking the
-      // build first cost an hour on 18 Aug; the build was fine, the secret
-      // was not.)
-      const hint =
-        status === 404
-          ? `\n  The probe door refuses with 404 rather than 401, so this is one of two things:\n` +
-            `    1. the deployed worker predates the secret-gated probe (check /health and the last deploy), or\n` +
-            `    2. neither SIL_EVAL_SECRET nor BOT_SHARED_SECRET here matches the deployed worker.\n` +
-            `  Tell them apart WITHOUT reading any secret: POST malformed JSON to /internal/cache-invalidate\n` +
-            `  with no x-bot-secret header. 403 = the worker HAS a secret set (so it is case 2, a value\n` +
-            `  mismatch); 400 invalid_json = the worker has no secret at all.`
-          : '';
+      // 404 is what silEvalAllowed returns when it refuses — deliberately the
+      // same status a missing route gets, so a stranger cannot map the door.
+      //
+      // The previous hint told the reader to check the build first and offered
+      // a test (/internal/cache-invalidate) that only proves the worker holds
+      // SOME bot secret — it never proved the probe route was deployed, so it
+      // could not actually separate the two cases it named. On 21 Aug it sent
+      // a reader to check a build that had been deployed two minutes earlier.
+      //
+      // Now the script runs the test that does separate them and prints the
+      // ANSWER. See diagnoseProbeDoor.
+      const hint = status === 404 ? `\n${await diagnoseProbeDoor(cfg)}` : '';
       die(`probe ${cfg.name} HTTP ${status}${hint}`);
     }
     out.push(...json.results);
@@ -333,8 +419,32 @@ async function gradeVectorLane(cfg, secret, rows, index, threshold, idField) {
   return { graded, ok: graded.filter((g) => g.ok).length, total: graded.length, mode };
 }
 
+/**
+ * Did the credential actually get exercised?
+ *
+ * On dev `SIL_EVAL_ENABLED = "true"`, so /api/sil/probe answers 200 to a
+ * request carrying NO key at all. A green dev run therefore proves the lanes
+ * are healthy — and proves nothing whatever about the secret. Prod has no eval
+ * flag by design, which is why prod is the only job that can go red this way,
+ * and why "but dev is green" has never been evidence about a prod credential.
+ *
+ * One header-less request, stated once, so nobody has to rediscover that.
+ */
+async function noteIfDoorIsOpen(cfg) {
+  try {
+    const { status } = await http('POST', `${cfg.spine}/api/sil/probe`, { body: { items: [] }, timeoutMs: 20_000 });
+    if (status === 200) {
+      console.warn(
+        `embed-pipeline: note — ${cfg.name}'s probe door answers without a credential ` +
+        `(SIL_EVAL_ENABLED). This run's ${secretSource(cfg)} was never checked by the worker.`,
+      );
+    }
+  } catch { /* diagnostics must never fail the run they are describing */ }
+}
+
 async function cmdVerify(cfg, { out }) {
   const secret = secretFor(cfg);
+  await noteIfDoorIsOpen(cfg);
   const golden = loadGolden();
   const gates = golden.gates;
   const started = new Date().toISOString();
