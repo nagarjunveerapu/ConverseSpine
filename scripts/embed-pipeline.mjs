@@ -177,13 +177,29 @@ async function diagnoseProbeDoor(cfg) {
     );
   }
   if (res.status === 404) {
+    const ghEnv = cfg.name === 'prod' ? 'production' : cfg.name;
+    const presented = secretSource(cfg);
+    // Two different bugs wear this same 404, and they need opposite fixes.
+    // Which one it is follows from WHICH key the run had to fall back to.
+    const remedy =
+      presented === 'SIL_EVAL_SECRET'
+        ? `  Both sides have the NAME, so the VALUES have drifted. Setting one without the other is\n` +
+          `  the usual cause; compare when each was last written (neither prints a value):\n` +
+          `    gh api repos/<owner>/ConverseSpine/environments/${ghEnv}/secrets \\\n` +
+          `      --jq '.secrets[] | select(.name=="SIL_EVAL_SECRET") | .updated_at'\n` +
+          `    npx wrangler deployments list --env ${cfg.name}   # look for "Source: Secret Change"\n` +
+          `  Whichever is older is the stale one. Push the newer value to the other side:\n` +
+          `    npx wrangler secret put SIL_EVAL_SECRET --env ${cfg.name}`
+        : `  It fell back to that key because SIL_EVAL_SECRET was empty. Compare the NAMES on the\n` +
+          `  worker (no values printed):\n` +
+          `    npx wrangler secret list --env ${cfg.name}\n` +
+          `  If the worker has SIL_EVAL_SECRET and CI does not, that is the bug: add SIL_EVAL_SECRET\n` +
+          `  to the GitHub environment "${ghEnv}" with the worker's value.`;
     return (
       `  /api/sil/probe IS deployed — the unauthenticated 404 carries no "path", so it came\n` +
       `  from the gate, not the router. This is a CREDENTIAL MISMATCH.\n` +
-      `  This run presented ${secretSource(cfg)}. Compare the NAMES on the worker (no values printed):\n` +
-      `    npx wrangler secret list --env ${cfg.name}\n` +
-      `  If the worker has SIL_EVAL_SECRET and CI does not, that is the bug: add SIL_EVAL_SECRET to\n` +
-      `  the GitHub environment "${cfg.name === 'prod' ? 'production' : cfg.name}" with the worker's value.\n` +
+      `  This run presented ${presented}.\n` +
+      remedy + `\n` +
       `  SIL_EVAL_SECRET is safe to rotate — it opens the two read-only probe routes and signs\n` +
       `  nothing. BOT_SHARED_SECRET is not: Desk HMACs signed media URLs with it, so rotating that\n` +
       `  one to feed CI would kill every brochure link already sent to a buyer.`
