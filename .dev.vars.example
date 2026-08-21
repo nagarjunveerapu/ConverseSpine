@@ -27,9 +27,4 @@ NAYADESK_URL=http://localhost:8787
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 
-# Optional — Langfuse cloud project keys
-# LANGFUSE_PUBLIC_KEY=pk-lf-...
-# LANGFUSE_SECRET_KEY=sk-lf-...
-# LANGFUSE_BASE_URL=https://cloud.langfuse.com
-
 DEFAULT_BUILDER_ID=lokations

@@ -13,7 +13,6 @@ import {
 import { runEngineTurn } from '../engine/turn.js';
 import { kvStore } from '../engine/store-kv.js';
 import type { EngineDeps } from '../engine/ports.js';
-import { LangfuseTracer } from '../observability/langfuse.js';
 import { emitLocalTurnLog, localTurnLogEnabled } from '../observability/local-turn-log.js';
 import { classifyTurnIntent } from '../engine/turn-intent/classify.js';
 import { engineDepsWithRuntimeFlags } from './failure-flags.js';
@@ -35,12 +34,10 @@ function resolveSyncBamlMode(env: Env): import('../engine/extract-baml.js').Baml
 /** ConverseEngine runtime — wires NayaDesk + KV state + LLM compose. */
 export class ConverseRuntime {
   readonly crm: NayaDeskClient;
-  readonly trace: LangfuseTracer;
   readonly engine: EngineDeps;
 
   constructor(readonly env: Env) {
     this.crm = new NayaDeskClient(env);
-    this.trace = new LangfuseTracer(env);
     const bamlMode = resolveSyncBamlMode(env);
     const intentRecoveryMode = resolveIntentRecoveryMode(env);
     const hybridMode = resolveHybridMode(env);

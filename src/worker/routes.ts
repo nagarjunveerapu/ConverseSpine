@@ -237,7 +237,6 @@ export function health(env: Env): Response {
     version: '0.6.0',
     env: env.LOG_LEVEL ?? 'info',
     nayadesk: env.NAYADESK ? 'binding' : env.NAYADESK_URL ?? 'unset',
-    langfuse: Boolean(env.LANGFUSE_PUBLIC_KEY),
     deepseek: Boolean(env.DEEPSEEK_API_KEY),
   });
 }

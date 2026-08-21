@@ -95,7 +95,7 @@ This is the whole trick: **global catalog explodes, conversation working set sta
                                                  │  (deterministic turn spine)│                education · holds ·
                                                  └──┬────────┬───────┬────────┘                geography · CP graph;
                                           Workers AI  Vectorize×3   DeepSeek                    D1 lives here)
-                                          (embed)     (intent/proj/edu) (LLM) · Langfuse
+                                          (embed)     (intent/proj/edu) (LLM)
 ```
 
 **The boundary rule (load-bearing).** Desk owns **truth**: catalog, per-project facts/FAQs, education content, the geography/area registry, the CP authorization graph, the CRM dossier, and the intent **labels**. CS owns the **turn**: the deterministic pipeline, the embedding **geometry** (model + learned projection + index membership), ranking, and composition. When these blur, things break silently — Desk once embedded-and-upserted intent vectors directly and stopped reaching the bot the moment the vector space changed, which is why the single writer to the intent index is now a CS route (§8). Trace consumers before changing any response shape.
@@ -125,7 +125,7 @@ Single Cloudflare Worker, `main = src/index.ts`, `compatibility_date = 2026-05-0
 | `EDUCATION_VECTORS` | Vectorize | Buyer-education retrieval — **jurisdiction-scoped** (§8). |
 | `AI` | Workers AI | Embeddings (`@cf/baai/bge-base-en-v1.5`). |
 
-**External (network, not bindings):** DeepSeek (`deepseek-chat`) for LLM extract + compose; Langfuse traces; WhatsApp Graph outbound.
+**External (network, not bindings):** DeepSeek (`deepseek-chat`) for LLM extract + compose; WhatsApp Graph outbound. **No third-party observability sink** — buyer text and replies never leave Cloudflare (the Langfuse tracer that used to sit here was removed 21 Aug 2026; it was wired but never enabled in any environment).
 
 **Deliberately absent today (greenfield for §11):** no `[[queues]]`, no `[[analytics_engine_datasets]]`, **no D1 in CS** (all relational truth is Desk's). The telemetry/CRM offload seam is net-new infra.
 

@@ -99,8 +99,8 @@ Generating separately in each gives you two different secrets and every call to
 Desk 401s, which presents as a bot with an empty catalog rather than as an auth
 error.
 
-Optional, off when unset: `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`,
-`GOOGLE_PLACES_API_KEY`. Leave `DEEPSEEK_API_KEY` unset and the engine falls
+Optional, off when unset: `GOOGLE_PLACES_API_KEY`.
+Leave `DEEPSEEK_API_KEY` unset and the engine falls
 back to Workers AI — but do not set it to a placeholder, which makes `/health`
 report `deepseek: true` and suppresses that fallback.
 
