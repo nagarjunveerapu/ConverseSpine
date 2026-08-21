@@ -59,13 +59,28 @@ export function localTurnLogPath(): string {
   return LOG_FILE;
 }
 
+let warnedNoFilesystem = false;
+
 export function emitLocalTurnLog(env: Env, entry: LocalTurnLogEntry): void {
   if (!localTurnLogEnabled(env)) return;
   const line = `${JSON.stringify(entry)}\n`;
   try {
     syncAppendLogLine(line);
   } catch {
-    console.log(`[turn-debug] ${line.trim()}`);
+    // This catch branch is the DEPLOYED branch. `node:fs` does not exist in a
+    // Worker isolate, so appendFileSync always throws off a laptop — and
+    // LOCAL_TURN_LOG is "on" in three deployed environments (dev, ctrldev,
+    // projdev). It used to console.log `line`, which is the whole entry:
+    // buyer_text verbatim, reply_preview, and the buyer's constraints. Every
+    // turn on those three Workers wrote a buyer's message into Workers Logs,
+    // where it sits under Cloudflare's retention rather than ours.
+    //
+    // The notice carries no entry data and fires once per isolate, so a
+    // developer whose logs/turn-debug.jsonl stays empty learns why.
+    if (!warnedNoFilesystem) {
+      warnedNoFilesystem = true;
+      console.warn('[turn-debug] no filesystem in this runtime — local turn log is wrangler-dev only');
+    }
   }
 }
 

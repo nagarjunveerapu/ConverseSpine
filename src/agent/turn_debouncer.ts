@@ -120,12 +120,15 @@ export class TurnDebouncer implements DurableObject {
   async alarm(): Promise<void> {
     const inbox = (await this.state.storage.get<InboxEntry[]>('inbox')) ?? [];
     if (inbox.length === 0) return;
+    // How many entries this alarm is answering, read before the first await.
+    // The drain at the bottom needs the count as it was when we took the batch,
+    // and `inbox.length` is not that number by the time we get there: enqueue
+    // can run between any two awaits below and appends to the same key.
+    const handled = inbox.length;
 
     const builder_id = (await this.state.storage.get<string>('builder_id'))!;
     const buyer_phone = (await this.state.storage.get<string>('buyer_phone'))!;
     const phone_number_id = (await this.state.storage.get<string>('phone_number_id'))!;
-
-    await this.state.storage.put('inbox', []);
 
     const last = inbox[inbox.length - 1];
     const action_id = [...inbox].reverse().find((e) => e.action_id)?.action_id;
@@ -152,5 +155,32 @@ export class TurnDebouncer implements DurableObject {
     if (token) {
       await deliverWhatsAppTurn(phone_number_id, buyer_phone, result, token);
     }
+
+    // The drain happens HERE, after the reply is out — and it removes exactly
+    // the batch this alarm handled rather than blanking the inbox.
+    //
+    // It used to be the first thing the alarm did, above. That destroyed the
+    // buyer's message before anything had been done with it: getWhatsAppCreds
+    // is a fetch to Desk, handleChat is the whole engine, deliverWhatsAppTurn
+    // is the Meta Graph API, and any of the three can throw. When one did, the
+    // runtime's alarm retries all re-entered at `if (inbox.length === 0)
+    // return` and did nothing — six no-ops. The buyer sent a message and got
+    // permanent silence, with no error anywhere that named them.
+    //
+    // `.slice(handled)`, not `[]`, because enqueue only ever appends. The first
+    // `handled` entries are the batch we just answered; anything past them
+    // arrived WHILE we were answering. Blanking would eat those, and that is
+    // the commoner loss — a buyer typing "2bhk" and then "in whitefield"
+    // produces it every time. The stragglers already have an alarm: enqueue
+    // sees getAlarm() as null while this handler runs and sets a fresh one.
+    //
+    // The trade this accepts: if delivery throws after handleChat succeeded,
+    // the retry runs handleChat again, so that turn's Desk appends can double
+    // and the second reply is composed from state that already moved. Worse
+    // than clean, better than silence. Duplicate *enqueues* are separately
+    // guarded — SEEN_KEY holds the last 50 meta_message_ids in strongly
+    // consistent storage, checked before anything is appended.
+    const queued = (await this.state.storage.get<InboxEntry[]>('inbox')) ?? [];
+    await this.state.storage.put('inbox', queued.slice(handled));
   }
 }
