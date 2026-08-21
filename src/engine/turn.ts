@@ -523,9 +523,22 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // Carried to debug so "the bot knew my budget" is a checkable claim about a
   // specific turn, not a thing we believe about the wiring.
   let deskBriefSeeded: string[] = [];
-  // Desk bootstrap is expensive — only on cold conversations (first turn).
-  // Later turns use Spine state + L1–L4; CRM sync rides waitUntil.
-  if (nd && state.turnCount === 0) {
+  // Desk bootstrap is expensive, so it runs when there is a reason to look —
+  // not on a clock.
+  //
+  // The condition used to be `turnCount === 0`, described as "only on cold
+  // conversations (first turn)". The session is what turns cold; the buyer is
+  // not. `handleChat` resolves this `convId` from Desk's `upsertLead`, Desk's
+  // `conversations` row is `UNIQUE(builder_id, buyer_phone)`, and the same id
+  // keys the Durable Object — so a person gets exactly one turn 0, ever, and
+  // every fact Desk recorded after it went into a row nobody would read again.
+  // That is the whole reason a buyer who filled the registration form got a
+  // hello with nothing in it: she had messaged the bot three days earlier.
+  //
+  // `deskBriefAt` asks the honest question instead — have we looked at all? An
+  // empty row still counts as looked, so a session that finds nothing does not
+  // re-fetch forever; `freshSession` clears it, so `/reset` looks again.
+  if (nd && (state.turnCount === 0 || state.deskBriefAt === undefined)) {
     const boot = await deps.data.bootstrapContext(nd).catch(() => null);
     if (boot) {
       if (boot.returningBuyer && !state.returningBuyer) {
@@ -556,6 +569,10 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       if (briefSeed.seeded.length) {
         deskBriefSeeded = briefSeed.seeded;
       }
+      // Stamped on the LOOK, not on the find — see `deskBriefAt`. A row that
+      // holds nothing is an answer, and re-asking it every turn would put a
+      // Desk round trip on the critical path of every message the bot handles.
+      state = { ...state, deskBriefAt: deps.clock.nowMs() };
       // P2b — gap-fill RTI / focus from ledger prior (live KV wins).
       state = hydrateStateFromFeedForward(state, mapLedgerPrior(boot.ledgerPrior));
       // P2c — merge ledger disclosed into session accum.

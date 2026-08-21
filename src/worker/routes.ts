@@ -219,6 +219,29 @@ export async function handleCacheInvalidate(
   if (!req || typeof req !== 'object' || !req.type) {
     return json({ error: 'type_required' }, 400);
   }
+
+  // A lead invalidate clears one field on one session; it is not a KV sweep.
+  // The session lives in the Durable Object because that store is
+  // read-after-write consistent — a KV marker would be the wrong shape here,
+  // since KV caches a miss per colo for up to a minute and the buyer's next
+  // message can easily land inside that window.
+  if (req.type === 'lead') {
+    const convId = (req.conversationId ?? '').trim();
+    if (!convId) return json({ error: 'conversation_id_required' }, 400);
+    // The runtime's own store, not a second construction of it — which
+    // binding backs the session is a fact that must have one home.
+    const { createWorkerRuntime } = await import('../runtime/deps.js');
+    const { store } = createWorkerRuntime(env).engine;
+    const state = await store.load(convId).catch(() => null);
+    // No session yet is the ordinary case, not a failure: the buyer registered
+    // and has not messaged. Their first turn is a turn 0 and reads the row
+    // anyway.
+    if (!state) return json({ ok: true, session: 'absent' });
+    const { deskBriefAt: _dropped, ...rest } = state;
+    await store.save(rest);
+    return json({ ok: true, session: 'refreshed' });
+  }
+
   const result = await invalidateTurnCache(env.TURN_CACHE, req);
   return json({ ok: true, ...result });
 }

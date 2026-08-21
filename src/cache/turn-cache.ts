@@ -353,9 +353,23 @@ export async function putSearchMemo(
 }
 
 export type InvalidateRequest = {
-  type: 'segment' | 'project' | 'search' | 'embed' | 'all';
+  /**
+   * `'lead'` is not a cache key. Desk sends it when a HUMAN changed what it
+   * holds about a buyer — a registration at a site office, an agent
+   * qualifying the lead on the walk-in sheet — and it clears the session's
+   * `deskBriefAt` so the buyer's next message reads the row again.
+   *
+   * It has to be a push. The alternative is a freshness check, and there is
+   * nothing cheap to check: Desk's `updated_at` moves on the engine's OWN
+   * write-back, so comparing against it would re-bootstrap on every single
+   * turn. Desk is the only party that knows a person, rather than the bot,
+   * changed the row.
+   */
+  type: 'segment' | 'project' | 'search' | 'embed' | 'all' | 'lead';
   builderId?: string;
   projectId?: string;
+  /** `'lead'` only — Desk's `conversations.conversation_id`. */
+  conversationId?: string;
   areaNorm?: string;
   propertyType?: string;
   keys?: string[];
