@@ -283,6 +283,29 @@ export interface ConversationState {
    */
   deskShortlistIds?: string[];
   /**
+   * When this session last LOOKED at Desk's conversation row — not when it
+   * last found something there.
+   *
+   * The bootstrap used to be gated on `turnCount === 0` alone, commented
+   * "only on cold conversations (first turn)". That is true of the session and
+   * false of the buyer. `handleChat` resolves the Spine `convId` from Desk's
+   * `upsertLead`, and Desk's `conversations` table is
+   * `UNIQUE(builder_id, buyer_phone)` — one row per person per tenant,
+   * forever — and that id is also the Durable Object key. So `turnCount === 0`
+   * happens ONCE IN A BUYER'S LIFE, and everything Desk learned after their
+   * very first message was written to a row the bot would never read again:
+   * a registration at a site office, an agent qualifying the lead, a second
+   * project. The buyer registered, opened WhatsApp, said "Hi" and was greeted
+   * by name with nothing else, because the name was the only thing already in
+   * the session.
+   *
+   * Set even when Desk sent no brief, because the question this answers is
+   * "have we looked?" — a session that keeps finding an empty row must not
+   * re-fetch it on every turn. `freshSession` drops it, which is what makes a
+   * `/reset` re-read rather than orphan the row for good.
+   */
+  deskBriefAt?: number;
+  /**
    * The buyer filled Desk's own registration form at the site office
    * (`conversations.source_detail === 'self_registered'`).
    *

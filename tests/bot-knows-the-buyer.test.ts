@@ -15,6 +15,8 @@
  * never widen a value on the way in, and never speak a record that is empty.
  */
 import { describe, expect, it } from 'vitest';
+import { runEngineTurn } from '../src/engine/turn.js';
+import { fakeDeps } from './fakes.js';
 import { seedFromDeskBrief, resolveShortlistNames } from '../src/engine/desk-brief.js';
 import { owesWelcome, welcomeLine } from '../src/engine/welcome.js';
 import { fallbackReply } from '../src/engine/compose.js';
@@ -333,5 +335,224 @@ describe('recall_profile — the kind the corpus never had', () => {
     // "what personal data do you collect" is `about_data` — a policy question.
     // Answering it with this buyer's budget is a different wrong answer.
     expect(INTENT_EFFECTS['about_data']).toBeUndefined();
+  });
+});
+
+/**
+ * ── The wire, not the units ──────────────────────────────────────────────
+ *
+ * Everything above this line is green and has been since the day it was
+ * written, and none of it drives a turn. `seedFromDeskBrief` folds a brief
+ * correctly when handed one; `welcomeLine` reads a record back correctly when
+ * handed one. Neither test says that a buyer sending "Hi" to the deployed bot
+ * gets a welcome with her project in it — that needs the two to meet inside
+ * `runEngineTurn`, and nothing here made them.
+ *
+ * It matters because the fake said no. `fakeData().bootstrapContext` returns
+ * `{ recentMessages: [], rejectedProjectIds: [], turnIndex: 1 }` — no
+ * `deskBrief`, ever. So every end-to-end test in this suite has been running
+ * the empty-record branch and passing, which is the same shape as three copies
+ * of a gate where only one of them runs.
+ */
+describe('a real turn — the welcome a buyer actually receives', () => {
+  const RAMYA = {
+    buyerName: 'Ramya',
+    bhk: '3 BHK',
+    purpose: 'self_use',
+    projectId: 'ayana',
+    projectName: 'Ayana',
+    shortlistProjectIds: [],
+    selfRegistered: true,
+  } satisfies DeskBrief;
+
+  function harness(deskBrief: DeskBrief | undefined, convId: string) {
+    const deps = fakeDeps();
+    deps.data.bootstrapContext = async () => ({
+      recentMessages: [],
+      rejectedProjectIds: [],
+      turnIndex: 1,
+      ...(deskBrief ? { deskBrief } : {}),
+    });
+    return (text: string) =>
+      runEngineTurn(
+        { convId, builderId: 'brigade-group', text, buyerPhone: '+919591400615', channel: 'whatsapp' },
+        deps,
+      );
+  }
+
+  it('names the project she registered at, on her first message', async () => {
+    const turn = harness(RAMYA, 'wire-welcome-full');
+    const out = await turn('Hi');
+
+    // The greeting and the official-number line were never the problem — they
+    // are what she GOT. The read-back is the part that went missing.
+    expect(out.welcome, 'a self-registered buyer is owed a welcome').toBeTruthy();
+    expect(out.welcome).toContain('Ramya');
+    expect(out.welcome).toContain('Ayana');
+    expect(out.welcome).toContain('3 BHK');
+    expect(out.welcome).toContain('to live in');
+  });
+
+  it('starts her focused on that project rather than asking which one', async () => {
+    const turn = harness(RAMYA, 'wire-welcome-focus');
+    const out = await turn('Hi');
+    expect(out.state.focus?.projectId, 'she walked through that gate').toBe('ayana');
+  });
+
+  it('still says only hello when Desk held nothing but the registration', async () => {
+    // Not a weaker assertion — the honest branch has to survive the fix, or
+    // "we have your requirements" starts appearing over empty rows.
+    const turn = harness(
+      { shortlistProjectIds: [], selfRegistered: true },
+      'wire-welcome-empty',
+    );
+    const out = await turn('Hi');
+    expect(out.welcome).toBeTruthy();
+    expect(out.welcome).not.toContain('filled in at the site office');
+  });
+
+  it('greets a walk-in the agent recorded as a stranger — no welcome at all', async () => {
+    const turn = harness({ ...RAMYA, selfRegistered: false }, 'wire-welcome-notself');
+    const out = await turn('Hi');
+    expect(out.welcome).toBeUndefined();
+  });
+});
+
+/**
+ * ── The returning buyer ───────────────────────────────────────────────────
+ *
+ * `bootstrapContext` is guarded by `state.turnCount === 0` and commented
+ * "only on cold conversations (first turn)". That is true of the SESSION. It
+ * is not true of the buyer.
+ *
+ * `handleChat` (worker/routes.ts) resolves the Spine `convId` by calling
+ * Desk's `upsertLead`, and Desk's `conversations` table is
+ * `UNIQUE(builder_id, buyer_phone)` — one row per person per tenant, forever.
+ * That id is also the Durable Object key (`state:${convId}` in store-kv.ts).
+ * So the session state is not per-conversation; it is per-person-per-tenant
+ * and it never expires.
+ *
+ * Which means `turnCount === 0` happens exactly once in a buyer's life. Every
+ * later thing Desk learns about them — a registration at a second project, an
+ * agent qualifying the lead on the walk-in sheet, a budget typed into the
+ * dossier — is written to a row the bot will never read again.
+ *
+ * This is the founder's reported failure: she registered, opened WhatsApp,
+ * said "Hi", and got a greeting with no read-back — on a number that had
+ * talked to the bot three days earlier.
+ */
+describe('what Desk learns after the buyer\u2019s first ever message', () => {
+  const LATER = {
+    buyerName: 'Ramya',
+    bhk: '3 BHK',
+    purpose: 'self_use',
+    projectId: 'ayana',
+    projectName: 'Ayana',
+    shortlistProjectIds: [],
+    selfRegistered: true,
+  } satisfies DeskBrief;
+
+  function returning(convId: string) {
+    const deps = fakeDeps();
+    let brief: DeskBrief | undefined;
+    let looks = 0;
+    deps.data.bootstrapContext = async () => {
+      looks += 1;
+      return {
+        recentMessages: [],
+        rejectedProjectIds: [],
+        turnIndex: 1,
+        ...(brief ? { deskBrief: brief } : {}),
+      };
+    };
+    const turn = (text: string) =>
+      runEngineTurn(
+        {
+          convId,
+          builderId: 'brigade-group',
+          text,
+          buyerPhone: '+919591400615',
+          channel: 'whatsapp',
+        },
+        deps,
+      );
+    return {
+      deps,
+      turn,
+      looks: () => looks,
+      setBrief: (b: DeskBrief | undefined) => {
+        brief = b;
+      },
+      /** What Desk's lead invalidate does to the session, and nothing more. */
+      async deskPushedLeadInvalidate() {
+        const st = await deps.store.load(convId);
+        if (!st) throw new Error('no session to refresh');
+        const { deskBriefAt: _dropped, ...rest } = st;
+        await deps.store.save(rest);
+      },
+    };
+  }
+
+  it('is read by a session that had never looked — every row that predates the form', async () => {
+    // The real shape of the reported failure. Her number had talked to the bot
+    // three days earlier, so `turnCount === 0` was long spent; the session had
+    // no `deskBriefAt` because nothing had ever asked the question.
+    const h = returning('legacy-session');
+    h.deps.store.save({
+      ...cold(),
+      convId: 'legacy-session',
+      builderId: 'brigade-group',
+      turnCount: 4,
+      ndConversationId: 'nd:+919591400615',
+    });
+    h.setBrief(LATER);
+
+    const out = await h.turn('Hi');
+    expect(out.welcome, 'she registered — she is owed the welcome').toBeTruthy();
+    expect(out.welcome).toContain('Ayana');
+    expect(out.state.focus?.projectId).toBe('ayana');
+  });
+
+  it('is read again when Desk says a person changed the row', async () => {
+    const h = returning('agent-qualified');
+    await h.turn('hi');
+    expect(h.looks(), 'turn 0 looks').toBe(1);
+
+    // Turn two, nothing pushed: the row is not re-read. This is the property
+    // that keeps a Desk round trip off every message the bot handles.
+    await h.turn('what about north bangalore');
+    expect(h.looks(), 'no push, no second look').toBe(1);
+
+    // Now an agent claims the walk-in and qualifies her, and Desk pushes.
+    h.setBrief(LATER);
+    await h.deskPushedLeadInvalidate();
+
+    const out = await h.turn('Hi');
+    expect(h.looks(), 'the push is what makes it look again').toBe(2);
+    expect(out.state.focus?.projectId).toBe('ayana');
+  });
+
+  it('does not re-fetch an empty row on every turn', async () => {
+    // "Have we looked?" — not "did we find anything?". Desk holding nothing is
+    // an answer, and re-asking it each turn would put a round trip on the
+    // critical path of every message.
+    const h = returning('empty-row');
+    await h.turn('hi');
+    await h.turn('coorg');
+    await h.turn('50 lakhs');
+    expect(h.looks()).toBe(1);
+  });
+
+  it('looks again after a reset, rather than orphaning the row for good', async () => {
+    // `/reset` returns before the bootstrap with `turnCount: 1`, so under the
+    // old condition a buyer who typed it could never be read from Desk again.
+    // `freshSession` drops `deskBriefAt`, so the question reopens.
+    const h = returning('after-reset');
+    await h.turn('hi');
+    h.setBrief(LATER);
+    await h.turn('/reset');
+    const out = await h.turn('Hi');
+    expect(h.looks()).toBe(2);
+    expect(out.state.focus?.projectId).toBe('ayana');
   });
 });
