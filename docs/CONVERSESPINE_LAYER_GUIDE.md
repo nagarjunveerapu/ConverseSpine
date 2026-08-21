@@ -561,7 +561,6 @@ Maps engine output → `AdvisorTurnResponse` for NayaAdvisor UI:
 
 - `postTurnEgress` — journey signals to NayaDesk
 - `whatsappActions` — up to 3 recovery buttons on no_fit/recovery turns
-- Langfuse trace span
 
 ### When it runs
 

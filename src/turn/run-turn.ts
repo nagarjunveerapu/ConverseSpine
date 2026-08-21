@@ -33,18 +33,6 @@ export async function runTurn(
     engine,
   );
 
-  rt.trace.traceTurn(ctx, {
-    conversation_id,
-    turn_index: result.state.turnCount,
-    buyer_text,
-    reply_text: result.reply,
-    composer: result.debug.goal.kind,
-    spans: [
-      { name: 'engine', output: result.debug },
-      { name: 'phase', output: result.state.phase },
-    ],
-  });
-
   if (result.state.ndConversationId) {
     postTurnEgress(rt, ctx, {
       builder_id: result.state.builderId,

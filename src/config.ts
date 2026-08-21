@@ -33,8 +33,5 @@ export function createNodeEnv(): import('./env.js').Env {
     DEEPSEEK_API_KEY: nodeConfig.deepseekApiKey,
     DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
     DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL ?? 'deepseek-chat',
-    LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
-    LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY,
-    LANGFUSE_BASE_URL: process.env.LANGFUSE_BASE_URL ?? 'https://cloud.langfuse.com',
   };
 }

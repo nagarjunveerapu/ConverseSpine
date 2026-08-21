@@ -22,7 +22,6 @@ WhatsApp / HTTP POST /chat
 │  5. COMPOSE     Handlebars OR LlmComposer (llm lane only)   │
 │  6. VERIFY      grounding gate (₹L amounts vs tool evidence)  │
 │  7. PERSIST     messages + turn_ledger + state-writes       │
-│  8. TRACE       Langfuse (optional, waitUntil)                │
 └────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -44,7 +43,7 @@ WhatsApp / HTTP POST /chat
 | **Compose (structured)** | Handlebars templates | list, pricing, visit, legal, objection |
 | **Compose (open)** | DeepSeek chat | Only when `composer: 'llm'` |
 | **Subgraphs** | Plain TS (`src/graphs/`) | Visit + objection state machines |
-| **Observability** | Langfuse HTTP ingest | Optional keys in secrets |
+| **Observability** | `console` → Workers Logs; `observability/local-turn-log.ts` JSONL | Nothing leaves Cloudflare |
 | **Tests** | Vitest | `tests/spine.test.ts` + scripted demo |
 
 **Not in v0.2 (planned):** WhatsApp webhook, Queues, multi-stop visit plan engine, RAG brochure index.
@@ -66,7 +65,7 @@ src/
   compose/              templates + grounding
   llm/                  LlmComposer (open turns)
   graphs/               visit + objection subgraphs
-  observability/        Langfuse
+  observability/        local turn log + snapshot (dev)
   cli.ts                Local interactive demo
 ```
 
@@ -109,8 +108,6 @@ curl -s http://localhost:8788/chat -H 'content-type: application/json' -d '{
 # Secrets (once per env)
 wrangler secret put BOT_SHARED_SECRET --env prod
 wrangler secret put DEEPSEEK_API_KEY --env prod
-wrangler secret put LANGFUSE_PUBLIC_KEY --env prod   # optional
-wrangler secret put LANGFUSE_SECRET_KEY --env prod   # optional
 
 npm run deploy:prod
 ```
@@ -152,7 +149,7 @@ NayaDesk, D1 catalog, disclosure engine, and admin UI are **shared** — only th
 
 | Phase | Deliverable |
 |-------|-------------|
-| **0.2** | Worker + NLU + templates + Langfuse + **dynamic quality eval** |
+| **0.2** | Worker + NLU + templates + **dynamic quality eval** |
 | **0.3** | WhatsApp webhook + TurnDebouncer DO + BPE egress + KV cache |
 | **0.4** | Quality eval in CI gate (not golden regression) |
 | **0.5** | Cutover lokations prod traffic; retire Naya bot path |

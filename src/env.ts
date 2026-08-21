@@ -151,11 +151,6 @@ export interface Env {
    */
   WA_PROJECT_FIRST?: string;
 
-  /** Langfuse observability (optional). */
-  LANGFUSE_PUBLIC_KEY?: string;
-  LANGFUSE_SECRET_KEY?: string;
-  LANGFUSE_BASE_URL?: string;
-
   DEFAULT_BUILDER_ID?: string;
   /** Builder tenant for NayaAdvisor channel (default naya-advisor). */
   ADVISOR_BUILDER_ID?: string;
