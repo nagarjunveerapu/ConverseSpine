@@ -88,6 +88,7 @@ import {
   resolvePendingStop,
 } from './optout-confirm.js';
 import { CONSENT_NOTICE, owesConsentNotice } from './consent-line.js';
+import { owesWelcome, welcomeLine } from './welcome.js';
 import { performErasure } from './erasure-reply.js';
 import { intelGatedSubject, speakFailure } from './speak-failure.js';
 import { speakStickyClarify } from './clarify-outstanding.js';
@@ -112,6 +113,7 @@ import {
   textAnchorsProjectName,
   wantsCostBreakdown,
 } from './facts.js';
+import { resolveShortlistNames, seedFromDeskBrief } from './desk-brief.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
 import { excludeParkedFaqKeys, isFaqShapedAsk, resolveFaqQuestionKeys, taughtFaqKey } from './faq-keys.js';
 import { buyerCuedOtherProject } from './project_switch.js';
@@ -274,6 +276,15 @@ export interface EngineTurnOutput {
    * eat into WhatsApp's 1024-character interactive body.
    */
   consentNotice?: string;
+  /**
+   * The self-registration hello, sent once and BEFORE the reply.
+   *
+   * The mirror image of `consentNotice`: that line trails the answer so the
+   * buyer's own question is what they read first; this one leads, because a
+   * greeting delivered after the answer is not a greeting. Its own message for
+   * the same reason — the 1024-character interactive body.
+   */
+  welcome?: string;
 }
 
 /**
@@ -315,10 +326,44 @@ export async function runEngineTurn(
   input: EngineTurnInput,
   deps: EngineDeps,
 ): Promise<EngineTurnOutput> {
-  const out = await runEngineTurnCore(input, deps);
+  let out = await runEngineTurnCore(input, deps);
+  const channel = input.channel ?? 'whatsapp';
+
+  // The self-registration welcome. Same seam and the same reason as the
+  // consent notice below: a first-reply-only rule cannot live at forty return
+  // sites. Runs FIRST because the stamp it writes has to survive into the same
+  // save the consent notice performs, and because a welcome that arrives after
+  // the answer is not a welcome.
+  const welcomeArgs = {
+    channel,
+    ...(out.state.selfRegistered ? { selfRegistered: true } : {}),
+    ...(out.state.welcomedAt !== undefined ? { welcomedAt: out.state.welcomedAt } : {}),
+    ...(out.erased ? { erased: true } : {}),
+    ...(out.state.buyerName ? { buyerName: out.state.buyerName } : {}),
+    builderName: friendlyBuilder(out.state.builderId),
+    constraints: out.state.constraints,
+    ...(out.state.focus?.projectName ? { focusProjectName: out.state.focus.projectName } : {}),
+  };
+  if (owesWelcome(welcomeArgs)) {
+    const welcome = welcomeLine(welcomeArgs);
+    if (welcome) {
+      const state = { ...out.state, welcomedAt: deps.clock.nowMs() };
+      await deps.store.save(state).catch(() => {});
+      // Written down as well as sent, for the same reason the consent line is:
+      // an outbound the transcript has no record of is not something we can
+      // later say we said.
+      if (state.ndConversationId) {
+        await deps.crm
+          .appendMessage(state.ndConversationId, 'outbound', welcome, { replyKey: 'welcome' })
+          .catch(() => {});
+      }
+      out = { ...out, state, welcome };
+    }
+  }
+
   if (
     !owesConsentNotice({
-      channel: input.channel ?? 'whatsapp',
+      channel,
       ...(out.state.consentNoticedAt !== undefined
         ? { consentNoticedAt: out.state.consentNoticedAt }
         : {}),
@@ -474,6 +519,10 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   }
   const nd = state.ndConversationId ?? '';
 
+  // Which of the buyer's own fields came from Desk rather than this session.
+  // Carried to debug so "the bot knew my budget" is a checkable claim about a
+  // specific turn, not a thing we believe about the wiring.
+  let deskBriefSeeded: string[] = [];
   // Desk bootstrap is expensive — only on cold conversations (first turn).
   // Later turns use Spine state + L1–L4; CRM sync rides waitUntil.
   if (nd && state.turnCount === 0) {
@@ -496,6 +545,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         const existing = state.discover.recentMessages ?? [];
         const combined = [...boot.recentMessages, ...existing].slice(-20);
         state = { ...state, discover: { ...state.discover, recentMessages: combined } };
+      }
+      // What Desk already holds about this buyer — bhk, budget, area, purpose,
+      // name, board. The row arrived in the same fetch above and used to be
+      // dropped, so a buyer who filled Desk's registration form at the gate
+      // met a bot that knew nothing about them. Gap-fill only: the live
+      // session always wins, same rule as the ledger prior below.
+      const briefSeed = seedFromDeskBrief(state, boot.deskBrief);
+      state = briefSeed.state;
+      if (briefSeed.seeded.length) {
+        deskBriefSeeded = briefSeed.seeded;
       }
       // P2b — gap-fill RTI / focus from ledger prior (live KV wins).
       state = hydrateStateFromFeedForward(state, mapLedgerPrior(boot.ledgerPrior));
@@ -2722,6 +2781,14 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   const offersSizeRows = (pickSizeUnits?.length ?? 0) >= 2;
 
   const alreadyShownSameSet = evidence.matches ? isSameAsLast(state, evidence.matches) : false;
+  // The board, by name. Live session first; Desk's durable ids resolved
+  // against the catalog name index this turn already holds, so reading the
+  // shortlist back costs no extra call.
+  const shortlistNames = resolveShortlistNames(
+    state,
+    currentShortlist(state),
+    catalogForTurn?.projectNames,
+  );
   const ff = state.feedForward;
   const disclosedForCompose = [
     ...(ff?.disclosedFacts ?? []),
@@ -2750,6 +2817,8 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     ...(evidence.escalationPhone?.trim()
       ? { handoffPhone: evidence.escalationPhone.trim(), handoffTeamName: friendlyBuilder(state.builderId) }
       : {}),
+    ...(shortlistNames.length ? { shortlistNames } : {}),
+    ...(state.selfRegistered ? { selfRegistered: true } : {}),
   });
   // Phase 3 no_fit may carry both a Failure (ledger) and rich compose evidence
   // (budgetGap / noMatch / …). Prefer the existing compose templates over the
@@ -3548,6 +3617,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       tools: evidence.tools,
       grounding,
       ...(repeat_guard ? { repeat_guard } : {}),
+      ...(deskBriefSeeded.length ? { desk_brief_seeded: deskBriefSeeded } : {}),
       last_offered_count: currentShortlist(state).length,
       last_offered_ids: currentShortlist(state).map((o) => o.projectId),
       ...(evidence.nearbyOffer?.nearbyAreas.length

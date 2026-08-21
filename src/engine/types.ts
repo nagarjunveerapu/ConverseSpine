@@ -264,6 +264,34 @@ export interface ConversationState {
    */
   consentNoticedAt?: number;
   /**
+   * When this buyer was welcomed — the self-registration hello, sent once.
+   *
+   * Same shape and the same reason as `consentNoticedAt`: a rule that applies
+   * to the FIRST reply and no other cannot live at forty return sites without
+   * being forgotten at half of them.
+   */
+  welcomedAt?: number;
+  /**
+   * Desk's durable shortlist, seeded on a cold turn when this session has no
+   * board of its own (engine/desk-brief.ts). Ids only — the names come from
+   * the catalog index the turn already holds.
+   *
+   * Kept separate from `shortlistIds` on purpose: that field is the discourse
+   * board, and every reader of it expects a matching entity card. Ids with no
+   * cards would make `currentShortlist` return an empty list while claiming a
+   * shortlist exists.
+   */
+  deskShortlistIds?: string[];
+  /**
+   * The buyer filled Desk's own registration form at the site office
+   * (`conversations.source_detail === 'self_registered'`).
+   *
+   * Read on the cold turn and kept, because it changes what every later
+   * read-back means: these preferences were typed by the buyer minutes ago in
+   * another room, not inferred by the bot from chat.
+   */
+  selfRegistered?: boolean;
+  /**
    * Removed. `optedOut` was set by the STOP door and read by nothing: it
    * described a session that was supposed to be silent, on a state object
    * that no reader consulted before speaking. Silence is Desk's tombstone
@@ -1060,6 +1088,23 @@ export interface ComposeContext {
   /** Stage 7 — named latch when Desk provides sales contact. */
   handoffPhone?: string;
   handoffTeamName?: string;
+  /**
+   * The projects on this buyer's board, by name — the session's own if it has
+   * one, otherwise Desk's durable list resolved against the catalog index the
+   * turn already holds (engine/desk-brief.ts).
+   *
+   * "What's on my shortlist" had no answer because the read-back template knew
+   * about area, budget, size and purpose and nothing else, while the engine
+   * had been writing `set_shortlist_project_ids` to Desk the whole time.
+   */
+  shortlistNames?: string[];
+  /**
+   * The buyer registered themselves on Desk's form — `source_detail` is
+   * `'self_registered'`. Changes what a read-back MEANS: these preferences are
+   * something they typed minutes ago at a gate, not something the bot inferred
+   * from chat, and saying so is the difference between recall and a guess.
+   */
+  selfRegistered?: boolean;
 }
 
 export interface ComposeRequest {
@@ -1088,6 +1133,16 @@ export interface TurnDebug {
   speech_act?: import('./speech-act/types.js').SpeechActKind;
   /** SA-0: resolved chip path ids (primary first). */
   chip_path_ids?: import('./speech-act/types.js').ChipPathId[];
+  /**
+   * Which of the buyer's own fields this turn read out of Desk rather than out
+   * of the session — 'bhk' | 'budget' | 'location' | 'purpose' | 'buyerName' |
+   * 'shortlist'. Present only on the cold turn that seeded them.
+   *
+   * Here so "the bot knew my budget on turn 1" is a checkable claim about a
+   * specific turn instead of a belief about the wiring. The last four things
+   * that crossed this wire were believed to work for weeks each.
+   */
+  desk_brief_seeded?: string[];
   /** W2/W6: shortlist size after turn (stale-board asserts). */
   last_offered_count?: number;
   last_offered_ids?: string[];

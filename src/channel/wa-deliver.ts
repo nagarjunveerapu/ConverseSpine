@@ -12,9 +12,17 @@ import {
 export async function deliverWhatsAppTurn(
   phoneNumberId: string,
   to: string,
-  result: Pick<TurnResult, 'reply_text' | 'whatsapp_actions' | 'whatsapp_interactive' | 'media_attachments' | 'consent_notice'>,
+  result: Pick<TurnResult, 'reply_text' | 'whatsapp_actions' | 'whatsapp_interactive' | 'media_attachments' | 'consent_notice' | 'welcome_message'>,
   token: string,
 ): Promise<void> {
+  // The self-registration hello, ahead of everything. A buyer who filled a
+  // form at a gate and tapped a wa.me link has no way of knowing whose number
+  // they just opened; the answer to their message makes sense only after they
+  // know they reached the right builder. Its own message, because the body
+  // below caps at 1024 characters whenever the turn carries a list.
+  if (result.welcome_message) {
+    await sendText(phoneNumberId, to, result.welcome_message, token);
+  }
   const packed = result.whatsapp_interactive;
   if (packed?.type === 'list') {
     await sendInteractiveList(phoneNumberId, to, result.reply_text, packed.button, packed.sections, token);
