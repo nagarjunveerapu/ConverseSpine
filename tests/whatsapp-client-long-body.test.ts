@@ -33,7 +33,7 @@ describe('whatsapp interactive — bodies over the 1024 limit', () => {
     expect(LONG.length).toBeGreaterThan(1024);
     const ok = await sendInteractiveButtons('pid', '+919000000001', LONG, [{ id: 'a', title: 'Price' }], 'tok');
 
-    expect(ok).toBe(true);
+    expect(ok.ok).toBe(true);
     const messages = sent(fetchMock);
     expect(messages).toHaveLength(2);
     expect(messages[0]!.type).toBe('text');
@@ -52,7 +52,7 @@ describe('whatsapp interactive — bodies over the 1024 limit', () => {
       'tok',
     );
 
-    expect(ok).toBe(true);
+    expect(ok.ok).toBe(true);
     const messages = sent(fetchMock);
     expect(messages[0]!.text!.body).toBe(LONG);
     expect(messages.some((m) => m.interactive?.body.text === LONG.slice(0, 1024))).toBe(false);
@@ -61,7 +61,7 @@ describe('whatsapp interactive — bodies over the 1024 limit', () => {
   it('keeps a short body on the interactive itself — one bubble, as before', async () => {
     const ok = await sendInteractiveButtons('pid', '+919000000003', 'Want the price?', [{ id: 'a', title: 'Price' }], 'tok');
 
-    expect(ok).toBe(true);
+    expect(ok.ok).toBe(true);
     const messages = sent(fetchMock);
     expect(messages).toHaveLength(1);
     expect(messages[0]!.interactive!.body.text).toBe('Want the price?');
@@ -74,7 +74,7 @@ describe('whatsapp interactive — bodies over the 1024 limit', () => {
 
     const ok = await sendInteractiveButtons('pid', '+919000000004', LONG, [{ id: 'a', title: 'Price' }], 'tok');
 
-    expect(ok).toBe(true);
+    expect(ok.ok).toBe(true);
     // The answer went out once — a fallback resend would double-send it.
     expect(sent(fetchMock).filter((m) => m.text?.body === LONG)).toHaveLength(1);
   });

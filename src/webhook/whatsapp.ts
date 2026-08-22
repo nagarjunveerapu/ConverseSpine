@@ -2,6 +2,7 @@ import type { Env } from '../env.js';
 import { resolveBuilderByPhoneNumberId } from '../channel/phone-resolve.js';
 import { getMetaAppSecret, verifyMetaWebhookSignature } from '../channel/meta-secrets.js';
 import { deliverWhatsAppTurn } from '../channel/wa-deliver.js';
+import { fileStatusReceipts, fileTurnReceipts, type MetaStatus } from '../channel/delivery-receipt.js';
 import { sendTyping } from '../channel/whatsapp-client.js';
 import { seenWebhookMessage, overRateLimit } from '../channel/ingress-guard.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
@@ -25,6 +26,14 @@ interface MetaPayload {
             list_reply?: { id: string; title: string };
           };
         }>;
+        /**
+         * Meta's verdict on messages WE sent — `sent`, `delivered`, `read`, or
+         * `failed` with a reason. It rides the same `messages` field as inbound
+         * traffic and has been arriving on every bot send since this webhook
+         * existed. This interface not declaring it is the whole reason a
+         * message Graph accepted and then refused to deliver left no trace.
+         */
+        statuses?: MetaStatus[];
       };
     }>;
   }>;
@@ -70,10 +79,17 @@ export async function handleWhatsAppWebhook(
       if (change.field !== 'messages') continue;
       const value = change.value;
       const phoneNumberId = value?.metadata?.phone_number_id;
-      if (!phoneNumberId || !value?.messages?.length) continue;
+      if (!phoneNumberId) continue;
 
       const builderId = await resolveBuilderByPhoneNumberId(rt.crm, phoneNumberId);
       if (!builderId) continue;
+
+      // A status-only change carries no `messages` at all, which is how the
+      // old guard on this line discarded every one of them.
+      if (value.statuses?.length) {
+        ctx.waitUntil(fileStatusReceipts(rt.crm, builderId, value.statuses));
+      }
+      if (!value.messages?.length) continue;
 
       for (const msg of value.messages) {
         let buyerText = '';
@@ -127,7 +143,8 @@ export async function handleWhatsAppWebhook(
           });
 
           if (creds.access_token) {
-            await deliverWhatsAppTurn(phoneNumberId, buyerPhone, result, creds.access_token);
+            const report = await deliverWhatsAppTurn(phoneNumberId, buyerPhone, result, creds.access_token);
+            await fileTurnReceipts(rt.crm, builderId, result.nd_conversation_id, report);
           }
         };
 

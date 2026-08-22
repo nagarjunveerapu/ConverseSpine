@@ -2,7 +2,7 @@ import type { Env } from '../env.js';
 import type { TurnRuntime } from '../runtime/deps.js';
 import { runTurn } from '../turn/run-turn.js';
 import type { TurnInput, TurnResult } from '../types.js';
-import { sendMedia, sendTextWithWamid } from '../channel/whatsapp-client.js';
+import { sendMediaOutcome, sendTextOutcome, type SendOutcome } from '../channel/whatsapp-client.js';
 import { getMetaAccessToken } from '../channel/meta-secrets.js';
 
 export interface ChatRequest {
@@ -182,13 +182,13 @@ export async function handleAgentSend(env: Env, body: AgentSendBody): Promise<Re
     }
   }
 
-  let wamid: string | null = null;
+  let out: SendOutcome = { ok: false, wamid: null };
   if (accessToken) {
     if (kind === 'text') {
-      wamid = await sendTextWithWamid(phone_number_id, buyer_phone, body.text ?? '', accessToken);
+      out = await sendTextOutcome(phone_number_id, buyer_phone, body.text ?? '', accessToken);
     } else {
       if (!body.link) return json({ error: 'missing_link_for_media' }, 400);
-      wamid = await sendMedia(
+      out = await sendMediaOutcome(
         phone_number_id,
         buyer_phone,
         kind,
@@ -207,7 +207,15 @@ export async function handleAgentSend(env: Env, body: AgentSendBody): Promise<Re
     }
   }
 
-  return json({ wamid, delivered: !!wamid, has_token: !!accessToken });
+  // `error` is new and it is the point: Desk printed a guess here ("probably
+  // outside the 24-hour window") because this route had nothing else to give
+  // it. Graph's own sentence is better than our best guess, every time.
+  return json({
+    wamid: out.wamid,
+    delivered: out.ok,
+    has_token: !!accessToken,
+    ...(out.error ? { error: out.error } : {}),
+  });
 }
 
 export async function handleCacheInvalidate(

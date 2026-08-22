@@ -147,6 +147,16 @@ export interface TurnResult {
   reply_text: string;
   /** Engine turn goal kind (e.g. recommend, answer, visit_booked). */
   composer: string;
+  /**
+   * Desk's lead id for this conversation, when the engine resolved one.
+   *
+   * Delivery needs it. The bubbles below are written to Desk at COMPOSE time
+   * and sent afterwards, so the receipt for a send has to find its way back to
+   * a conversation the sender never learned the id of. Absent for a turn that
+   * never reached Desk (eval harness, demo CLI) — an absent id means "file no
+   * receipt", never "the send failed".
+   */
+  nd_conversation_id?: string;
   turn_index: number;
   whatsapp_actions?: Array<{ id: string; label: string; patch: Record<string, string | undefined>; user_line: string; expected_matches: number }>;
   /** Native Cloud API interactive (list XOR buttons). Saarathi / webhook send this. */
