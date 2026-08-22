@@ -66,6 +66,7 @@ export async function runTurn(
     reply_text: result.reply,
     composer: result.debug.goal.kind,
     turn_index: result.state.turnCount,
+    ...(result.state.ndConversationId ? { nd_conversation_id: result.state.ndConversationId } : {}),
     ...(result.welcome ? { welcome_message: result.welcome } : {}),
     ...(result.consentNotice ? { consent_notice: result.consentNotice } : {}),
     ...(result.whatsappActions ? { whatsapp_actions: result.whatsappActions } : {}),

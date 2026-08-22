@@ -2,6 +2,7 @@ import type { Env } from '../env.js';
 import type { ConversationState } from '../engine/types.js';
 import { sendTyping } from '../channel/whatsapp-client.js';
 import { deliverWhatsAppTurn } from '../channel/wa-deliver.js';
+import { fileTurnReceipts } from '../channel/delivery-receipt.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
 import { handleChat } from '../worker/routes.js';
 
@@ -153,7 +154,11 @@ export class TurnDebouncer implements DurableObject {
     });
 
     if (token) {
-      await deliverWhatsAppTurn(phone_number_id, buyer_phone, result, token);
+      const report = await deliverWhatsAppTurn(phone_number_id, buyer_phone, result, token);
+      // Before the drain below, deliberately. A receipt is part of answering
+      // the buyer, not bookkeeping done afterwards — and if the alarm retries,
+      // it re-files the same rows rather than losing them.
+      await fileTurnReceipts(rt.crm, builder_id, result.nd_conversation_id, report);
     }
 
     // The drain happens HERE, after the reply is out — and it removes exactly

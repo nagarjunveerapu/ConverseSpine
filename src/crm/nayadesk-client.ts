@@ -748,6 +748,31 @@ export class NayaDeskClient {
     return this.call('POST', `/api/leads/${encodeURIComponent(conversation_id)}/messages`, msg);
   }
 
+  /**
+   * File delivery receipts against the rows `appendMessage` already wrote.
+   *
+   * Two ways to address a row, and both are needed. At send time we have the
+   * exact text and the conversation but no id yet, so `content` finds the row
+   * and the wamid gets stamped on it. Minutes later Meta's own status webhook
+   * arrives holding nothing but that wamid — `delivered`, `read`, or `failed`
+   * with a reason — and it addresses the row directly.
+   *
+   * Best-effort by construction: a receipt that cannot be filed must never
+   * cost the buyer their message.
+   */
+  reportWhatsAppDelivery(req: {
+    builder_id: string;
+    conversation_id?: string;
+    reports: ReadonlyArray<{
+      content?: string;
+      wamid?: string;
+      status: 'sent' | 'delivered' | 'read' | 'failed';
+      detail?: string;
+    }>;
+  }): Promise<{ ok: true; matched: number }> {
+    return this.call('POST', '/api/whatsapp/delivery', req);
+  }
+
   listMessages(conversation_id: string): Promise<{ messages: NdMessage[] }> {
     return this.call('GET', `/api/leads/${encodeURIComponent(conversation_id)}/messages?limit=50`);
   }
