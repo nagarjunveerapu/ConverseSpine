@@ -25,6 +25,8 @@ interface MetaPayload {
             button_reply?: { id: string; title: string };
             list_reply?: { id: string; title: string };
           };
+          /** A quick-reply tap on a TEMPLATE message — not `interactive`. */
+          button?: { text?: string; payload?: string };
         }>;
         /**
          * Meta's verdict on messages WE sent — `sent`, `delivered`, `read`, or
@@ -103,6 +105,20 @@ export async function handleWhatsAppWebhook(
             buyerText = reply.title;
             actionId = reply.id;
           }
+        } else if (msg.type === 'button' && msg.button?.text) {
+          // A tap on a TEMPLATE quick-reply (the opening message's buttons).
+          // Meta sends these as `type:"button"` with the label in `button.text`
+          // — a different shape from the interactive `button_reply` above, and
+          // until this branch existed every such tap fell through the
+          // `!buyerText` guard below and vanished: the buyer tapped
+          // "Book a site visit" and nothing happened.
+          //
+          // The label is deliberately the ONLY thing read. `button.payload`
+          // defaults to the label when the send named none (ours never do),
+          // and it is not an id from our interactive vocabulary — so the tap
+          // becomes the buyer's words, routed by the intent lane exactly as if
+          // they had typed them.
+          buyerText = msg.button.text;
         }
         if (!buyerText) continue;
 
