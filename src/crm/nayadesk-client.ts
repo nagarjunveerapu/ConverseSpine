@@ -424,11 +424,11 @@ export class NayaDeskClient {
     pending_action?: string;
     pending_action_payload?: unknown;
   }): Promise<{ ok: true; conversation_id: string; created: boolean }> {
-    return this.call('PUT', '/api/leads', req);
+    return this.call('PUT', '/api/v1/leads', req);
   }
 
   getLead(conversation_id: string): Promise<{ lead: NdConversation }> {
-    return this.call('GET', `/api/leads/${encodeURIComponent(conversation_id)}`);
+    return this.call('GET', `/api/v1/leads/${encodeURIComponent(conversation_id)}`);
   }
 
   patchFacts(
@@ -442,7 +442,7 @@ export class NayaDeskClient {
       purpose?: string;
     },
   ): Promise<{ ok: true }> {
-    return this.call('PATCH', `/api/leads/${encodeURIComponent(conversation_id)}/facts`, facts);
+    return this.call('PATCH', `/api/v1/leads/${encodeURIComponent(conversation_id)}/facts`, facts);
   }
 
   patchStage(conversation_id: string, stage: string, only_forward?: boolean): Promise<{ ok: true }> {
@@ -583,7 +583,7 @@ export class NayaDeskClient {
     served_cities?: string[];
     no_match_reasoning?: string;
   }> {
-    return this.call('POST', '/api/projects/search', req);
+    return this.call('POST', '/api/v1/projects/search', req);
   }
 
   /**
@@ -595,11 +595,13 @@ export class NayaDeskClient {
    * the library UI too) — the caller keeps public and leaves entitlement to
    * media/share + disclosure/evaluate, which remain the authority on delivery.
    */
-  listProjectMedia(project_id: string): Promise<NdMediaAssetRow[]> {
-    return this.call<{ assets: NdMediaAssetRow[] | null }>(
+  async listProjectMedia(project_id: string): Promise<NdMediaAssetRow[]> {
+    const project = await this.getProject(project_id);
+    const r = await this.call<{ media?: NdMediaAssetRow[] | null; assets?: NdMediaAssetRow[] | null }>(
       'GET',
-      `/api/projects/${encodeURIComponent(project_id)}/media`,
-    ).then((r) => r.assets ?? []);
+      `/api/v1/media?project_id=${encodeURIComponent(project_id)}&builder_id=${encodeURIComponent(project.builder_id)}`,
+    );
+    return r.media ?? r.assets ?? [];
   }
 
   /** Direct LI row — engine door (bot auth), same D1 as Overview LI card. */
@@ -618,7 +620,7 @@ export class NayaDeskClient {
       market_intel?: NdMarketIntel | null;
     }
   > {
-    return this.call('GET', `/api/projects/${encodeURIComponent(project_id)}`).then(
+    return this.call('GET', `/api/v1/projects/${encodeURIComponent(project_id)}`).then(
       (raw) => {
         const wrapped = raw as {
           project?: NdProjectSummary & { builder_id: string };
@@ -692,7 +694,7 @@ export class NayaDeskClient {
     reason?: string;
     redirect_hint?: string;
   }> {
-    return this.call('POST', '/api/media/share', req);
+    return this.call('POST', '/api/v1/media/share', req);
   }
 
   listProjectUnits(project_id: string): Promise<{
@@ -745,7 +747,11 @@ export class NayaDeskClient {
     conversation_id: string,
     msg: { direction: 'inbound' | 'outbound'; content: string },
   ): Promise<{ ok: true; message_id: string }> {
-    return this.call('POST', `/api/leads/${encodeURIComponent(conversation_id)}/messages`, msg);
+    return this.call<{ message_id: string }>(
+      'POST',
+      `/api/v1/threads/${encodeURIComponent(conversation_id)}/messages`,
+      msg,
+    ).then((row) => ({ ok: true as const, message_id: row.message_id }));
   }
 
   /**
@@ -774,7 +780,7 @@ export class NayaDeskClient {
   }
 
   listMessages(conversation_id: string): Promise<{ messages: NdMessage[] }> {
-    return this.call('GET', `/api/leads/${encodeURIComponent(conversation_id)}/messages?limit=50`);
+    return this.call('GET', `/api/v1/threads/${encodeURIComponent(conversation_id)}/messages?limit=50`);
   }
 
   turnLedgerContext(conversation_id: string): Promise<{
@@ -1022,7 +1028,13 @@ export class NayaDeskClient {
   }
 
   projectEtag(project_id: string): Promise<{ etag: string; latest_updated_at: number }> {
-    return this.call('GET', `/api/projects/${encodeURIComponent(project_id)}/etag`);
+    return this.call<{ etag: string; updated_at?: number; latest_updated_at?: number }>(
+      'GET',
+      `/api/v1/projects/${encodeURIComponent(project_id)}/etag`,
+    ).then((r) => ({
+      etag: r.etag,
+      latest_updated_at: r.latest_updated_at ?? r.updated_at ?? 0,
+    }));
   }
 
   engineConfig(builder_id: string): Promise<{ builder_id: string; config: Record<string, unknown> }> {
@@ -1063,7 +1075,7 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/faqs/lookup?project_id=${encodeURIComponent(project_id)}&question_key=${encodeURIComponent(question_key)}`,
+      `/api/v1/faqs/lookup?project_id=${encodeURIComponent(project_id)}&question_key=${encodeURIComponent(question_key)}`,
     );
   }
 
