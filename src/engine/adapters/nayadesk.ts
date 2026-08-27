@@ -933,6 +933,7 @@ export function nayadeskData(
     async placeHold(ids, hold) {
       try {
         const r = await crm.placeHold({
+          builder_id: ids.builderId,
           project_id: hold.projectId,
           unit_type: hold.unitType,
           conversation_id: ids.ndConversationId,
