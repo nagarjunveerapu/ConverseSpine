@@ -33,6 +33,17 @@ import {
   type CacheStats,
 } from '../../cache/turn-cache.js';
 
+const IST_OFFSET_MS = 330 * 60_000;
+
+/** Desk visits.scheduled_at — IST wall-clock 'YYYY-MM-DD HH:MM'. */
+function isoToIstWallClock(iso: string): string | null {
+  const trimmed = iso.trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(trimmed)) return trimmed.slice(0, 16);
+  const ms = Date.parse(trimmed);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 16).replace('T', ' ');
+}
+
 /** Conversation context is Desk-focus-scoped — never use it for another project's identity. */
 function ctxForProject(
   ctx: NdContextBundle | null | undefined,
@@ -907,23 +918,14 @@ export function nayadeskData(
 
     async recordVisit(ids, visit) {
       try {
-        const created = await crm.createPlan({
-          conversation_id: ids.ndConversationId,
-          buyer_phone: ids.buyerPhone,
-          builder_id: ids.builderId,
-          goal: 'site_visits',
-          steps: [{ id: 'visit_confirmed', kind: 'book_visit', status: 'completed' }],
-          current_step: 'visit_confirmed',
-          collected: {
-            project_id: visit.projectId,
-            project_name: visit.projectName,
-            proposed_iso_datetime: visit.iso,
-            human_label: visit.label,
-            confirmed: true,
-          },
+        // Desk visits.scheduled_at is IST wall-clock 'YYYY-MM-DD HH:MM'.
+        const scheduled_at = isoToIstWallClock(visit.iso);
+        if (!scheduled_at) return false;
+        await crm.proposeVisit(ids.ndConversationId, {
+          scheduled_at,
+          project_id: visit.projectId,
+          status: 'confirmed',
         });
-        if (!created.ok) return false;
-        await crm.patchPlan(created.plan_id, { status: 'completed' });
         return true;
       } catch {
         return false;

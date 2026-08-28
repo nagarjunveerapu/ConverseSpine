@@ -446,8 +446,17 @@ export class NayaDeskClient {
   }
 
   patchStage(conversation_id: string, stage: string, only_forward?: boolean): Promise<{ ok: true }> {
-    return this.call('PATCH', `/api/leads/${encodeURIComponent(conversation_id)}/stage`, {
-      stage,
+    // Store stages are new|talking|qualified|visiting|negotiating.
+    // Leftover bot vocabulary maps at this seam — not in turn.ts.
+    if (stage === 'escalated') {
+      return this.call('POST', `/api/v1/leads/${encodeURIComponent(conversation_id)}/escalate`, {});
+    }
+    const mapped =
+      stage === 'visit_booked' ? 'visiting'
+        : stage === 'engaged' ? 'talking'
+          : stage;
+    return this.call('PATCH', `/api/v1/leads/${encodeURIComponent(conversation_id)}/stage`, {
+      stage: mapped,
       ...(only_forward ? { only_forward: true } : {}),
     });
   }
@@ -740,7 +749,17 @@ export class NayaDeskClient {
     conversation_id: string,
     writes: ReadonlyArray<Record<string, unknown>>,
   ): Promise<{ ok: true; applied: number }> {
-    return this.call('POST', `/api/leads/${encodeURIComponent(conversation_id)}/state-writes`, { writes });
+    return this.call('POST', `/api/v1/leads/${encodeURIComponent(conversation_id)}/state-writes`, { writes });
+  }
+
+  /**
+   * Mint a store visit under the lead (IST wall-clock). Replaces leftover /api/plans.
+   */
+  proposeVisit(
+    lead_id: string,
+    body: { scheduled_at: string; project_id?: string; status?: 'proposed' | 'confirmed' },
+  ): Promise<{ visit_id: string }> {
+    return this.call('POST', `/api/v1/leads/${encodeURIComponent(lead_id)}/visits`, body);
   }
 
   appendMessage(
