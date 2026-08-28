@@ -131,4 +131,43 @@ describe('Wave 4 Spine posts leftover colliding doors on /api/v1', () => {
       'https://desk.test/api/whatsapp/delivery',
     );
   });
+
+  it('patchStage maps visit_booked → visiting on /api/v1/leads/:id/stage', async () => {
+    const fetchMock = stubJson({ stage: 'visiting' });
+    await crm().patchStage('c1', 'visit_booked');
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
+      'https://desk.test/api/v1/leads/c1/stage',
+    );
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toEqual({
+      stage: 'visiting',
+    });
+  });
+
+  it('patchStage escalated POSTs /api/v1/leads/:id/escalate', async () => {
+    const fetchMock = stubJson({ escalated_at: 1 });
+    await crm().patchStage('c1', 'escalated');
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
+      'https://desk.test/api/v1/leads/c1/escalate',
+    );
+  });
+
+  it('applyStateWrites POSTs /api/v1/leads/:id/state-writes', async () => {
+    const fetchMock = stubJson({ ok: true, applied: 1 });
+    await crm().applyStateWrites('c1', [{ op: 'set_slot', slot: 'bhk', value: '2' }]);
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
+      'https://desk.test/api/v1/leads/c1/state-writes',
+    );
+  });
+
+  it('proposeVisit POSTs /api/v1/leads/:id/visits', async () => {
+    const fetchMock = stubJson({ visit_id: 'visit_1' }, 201);
+    await crm().proposeVisit('c1', {
+      scheduled_at: '2026-08-29 11:00',
+      project_id: 'p1',
+      status: 'confirmed',
+    });
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
+      'https://desk.test/api/v1/leads/c1/visits',
+    );
+  });
 });
