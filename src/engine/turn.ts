@@ -3554,12 +3554,18 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   await deps.store.save(state);
   storeSaveMs = deps.clock.nowMs() - storeSaveT0;
 
-  // The post-reply tail (turn ledger, transcript append, CRM facts, telemetry)
-  // is read by an agent later, NEVER by the next turn, and mutates no state the
-  // response depends on (reply + state are already frozen above). So it rides
-  // ctx.waitUntil off the buyer's critical path — Bridge Stage 2, ~1s. CLI/eval
-  // pass no waitUntil, so there the tail is awaited exactly as before.
-  const _tail = (async () => {
+  // Desk capture (transcript + facts) must land before the HTTP response returns —
+  // waitUntil tails were not completing reliably on dev, leaving CRM empty while
+  // the buyer saw a reply. Telemetry / catalog watching stay deferred (~1s).
+  const convIdForCrm = nd || input.convId;
+  await (async () => {
+    await deps.crm.appendMessage(convIdForCrm, 'inbound', input.text).catch(() => {});
+    await deps.crm.appendMessage(convIdForCrm, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
+    await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
+    await syncProfileObservations(deps, convIdForCrm, input, goal, state).catch(() => {});
+  })();
+
+  const telemetryTail = (async () => {
     await deps.store
       .logTurn({
         convId: state.convId,
@@ -3571,9 +3577,6 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         grounding,
       })
       .catch(() => {});
-    await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
-    await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
-    await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
     await syncTelemetry(deps, nd, input, goal, evidence, state, reply, {
       ex,
       extractProvenance,
@@ -3595,13 +3598,11 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
           : {}),
       },
     }).catch(() => {});
-    // Catalog Onboarding Watching — live ask grade (Desk owns fulfill/Problem).
-    // Never block the buyer on ledger I/O; transport errors stay watching.
     await reportCatalogWatchFromTurn({
       crm: deps.crm,
       builderId: state.builderId,
       projectId: state.focus?.projectId ?? '',
-      conversationId: nd || input.convId,
+      conversationId: convIdForCrm,
       buyerText: trimmedText || input.text,
       reply,
       routingBind: (routing?.bind ?? extractProvenance?.routing_bind ?? null) as {
@@ -3622,8 +3623,8 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       ),
     }).catch(() => {});
   })();
-  if (input.waitUntil) input.waitUntil(_tail);
-  else await _tail;
+  if (input.waitUntil) input.waitUntil(telemetryTail);
+  else await telemetryTail;
 
   const cappedRecovery = searchRecovery ? capRecoveryForChannel(searchRecovery, channel) : undefined;
 
@@ -6343,6 +6344,68 @@ async function syncFacts(
   if (goal.kind === 'handoff') await deps.crm.setStage(nd, 'escalated');
 }
 
+/** BPE lane — buyer_facts via /api/profile/observations (separate from conv columns). */
+async function syncProfileObservations(
+  deps: EngineDeps,
+  nd: string,
+  input: EngineTurnInput,
+  goal: TurnGoal,
+  state: ConversationState,
+): Promise<void> {
+  if (!nd) return;
+  const buyerPhone = state.ndBuyerPhone ?? input.buyerPhone;
+  const observations: Array<{ fact_key: string; value: unknown; provenance: string }> = [];
+  const prov = deskFactProvenance('regex');
+  if (state.constraints.location) {
+    observations.push({ fact_key: 'location_pref', value: state.constraints.location, provenance: prov });
+  }
+  if (state.constraints.budgetMaxInr) {
+    observations.push({ fact_key: 'budget_inr', value: state.constraints.budgetMaxInr, provenance: prov });
+  }
+  if (state.constraints.bhk) {
+    observations.push({ fact_key: 'bhk_preference', value: state.constraints.bhk, provenance: prov });
+  }
+  if (state.constraints.purpose) {
+    observations.push({ fact_key: 'purpose', value: state.constraints.purpose, provenance: prov });
+  }
+  if (state.constraints.propertyType) {
+    observations.push({ fact_key: 'property_interest', value: [state.constraints.propertyType], provenance: prov });
+  }
+  if ((input.channel ?? 'whatsapp') === 'advisor_web') {
+    if (state.constraints.commuteHub) {
+      observations.push({ fact_key: 'commute_hub', value: state.constraints.commuteHub, provenance: prov });
+    }
+    if (state.constraints.worries?.length) {
+      observations.push({ fact_key: 'worries', value: state.constraints.worries, provenance: prov });
+    }
+    {
+      const imp = importanceFromConstraints(state.constraints);
+      if (imp.commute !== undefined) observations.push({ fact_key: 'commute_importance', value: imp.commute, provenance: prov });
+      if (imp.schools !== undefined) observations.push({ fact_key: 'school_importance', value: imp.schools, provenance: prov });
+      if (imp.budget !== undefined) observations.push({ fact_key: 'budget_importance', value: imp.budget, provenance: prov });
+      if (imp.walkability !== undefined) observations.push({ fact_key: 'walkability_importance', value: imp.walkability, provenance: prov });
+      if (imp.builder_trust !== undefined) observations.push({ fact_key: 'builder_trust_importance', value: imp.builder_trust, provenance: prov });
+      if (imp.value !== undefined) observations.push({ fact_key: 'value_importance', value: imp.value, provenance: prov });
+    }
+  }
+  if (state.focus) {
+    observations.push({
+      fact_key: 'focused_project',
+      value: { project_id: state.focus.projectId, name: state.focus.projectName },
+      provenance: prov,
+    });
+  }
+  if (goal.kind === 'visit_booked') {
+    observations.push({
+      fact_key: 'visit_booked',
+      value: { project_id: goal.projectId, label: goal.label, iso: goal.iso },
+      provenance: prov,
+    });
+  }
+  if (!observations.length) return;
+  await deps.crm.postProfileObservations(state.builderId, buyerPhone, nd, observations);
+}
+
 function answerFactKind(topic: string): string | null {
   switch (topic) {
     case 'price':
@@ -6545,73 +6608,8 @@ async function syncTelemetry(
       });
   }
 
-  const observations: Array<{ fact_key: string; value: unknown; provenance: string }> = [];
-  const prov = deskFactProvenance('regex');
-  if (state.constraints.location) {
-    observations.push({ fact_key: 'location_pref', value: state.constraints.location, provenance: prov });
-  }
-  if (state.constraints.budgetMaxInr) {
-    observations.push({ fact_key: 'budget_inr', value: state.constraints.budgetMaxInr, provenance: prov });
-  }
-  if (state.constraints.bhk) {
-    observations.push({ fact_key: 'bhk_preference', value: state.constraints.bhk, provenance: prov });
-  }
-  if (state.constraints.purpose) {
-    observations.push({ fact_key: 'purpose', value: state.constraints.purpose, provenance: prov });
-  }
-  if (state.constraints.propertyType) {
-    observations.push({ fact_key: 'property_interest', value: [state.constraints.propertyType], provenance: prov });
-  }
-  // Trade-off Advisor soft signals — mirror of advisor-weights.ts so the BPE
-  // resolves the same ranking for a returning buyer (migration 0116 keys).
-  // Advisor-web only (same gate as fetchRecommend).
-  if ((input.channel ?? 'whatsapp') === 'advisor_web') {
-    if (state.constraints.commuteHub) {
-      observations.push({ fact_key: 'commute_hub', value: state.constraints.commuteHub, provenance: prov });
-    }
-    if (state.constraints.worries?.length) {
-      observations.push({ fact_key: 'worries', value: state.constraints.worries, provenance: prov });
-    }
-    {
-      const imp = importanceFromConstraints(state.constraints);
-      if (imp.commute !== undefined) observations.push({ fact_key: 'commute_importance', value: imp.commute, provenance: prov });
-      if (imp.schools !== undefined) observations.push({ fact_key: 'school_importance', value: imp.schools, provenance: prov });
-      if (imp.budget !== undefined) observations.push({ fact_key: 'budget_importance', value: imp.budget, provenance: prov });
-    if (imp.walkability !== undefined) observations.push({ fact_key: 'walkability_importance', value: imp.walkability, provenance: prov });
-    if (imp.builder_trust !== undefined) observations.push({ fact_key: 'builder_trust_importance', value: imp.builder_trust, provenance: prov });
-    if (imp.value !== undefined) observations.push({ fact_key: 'value_importance', value: imp.value, provenance: prov });
-    }
-  }
-  if (state.focus) {
-    observations.push({
-      fact_key: 'focused_project',
-      value: { project_id: state.focus.projectId, name: state.focus.projectName },
-      provenance: prov,
-    });
-  }
-  if (goal.kind === 'visit_booked') {
-    observations.push({
-      fact_key: 'visit_booked',
-      value: { project_id: goal.projectId, label: goal.label, iso: goal.iso },
-      provenance: prov,
-    });
-  }
-  if (observations.length) {
-    await deps.crm
-      .postProfileObservations(state.builderId, buyerPhone, nd, observations)
-      .catch((err) => {
-        // No buyerPhone. This was the one console.* in the turn path carrying a
-        // raw E.164 number, ungated, on prod. `nd` is the NayaDesk conversation
-        // id — it finds the same row and is not personal data by itself.
-        console.error(
-          '[syncTelemetry] postProfileObservations',
-          nd,
-          observations.map((o) => o.fact_key),
-          err,
-        );
-      });
-  }
-
+  // Profile observations await on the buyer path via syncProfileObservations —
+  // do not also post them from this deferred telemetry tail.
   const journeyPost = buildJourneySignalPost(goal, state, evidence);
   await deps.crm
     .postJourneySignals(state.builderId, buyerPhone, nd, journeyPost.signals, {
