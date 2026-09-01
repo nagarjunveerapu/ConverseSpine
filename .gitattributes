@@ -1,0 +1,41 @@
+# Line endings. Git for Windows is normally installed with core.autocrlf=true,
+# which rewrites checked-out files to CRLF. A shell script that arrives with
+# CRLF fails on its first line with `$'\r': command not found` — inside Git Bash
+# and inside WSL alike — so anything a shell or interpreter reads line by line
+# is pinned to LF here, regardless of the developer's git config.
+#
+# `text=auto` still normalises to LF *in the repository*; `eol=lf` additionally
+# forces LF in the working tree.
+
+*           text=auto
+
+# Anything with a shebang, or that a shell/interpreter reads line by line.
+*.sh        text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.js        text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.py        text eol=lf
+*.sql       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+.dev.vars*  text eol=lf
+
+# Never touched.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.pdf       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
+*.xlsx      binary
+*.zip       binary

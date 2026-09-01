@@ -11,10 +11,15 @@ what keeps it a holdout, live and offline alike.
     python3 scripts/sil-load-projected-index.py --vec /tmp/sil \\
         --index naya-intent-p256-f6665e0b79-dev --space p256-f6665e0b79
 """
-import argparse, json, subprocess, sys, tempfile
+import argparse, json, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 import numpy as np
+
+# `npx` is `npx.cmd` on Windows, and subprocess cannot launch a bare "npx"
+# there. shutil.which() returns the full path to the .cmd, which it can.
+NPX = shutil.which("npx") or "npx"
+
 
 BATCH = 5000  # wrangler insert takes an NDJSON file; keep each one modest
 
@@ -74,7 +79,7 @@ def main():
             print(f"  dry-run: would insert {len(chunk)} from {path}")
             continue
         p = subprocess.run(
-            ["npx", "wrangler", "vectorize", "insert", a.index, "--file", path],
+            [NPX, "wrangler", "vectorize", "insert", a.index, "--file", path],
             capture_output=True, text=True, timeout=900,
         )
         if p.returncode != 0:
