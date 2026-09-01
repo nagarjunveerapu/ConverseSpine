@@ -8,14 +8,19 @@ Reproducible from any checkout (no hardcoded paths):
     python3 scripts/vectorize-dump-registry.py --index naya-intent-phrasings-dev \
             --out corpus/recovered-raw.jsonl
 """
-import argparse, json, re, subprocess, sys, time
+import argparse, json, re, shutil, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+# `npx` is `npx.cmd` on Windows, and subprocess cannot launch a bare "npx"
+# there. shutil.which() returns the full path to the .cmd, which it can.
+NPX = shutil.which("npx") or "npx"
+
 
 def wrangler(args, cwd, retries=3):
     err = ""
     for attempt in range(retries):
-        p = subprocess.run(["npx", "wrangler"] + args, cwd=cwd,
+        p = subprocess.run([NPX, "wrangler"] + args, cwd=cwd,
                            capture_output=True, text=True, timeout=180)
         if p.returncode == 0:
             return p.stdout

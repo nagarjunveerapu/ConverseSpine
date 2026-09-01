@@ -26,6 +26,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
+import { wranglerArgv } from './lib/wrangler.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID || 'a24378cdba77c1d03c3115651bb9cd11';
 
@@ -250,7 +251,8 @@ async function vectorizeInfo(indexName) {
     return { error: `HTTP ${status}${json?.errors?.[0]?.message ? `: ${json.errors[0].message}` : ''}` };
   }
   try {
-    const out = execFileSync('npx', ['wrangler', 'vectorize', 'info', indexName], {
+    // Not `npx` — that is `npx.cmd` on Windows and Node cannot execFile a .cmd.
+    const out = execFileSync(process.execPath, wranglerArgv(['vectorize', 'info', indexName]), {
       cwd: ROOT, encoding: 'utf8', timeout: 60_000,
     });
     const m = out.match(/│\s*(\d+)\s*│\s*(\d+)\s*│\s*[0-9a-f-]+\s*│\s*(\S+)\s*│/);

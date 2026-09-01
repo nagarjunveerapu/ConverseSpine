@@ -25,6 +25,13 @@ npm run dev:local                # Worker on :8789, against the LOCAL Desk
 npm run demo                     # CLI chat
 ```
 
+**Windows works, with the same commands.** PowerShell, no WSL — `cp` is an
+alias for `Copy-Item` there, workerd ships a native win32 build, and a
+`windows-latest` CI job runs install + typecheck + tests on every PR so this
+stays true. Node 22 (`.nvmrc`), and `git config --global core.autocrlf input`
+before you clone. The one script that is still bash is `npm run smoke:p7` —
+a smoke test against dev, not part of setup; run it from Git Bash or WSL.
+
 **`dev:local`, not `dev`.** `npm run dev` uses `--env dev`, which binds
 `NAYADESK` as a *service* — and a service binding can only reach a **deployed**
 Worker, so your local turns go to the shared dev database no matter what
@@ -126,7 +133,9 @@ binding resolved, not a URL fallback. Full matrix and the per-Worker checklist:
 Generates **fresh buyer personas** each run, simulates multi-turn WhatsApp conversations, LLM-judges transcript quality:
 
 ```bash
-npm run eval:quality          # 3 journeys (EVAL_COUNT=5 to override)
+npm run eval:quality          # 3 journeys
+EVAL_COUNT=5 npm run eval:quality              # bash / zsh
+$env:EVAL_COUNT=5; npm run eval:quality        # PowerShell
 ```
 
 Outputs HTML + JSON under `eval-reports/<timestamp>/`. Read the transcript and judge scores — no fixed expected strings.

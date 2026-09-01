@@ -16,11 +16,16 @@ in the result because every vector came from one source index.
         --target naya-intent-p256-f6665e0b79-full-dev \\
         --vec /tmp/sil --space p256-f6665e0b79
 """
-import argparse, json, re, subprocess, sys, tempfile, time
+import argparse, json, re, shutil, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
+
+# `npx` is `npx.cmd` on Windows, and subprocess cannot launch a bare "npx"
+# there. shutil.which() returns the full path to the .cmd, which it can.
+NPX = shutil.which("npx") or "npx"
+
 
 GET_BATCH = 20     # wrangler's documented id cap for get-vectors
 UPSERT_BATCH = 2000
@@ -29,7 +34,7 @@ UPSERT_BATCH = 2000
 def wrangler(args, retries=3):
     err = ""
     for a in range(retries):
-        p = subprocess.run(["npx", "wrangler"] + args, capture_output=True, text=True, timeout=300)
+        p = subprocess.run([NPX, "wrangler"] + args, capture_output=True, text=True, timeout=300)
         if p.returncode == 0:
             return p.stdout
         err = p.stderr[-300:]

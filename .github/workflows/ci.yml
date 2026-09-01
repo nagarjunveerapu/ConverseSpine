@@ -28,6 +28,29 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  # Everything else here runs on Ubuntu, which is how the repo quietly became
+  # Mac/Linux-only: `execFileSync('npx', …)` in scripts/embed-pipeline.mjs
+  # (npx is npx.cmd on Windows and Node cannot execFile a .cmd), an
+  # `EVAL_MODE=… tsx` script that npm hands to cmd.exe, and no .gitattributes,
+  # so every .sh checked out CRLF and died on line one.
+  #
+  # This job is the first-morning path from the README: install, typecheck,
+  # run the unit tests. If it goes red, Windows broke in a PR.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
   # Second-tenant resolution against the REAL bge-base embedder (no fake
   # vectors) — tests/embed-gate-second-tenant.test.ts. Uses the dev
   # environment's Workers AI credentials; EMBED_GATE_REQUIRED turns a missing
