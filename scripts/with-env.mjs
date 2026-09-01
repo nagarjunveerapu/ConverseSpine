@@ -32,6 +32,11 @@ const [cmd, ...args] = argv.slice(sep + 1);
 // `shell` on Windows only: the binaries reached here (tsx, vitest, npm) are
 // `.cmd` shims, which Node cannot spawn directly. Every command passed in
 // comes from this repo's own package.json — never from user input.
+//
+// Keep it that way: with `shell: true` Node joins argv into ONE string and does
+// NOT quote it, so an argument containing `;`, `(`, `)`, `&` or `^` is re-read
+// by cmd.exe. Today every caller passes plain paths and flags. If one ever
+// needs to pass an expression, it must not come through here.
 const r = spawnSync(cmd, args, {
   stdio: 'inherit',
   env,
