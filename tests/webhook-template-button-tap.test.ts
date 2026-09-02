@@ -41,13 +41,27 @@ function fakeDebouncer(): { ns: DurableObjectNamespace; enqueues: Array<Record<s
   return { ns, enqueues };
 }
 
-function payload(messages: Array<Record<string, unknown>>): Request {
+const APP_SECRET = 'test-app-secret';
+
+/** X-Hub-Signature-256 exactly as Meta computes it: HMAC-SHA256 of the raw body. */
+async function sign(body: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(APP_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+  return `sha256=${[...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function payload(messages: Array<Record<string, unknown>>): Promise<Request> {
+  const body = JSON.stringify({
+    object: 'whatsapp_business_account',
+    entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: PHONE_NUMBER_ID }, messages } }] }],
+  });
   return new Request('https://spine.test/webhook/whatsapp', {
     method: 'POST',
-    body: JSON.stringify({
-      object: 'whatsapp_business_account',
-      entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: PHONE_NUMBER_ID }, messages } }] }],
-    }),
+    body,
+    headers: { 'x-hub-signature-256': await sign(body) },
   });
 }
 
@@ -61,6 +75,9 @@ describe('a template quick-reply tap', () => {
     env = {
       NAYADESK_URL: 'https://desk.test',
       BOT_SHARED_SECRET: 'shh',
+      // The webhook refuses an unsigned payload now; this test used to pass
+      // because verification was skipped whenever no secret resolved.
+      META_APP_SECRET: APP_SECRET,
       TURN_DEBOUNCER: fake.ns,
     } as unknown as Env;
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -76,7 +93,7 @@ describe('a template quick-reply tap', () => {
 
   it('becomes the buyer’s words, not a dropped message', async () => {
     const { ctx: c, settle } = ctx();
-    const res = await handleWhatsAppWebhook(payload([{
+    const res = await handleWhatsAppWebhook(await payload([{
       from: '15556287583',
       id: 'wamid.tap.1',
       type: 'button',
@@ -100,7 +117,7 @@ describe('a template quick-reply tap', () => {
 
   it('with no label still acks 200 and enqueues nothing', async () => {
     const { ctx: c, settle } = ctx();
-    const res = await handleWhatsAppWebhook(payload([{
+    const res = await handleWhatsAppWebhook(await payload([{
       from: '15556287583',
       id: 'wamid.tap.2',
       type: 'button',
@@ -114,7 +131,7 @@ describe('a template quick-reply tap', () => {
 
   it('rides the same batch as an ordinary text without stealing its turn', async () => {
     const { ctx: c, settle } = ctx();
-    await handleWhatsAppWebhook(payload([
+    await handleWhatsAppWebhook(await payload([
       { from: '15556287583', id: 'wamid.tap.3', type: 'button', button: { text: 'Show my details' } },
       { from: '15556287583', id: 'wamid.txt.1', type: 'text', text: { body: 'and the price?' } },
     ]), env, c);
