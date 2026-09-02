@@ -67,8 +67,25 @@ export async function handleWhatsAppWebhook(
     }
   }
 
+  // Fail CLOSED when no secret resolves.
+  //
+  // `if (secret && ...)` skipped verification entirely whenever the lookup
+  // came back empty, which is not a rare state: prod has no META_APP_SECRET
+  // set at all, and no builder anywhere has a per-tenant one, so the fallback
+  // was carrying every environment and on prod it resolved to undefined. An
+  // unverified payload here is not inert — it is written to the CRM and it
+  // makes the bot send real WhatsApp messages to real phone numbers, billed.
+  // So anyone who knew this URL could put words in a tenant's mouth.
+  //
+  // It also compounds with the resolver above: a tenant we cannot resolve
+  // contributes no secret, so the window where a tenant is invisible used to
+  // be the same window where nothing was authenticated.
   const secret = builderIds.map((b) => getMetaAppSecret(env, b)).find(Boolean) ?? env.META_APP_SECRET;
-  if (secret && !(await verifyMetaWebhookSignature(rawBody, sig, secret))) {
+  if (!secret) {
+    console.error('[wa-webhook] refused: no META_APP_SECRET for', builderIds.join(',') || '(unresolved)');
+    return new Response('Forbidden', { status: 403 });
+  }
+  if (!(await verifyMetaWebhookSignature(rawBody, sig, secret))) {
     return new Response('Forbidden', { status: 403 });
   }
 

@@ -16,8 +16,27 @@ import type { Env } from '../src/env.js';
 const PHONE_NUMBER_ID = '773311992244001';
 const BUILDER = 'brigade-group';
 
+const APP_SECRET = 'test-app-secret';
+
 function env(): Env {
-  return { NAYADESK_URL: 'https://desk.test', BOT_SHARED_SECRET: 'shh' } as unknown as Env;
+  return {
+    NAYADESK_URL: 'https://desk.test',
+    BOT_SHARED_SECRET: 'shh',
+    // The webhook refuses an unsigned payload now, so these have to sign like
+    // Meta does. They used to pass BECAUSE verification was skipped whenever
+    // no secret resolved — the suite was resting on the fail-open.
+    META_APP_SECRET: APP_SECRET,
+  } as unknown as Env;
+}
+
+/** X-Hub-Signature-256 exactly as Meta computes it: HMAC-SHA256 of the raw body. */
+async function sign(body: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(APP_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+  return `sha256=${[...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function ctx(): { ctx: ExecutionContext; settle: () => Promise<void> } {
@@ -28,13 +47,15 @@ function ctx(): { ctx: ExecutionContext; settle: () => Promise<void> } {
   };
 }
 
-function payload(value: Record<string, unknown>): Request {
+async function payload(value: Record<string, unknown>): Promise<Request> {
+  const body = JSON.stringify({
+    object: 'whatsapp_business_account',
+    entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: PHONE_NUMBER_ID }, ...value } }] }],
+  });
   return new Request('https://spine.test/webhook/whatsapp', {
     method: 'POST',
-    body: JSON.stringify({
-      object: 'whatsapp_business_account',
-      entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: PHONE_NUMBER_ID }, ...value } }] }],
-    }),
+    body,
+    headers: { 'x-hub-signature-256': await sign(body) },
   });
 }
 
@@ -57,7 +78,7 @@ describe('a status-only webhook', () => {
 
   it('files Meta’s verdict against the row instead of being discarded', async () => {
     const { ctx: c, settle } = ctx();
-    const res = await handleWhatsAppWebhook(payload({
+    const res = await handleWhatsAppWebhook(await payload({
       statuses: [
         { id: 'wamid.welcome', status: 'failed', recipient_id: '919000000001', errors: [
           { code: 131049, title: 'Not delivered', error_data: { details: 'Meta chose not to deliver this message.' } },
@@ -79,7 +100,7 @@ describe('a status-only webhook', () => {
 
   it('still acks and files nothing when the change carries neither messages nor statuses', async () => {
     const { ctx: c, settle } = ctx();
-    const res = await handleWhatsAppWebhook(payload({}), env(), c);
+    const res = await handleWhatsAppWebhook(await payload({}), env(), c);
     await settle();
 
     expect(res.status).toBe(200);
