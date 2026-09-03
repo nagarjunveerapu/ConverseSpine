@@ -28,7 +28,7 @@ describe('taught lane end-to-end (focused typo facet ask)', () => {
     const deps = depsWithTaughtEmbedder();
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'tf-e2e', builderId: 'lokations', text, buyerPhone: '+919999999992', channel: 'advisor_web' },
+        { threadId: 'tf-e2e', builderId: 'lokations', text, buyerPhone: '+919999999992', channel: 'advisor_web' },
         deps,
       );
     await turn('coorg, 50 Lakhs');

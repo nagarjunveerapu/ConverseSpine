@@ -74,7 +74,7 @@ describe('nayadeskCrm — enqueueIntentReview wiring', () => {
     expect(crm.enqueueIntentReview).toBeDefined();
     await crm.enqueueIntentReview!({
       builderId: 'lokations',
-      conversationId: 'conv_1',
+      threadId: 'conv_1',
       buyerPhone: '+9199999',
       turnIndex: 3,
       buyerText: 'price of Brigade Oasis?',
@@ -90,7 +90,7 @@ describe('nayadeskCrm — enqueueIntentReview wiring', () => {
     const p = calls[0]!;
     expect(p).toMatchObject({
       builder_id: 'lokations',
-      conversation_id: 'conv_1',
+      thread_id: 'conv_1',
       buyer_phone: '+9199999',
       turn_index: 3,
       buyer_text: 'price of Brigade Oasis?',

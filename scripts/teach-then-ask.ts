@@ -113,7 +113,7 @@ async function ask(builder: string, text: string): Promise<Omit<Probe, 'ask' | '
     body: JSON.stringify({
       builder_id: builder,
       buyer_phone: `+9199${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`,
-      conversation_id: randomUUID(),
+      thread_id: randomUUID(),
       text,
       channel: 'advisor_web',
     }),

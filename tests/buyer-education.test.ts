@@ -33,7 +33,7 @@ describe('buyer education KB resolver', () => {
     const deps = definitionHarness('definition_bhk');
     const result = await runEngineTurn(
       {
-        convId: 'edu-bhk',
+        threadId: 'edu-bhk',
         builderId: 'lokations',
         text: 'what is this bhk you people say',
         channel: 'advisor_web',
@@ -50,7 +50,7 @@ describe('buyer education KB resolver', () => {
     const deps = definitionHarness('definition_property_type');
     const result = await runEngineTurn(
       {
-        convId: 'edu-plot',
+        threadId: 'edu-plot',
         builderId: 'lokations',
         text: 'what is plotted development',
         channel: 'advisor_web',
@@ -69,7 +69,7 @@ describe('buyer education KB resolver', () => {
 
     const result = await runEngineTurn(
       {
-        convId: 'edu-miss',
+        threadId: 'edu-miss',
         builderId: 'lokations',
         text: 'what is a khata extract pack in detail for aliens',
         channel: 'advisor_web',
@@ -93,7 +93,7 @@ describe('buyer education KB resolver', () => {
     deps.failureSearch = true;
     const result = await runEngineTurn(
       {
-        convId: 'edu-search-neg',
+        threadId: 'edu-search-neg',
         builderId: 'lokations',
         text: 'Whitefield 70L 2BHK',
         channel: 'advisor_web',
@@ -108,7 +108,7 @@ describe('buyer education KB resolver', () => {
     const deps = definitionHarness('policy_investment_metric');
     const result = await runEngineTurn(
       {
-        convId: 'edu-policy-neg',
+        threadId: 'edu-policy-neg',
         builderId: 'lokations',
         text: 'what CAGR will I get',
         channel: 'advisor_web',

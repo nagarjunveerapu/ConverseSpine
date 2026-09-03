@@ -22,12 +22,12 @@ import { fakeData, fakeDeps, projectDetailFor } from './fakes.js';
  * once they were delivered.
  */
 
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = { ...fakeDeps(), waProjectFirst: true };
   const turn = (text: string, actionId?: string) =>
     runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text,
         buyerPhone: '+919999991180',
@@ -160,7 +160,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
 
   it('all seen → "you\'ve been through the full file", said once', async () => {
     const deps = { ...fakeDeps(), waProjectFirst: true };
-    const convId = 'wa-all-seen';
+    const threadId = 'wa-all-seen';
     const detail = {
       ...projectDetailFor('cornerstone')!,
       configurations: [
@@ -168,7 +168,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
         { unitType: '3 BHK', priceDisplay: '₹62 L', priceMinInr: 6_240_000, sizeDisplay: '1400-1550 sqft' },
       ],
     };
-    let s = commitTo(initState(convId, 'lokations'), 'cornerstone', 'Brigade Cornerstone');
+    let s = commitTo(initState(threadId, 'lokations'), 'cornerstone', 'Brigade Cornerstone');
     s = recordEntities(s, [{ projectId: 'cornerstone', name: 'Brigade Cornerstone' }], 'discussed', 1);
     s = { ...s, constraints: { ...s.constraints, bhk: '2 BHK' } };
     s = { ...s, projectCache: { cornerstone: detail } };
@@ -180,7 +180,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
 
     const turn = (text: string, actionId?: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919999991181', channel: 'whatsapp', ...(actionId ? { action_id: actionId } : {}) },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919999991181', channel: 'whatsapp', ...(actionId ? { action_id: actionId } : {}) },
         deps,
       );
 
@@ -212,13 +212,13 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
  * keeping the file missing for the rest of the conversation.
  */
 describe('an identity-only shell never becomes the project file', () => {
-  function shellHarness(convId: string) {
+  function shellHarness(threadId: string) {
     const data = fakeData();
     const deps = { ...fakeDeps(), data, waProjectFirst: true };
     const turn = (text: string, actionId?: string) =>
       runEngineTurn(
         {
-          convId,
+          threadId,
           builderId: 'lokations',
           text,
           buyerPhone: '+919999991181',
@@ -232,7 +232,7 @@ describe('an identity-only shell never becomes the project file', () => {
 
   it('the pick re-fetches past a prefetched shell, so the file rows draw', async () => {
     const { data, turn } = shellHarness('wa-shell-pick');
-    // Desk's conversationContext is focus-scoped, so a prefetched match that
+    // Desk's threadContext is focus-scoped, so a prefetched match that
     // isn't the focus yields a shell. This is the ordinary board turn.
     data.fail.projectDetail = 'absent';
     await turn('Help me choose', WA_MENU_CHOOSE);

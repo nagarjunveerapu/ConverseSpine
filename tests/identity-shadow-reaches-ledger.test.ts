@@ -4,7 +4,7 @@ import { mergeExtractedAuthority } from '../src/engine/extract-authority.js';
 import { buildLedgerWritePayload } from '../src/engine/ledger-write.js';
 import type { Env } from '../src/env.js';
 import type {
-  ConversationState,
+  ThreadState,
   EvidenceSet,
   Extracted,
   TurnGoal,
@@ -99,13 +99,13 @@ describe('the shadow row survives the path from retrieval to the ledger', () => 
 
 describe('the ledger projection actually carries it', () => {
   const state = {
-    convId: 'c1',
+    threadId: 'c1',
     builderId: 'b1',
     phase: 'discover',
     turnCount: 1,
     constraints: {},
     discover: { lastOffered: [], discussedProjects: [] },
-  } as unknown as ConversationState;
+  } as unknown as ThreadState;
   const goal = { kind: 'answer', topic: 'overview' } as TurnGoal;
   const ev = { tools: [] } as unknown as EvidenceSet;
 

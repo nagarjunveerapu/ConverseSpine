@@ -67,7 +67,7 @@ describe('egress gate — the signal and the fact travel together', () => {
     postTurnEgress(rt, undefined, {
       builder_id: 'brigade-group',
       buyer_phone: '+919990000001',
-      conversation_id: 'conv:test',
+      thread_id: 'conv:test',
       buyer_text: 'yes',
       understood: { intents: [{ kind: 'visit_booked' }], slot_writes: [] },
       ...input,

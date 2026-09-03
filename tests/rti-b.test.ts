@@ -117,7 +117,7 @@ describe('RTI-B end-to-end', () => {
 
     const out = await runEngineTurn(
       {
-        convId: 'rti-b',
+        threadId: 'rti-b',
         builderId: 'lokations',
         text: 'I am looking in Bangalore',
         buyerPhone: '+919977665544',

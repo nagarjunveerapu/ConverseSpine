@@ -22,13 +22,13 @@ describe('Wave 4 Spine posts leftover colliding doors on /api/v1', () => {
   const crm = () => new NayaDeskClient({ nayadeskUrl: 'https://desk.test', botSecret: 's' });
 
   it('upsertLead PUTs /api/v1/leads', async () => {
-    const fetchMock = stubJson({ ok: true, conversation_id: 'c1', created: true });
+    const fetchMock = stubJson({ ok: true, thread_id: 'c1', created: true });
     await crm().upsertLead({ builder_id: 'sandbox', buyer_phone: '+919000000901' });
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe('https://desk.test/api/v1/leads');
   });
 
   it('getLead GETs /api/v1/leads/:id', async () => {
-    const fetchMock = stubJson({ lead: { conversation_id: 'c1', builder_id: 'sandbox', buyer_phone: '+91' } });
+    const fetchMock = stubJson({ lead: { lead_id: 'ld_1', thread_id: 'c1', builder_id: 'sandbox', buyer_phone: '+91' } });
     await crm().getLead('c1');
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe('https://desk.test/api/v1/leads/c1');
   });
@@ -47,7 +47,7 @@ describe('Wave 4 Spine posts leftover colliding doors on /api/v1', () => {
 
   it('mediaShare POSTs /api/v1/media/share', async () => {
     const fetchMock = stubJson({ allowed: true });
-    await crm().mediaShare({ project_id: 'p1', conversation_id: 'c1', asset_kind: 'brochure' });
+    await crm().mediaShare({ project_id: 'p1', thread_id: 'c1', asset_kind: 'brochure' });
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe('https://desk.test/api/v1/media/share');
   });
 
@@ -104,19 +104,19 @@ describe('Wave 4 Spine posts leftover colliding doors on /api/v1', () => {
     );
   });
 
-  it('conversationContext still POSTs leftover /api/conversation-context', async () => {
-    const fetchMock = stubJson({ conversation: {}, recent_messages: [] });
-    await crm().conversationContext('c1');
+  it('threadContext POSTs /api/thread-context', async () => {
+    const fetchMock = stubJson({ lead: {}, recent_messages: [] });
+    await crm().threadContext('c1');
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
-      'https://desk.test/api/conversation-context',
+      'https://desk.test/api/thread-context',
     );
   });
 
-  it('commitProject still POSTs leftover /api/conversations/:id/commit-project', async () => {
-    const fetchMock = stubJson({ ok: true, conversation_id: 'c1', project_id: 'p1', project_state: 'focused' });
+  it('commitProject POSTs /api/threads/:id/commit-project', async () => {
+    const fetchMock = stubJson({ ok: true, thread_id: 'c1', project_id: 'p1', project_state: 'focused' });
     await crm().commitProject('c1', 'p1');
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
-      'https://desk.test/api/conversations/c1/commit-project',
+      'https://desk.test/api/threads/c1/commit-project',
     );
   });
 
@@ -124,7 +124,7 @@ describe('Wave 4 Spine posts leftover colliding doors on /api/v1', () => {
     const fetchMock = stubJson({ ok: true, matched: 1 });
     await crm().reportWhatsAppDelivery({
       builder_id: 'sandbox',
-      conversation_id: 'c1',
+      thread_id: 'c1',
       reports: [{ content: 'hi', wamid: 'wamid.1', status: 'sent' }],
     });
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(

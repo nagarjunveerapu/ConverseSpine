@@ -157,8 +157,8 @@ npm run script        # live NayaDesk smoke
   "builder_id": "lokations",
   "buyer_phone": "+919876543210",
   "text": "tell me about Ayana",
-  "conversation_id": "optional-existing-conv-id"
+  "thread_id": "optional-existing-conv-id"
 }
 ```
 
-Response: `{ "reply_text", "composer", "turn_index", "conversation_id" }`
+Response: `{ "reply_text", "composer", "turn_index", "thread_id" }`

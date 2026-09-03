@@ -373,7 +373,7 @@ describe('Phase 2 turn contract', () => {
     };
     const result = await runEngineTurn(
       {
-        convId: 'fv2-policy',
+        threadId: 'fv2-policy',
         builderId: 'lokations',
         text: 'show me areas where only my caste lives',
         channel: 'advisor_web',
@@ -401,7 +401,7 @@ describe('Phase 2 turn contract', () => {
     if (deps.routingEnv) deps.routingEnv.FAILURE_ROUTING = 'false';
     const result = await runEngineTurn(
       {
-        convId: 'fv2-dark',
+        threadId: 'fv2-dark',
         builderId: 'lokations',
         text: 'are you a bot',
         channel: 'advisor_web',
@@ -431,7 +431,7 @@ describe('Phase 2 turn contract', () => {
 
     await runEngineTurn(
       {
-        convId: 'fv2-pending-owner',
+        threadId: 'fv2-pending-owner',
         builderId: 'lokations',
         text: 'stop contacting me',
         channel: 'advisor_web',
@@ -440,7 +440,7 @@ describe('Phase 2 turn contract', () => {
     );
     const result = await runEngineTurn(
       {
-        convId: 'fv2-pending-owner',
+        threadId: 'fv2-pending-owner',
         builderId: 'lokations',
         text: 'keep the chat',
         channel: 'advisor_web',
@@ -456,7 +456,7 @@ describe('Phase 2 turn contract', () => {
     const deps = harness('definition_bhk');
     const result = await runEngineTurn(
       {
-        convId: 'fv2-mumbai-bhk',
+        threadId: 'fv2-mumbai-bhk',
         builderId: 'lokations',
         text: '3 BHK in Mumbai',
         channel: 'advisor_web',

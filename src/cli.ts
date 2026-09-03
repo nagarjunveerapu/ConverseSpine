@@ -18,10 +18,10 @@ async function main(): Promise<void> {
 ╚══════════════════════════════════════════════════════════════╝
 `);
 
-  let conversationId: string;
+  let threadId: string;
   try {
-    conversationId = await bootDemo(rt, nodeConfig.defaultBuyerPhone);
-    console.log(`\nLead ready: ${conversationId} (${nodeConfig.defaultBuyerPhone})\n`);
+    threadId = await bootDemo(rt, nodeConfig.defaultBuyerPhone);
+    console.log(`\nLead ready: ${threadId} (${nodeConfig.defaultBuyerPhone})\n`);
   } catch (err) {
     console.error(err instanceof Error ? err.message : err);
     process.exit(1);
@@ -35,11 +35,11 @@ async function main(): Promise<void> {
     if (line === 'quit' || line === 'exit') break;
 
     if (line === 'facts') {
-      console.table(await listFacts(rt, conversationId));
+      console.table(await listFacts(rt, threadId));
       continue;
     }
     if (line === 'ledger') {
-      for (const row of await listLedger(rt, conversationId)) {
+      for (const row of await listLedger(rt, threadId)) {
         console.log(`#${row.turn_index} in: ${row.buyer_text}`);
         console.log(`    out: ${row.reply_text.slice(0, 100)}…`);
       }
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
 
     try {
       const result = await runTurn(rt, {
-        conversation_id: conversationId,
+        thread_id: threadId,
         buyer_text: line,
         builder_id: nodeConfig.defaultBuilderId,
         buyer_phone: nodeConfig.defaultBuyerPhone,

@@ -4,7 +4,7 @@
  * Every wire between the two systems ran ONE way. The engine writes
  * `bhk_preference`, `budget_inr`, `location_pref` and `shortlist_project_ids`
  * into Desk, and had never read one of them back — while `bootstrapContext`
- * fetched the whole conversation row on every cold turn and dropped it.
+ * fetched the whole lead row on every cold turn and dropped it.
  *
  * So a buyer who filled Desk's registration form at a site office and tapped
  * the wa.me link met a bot that greeted them as a stranger, and "what's my
@@ -24,10 +24,10 @@ import { commitTo, initState } from '../src/engine/state.js';
 import { discussedList } from '../src/engine/entity-store.js';
 import { INTENT_EFFECTS, applyIntentAuthority } from '../src/engine/turn-routing/intent-authority.js';
 import { parseShortlistIds } from '../src/crm/nayadesk-client.js';
-import type { ComposeRequest, ConversationState, Extracted } from '../src/engine/types.js';
+import type { ComposeRequest, ThreadState, Extracted } from '../src/engine/types.js';
 import type { DeskBrief } from '../src/engine/ports.js';
 
-const cold = (): ConversationState => initState('conv:test', 'brigade-group');
+const cold = (): ThreadState => initState('conv:test', 'brigade-group');
 
 const brief = (over: Partial<DeskBrief> = {}): DeskBrief => ({
   shortlistProjectIds: [],
@@ -52,7 +52,7 @@ describe('seedFromDeskBrief — the record Desk already held', () => {
     // Desk's row is the OLDER statement by construction — the engine is what
     // writes to it. A buyer who just said "make it 2 BHK" must not be
     // corrected by a form they filled last week.
-    const live: ConversationState = {
+    const live: ThreadState = {
       ...cold(),
       constraints: { bhk: '2 BHK', location: 'Sarjapur', purpose: 'investment', budgetMaxInr: 9_000_000 },
     };
@@ -85,7 +85,7 @@ describe('seedFromDeskBrief — the record Desk already held', () => {
   });
 
   it('keeps Desk’s board only when this session has none of its own', () => {
-    const withBoard: ConversationState = { ...cold(), shortlistIds: ['p1'] };
+    const withBoard: ThreadState = { ...cold(), shortlistIds: ['p1'] };
     expect(seedFromDeskBrief(withBoard, brief({ shortlistProjectIds: ['p9'] })).state.deskShortlistIds)
       .toBeUndefined();
     expect(seedFromDeskBrief(cold(), brief({ shortlistProjectIds: ['p9'] })).state.deskShortlistIds)
@@ -181,18 +181,18 @@ describe('resolveShortlistNames', () => {
   ];
 
   it('prefers the live board — it is what the buyer was actually shown', () => {
-    const s: ConversationState = { ...cold(), deskShortlistIds: ['p1'] };
+    const s: ThreadState = { ...cold(), deskShortlistIds: ['p1'] };
     expect(resolveShortlistNames(s, [{ name: 'Sobha Dream' }], names)).toEqual(['Sobha Dream']);
   });
 
   it('falls back to Desk’s ids, named from the catalog the turn already holds', () => {
-    const s: ConversationState = { ...cold(), deskShortlistIds: ['p2', 'p1'] };
+    const s: ThreadState = { ...cold(), deskShortlistIds: ['p2', 'p1'] };
     expect(resolveShortlistNames(s, [], names)).toEqual(['Brigade Oasis', 'Brigade Cornerstone']);
   });
 
   it('drops an id the catalog cannot name rather than speaking the id', () => {
     // "your shortlist: proj_8f21c" is not an answer to anybody.
-    const s: ConversationState = { ...cold(), deskShortlistIds: ['p1', 'ghost'] };
+    const s: ThreadState = { ...cold(), deskShortlistIds: ['p1', 'ghost'] };
     expect(resolveShortlistNames(s, [], names)).toEqual(['Brigade Cornerstone']);
   });
 });
@@ -365,7 +365,7 @@ describe('a real turn — the welcome a buyer actually receives', () => {
     selfRegistered: true,
   } satisfies DeskBrief;
 
-  function harness(deskBrief: DeskBrief | undefined, convId: string) {
+  function harness(deskBrief: DeskBrief | undefined, threadId: string) {
     const deps = fakeDeps();
     deps.data.bootstrapContext = async () => ({
       recentMessages: [],
@@ -375,7 +375,7 @@ describe('a real turn — the welcome a buyer actually receives', () => {
     });
     return (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'brigade-group', text, buyerPhone: '+919591400615', channel: 'whatsapp' },
+        { threadId, builderId: 'brigade-group', text, buyerPhone: '+919591400615', channel: 'whatsapp' },
         deps,
       );
   }
@@ -425,11 +425,11 @@ describe('a real turn — the welcome a buyer actually receives', () => {
  * "only on cold conversations (first turn)". That is true of the SESSION. It
  * is not true of the buyer.
  *
- * `handleChat` (worker/routes.ts) resolves the Spine `convId` by calling
- * Desk's `upsertLead`, and Desk's `conversations` table is
- * `UNIQUE(builder_id, buyer_phone)` — one row per person per tenant, forever.
- * That id is also the Durable Object key (`state:${convId}` in store-kv.ts).
- * So the session state is not per-conversation; it is per-person-per-tenant
+ * `handleChat` (worker/routes.ts) resolves the Spine `threadId` by calling
+ * Desk's `upsertLead`, and Desk's `threads` table is unique per (builder,
+ * buyer, channel) — one row per person per tenant per channel, forever.
+ * That id is also the Durable Object key (`state:${threadId}` in store-kv.ts).
+ * So the session state is not per-chat; it is per-person-per-tenant
  * and it never expires.
  *
  * Which means `turnCount === 0` happens exactly once in a buyer's life. Every
@@ -452,7 +452,7 @@ describe('what Desk learns after the buyer\u2019s first ever message', () => {
     selfRegistered: true,
   } satisfies DeskBrief;
 
-  function returning(convId: string) {
+  function returning(threadId: string) {
     const deps = fakeDeps();
     let brief: DeskBrief | undefined;
     let looks = 0;
@@ -468,7 +468,7 @@ describe('what Desk learns after the buyer\u2019s first ever message', () => {
     const turn = (text: string) =>
       runEngineTurn(
         {
-          convId,
+          threadId,
           builderId: 'brigade-group',
           text,
           buyerPhone: '+919591400615',
@@ -485,7 +485,7 @@ describe('what Desk learns after the buyer\u2019s first ever message', () => {
       },
       /** What Desk's lead invalidate does to the session, and nothing more. */
       async deskPushedLeadInvalidate() {
-        const st = await deps.store.load(convId);
+        const st = await deps.store.load(threadId);
         if (!st) throw new Error('no session to refresh');
         const { deskBriefAt: _dropped, ...rest } = st;
         await deps.store.save(rest);
@@ -500,10 +500,10 @@ describe('what Desk learns after the buyer\u2019s first ever message', () => {
     const h = returning('legacy-session');
     h.deps.store.save({
       ...cold(),
-      convId: 'legacy-session',
+      threadId: 'legacy-session',
       builderId: 'brigade-group',
       turnCount: 4,
-      ndConversationId: 'nd:+919591400615',
+      ndThreadId: 'nd:+919591400615',
     });
     h.setBrief(LATER);
 

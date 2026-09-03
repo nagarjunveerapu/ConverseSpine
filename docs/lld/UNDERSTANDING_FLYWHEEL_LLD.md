@@ -96,7 +96,7 @@ Per turn, persist one record (`understanding_turns`, extending today's `intent_r
 
 | field | why |
 |---|---|
-| `turn_id, conversation_id, builder_id, ts` | identity / scope |
+| `turn_id, thread_id, builder_id, ts` | identity / scope |
 | `raw_text`, `canonical` | surface + masked form |
 | `canonical_vec_id` | Vectorize handle for clustering/novelty |
 | `student_intent`, `student_score`, `student_top3` | embedder result + **margin** (top1−top2) |

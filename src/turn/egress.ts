@@ -9,7 +9,7 @@ export function postTurnEgress(
   input: {
     builder_id: string;
     buyer_phone: string;
-    conversation_id: string;
+    thread_id: string;
     buyer_text: string;
     understood: UnderstandResult;
     visitBooked: boolean;
@@ -36,7 +36,7 @@ export function postTurnEgress(
   const visitFactComplete = input.visitBooked && !!input.project_id && !!input.visit_iso;
   if (input.visitBooked && !visitFactComplete) {
     console.error('visit_booked dropped: incomplete fact', {
-      conversation_id: input.conversation_id,
+      thread_id: input.thread_id,
       has_project: !!input.project_id,
       has_iso: !!input.visit_iso,
     });
@@ -64,7 +64,7 @@ export function postTurnEgress(
     .postProfileObservations({
       builder_id: input.builder_id,
       buyer_phone: input.buyer_phone,
-      conversation_id: input.conversation_id,
+      thread_id: input.thread_id,
       observations,
     })
     .catch(() => undefined);
@@ -74,7 +74,7 @@ export function postTurnEgress(
     .postJourneySignals({
       builder_id: input.builder_id,
       buyer_phone: input.buyer_phone,
-      conversation_id: input.conversation_id,
+      thread_id: input.thread_id,
       signals: {
         intents: kinds,
         // Same gate as the fact. The signal is what flips Desk's status to
@@ -87,7 +87,7 @@ export function postTurnEgress(
 
   const env = rt.env as Env;
   const work = Promise.all([postObs, postJourney]).then(() => {
-    return env.TURN_CACHE?.delete(`ctx:${input.conversation_id}`);
+    return env.TURN_CACHE?.delete(`ctx:${input.thread_id}`);
   });
 
   if (ctx) ctx.waitUntil(work);

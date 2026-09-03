@@ -1,4 +1,4 @@
-import type { ConversationState, TurnDebug } from '../engine/types.js';
+import type { ThreadState, TurnDebug } from '../engine/types.js';
 import type { SearchRecoveryEnvelope } from '../engine/recovery-planner.js';
 
 export type AdvisorUiMode =
@@ -15,7 +15,12 @@ export interface AdvisorTurnRequest {
   message?: string;
   buyer_phone?: string;
   builder_id?: string;
-  conversation_id?: string;
+  /**
+   * Spine's OWN engine state key for this advisor session (`advisor:{sid}`) —
+   * neither a lead id nor a thread id, and never a Desk key. Optional: leaving
+   * it out derives the same value from `session_id`.
+   */
+  state_key?: string;
   preferences?: Record<string, string | undefined>;
   /** Active project from the advisor board — sets focused phase before this turn. */
   project_id?: string;
@@ -61,8 +66,10 @@ export interface AdvisorTurnResponse {
   status: 'ok' | 'error';
   session_id: string;
   reply: string;
-  conversation_id: string;
-  nd_conversation_id?: string;
+  /** Echo of the Spine-local engine state key — see AdvisorTurnRequest. */
+  state_key: string;
+  /** Desk's THREAD id, once the reveal has given this session a real identity. */
+  nd_thread_id?: string;
   /** Named media cards — URL not embedded in reply prose. */
   media_attachments?: AdvisorMediaAttachment[];
   projects?: AdvisorProjectCard[];
@@ -117,7 +124,7 @@ export interface AdvisorProjectDetailResponse {
 
 export interface AdvisorMapInput {
   sessionId: string;
-  state: ConversationState;
+  state: ThreadState;
   reply: string;
   debug: TurnDebug;
   compareMatrix?: {

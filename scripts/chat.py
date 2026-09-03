@@ -26,9 +26,9 @@ import argparse, datetime, importlib.util, json, os, pathlib, subprocess, sys, t
 
 HERE = pathlib.Path(__file__).parent
 
-# conversation-report.py has the hyphen a module name cannot, and there is no
+# chat-report.py has the hyphen a module name cannot, and there is no
 # reason to have two renderers drifting apart.
-_spec = importlib.util.spec_from_file_location('convreport', HERE / 'conversation-report.py')
+_spec = importlib.util.spec_from_file_location('chatreport', HERE / 'chat-report.py')
 _cr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_cr)
 
@@ -156,7 +156,7 @@ def main():
             'say': text, 'reply': reply, 'secs': secs, 'goal': goal.get('kind', '-'),
             'topic': goal.get('topic'), 'prefs': resp.get('prefs_snapshot') or {},
             'chips': (resp.get('nba') or {}).get('chips') or [],
-            'nd': resp.get('nd_conversation_id'),
+            'nd': resp.get('nd_thread_id'),
             'timings': debug.get('timings') or {},
         })
 

@@ -20,7 +20,7 @@ import {
   WA_TYPE_PLOT,
   WA_TYPE_VILLA,
 } from '../src/channel/wa-pack.js';
-import type { ConversationState, Extracted } from '../src/engine/types.js';
+import type { ThreadState, Extracted } from '../src/engine/types.js';
 
 const BAG = [
   { projectId: 'brigade-eldorado', name: 'Brigade Eldorado' },
@@ -41,7 +41,7 @@ function ex(over: Partial<Extracted> = {}): Extracted {
   return { constraints: {}, ...over } as Extracted;
 }
 
-function state(over: Partial<ConversationState> = {}): ConversationState {
+function state(over: Partial<ThreadState> = {}): ThreadState {
   return { ...initState('c1', 'brigade-group'), turnCount: 3, ...over };
 }
 

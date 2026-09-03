@@ -28,7 +28,7 @@ import {
   releaseToDiscover,
 } from '../src/engine/state.js';
 import { runEngineTurn } from '../src/engine/turn.js';
-import type { ConversationState, Match } from '../src/engine/types.js';
+import type { ThreadState, Match } from '../src/engine/types.js';
 import { buildAdvisorNba } from '../src/advisor/nba.js';
 import { fakeDeps, projectDetailFor } from './fakes.js';
 import {
@@ -36,7 +36,7 @@ import {
   gradeOtherOne,
   gradeReraGrounded,
   gradeShowSomethingElse,
-} from './phase-1c-conversation-quality.js';
+} from './phase-1c-chat-quality.js';
 
 const AYANA: Match = {
   projectId: 'ayana',
@@ -82,9 +82,9 @@ const SANCTUARY: Match = {
 
 /** Poison the mirror without touching the store — simulates a desync bug. */
 function poisonMirror(
-  s: ConversationState,
+  s: ThreadState,
   bogus: Array<{ projectId: string; name: string }>,
-): ConversationState {
+): ThreadState {
   return {
     ...s,
     discover: {
@@ -95,7 +95,7 @@ function poisonMirror(
   };
 }
 
-function assertFocusedInvariants(s: ConversationState, step: string): void {
+function assertFocusedInvariants(s: ThreadState, step: string): void {
   if (s.phase !== 'focused') {
     expect(focusedRef(s), `${step}: no focus in ${s.phase}`).toBeUndefined();
     return;
@@ -109,7 +109,7 @@ function assertFocusedInvariants(s: ConversationState, step: string): void {
   expect(focusedEntity(s)?.projectId, `${step}: focusedEntity`).toBe(ref!.projectId);
 }
 
-function assertShortlistAuthority(s: ConversationState, step: string): void {
+function assertShortlistAuthority(s: ThreadState, step: string): void {
   const board = currentShortlist(s);
   if (s.shortlistIds?.length) {
     expect(
@@ -124,7 +124,7 @@ function assertShortlistAuthority(s: ConversationState, step: string): void {
   }
 }
 
-function assertDiscussedUncapped(s: ConversationState, minStore: number, step: string): void {
+function assertDiscussedUncapped(s: ThreadState, minStore: number, step: string): void {
   const storeN = discussedList(s).length;
   expect(storeN, `${step}: discussedList`).toBeGreaterThanOrEqual(minStore);
   // Mirror may be sliced to 6; store must not lose history.
@@ -268,15 +268,15 @@ describe('1C-ADV — clear / replace / thrash shortlist', () => {
 describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
   it('ADV-J1: offer → focus → other one → compare both → release → new board', async () => {
     const deps = fakeDeps();
-    const convId = 'adv-j1';
+    const threadId = 'adv-j1';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900001001', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900001001', channel: 'advisor_web' },
         deps,
       );
 
     // Seed a clean two-project board + focus via store writers, then thrash via turns.
-    let s = initState(convId, 'lokations');
+    let s = initState(threadId, 'lokations');
     s = recordOffered(s, [AYANA, KRISHNAJA]);
     s = commitTo(s, 'ayana', 'Ayana');
     await deps.store.save(s);
@@ -310,11 +310,11 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
 
   it('ADV-J2: sibling NAME-06 switch then go-back deixis', async () => {
     const deps = fakeDeps();
-    const convId = 'adv-j2';
+    const threadId = 'adv-j2';
     const say = (text: string) =>
       runEngineTurn(
         {
-          convId,
+          threadId,
           builderId: 'naya-advisor',
           text,
           buyerPhone: '+919900001002',
@@ -343,14 +343,14 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
 
   it('ADV-J3: switch spam + facet asks must not invent a third subject', async () => {
     const deps = fakeDeps();
-    const convId = 'adv-j3';
+    const threadId = 'adv-j3';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900001003', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900001003', channel: 'advisor_web' },
         deps,
       );
 
-    let s = recordOffered(initState(convId, 'lokations'), [AYANA, KRISHNAJA]);
+    let s = recordOffered(initState(threadId, 'lokations'), [AYANA, KRISHNAJA]);
     s = commitTo(s, 'ayana', 'Ayana');
     await deps.store.save(s);
 
@@ -388,7 +388,7 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
     await deps.store.save(s);
     const r = await runEngineTurn(
       {
-        convId: 'adv-j4',
+        threadId: 'adv-j4',
         builderId: 'lokations',
         text: 'what about the other one',
         buyerPhone: '+919900001004',
@@ -403,7 +403,7 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
 
   it('ADV-J5: empty store session with only legacy lastOffered still revives', () => {
     // Pre-1c KV shape — no entities / shortlistIds.
-    const s: ConversationState = {
+    const s: ThreadState = {
       ...initState('adv-j5', 'lokations'),
       discover: {
         ...initState('adv-j5', 'lokations').discover,
@@ -420,11 +420,11 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
 
   it('ADV-J6: cold search → thrash focus/compare/other-one with poison each turn', async () => {
     const deps = fakeDeps();
-    const convId = 'adv-j6';
+    const threadId = 'adv-j6';
     const say = async (text: string) => {
-      const before = (await deps.store.load(convId)) ?? initState(convId, 'lokations');
+      const before = (await deps.store.load(threadId)) ?? initState(threadId, 'lokations');
       const r = await runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900001006', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900001006', channel: 'advisor_web' },
         deps,
       );
       // Reply quality — state invariants alone let overview-recycle pass.
@@ -495,14 +495,14 @@ describe('1C-ADV — confuse-the-bot multi-turn journeys (fakeDeps)', () => {
 
   it('ADV-J7: unbound Prestige + prior shortlist must not compare the board pair', async () => {
     const deps = fakeDeps();
-    const convId = 'adv-j7';
-    let s = recordOffered(initState(convId, 'lokations'), [AYANA, KRISHNAJA]);
+    const threadId = 'adv-j7';
+    let s = recordOffered(initState(threadId, 'lokations'), [AYANA, KRISHNAJA]);
     s = commitTo(s, 'ayana', 'Ayana');
     await deps.store.save(s);
 
     const r = await runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text: 'comparing Prestige Lakeside and Brigade Eldorado',
         buyerPhone: '+919900001007',

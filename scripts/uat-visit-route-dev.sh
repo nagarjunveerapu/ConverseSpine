@@ -23,7 +23,7 @@ wa_turn() {
   local body
   if [[ -n $conv ]]; then
     body=$(jq -n --arg b "naya-advisor" --arg p "$phone" --arg t "$text" --arg c "$conv" \
-      '{builder_id:$b,buyer_phone:$p,text:$t,conversation_id:$c}')
+      '{builder_id:$b,buyer_phone:$p,text:$t,thread_id:$c}')
   else
     body=$(jq -n --arg b "naya-advisor" --arg p "$phone" --arg t "$text" \
       '{builder_id:$b,buyer_phone:$p,text:$t}')
@@ -93,7 +93,7 @@ CONV=""
 BRIEF="2 BHK apartment in Aerospace Park Devanahalli corridor, budget 40-50 lakh, self use"
 echo ">>> $BRIEF"
 resp=$(wa_turn "$PHONE" "$BRIEF" "$CONV")
-CONV=$(echo "$resp" | jq -r '.conversation_id // empty')
+CONV=$(echo "$resp" | jq -r '.thread_id // empty')
 echo "$(echo "$resp" | jq -r '.reply_text // .reply // .error // empty')"
 sleep 1
 for msg in \
@@ -105,7 +105,7 @@ for msg in \
   "yes"; do
   echo ">>> $msg"
   resp=$(wa_turn "$PHONE" "$msg" "$CONV")
-  CONV=$(echo "$resp" | jq -r '.conversation_id // empty')
+  CONV=$(echo "$resp" | jq -r '.thread_id // empty')
   echo "$(echo "$resp" | jq -r '.reply_text // .reply // .error // empty')"
   sleep 1
 done

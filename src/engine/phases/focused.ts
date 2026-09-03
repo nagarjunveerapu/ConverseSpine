@@ -1,4 +1,4 @@
-import type { AnswerTopic, ConversationState, Extracted, TurnGoal } from '../types.js';
+import type { AnswerTopic, ThreadState, Extracted, TurnGoal } from '../types.js';
 import { currentShortlist, discourseEntities, focusedRef } from '../entity-store.js';
 import { splitComposeTopics } from '../facts.js';
 import { resolveFaqQuestionKeys } from '../faq-keys.js';
@@ -8,7 +8,7 @@ import { DECLINE } from '../turn-intent/dialogue-acts.js';
 import { resolvePendingFork } from '../pending-fork.js';
 
 /** Unique projects the buyer can honestly compare / deictically address. */
-function discourseProjectCount(s: ConversationState): number {
+function discourseProjectCount(s: ThreadState): number {
   const ids = new Set<string>();
   for (const e of discourseEntities(s)) ids.add(e.projectId);
   for (const o of currentShortlist(s)) ids.add(o.projectId);
@@ -37,7 +37,7 @@ function answerTopics(ex: Extracted): AnswerTopic[] {
   return ['overview'];
 }
 
-export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal {
+export function decide(s: ThreadState, ex: Extracted, text = ''): TurnGoal {
   const focus = s.focus;
   if (!focus) return { kind: 'orient' };
 

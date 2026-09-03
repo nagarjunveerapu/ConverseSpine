@@ -141,7 +141,7 @@ describe('RTI-A pending probing', () => {
 
     const out = await runEngineTurn(
       {
-        convId: 'rti-yes',
+        threadId: 'rti-yes',
         builderId: 'lokations',
         text: 'yes',
         buyerPhone: '+919988776655',
@@ -175,7 +175,7 @@ describe('RTI-A pending probing', () => {
 
     const out = await runEngineTurn(
       {
-        convId: 'rti-chip',
+        threadId: 'rti-chip',
         builderId: 'lokations',
         text: 'Any configuration',
         buyerPhone: '+919988776644',

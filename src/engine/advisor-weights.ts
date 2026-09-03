@@ -4,7 +4,7 @@
  *
  * Two consumers, kept in lockstep so ranking and memory never diverge:
  *   1. fetchRecommend passes these EXPLICIT weights to Desk /search — explicit
- *      wins over conversation_id resolution Desk-side, which closes the
+ *      wins over lead_id resolution Desk-side, which closes the
  *      same-turn race (facts persist at Layer 13, AFTER the search).
  *   2. syncTelemetry persists the same numbers as BPE facts (*_importance),
  *      so a returning buyer with no KV state resolves to identical ranking

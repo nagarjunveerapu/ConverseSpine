@@ -32,7 +32,7 @@ describe('W3 repeat guard', () => {
     deps.llm = { ...deps.llm, compose: llm.compose }; // override compose only
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'rg-1', builderId: 'lokations', text, buyerPhone: '+919999999996', channel: 'advisor_web' },
+        { threadId: 'rg-1', builderId: 'lokations', text, buyerPhone: '+919999999996', channel: 'advisor_web' },
         deps,
       );
     await turn('plantation in sakleshpur under 50 lakhs');
@@ -57,7 +57,7 @@ describe('W3 repeat guard', () => {
     const deps = fakeDeps();
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'rg-3', builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'advisor_web' },
+        { threadId: 'rg-3', builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'advisor_web' },
         deps,
       );
     await turn('plantation in sakleshpur under 50 lakhs');
@@ -75,7 +75,7 @@ describe('W3 repeat guard', () => {
     const deps = fakeDeps();
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'rg-4', builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
+        { threadId: 'rg-4', builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
         deps,
       );
     await turn('plantation in sakleshpur under 50 lakhs');
@@ -91,7 +91,7 @@ describe('W3 repeat guard', () => {
     const deps = fakeDeps();
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'rg-2', builderId: 'lokations', text, buyerPhone: '+919999999997', channel: 'advisor_web' },
+        { threadId: 'rg-2', builderId: 'lokations', text, buyerPhone: '+919999999997', channel: 'advisor_web' },
         deps,
       );
     await turn('coorg, 50 Lakhs');

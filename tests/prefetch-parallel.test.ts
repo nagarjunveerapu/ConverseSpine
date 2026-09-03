@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hydrateProjectDetail, prefetchProjects } from '../src/engine/project-cache.js';
-import type { ConversationState, ProjectDetail } from '../src/engine/types.js';
+import type { ThreadState, ProjectDetail } from '../src/engine/types.js';
 
 /**
  * The prefetch runs after compose but before the awaited store.save — the
@@ -37,9 +37,9 @@ function fakeKv(): KVNamespace {
   } as unknown as KVNamespace;
 }
 
-function stateWith(over: Partial<ConversationState> = {}): ConversationState {
+function stateWith(over: Partial<ThreadState> = {}): ThreadState {
   return {
-    convId: 'c1',
+    threadId: 'c1',
     builderId: 'naya-advisor',
     phase: 'discover',
     constraints: {},
@@ -56,9 +56,9 @@ function stateWith(over: Partial<ConversationState> = {}): ConversationState {
       advancedOnce: false,
     },
     turnCount: 1,
-    ndConversationId: 'nd-1',
+    ndThreadId: 'nd-1',
     ...over,
-  } as ConversationState;
+  } as ThreadState;
 }
 
 /**

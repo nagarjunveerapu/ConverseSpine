@@ -9,25 +9,25 @@ export interface ChatRequest {
   builder_id: string;
   buyer_phone: string;
   text: string;
-  conversation_id?: string;
+  thread_id?: string;
   action_id?: string;
   /** W6 — ingress door; webhook/debouncer send 'whatsapp', bare /chat defaults to 'api'. */
   channel?: 'whatsapp' | 'advisor_web' | 'api';
 }
 
 export interface ChatResponse extends TurnResult {
-  conversation_id: string;
+  thread_id: string;
 }
 
 /**
  * NayaDesk Playground / Auto / Vault expect Naya-shaped /chat JSON:
- * `{ status, reply, conversation_id, debug: { classifier, brain.tool_calls } }`.
+ * `{ status, reply, thread_id, debug: { classifier, brain.tool_calls } }`.
  */
 export interface DeskChatResponse {
   status: 'ok';
   reply: string;
   reply_text: string;
-  conversation_id: string;
+  thread_id: string;
   composer: string;
   turn_index: number;
   debug: {
@@ -77,18 +77,18 @@ export async function handleChat(
   body: ChatRequest,
   ctx?: ExecutionContext,
 ): Promise<ChatResponse> {
-  let conversationId = body.conversation_id;
-  if (!conversationId) {
+  let threadId = body.thread_id;
+  if (!threadId) {
     const upsert = await rt.crm.upsertLead({
       builder_id: body.builder_id,
       buyer_phone: body.buyer_phone,
       ...(body.channel ? { channel: body.channel } : {}),
     });
-    conversationId = upsert.conversation_id;
+    threadId = upsert.thread_id;
   }
 
   const input: TurnInput = {
-    conversation_id: conversationId,
+    thread_id: threadId,
     buyer_text: body.text,
     builder_id: body.builder_id,
     buyer_phone: body.buyer_phone,
@@ -97,7 +97,7 @@ export async function handleChat(
   };
 
   const result = await runTurn(rt, input, ctx);
-  return { ...result, conversation_id: conversationId };
+  return { ...result, thread_id: threadId };
 }
 
 /** Map Spine turn result → NayaDesk Auto/Vault/Manual contract. */
@@ -107,7 +107,7 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
     status: 'ok',
     reply: result.reply_text,
     reply_text: result.reply_text,
-    conversation_id: result.conversation_id,
+    thread_id: result.thread_id,
     composer: result.composer,
     turn_index: result.turn_index,
     debug: {
@@ -147,7 +147,7 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
 
 export interface AgentSendBody {
   builder_id: string;
-  conversation_id: string;
+  thread_id: string;
   buyer_phone: string;
   phone_number_id: string;
   kind?: 'text' | 'document' | 'image' | 'video';
@@ -162,7 +162,7 @@ export interface AgentSendBody {
  * We deliver via Graph and invalidate TURN_CACHE so the next inbound sees pause.
  */
 export async function handleAgentSend(env: Env, body: AgentSendBody): Promise<Response> {
-  const { builder_id, conversation_id, buyer_phone, phone_number_id } = body;
+  const { builder_id, thread_id, buyer_phone, phone_number_id } = body;
   const kind = body.kind ?? 'text';
   if (!builder_id || !buyer_phone || !phone_number_id) {
     return json(
@@ -199,9 +199,9 @@ export async function handleAgentSend(env: Env, body: AgentSendBody): Promise<Re
     }
   }
 
-  if (conversation_id && env.TURN_CACHE) {
+  if (thread_id && env.TURN_CACHE) {
     try {
-      await env.TURN_CACHE.delete(`ctx:${conversation_id}`);
+      await env.TURN_CACHE.delete(`ctx:${thread_id}`);
     } catch {
       /* never block on cache */
     }
@@ -234,13 +234,24 @@ export async function handleCacheInvalidate(
   // since KV caches a miss per colo for up to a minute and the buyer's next
   // message can easily land inside that window.
   if (req.type === 'lead') {
-    const convId = (req.conversationId ?? '').trim();
-    if (!convId) return json({ error: 'conversation_id_required' }, 400);
+    const leadId = (req.leadId ?? '').trim();
+    if (!leadId) return json({ error: 'lead_id_required' }, 400);
     // The runtime's own store, not a second construction of it — which
     // binding backs the session is a fact that must have one home.
     const { createWorkerRuntime } = await import('../runtime/deps.js');
-    const { store } = createWorkerRuntime(env).engine;
-    const state = await store.load(convId).catch(() => null);
+    const rt = createWorkerRuntime(env);
+    const { store } = rt.engine;
+    // Desk pushes the CRM key; the session is stored under the MESSAGING key.
+    // lead → thread is the exact direction (many leads, one thread per
+    // channel), so ask Desk to walk it. Before 0220 one id meant both and this
+    // lookup was free; skipping it now would answer `session: 'absent'` for
+    // every buyer and quietly retire the whole push-invalidate.
+    const threadId = await rt.crm
+      .getThreadFor(leadId)
+      .then((t) => t.thread_id)
+      .catch(() => '');
+    if (!threadId) return json({ ok: true, session: 'absent' });
+    const state = await store.load(threadId).catch(() => null);
     // No session yet is the ordinary case, not a failure: the buyer registered
     // and has not messaged. Their first turn is a turn 0 and reads the row
     // anyway.

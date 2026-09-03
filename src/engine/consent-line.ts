@@ -27,9 +27,9 @@ export const CONSENT_NOTICE =
   'Reply STOP any time to stop messages, or DELETE to remove everything we hold about you.';
 
 /**
- * Whether this conversation still owes the buyer the notice.
+ * Whether this chat still owes the buyer the notice.
  *
- * The stamp lives on the session state, so an existing conversation that
+ * The stamp lives on the session state, so an existing chat that
  * predates this code has no stamp and gets told on its next turn. That is the
  * correct reading, not a migration gap: those buyers were never told either.
  *

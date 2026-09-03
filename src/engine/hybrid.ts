@@ -3,7 +3,7 @@
  * See docs/lld/HYBRID_LATENCY_LLD.md
  */
 import type { Env } from '../env.js';
-import type { ConversationState, TurnGoal } from './types.js';
+import type { ThreadState, TurnGoal } from './types.js';
 import type { Extracted } from './types.js';
 import type { EvidenceSet } from './types.js';
 
@@ -28,7 +28,7 @@ export function llmRateTarget(env: Pick<Env, 'LLM_RATE_TARGET'>): number {
 }
 
 /** Conversation soft-cap: force template when recent LLM share exceeds target. */
-export function llmRateExceeded(state: ConversationState, target: number): boolean {
+export function llmRateExceeded(state: ThreadState, target: number): boolean {
   const turns = Math.max(1, state.turnCount);
   const used = state.llmUsedCount ?? 0;
   // Before this turn completes: if past usage already over target, shed.

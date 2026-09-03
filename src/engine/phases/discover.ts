@@ -1,4 +1,4 @@
-import type { CatalogEnvelope, Constraints, ConversationState, EvidenceSet, Extracted, Match, ProbeKind, SearchFilters, TurnGoal } from '../types.js';
+import type { CatalogEnvelope, Constraints, ThreadState, EvidenceSet, Extracted, Match, ProbeKind, SearchFilters, TurnGoal } from '../types.js';
 import { splitComposeTopics } from '../facts.js';
 import { nameMentioned } from '../project_references.js';
 import { resolvePick } from '../state.js';
@@ -10,7 +10,7 @@ import { isCompareAmongOfferedTurn } from '../turn-intent/compare-intent.js';
 import { asksForAHuman, asksForSomethingNotOnBook, resolveBookQuestion, resolveSituation } from '../book-questions.js';
 
 export function decide(
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   buyerText?: string,
   opts?: { skipBrief?: boolean },
@@ -431,7 +431,7 @@ function coldAskTopic(ex: Extracted): import('../types.js').AnswerTopic | undefi
 }
 
 /** True when turn-0 content must not be swallowed by the welcome greet. */
-export function hasRoutableTurnZeroAsk(ex: Extracted, s: ConversationState): boolean {
+export function hasRoutableTurnZeroAsk(ex: Extracted, s: ThreadState): boolean {
   if (ex.askTopic || (ex.askTopics?.length ?? 0) > 0) return true;
   if ((ex.namedProjects?.length ?? 0) > 0) return true;
   if (ex.forceRecommendList || ex.speechAct === 'search') return true;
@@ -532,7 +532,7 @@ export function resolveRecommend(
   };
 }
 
-export function firstMissingSlot(s: ConversationState): ProbeKind | undefined {
+export function firstMissingSlot(s: ThreadState): ProbeKind | undefined {
   const c = s.constraints;
   const asked = new Set(s.discover.asked);
   if (!c.location && !asked.has('location')) return 'location';
@@ -553,7 +553,7 @@ export function firstMissingSlot(s: ConversationState): ProbeKind | undefined {
   return undefined;
 }
 
-function nextSlot(s: ConversationState): ProbeKind {
+function nextSlot(s: ThreadState): ProbeKind {
   return firstMissingSlot(s) ?? 'location';
 }
 
@@ -769,7 +769,7 @@ export function buildConstraintGapEvidence(
 }
 
 /** After a shortlist, route legal/EMI/price/availability asks to a project instead of re-searching. */
-function offeredDetailGoal(s: ConversationState, ex: Extracted): TurnGoal | null {
+function offeredDetailGoal(s: ThreadState, ex: Extracted): TurnGoal | null {
   if (ex.budgetFitQuestion || ex.budgetPickQuestion) return null;
   const topics = (ex.askTopics ?? []).filter((t) => t !== 'compare');
   const mediaKind = typeof ex.mediaAssetKind === 'string' ? ex.mediaAssetKind.trim() : '';
@@ -835,7 +835,7 @@ const SHORTLIST_ANSWERABLE: ReadonlySet<import('../types.js').AnswerTopic> = new
 ] as import('../types.js').AnswerTopic[]);
 
 /** Facet ask over a ≥2 shortlist with no pick → answer across the board. */
-function shortlistAnswerGoal(s: ConversationState, ex: Extracted): TurnGoal | null {
+function shortlistAnswerGoal(s: ThreadState, ex: Extracted): TurnGoal | null {
   const asked = (ex.askTopics?.length ? ex.askTopics : ex.askTopic ? [ex.askTopic] : []).filter(
     (t) => SHORTLIST_ANSWERABLE.has(t),
   );
@@ -854,7 +854,7 @@ function shortlistAnswerGoal(s: ConversationState, ex: Extracted): TurnGoal | nu
 
 /** Prior buyer turn named a shortlisted project — use for facet asks without re-naming. */
 function recentBuyerNamedPick(
-  s: ConversationState,
+  s: ThreadState,
   offered: readonly import('../types.js').OfferedProject[],
 ): import('../types.js').OfferedProject | undefined {
   if (!offered.length) return undefined;

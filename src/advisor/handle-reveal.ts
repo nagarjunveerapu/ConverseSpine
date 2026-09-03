@@ -21,7 +21,13 @@ export interface AdvisorRevealResponse {
   source_builder_id?: string;
   source_project_id?: string;
   project_name?: string;
-  conversation_id?: string;
+  /** Desk's messaging key for this buyer on this builder (builder x buyer x CHANNEL). */
+  thread_id?: string;
+  /**
+   * Desk's CRM key (builder x buyer x PROJECT). Present because the reveal
+   * upserts WITH a project_id, which is the only way this door returns one.
+   */
+  lead_id?: string;
   created?: boolean;
   error?: string;
 }
@@ -144,7 +150,9 @@ export async function handleAdvisorReveal(
       .filter(Boolean)
       .join(' ');
     await rt.engine.crm
-      .appendMessage(resp.conversation_id, 'outbound', note, { replyKey: 'advisor_reveal' })
+      // A message is thread-keyed — `/api/v1/threads/:thread_id/messages`.
+      // The lead id this same response carries would 404 there.
+      .appendMessage(resp.thread_id, 'outbound', note, { replyKey: 'advisor_reveal' })
       .catch(() => undefined);
 
     return {
@@ -153,7 +161,8 @@ export async function handleAdvisorReveal(
       source_builder_id: routed.sourceBuilderId,
       source_project_id: routed.sourceProjectId,
       project_name: routed.projectName,
-      conversation_id: resp.conversation_id,
+      thread_id: resp.thread_id,
+      ...(resp.lead_id ? { lead_id: resp.lead_id } : {}),
       created: resp.created,
     };
   } catch (e) {

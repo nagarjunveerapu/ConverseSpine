@@ -138,7 +138,7 @@ describe('Phase 4 turn behavior', () => {
     const turn = (text: string) =>
       runEngineTurn(
         {
-          convId: id,
+          threadId: id,
           builderId: 'lokations',
           text,
           buyerPhone: '+919999999991',

@@ -8,7 +8,7 @@ import type { Env } from '../env.js';
 
 export interface LocalTurnLogEntry {
   ts: string;
-  conv_id: string;
+  thread_id: string;
   turn_index: number;
   channel: string;
   input_source?: string;

@@ -45,9 +45,9 @@ async function chatTurn(
   builderId: string,
   phone: string,
   text: string,
-  convId?: string,
+  threadId?: string,
   actionId?: string,
-): Promise<{ reply: string; conversation_id: string; debug: Record<string, unknown> }> {
+): Promise<{ reply: string; thread_id: string; debug: Record<string, unknown> }> {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -55,7 +55,7 @@ async function chatTurn(
       builder_id: builderId,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
       ...(actionId ? { action_id: actionId } : {}),
     }),
   });
@@ -63,7 +63,7 @@ async function chatTurn(
   if (!r.ok) throw new Error(String(body.error ?? `HTTP ${r.status}`));
   return {
     reply: String(body.reply_text ?? body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     debug: (body.debug as Record<string, unknown>) ?? {},
   };
 }
@@ -190,7 +190,7 @@ async function main() {
         'tell me more details about this project',
       ]) {
         const out = await chatTurn('lokations', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug), phase: phaseOf(out.debug) } });
         await sleep(400);
       }
@@ -206,7 +206,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['Whitefield 3BHK apartment under 1.5 Cr', 'Cornerstone Utopia', 'what are the plot sizes / unit sizes?']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug), act: speechAct(out.debug) } });
         await sleep(400);
       }
@@ -222,7 +222,7 @@ async function main() {
       const phone = `+9198${ts}03`;
       let conv: string | undefined;
       let out = await chatTurn('brigade-group', phone, 'Whitefield 3BHK', conv);
-      conv = out.conversation_id;
+      conv = out.thread_id;
       out = await chatTurn('brigade-group', phone, 'Eldorado looks good', conv);
       await sleep(300);
       out = await chatTurn('brigade-group', phone, 'lets do a site visit', conv);
@@ -256,7 +256,7 @@ async function main() {
         'compare both',
       ]) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug), act: speechAct(out.debug) } });
         await sleep(400);
       }
@@ -277,7 +277,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['Whitefield 3BHK', 'Orchards', 'which banks?', 'is EC clear?', 'starting price?']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug) } });
         await sleep(350);
       }
@@ -293,7 +293,7 @@ async function main() {
       const phone = `+9198${ts}06`;
       let conv: string | undefined;
       let out = await chatTurn('brigade-group', phone, 'Whitefield 3BHK apartment', conv);
-      conv = out.conversation_id;
+      conv = out.thread_id;
       out = await chatTurn('brigade-group', phone, 'Eldorado', conv);
       await sleep(300);
       out = await chatTurn('brigade-group', phone, 'haan', conv);
@@ -309,7 +309,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['Whitefield', 'Orchards', 'legal status?', 'what banks?']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug), topic: (out.debug.goal as { topic?: string })?.topic } });
         await sleep(350);
       }
@@ -325,7 +325,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['Whitefield 2BHK', 'Eldorado', 'show 2BHK options', 'yes']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({
           buyer: text,
           reply: out.reply,
@@ -345,7 +345,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['Whitefield 3BHK', 'Cornerstone Utopia', 'Starting prices']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug), focus: focusBlob(out.debug) } });
         await sleep(400);
       }
@@ -363,7 +363,7 @@ async function main() {
       // Vanam is on naya-advisor / lokations catalog — try brigade first then lokations
       for (const text of ['looking near Coorg plantation', 'Vanam', 'Send brochure']) {
         const out = await chatTurn('lokations', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug), focus: focusBlob(out.debug) } });
         await sleep(400);
       }
@@ -394,7 +394,7 @@ async function main() {
       const phone = `+9198${ts}20`;
       let conv: string | undefined;
       let out = await chatTurn('brigade-group', phone, 'Whitefield 3BHK', conv);
-      conv = out.conversation_id;
+      conv = out.thread_id;
       out = await chatTurn('brigade-group', phone, 'Eldorado', conv);
       for (const text of ['yes', 'yes', 'ok', 'sure', 'haan']) {
         out = await chatTurn('brigade-group', phone, text, conv);
@@ -412,7 +412,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['Whitefield', 'Eldorado', 'Starting prices', 'what about Cornerstone?', 'Send brochure']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({
           buyer: text,
           reply: out.reply,
@@ -434,7 +434,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['North Bangalore apartments', 'Neo', 'Starting prices']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({ buyer: text, reply: out.reply, meta: { goal: goalKind(out.debug) } });
         await sleep(350);
       }
@@ -450,7 +450,7 @@ async function main() {
       const phone = `+9198${ts}23`;
       let conv: string | undefined;
       let out = await chatTurn('brigade-group', phone, 'Whitefield', conv);
-      conv = out.conversation_id;
+      conv = out.thread_id;
       out = await chatTurn('brigade-group', phone, 'compare both', conv);
       r.transcript.push({ buyer: 'compare both', reply: out.reply, meta: { goal: goalKind(out.debug) } });
       // Should clarify / ask which — not hallucinate a comparison table of random projects
@@ -467,7 +467,7 @@ async function main() {
       const phone = `+9198${ts}24`;
       let conv: string | undefined;
       let out = await chatTurn('brigade-group', phone, 'asdf qwerty zxcv', conv);
-      conv = out.conversation_id;
+      conv = out.thread_id;
       r.transcript.push({ buyer: 'gibberish', reply: out.reply, meta: { goal: goalKind(out.debug) } });
       out = await chatTurn('brigade-group', phone, 'Eldorado pricing', conv);
       r.transcript.push({ buyer: 'Eldorado pricing', reply: out.reply, meta: { goal: goalKind(out.debug) } });
@@ -482,7 +482,7 @@ async function main() {
       let conv: string | undefined;
       for (const text of ['Whitefield', 'Eldorado', 'what about the unit configurations?']) {
         const out = await chatTurn('brigade-group', phone, text, conv);
-        conv = out.conversation_id;
+        conv = out.thread_id;
         r.transcript.push({
           buyer: text,
           reply: out.reply,

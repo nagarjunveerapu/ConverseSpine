@@ -218,7 +218,7 @@ export function classifyFocusedPivot(input: TurnIntentInput): TurnIntentResult |
 }
 
 export function shouldRunFocusedTurnIntent(
-  state: import('../types.js').ConversationState,
+  state: import('../types.js').ThreadState,
   text: string,
   actionId?: string,
 ): boolean {

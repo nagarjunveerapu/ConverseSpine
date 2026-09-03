@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hydrateProjectDetail, isUsableProjectCard } from '../src/engine/project-cache.js';
-import type { ConversationState, ProjectDetail } from '../src/engine/types.js';
+import type { ThreadState, ProjectDetail } from '../src/engine/types.js';
 
 /**
  * The founder picked Brigade Eldorado on their own phone and walked the whole
@@ -24,9 +24,9 @@ import type { ConversationState, ProjectDetail } from '../src/engine/types.js';
  */
 const PID = 'brigade-eldorado';
 
-function stateWith(over: Partial<ConversationState> = {}): ConversationState {
+function stateWith(over: Partial<ThreadState> = {}): ThreadState {
   return {
-    convId: 'c1',
+    threadId: 'c1',
     builderId: 'brigade-group',
     phase: 'discover',
     constraints: {},
@@ -39,9 +39,9 @@ function stateWith(over: Partial<ConversationState> = {}): ConversationState {
       advancedOnce: false,
     },
     turnCount: 1,
-    ndConversationId: 'nd-1',
+    ndThreadId: 'nd-1',
     ...over,
-  } as ConversationState;
+  } as ThreadState;
 }
 
 /** Exactly the card the founder's conversation was served. */

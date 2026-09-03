@@ -21,7 +21,7 @@ const SPINE = (process.env.CONVERSE_SPINE_URL ?? 'https://converse-spine-dev.nag
 const BUILDER = process.env.BUILDER_ID ?? 'naya-advisor';
 
 interface Case { text: string; occurrences: number; expectName: string; expectId: string }
-interface Result extends Case { reply: string; namedExpected: boolean; convId: string; error?: string }
+interface Result extends Case { reply: string; namedExpected: boolean; threadId: string; error?: string }
 
 const cases = JSON.parse(readFileSync(process.argv[2], 'utf8')) as Case[];
 const out: Result[] = [];
@@ -35,7 +35,7 @@ async function chat(phone: string, text: string) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ builder_id: BUILDER, buyer_phone: phone, text }),
   });
-  const body = (await r.json()) as { reply_text?: string; conversation_id?: string; error?: string };
+  const body = (await r.json()) as { reply_text?: string; thread_id?: string; error?: string };
   if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
   return body;
 }
@@ -53,12 +53,12 @@ for (const [i, c] of cases.entries()) {
     const namedExpected =
       reply.toLowerCase().includes(c.expectName.toLowerCase()) ||
       reply.toLowerCase().includes(tail.toLowerCase());
-    out.push({ ...c, reply, namedExpected, convId: res.conversation_id ?? '' });
+    out.push({ ...c, reply, namedExpected, threadId: res.thread_id ?? '' });
     console.log(
       `${namedExpected ? 'BOUND  ' : 'MISSED '} ${String(c.occurrences).padStart(4)}×  ${JSON.stringify(c.text).slice(0, 46).padEnd(48)} ${namedExpected ? '' : '→ ' + reply.slice(0, 90).replace(/\s+/g, ' ')}`,
     );
   } catch (e) {
-    out.push({ ...c, reply: '', namedExpected: false, convId: '', error: String(e).slice(0, 200) });
+    out.push({ ...c, reply: '', namedExpected: false, threadId: '', error: String(e).slice(0, 200) });
     console.log(`ERROR   ${JSON.stringify(c.text).slice(0, 46)} — ${String(e).slice(0, 120)}`);
   }
 }

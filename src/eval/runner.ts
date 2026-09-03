@@ -7,12 +7,12 @@ import { generateBuyerProfiles, profileOpeningMessage } from './personas.js';
 import { allBuilderIds, scenarioPersonas } from './persona-library.js';
 import { fetchBuilderCatalog, type BuilderCatalog } from './catalog.js';
 import { isDoneMessage, simulateBuyerMessage, type TranscriptTurn } from './buyer-sim.js';
-import { judgeConversationQuality, type QualityVerdict } from './judge.js';
+import { judgeChatQuality, type QualityVerdict } from './judge.js';
 import type { Env } from '../env.js';
 
 export interface JourneyResult {
   profile: BuyerProfile;
-  conversation_id: string;
+  thread_id: string;
   transcript: TranscriptTurn[];
   verdict: QualityVerdict;
 }
@@ -23,7 +23,7 @@ export async function runBuyerJourney(
   catalog?: BuilderCatalog,
 ): Promise<JourneyResult> {
   const transcript: TranscriptTurn[] = [];
-  let conversationId = '';
+  let threadId = '';
   const env = rt.env as Env;
 
   for (let turn = 0; turn < profile.max_turns; turn++) {
@@ -40,10 +40,10 @@ export async function runBuyerJourney(
         builder_id: profile.builder_id,
         buyer_phone: profile.phone,
         text: buyerText,
-        conversation_id: conversationId || undefined,
+        thread_id: threadId || undefined,
       },
     );
-    conversationId = result.conversation_id;
+    threadId = result.thread_id;
 
     transcript.push({ role: 'buyer', text: buyerText });
     transcript.push({
@@ -54,8 +54,8 @@ export async function runBuyerJourney(
     });
   }
 
-  const verdict = await judgeConversationQuality(env, profile, transcript);
-  return { profile, conversation_id: conversationId, transcript, verdict };
+  const verdict = await judgeChatQuality(env, profile, transcript);
+  return { profile, thread_id: threadId, transcript, verdict };
 }
 
 export async function runQualityEval(

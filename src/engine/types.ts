@@ -201,8 +201,19 @@ export interface HoldState {
   queue?: boolean;
 }
 
-export interface ConversationState {
-  convId: string;
+export interface ThreadState {
+  /**
+   * The engine's key for this running chat, and the key its L0 state is stored
+   * under (`ce:state:{threadId}` in KV, `state:{threadId}` in the DO).
+   *
+   * On the WhatsApp and /chat doors this IS Desk's thread id — `handleChat`
+   * takes it straight off `PUT /api/v1/leads`. The advisor web door has no
+   * Desk id before the A5 reveal, so it mints a Spine-LOCAL key
+   * (`advisor:{session_id}`, see advisor/session.ts) and parks it here. That
+   * value must never be posted to Desk: `ndThreadId` below is the only field
+   * that is guaranteed to name something Desk can find.
+   */
+  threadId: string;
   builderId: string;
   phase: Phase;
   buyerName?: string;
@@ -222,20 +233,28 @@ export interface ConversationState {
   lastReply?: string;
   /**
    * Fingerprints of the last few outbound lines, newest first. `lastReply`
-   * catches a line sent twice in a row; over 12 long conversations the repeats
+   * catches a line sent twice in a row; over 12 long chats the repeats
    * that actually landed were three and four turns apart — the same "which one?"
    * menu at turns 7, 9, 10 and 13. A window of one cannot see a loop.
    */
   recentReplies?: string[];
   objectionCount?: number;
-  /** Hybrid — count of sync DeepSeek compose/extract calls this conversation. */
+  /** Hybrid — count of sync DeepSeek compose/extract calls this chat. */
   llmUsedCount?: number;
-  ndConversationId?: string;
+  /**
+   * Desk's THREAD id (builder x buyer x CHANNEL), from `ensureLead`.
+   *
+   * NOT a lead id. Desk's CRM key is builder x buyer x PROJECT, so a buyer
+   * chasing two projects has two leads behind this one thread — which is why
+   * lead-only Desk doors are translated at the seam (adapters/nayadesk.ts)
+   * rather than fed this value.
+   */
+  ndThreadId?: string;
   ndBuyerPhone?: string;
   /** After visit_booked — next short ack should not escalate to handoff. */
   postVisitAckPending?: boolean;
   /**
-   * The project this conversation has already booked a visit to. Booking
+   * The project this chat has already booked a visit to. Booking
    * DELETES `visit`, so without this the next visit-shaped turn ("and can my
    * brother come too") re-asked "which day and time" one turn after saying
    * "Done — your visit is set for Saturday at 10:30 AM".
@@ -283,15 +302,15 @@ export interface ConversationState {
    */
   deskShortlistIds?: string[];
   /**
-   * When this session last LOOKED at Desk's conversation row — not when it
+   * When this session last LOOKED at Desk's CRM row — not when it
    * last found something there.
    *
    * The bootstrap used to be gated on `turnCount === 0` alone, commented
-   * "only on cold conversations (first turn)". That is true of the session and
-   * false of the buyer. `handleChat` resolves the Spine `convId` from Desk's
-   * `upsertLead`, and Desk's `conversations` table is
-   * `UNIQUE(builder_id, buyer_phone)` — one row per person per tenant,
-   * forever — and that id is also the Durable Object key. So `turnCount === 0`
+   * "only on cold chats (first turn)". That is true of the session and
+   * false of the buyer. `handleChat` resolves the Spine `threadId` from Desk's
+   * `upsertLead`, and a Desk thread is one per (builder, buyer, channel) —
+   * one row per person per channel per tenant, forever — and that id is also
+   * the Durable Object key. So `turnCount === 0`
    * happens ONCE IN A BUYER'S LIFE, and everything Desk learned after their
    * very first message was written to a row the bot would never read again:
    * a registration at a site office, an agent qualifying the lead, a second
@@ -307,7 +326,7 @@ export interface ConversationState {
   deskBriefAt?: number;
   /**
    * The buyer filled Desk's own registration form at the site office
-   * (`conversations.source_detail === 'self_registered'`).
+   * (the CRM row's `source_detail === 'self_registered'`).
    *
    * Read on the cold turn and kept, because it changes what every later
    * read-back means: these preferences were typed by the buyer minutes ago in
@@ -613,11 +632,14 @@ export interface SearchFilters {
   purpose?: 'self_use' | 'investment';
   searchText?: string;
   maxResults?: number;
-  /** Desk conversations row id. Recommend path only — lets the Desk resolve
-   *  the buyer's BPE preference weights and re-rank + narrate trade-offs.
-   *  Never set for catalog/facet/recovery-count calls. */
-  conversationId?: string;
-  /** Explicit in-state weights (advisor-weights.ts) — win over conversationId
+  /**
+   * Desk THREAD id. Recommend path only — the seam translates it to the LEAD
+   * id Desk's soft-rank actually resolves (`WHERE lead_id = ?`) when a bundle
+   * read this turn already proved one. Never set for catalog/facet/
+   * recovery-count calls.
+   */
+  ndThreadId?: string;
+  /** Explicit in-state weights (advisor-weights.ts) — win over the lead-id
    *  resolution Desk-side; close the same-turn persist race. */
   preferenceWeights?: Record<string, number>;
   commuteHub?: string;
@@ -697,7 +719,7 @@ export interface ProjectDetail {
   microMarket: string;
   /**
    * Identity + units only: built from the search result because Desk's
-   * conversationContext is focus-scoped and this project was not the focus.
+   * threadContext is focus-scoped and this project was not the focus.
    * Cached like any card, but re-hydrated on the next read so a project that
    * later becomes the focus picks up its full record.
    */

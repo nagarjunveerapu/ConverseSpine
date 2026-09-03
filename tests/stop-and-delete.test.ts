@@ -19,11 +19,11 @@ import { fakeDeps } from './fakes.js';
  *   STOP    — stop the messages, keep the record
  *   DELETE  — remove everything
  */
-function harness(convId: string, channel: 'whatsapp' | 'advisor_web' = 'whatsapp') {
+function harness(threadId: string, channel: 'whatsapp' | 'advisor_web' = 'whatsapp') {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999941', channel },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999941', channel },
       deps,
     );
   return { deps, turn };
@@ -89,7 +89,7 @@ describe('STOP and DELETE are not the same word', () => {
     // Retained record, retained thread. Silence is Desk's tombstone, which
     // every sender checks; amnesia was never what "stop messaging me" asked
     // for, and a buyer who writes back should not have to start over.
-    expect(stop.state.ndConversationId, 'the Desk pointer went with the messages')
+    expect(stop.state.ndThreadId, 'the Desk pointer went with the messages')
       .toBeDefined();
   });
 
@@ -102,7 +102,7 @@ describe('STOP and DELETE are not the same word', () => {
     expect(deps.crm.calls).toContain('erase:all');
     expect(del.reply).toMatch(/deleted/i);
     expect(del.state.focus, 'the session outlived the delete').toBeUndefined();
-    expect(del.state.ndConversationId).toBeUndefined();
+    expect(del.state.ndThreadId).toBeUndefined();
     expect(del.state.ndBuyerPhone).toBeUndefined();
   });
 

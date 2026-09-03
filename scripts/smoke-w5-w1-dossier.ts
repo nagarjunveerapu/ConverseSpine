@@ -44,7 +44,7 @@ const TURNS = [
   'back to Ayana',
 ];
 
-async function chat(phone: string, text: string, convId?: string) {
+async function chat(phone: string, text: string, threadId?: string) {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -52,14 +52,14 @@ async function chat(phone: string, text: string, convId?: string) {
       builder_id: 'lokations',
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as Record<string, unknown>;
   if (!r.ok) throw new Error(String(body.error ?? r.status));
   return {
     reply: String(body.reply_text ?? body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     debug: (body.debug as Record<string, unknown>) ?? {},
   };
 }
@@ -72,7 +72,7 @@ async function main() {
   for (let i = 0; i < TURNS.length; i++) {
     const text = TURNS[i]!;
     const resp = await chat(phone, text, conv);
-    conv = resp.conversation_id || conv;
+    conv = resp.thread_id || conv;
     const goal = resp.debug.goal as { kind?: string; projectId?: string; topic?: string } | undefined;
     const reply = resp.reply.toLowerCase();
     let ok = true;

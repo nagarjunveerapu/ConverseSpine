@@ -103,7 +103,7 @@ describe('RTI-D end-to-end', () => {
 
     const r = await runEngineTurn(
       {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
         text: 'I would like to visit eldorado and cornerstone',
         channel: 'advisor_web',

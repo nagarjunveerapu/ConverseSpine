@@ -3,22 +3,22 @@ import { commitTo, initState } from '../src/engine/state.js';
 import { extractFactsSync } from '../src/engine/facts.js';
 import * as focused from '../src/engine/phases/focused.js';
 import type { TurnRoutingResult } from '../src/engine/turn-routing/types.js';
-import type { AnswerTopic, ConversationState } from '../src/engine/types.js';
+import type { AnswerTopic, ThreadState } from '../src/engine/types.js';
 
 /**
  * Taught-lane fill — a focused facet ask the keyword lanes can't read
  * ("ameneties?") must take the intent embedder's bound topic instead of
  * collapsing to an overview repeat. Deterministic extraction keeps precedence.
  */
-function focusedState(): ConversationState {
+function focusedState(): ThreadState {
   return commitTo(initState('c1', 'lokations'), 'ayana', 'Ayana');
 }
 
 function withRouting(
-  s: ConversationState,
+  s: ThreadState,
   topic: AnswerTopic,
   bindSource: 'embed_intent' | 'regex' | 'none',
-): ConversationState {
+): ThreadState {
   const lastRouting: TurnRoutingResult = {
     routing: 'answer_on_project',
     confidence: 'embedder',

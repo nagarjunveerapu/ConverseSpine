@@ -1,4 +1,4 @@
-import type { ConversationState, Extracted } from './types.js';
+import type { ThreadState, Extracted } from './types.js';
 import {
   resolveProjectReferences,
   type ContextMessage,
@@ -18,7 +18,7 @@ const CATALOG_MATCH_CUE_RE =
  * Discussed order is preserved at the front so "compare both" stays stable;
  * remaining discourse entities follow salience (focus → stack → recency).
  */
-function projectPool(s: ConversationState): ProjectRef[] {
+function projectPool(s: ThreadState): ProjectRef[] {
   const ents = discourseEntities(s);
   if (ents.length === 0) {
     // Pre-1a sessions / empty store — legacy projection.
@@ -50,18 +50,18 @@ function projectPool(s: ConversationState): ProjectRef[] {
   return pool;
 }
 
-function discussedRefs(s: ConversationState): ProjectRef[] {
+function discussedRefs(s: ThreadState): ProjectRef[] {
   return discussedList(s).map((p) => ({ project_id: p.projectId, name: p.name }));
 }
 
-/** Conversation pool ∪ catalog — catalog joins MATCHING only, never fallback. */
+/** Chat pool ∪ catalog — catalog joins MATCHING only, never fallback. */
 function matchingPool(
-  conversation: ReadonlyArray<ProjectRef>,
+  chat: ReadonlyArray<ProjectRef>,
   catalog: ReadonlyArray<{ projectId: string; name: string }>,
 ): ProjectRef[] {
   const out: ProjectRef[] = [];
   const seen = new Set<string>();
-  for (const p of conversation) {
+  for (const p of chat) {
     if (!p.project_id || seen.has(p.project_id)) continue;
     seen.add(p.project_id);
     out.push(p);
@@ -94,7 +94,7 @@ function hasUnboundNames(ex: Extracted): boolean {
 export function resolveCompareProjectIds(
   buyerText: string,
   ex: Extracted,
-  s: ConversationState,
+  s: ThreadState,
   catalogNames: ReadonlyArray<{ projectId: string; name: string }> = [],
 ): string[] {
   if (ex.transition === 'want_visit') return [];

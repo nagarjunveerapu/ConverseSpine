@@ -69,7 +69,7 @@ describe('handleAdvisorReveal upsert payload', () => {
   it('upserts lead on source builder with source=naya_advisor', async () => {
     const upsertLead = vi.fn().mockResolvedValue({
       ok: true,
-      conversation_id: 'conv:a5-test',
+      thread_id: 'th_a5-test',
       created: true,
     });
     const appendMessage = vi.fn().mockResolvedValue(undefined);
@@ -100,7 +100,7 @@ describe('handleAdvisorReveal upsert payload', () => {
       status: 'ok',
       source_builder_id: 'brigade-group',
       source_project_id: 'brigade-eldorado',
-      conversation_id: 'conv:a5-test',
+      thread_id: 'th_a5-test',
       created: true,
     });
     expect(upsertLead).toHaveBeenCalledWith(

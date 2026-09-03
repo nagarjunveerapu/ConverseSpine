@@ -179,7 +179,7 @@ describe('Phase 3 turn behavior', () => {
   it('drops a rejected speculative locality and lets unknown recovery speak', async () => {
     const result = await runEngineTurn(
       {
-        convId: 'fv3-joke-not-place',
+        threadId: 'fv3-joke-not-place',
         builderId: 'lokations',
         text: 'tell me a joke',
         channel: 'advisor_web',
@@ -196,7 +196,7 @@ describe('Phase 3 turn behavior', () => {
   it('lets current-turn opt-out ownership beat speculative geography', async () => {
     const result = await runEngineTurn(
       {
-        convId: 'fv3-current-optout',
+        threadId: 'fv3-current-optout',
         builderId: 'lokations',
         text: 'I do not want any calls, only chat',
         channel: 'advisor_web',
@@ -213,7 +213,7 @@ describe('Phase 3 turn behavior', () => {
     deps.failureSearch = true;
     const result = await runEngineTurn(
       {
-        convId: 'fv3-project-not-place',
+        threadId: 'fv3-project-not-place',
         builderId: 'lokations',
         text: 'Ayana',
         channel: 'advisor_web',
@@ -232,7 +232,7 @@ describe('Phase 3 turn behavior', () => {
     const turn = (text: string) =>
       runEngineTurn(
         {
-          convId: 'fv3-stop-scope',
+          threadId: 'fv3-stop-scope',
           builderId: 'lokations',
           text,
           channel: 'advisor_web',
@@ -250,7 +250,7 @@ describe('Phase 3 turn behavior', () => {
     deps.failureSearch = true;
     const result = await runEngineTurn(
       {
-        convId: 'fv3-invalid-locality',
+        threadId: 'fv3-invalid-locality',
         builderId: 'lokations',
         text: 'Buy, 70 lakh, 2 BHK',
         channel: 'advisor_web',
@@ -268,7 +268,7 @@ describe('Phase 3 turn behavior', () => {
     deps.failureSearch = true;
     const result = await runEngineTurn(
       {
-        convId: 'fv3-durable',
+        threadId: 'fv3-durable',
         builderId: 'lokations',
         text: 'Whitefield, 70 lakh, 2 BHK',
         channel: 'advisor_web',
@@ -292,7 +292,7 @@ describe('Phase 3 turn behavior', () => {
     deps.failureSearch = true;
     const result = await runEngineTurn(
       {
-        convId: 'fv3-jayanagar',
+        threadId: 'fv3-jayanagar',
         builderId: 'lokations',
         text: '2 BHK in Jayanagar under 1 crore',
         channel: 'advisor_web',
@@ -319,7 +319,7 @@ describe('Phase 3 turn behavior', () => {
     deps.failureSearch = true;
     const first = await runEngineTurn(
       {
-        convId: 'fv3-jayanagar-affirm',
+        threadId: 'fv3-jayanagar-affirm',
         builderId: 'lokations',
         text: '2 BHK in Jayanagar under 1 crore',
         channel: 'advisor_web',
@@ -330,7 +330,7 @@ describe('Phase 3 turn behavior', () => {
 
     const yes = await runEngineTurn(
       {
-        convId: 'fv3-jayanagar-affirm',
+        threadId: 'fv3-jayanagar-affirm',
         builderId: 'lokations',
         text: 'show those',
         channel: 'advisor_web',
@@ -351,7 +351,7 @@ describe('Phase 3 turn behavior', () => {
     deps.failureSearch = true;
     const result = await runEngineTurn(
       {
-        convId: 'fv3-gurgaon',
+        threadId: 'fv3-gurgaon',
         builderId: 'lokations',
         text: '2 BHK in Gurgaon',
         channel: 'advisor_web',
@@ -375,7 +375,7 @@ describe('Phase 3 turn behavior', () => {
     deps.failureSearch = true;
     const result = await runEngineTurn(
       {
-        convId: 'fv3-hard-type',
+        threadId: 'fv3-hard-type',
         builderId: 'lokations',
         text: 'show me plotted projects in North Bangalore under 70 lakh',
         channel: 'advisor_web',
@@ -397,7 +397,7 @@ describe('Phase 3 turn behavior', () => {
     });
     const result = await runEngineTurn(
       {
-        convId: 'fv3-north-label',
+        threadId: 'fv3-north-label',
         builderId: 'lokations',
         text: '2 BHK in North Bangalore under 1 crore',
         channel: 'advisor_web',

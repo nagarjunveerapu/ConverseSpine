@@ -2,7 +2,7 @@
  * Map Spine turn outcomes → NayaDesk journey SignalEnvelope (closed vocabulary).
  * Desk Zod strips unknown keys (phase/goal/committed_project_id) — this is the adapter.
  */
-import type { ConversationState, EvidenceSet, TurnGoal } from './types.js';
+import type { ThreadState, EvidenceSet, TurnGoal } from './types.js';
 import { currentShortlist, discussedList } from './entity-store.js';
 
 export type DeskJourneySignals = {
@@ -22,7 +22,7 @@ export type JourneySignalPost = {
   rejectedAdd?: string[];
 };
 
-function constraintFactCount(c: ConversationState['constraints']): number {
+function constraintFactCount(c: ThreadState['constraints']): number {
   let n = 0;
   if (c.location) n++;
   if (c.budgetMaxInr != null) n++;
@@ -35,7 +35,7 @@ function constraintFactCount(c: ConversationState['constraints']): number {
 /** Pure mapper — unit-tested; used by syncTelemetry only. */
 export function buildJourneySignalPost(
   goal: TurnGoal,
-  state: ConversationState,
+  state: ThreadState,
   evidence: EvidenceSet,
 ): JourneySignalPost {
   const signals: DeskJourneySignals = {};

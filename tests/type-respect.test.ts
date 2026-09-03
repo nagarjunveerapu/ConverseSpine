@@ -14,8 +14,8 @@ import { fakeDeps } from './fakes.js';
  * Fake catalog: 1 villa (Clarks Exotica, North Bangalore), 3 plantations, 3
  * apartments — so a villa ask has exactly one true match and plenty of bait.
  */
-const turn = (convId: string, deps: ReturnType<typeof fakeDeps>) => (text: string) =>
-  runEngineTurn({ convId, builderId: 'lokations', text, buyerPhone: '+919999999991' }, deps);
+const turn = (threadId: string, deps: ReturnType<typeof fakeDeps>) => (text: string) =>
+  runEngineTurn({ threadId, builderId: 'lokations', text, buyerPhone: '+919999999991' }, deps);
 
 describe('AB-2 — type-respect search', () => {
   it('a villa ask returns ONLY villas — never padded with other types', async () => {

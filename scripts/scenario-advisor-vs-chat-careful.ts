@@ -257,7 +257,7 @@ async function runChatPath() {
   ];
 
   let n = 0;
-  let conversation_id: string | undefined;
+  let thread_id: string | undefined;
   for (const turn of turns) {
     n += 1;
     await new Promise((r) => setTimeout(r, 700));
@@ -266,9 +266,9 @@ async function runChatPath() {
       buyer_phone: phone,
       text: turn.text,
       channel: 'whatsapp',
-      ...(conversation_id ? { conversation_id } : {}),
+      ...(thread_id ? { thread_id } : {}),
     });
-    conversation_id = json.conversation_id ?? json.conversationId ?? conversation_id;
+    thread_id = json.thread_id ?? json.threadId ?? thread_id;
     const log = summarizeChat(n, turn.label, turn.text, http, json);
     logs.push(log);
     printTurn(log);

@@ -77,7 +77,7 @@ export interface Env {
    */
   UNDERSTANDING_CAPTURE?: string;
 
-  /** Turn bundle cache (conversation-context), 60s TTL. */
+  /** Turn bundle cache (thread-context), 60s TTL. */
   TURN_CACHE?: KVNamespace;
 
   LOG_LEVEL?: string;

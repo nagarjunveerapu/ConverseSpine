@@ -40,7 +40,7 @@ async function advisorTurn(sid, text, extras = {}) {
   return r.json();
 }
 
-async function botTurn(phone, text, conversation_id) {
+async function botTurn(phone, text, thread_id) {
   const r = await fetch(`${BASE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -49,7 +49,7 @@ async function botTurn(phone, text, conversation_id) {
       buyer_phone: phone,
       text,
       channel: 'api',
-      ...(conversation_id ? { conversation_id } : {}),
+      ...(thread_id ? { thread_id } : {}),
     }),
   });
   return r.json();
@@ -72,7 +72,7 @@ async function focusAdvisor(sid, sticky = false) {
 
 async function focusBot(phone) {
   let j = await botTurn(phone, 'hi');
-  const cid = j.conversation_id;
+  const cid = j.thread_id;
   j = await botTurn(phone, 'Tell me about Brigade Eldorado', cid);
   return cid;
 }

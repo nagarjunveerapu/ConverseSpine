@@ -45,7 +45,7 @@ describe('AB-7 — typeComparisonReply', () => {
 describe('AB-7 — end-to-end: a type-knowledge ask answers, does not recommend', () => {
   it('does not dump a project list', async () => {
     const r = await runEngineTurn(
-      { convId: 'ab7', builderId: 'lokations', text: "apartment or plot - what's the difference?", buyerPhone: '+919999999971' },
+      { threadId: 'ab7', builderId: 'lokations', text: "apartment or plot - what's the difference?", buyerPhone: '+919999999971' },
       fakeDeps(),
     );
     expect(r.reply).toMatch(/difference/i);
@@ -55,7 +55,7 @@ describe('AB-7 — end-to-end: a type-knowledge ask answers, does not recommend'
 
   it('a type comparison that NAMES a place searches instead (review AB-7)', async () => {
     const r = await runEngineTurn(
-      { convId: 'ab7-loc', builderId: 'lokations', text: 'compare apartments and plots in Sarjapur', buyerPhone: '+919999999972' },
+      { threadId: 'ab7-loc', builderId: 'lokations', text: 'compare apartments and plots in Sarjapur', buyerPhone: '+919999999972' },
       fakeDeps(),
     );
     // a locality is present → wants a shortlist, not a generic taxonomy

@@ -1,7 +1,7 @@
 import type {
   ConstraintAuthority,
   ConstraintAuthorityKey,
-  ConversationState,
+  ThreadState,
   Constraints,
   DiscoverState,
   Extracted,
@@ -16,9 +16,9 @@ import {
   stripLegacyMirrors,
 } from './entity-store.js';
 
-export function initState(convId: string, builderId: string): ConversationState {
+export function initState(threadId: string, builderId: string): ThreadState {
   return {
-    convId,
+    threadId,
     builderId,
     phase: 'discover',
     constraints: {},
@@ -34,11 +34,11 @@ export function isSessionResetText(text: string): boolean {
 }
 
 /** Keep conversation + Desk ids; drop focus, brief, visit, returning-buyer. */
-export function freshSession(s: ConversationState): ConversationState {
-  const next = initState(s.convId, s.builderId);
+export function freshSession(s: ThreadState): ThreadState {
+  const next = initState(s.threadId, s.builderId);
   return {
     ...next,
-    ...(s.ndConversationId ? { ndConversationId: s.ndConversationId } : {}),
+    ...(s.ndThreadId ? { ndThreadId: s.ndThreadId } : {}),
     ...(s.ndBuyerPhone ? { ndBuyerPhone: s.ndBuyerPhone } : {}),
   };
 }
@@ -54,22 +54,22 @@ export function emptyDiscover(): DiscoverState {
   };
 }
 
-export function withNdConversation(
-  s: ConversationState,
-  ndConversationId: string,
+export function withNdThread(
+  s: ThreadState,
+  ndThreadId: string,
   buyerPhone: string,
-): ConversationState {
-  return { ...s, ndConversationId, ndBuyerPhone: buyerPhone };
+): ThreadState {
+  return { ...s, ndThreadId, ndBuyerPhone: buyerPhone };
 }
 
-export function incObjection(s: ConversationState): ConversationState {
+export function incObjection(s: ThreadState): ThreadState {
   return { ...s, objectionCount: (s.objectionCount ?? 0) + 1 };
 }
 
 export function applyVisitBooked(
-  s: ConversationState,
+  s: ThreadState,
   explicitNext?: { projectId: string; projectName: string; slotText?: string },
-): ConversationState {
+): ThreadState {
   const queued = s.visit?.queued ?? [];
   const next = queued[0] ?? explicitNext;
   const prev = s.visit ?? {};
@@ -139,14 +139,14 @@ export function applyVisitBooked(
 }
 
 export function applyExtracted(
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   skipKeys?: ReadonlySet<'bhk' | 'location' | 'propertyType' | 'budget'>,
   options?: {
     locationValidated?: boolean;
     authority?: Partial<Record<ConstraintAuthorityKey, ConstraintAuthority>>;
   },
-): ConversationState {
+): ThreadState {
   const incoming = pruneUndefined(ex.constraints);
   if (skipKeys?.has('bhk')) delete incoming.bhk;
   if (skipKeys?.has('location')) delete incoming.location;
@@ -230,7 +230,7 @@ function resolveRejected(ex: Extracted, offered: readonly OfferedProject[]): str
 export function resolvePick(
   ex: Extracted,
   offered: readonly OfferedProject[],
-  s?: ConversationState,
+  s?: ThreadState,
 ): OfferedProject | null {
   if (typeof ex.pickOrdinal === 'number' && ex.pickOrdinal >= 1 && ex.pickOrdinal <= offered.length) {
     return offered[ex.pickOrdinal - 1] ?? null;
@@ -261,7 +261,7 @@ export function resolvePick(
   return null;
 }
 
-export function recordOffered(s: ConversationState, matches: readonly Match[]): ConversationState {
+export function recordOffered(s: ThreadState, matches: readonly Match[]): ThreadState {
   if (matches.length === 0) return s;
   const keep = new Set(matches.map((m) => m.projectId));
   // Phase 1c — store is authority: clear stale offered roles, write card payload,
@@ -291,7 +291,7 @@ export function recordOffered(s: ConversationState, matches: readonly Match[]): 
 }
 
 /** Drop stale shortlist — next successful recommend repopulates (W2). */
-export function clearLastOffered(s: ConversationState): ConversationState {
+export function clearLastOffered(s: ThreadState): ThreadState {
   if ((s.shortlistIds?.length ?? 0) === 0 && currentShortlist(s).length === 0) return s;
   const cleared = clearOfferedExcept(s, new Set());
   return stripLegacyMirrors({
@@ -305,7 +305,7 @@ export function clearLastOffered(s: ConversationState): ConversationState {
  * One-shot revive: pre-1c KV with only `lastOffered` → shortlistIds + entities.
  * When the store already has authority, strip stale mirrors so they cannot poison.
  */
-export function hydrateLegacyDiscourse(s: ConversationState): ConversationState {
+export function hydrateLegacyDiscourse(s: ThreadState): ThreadState {
   if ((s.shortlistIds?.length ?? 0) > 0) return stripLegacyMirrors(s);
   const legacy = s.discover.lastOffered ?? [];
   if (!legacy.length) return stripLegacyMirrors(s);
@@ -337,11 +337,11 @@ export function constraintsMateriallyChanged(prev: Constraints, next: Constraint
 }
 
 export function appendTranscript(
-  s: ConversationState,
+  s: ThreadState,
   buyerText: string,
   botReply: string,
   atMs: number,
-): ConversationState {
+): ThreadState {
   const prev = s.discover.recentMessages ?? [];
   const next = [
     ...prev,
@@ -351,19 +351,19 @@ export function appendTranscript(
   return { ...s, discover: { ...s.discover, recentMessages: next } };
 }
 
-export function markOriented(s: ConversationState): ConversationState {
+export function markOriented(s: ThreadState): ThreadState {
   return { ...s, discover: { ...s.discover, oriented: true } };
 }
 
-export function markAsked(s: ConversationState, slot: DiscoverState['asked'][number]): ConversationState {
+export function markAsked(s: ThreadState, slot: DiscoverState['asked'][number]): ThreadState {
   const asked = s.discover.asked.includes(slot) ? s.discover.asked : [...s.discover.asked, slot];
   return { ...s, discover: { ...s.discover, asked, ignoredProbes: s.discover.ignoredProbes + 1 } };
 }
 
 export function recordDiscussed(
-  s: ConversationState,
+  s: ThreadState,
   projects: ReadonlyArray<OfferedProject>,
-): ConversationState {
+): ThreadState {
   if (projects.length === 0) return s;
   // Phase 1c — store is uncapped authority; no legacy mirror write-through.
   return stripLegacyMirrors(
@@ -376,7 +376,7 @@ export function recordDiscussed(
   );
 }
 
-export function commitTo(s: ConversationState, projectId: string, projectName: string): ConversationState {
+export function commitTo(s: ThreadState, projectId: string, projectName: string): ThreadState {
   const clearUnit = s.focusUnit && s.focusUnit.projectId !== projectId;
   const base = clearUnit ? (({ focusUnit: _u, ...rest }) => rest)(s) : s;
   const discussed = recordDiscussed(
@@ -388,7 +388,7 @@ export function commitTo(s: ConversationState, projectId: string, projectName: s
   return pushFocus(discussed, projectId, s.turnCount);
 }
 
-export function releaseToDiscover(s: ConversationState): ConversationState {
+export function releaseToDiscover(s: ThreadState): ThreadState {
   const focus = s.focus;
   const withDiscussed = focus
     ? recordDiscussed(s, [{ projectId: focus.projectId, name: focus.projectName }])
@@ -399,7 +399,7 @@ export function releaseToDiscover(s: ConversationState): ConversationState {
   return { ...rest, phase: 'discover', focusStack: [] };
 }
 
-export function isSameAsLast(s: ConversationState, matches: readonly Match[]): boolean {
+export function isSameAsLast(s: ThreadState, matches: readonly Match[]): boolean {
   const prev = currentShortlist(s);
   if (prev.length === 0 || prev.length !== matches.length) return false;
   return prev.every((p, i) => p.projectId === matches[i]?.projectId);

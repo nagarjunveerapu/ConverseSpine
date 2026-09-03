@@ -2,7 +2,7 @@
  * WhatsApp Advisor brief — same chip ladder as NayaAdvisor SPA.
  * Packer chrome only; ranking still goes through advisor-weights + Desk.
  */
-import type { Constraints, ConversationState, ProbeKind } from '../engine/types.js';
+import type { Constraints, ThreadState, ProbeKind } from '../engine/types.js';
 import { derivedPriorityFromWorries } from '../engine/advisor-weights.js';
 import { parseBudgetToInr } from '../engine/facts.js';
 
@@ -271,7 +271,7 @@ function mergeBhk(prior: string | undefined, next: string): string {
 
 export function patchFromWaBriefAction(
   actionId: string | undefined,
-  state: ConversationState,
+  state: ThreadState,
   areas: readonly string[] = [],
 ): WaBriefPatch | undefined {
   const aid = parseWaBriefId(actionId);
@@ -371,9 +371,9 @@ export function patchFromWaBriefAction(
 }
 
 export function applyWaBriefPatch(
-  state: ConversationState,
+  state: ThreadState,
   patch: WaBriefPatch,
-): ConversationState {
+): ThreadState {
   const priorLoc = state.constraints.location;
   let constraints: Constraints = { ...state.constraints, ...patch.constraints };
   if (patch.preserveLocation) {
@@ -383,7 +383,7 @@ export function applyWaBriefPatch(
       constraints = rest;
     }
   }
-  let next: ConversationState = { ...state, constraints };
+  let next: ThreadState = { ...state, constraints };
   for (const slot of patch.markAsked ?? []) {
     const asked = next.discover.asked.includes(slot)
       ? next.discover.asked

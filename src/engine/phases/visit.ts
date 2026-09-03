@@ -1,4 +1,4 @@
-import type { ConversationState, Extracted, OfferedProject, TurnGoal, VisitState } from '../types.js';
+import type { ThreadState, Extracted, OfferedProject, TurnGoal, VisitState } from '../types.js';
 import type { StoredVisit } from '../ports.js';
 import {
   extractDayWord,
@@ -180,7 +180,7 @@ export interface VisitCtx {
  * draft made "compare → I'll come from Indiranagar" forget the origin ask
  * (VIS-ADX-05). Re-entry is in turn.ts when the draft is still actionable.
  */
-export function exitVisitPhase(s: ConversationState): ConversationState {
+export function exitVisitPhase(s: ThreadState): ThreadState {
   return { ...s, phase: s.focus ? 'focused' : 'discover' };
 }
 
@@ -235,7 +235,7 @@ export function shouldResumeVisitDraft(
   return false;
 }
 
-export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): TurnGoal {
+export function decide(s: ThreadState, ex: Extracted, ctx: VisitCtx): TurnGoal {
   const prior = s.visit ?? {};
   const now = ctx.now;
   const booked = ctx.bookedVisits ?? [];
@@ -425,7 +425,7 @@ export function decide(s: ConversationState, ex: Extracted, ctx: VisitCtx): Turn
   });
 }
 
-function deferToProjectAnswer(s: ConversationState, ex: Extracted): TurnGoal | null {
+function deferToProjectAnswer(s: ThreadState, ex: Extracted): TurnGoal | null {
   const named = ex.namedProjects?.[0];
   const projectId =
     named?.projectId ??
@@ -446,7 +446,7 @@ function deferToProjectAnswer(s: ConversationState, ex: Extracted): TurnGoal | n
   };
 }
 
-function followUpNamed(ex: Extracted, text: string, s: ConversationState): OfferedProject[] {
+function followUpNamed(ex: Extracted, text: string, s: ThreadState): OfferedProject[] {
   const named = ex.namedProjects ?? [];
   if (named.length <= 1) return named;
   const t = text.toLowerCase();
@@ -457,7 +457,7 @@ function followUpNamed(ex: Extracted, text: string, s: ConversationState): Offer
   return named.slice(0, 1);
 }
 
-function candidatesOf(s: ConversationState): OfferedProject[] {
+function candidatesOf(s: ThreadState): OfferedProject[] {
   // Open card / focused project owns visit — same as Advisor board selection.
   if (s.focus) return [{ projectId: s.focus.projectId, name: s.focus.projectName }];
   const ents = discourseEntities(s);

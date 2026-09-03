@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { kvStore } from '../src/engine/store-kv.js';
 import { initState } from '../src/engine/state.js';
-import type { ConversationState } from '../src/engine/types.js';
+import type { ThreadState } from '../src/engine/types.js';
 
 /**
- * KV is a per-colo cache; the Conversation DO is the only store here that is
+ * KV is a per-colo cache; the Thread DO is the only store here that is
  * read-after-write consistent. On WhatsApp the two disagree in practice —
  * Meta delivers each webhook from its own egress, so the tap after a project
  * card can be served a snapshot from before that card. These tests fake the
@@ -21,14 +21,14 @@ function fakeKv(seed: Record<string, string> = {}) {
   };
 }
 
-function fakeDo(seed?: ConversationState) {
-  let held: ConversationState | null = seed ?? null;
+function fakeDo(seed?: ThreadState) {
+  let held: ThreadState | null = seed ?? null;
   const ns = {
     idFromName: (name: string) => name,
     get: () => ({
       fetch: async (_url: string, init?: RequestInit) => {
         if (init?.method === 'PUT') {
-          held = (JSON.parse(String(init.body)) as { state: ConversationState }).state;
+          held = (JSON.parse(String(init.body)) as { state: ThreadState }).state;
           return new Response('{"ok":true}');
         }
         return new Response(JSON.stringify({ state: held }));
@@ -38,13 +38,13 @@ function fakeDo(seed?: ConversationState) {
   return { ns, read: () => held };
 }
 
-function withFocus(convId: string, projectId: string): ConversationState {
-  const s = initState(convId, 'brigade-group');
-  s.focus = { projectId, projectName: 'Brigade Eldorado' } as ConversationState['focus'];
+function withFocus(threadId: string, projectId: string): ThreadState {
+  const s = initState(threadId, 'brigade-group');
+  s.focus = { projectId, projectName: 'Brigade Eldorado' } as ThreadState['focus'];
   return s;
 }
 
-describe('conversation state reads', () => {
+describe('chat state reads', () => {
   it('reads the DO, not a lagging KV copy', async () => {
     const stale = initState('conv:lag', 'brigade-group');
     const { kv } = fakeKv({ 'ce:state:conv:lag': JSON.stringify(stale) });

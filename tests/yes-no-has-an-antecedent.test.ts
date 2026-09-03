@@ -18,11 +18,11 @@ import { fakeDeps } from './fakes.js';
  *  - the advance nudge is itself a question, but nothing armed a prompt for it,
  *    so the "yes" it asked for had no antecedent and re-ran the same nudge.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999991170', channel: 'whatsapp' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999991170', channel: 'whatsapp' },
       deps,
     );
   return { turn };

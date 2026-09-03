@@ -43,7 +43,7 @@ await scenario('S1: yes after offer_project', async () => {
   await deps.store.save(state);
   const out = await runEngineTurn(
     {
-      convId: 's1',
+      threadId: 's1',
       builderId: 'lokations',
       text: 'yes',
       buyerPhone: '+91001',
@@ -91,7 +91,7 @@ await scenario('S3: chip tap clear_bhk', async () => {
   await deps.store.save(state);
   const out = await runEngineTurn(
     {
-      convId: 's3',
+      threadId: 's3',
       builderId: 'lokations',
       text: 'Any configuration',
       buyerPhone: '+91002',

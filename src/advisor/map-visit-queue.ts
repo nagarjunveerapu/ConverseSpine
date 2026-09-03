@@ -1,4 +1,4 @@
-import type { ConversationState } from '../engine/types.js';
+import type { ThreadState } from '../engine/types.js';
 
 export interface AdvisorVisitStop {
   project_id: string;
@@ -13,7 +13,7 @@ export interface AdvisorVisitQueue {
   proposed_label?: string;
 }
 
-export function mapVisitQueue(state: ConversationState): AdvisorVisitQueue | undefined {
+export function mapVisitQueue(state: ThreadState): AdvisorVisitQueue | undefined {
   if (state.phase !== 'visit' && !state.visit?.projectId) return undefined;
 
   const v = state.visit;

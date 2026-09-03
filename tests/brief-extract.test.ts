@@ -13,11 +13,11 @@ import { fakeDeps } from './fakes.js';
  * deterministic and asserted here.)
  */
 
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string, briefExtract = false) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999995', channel: 'advisor_web', briefExtract },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999995', channel: 'advisor_web', briefExtract },
       deps,
     );
   return { deps, turn };

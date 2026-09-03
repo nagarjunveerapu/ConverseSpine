@@ -5,7 +5,7 @@ import type { NayaDeskClient } from '../src/crm/nayadesk-client.js';
 /**
  * The project file must not depend on whether Desk's conversation happens to be
  * focused on this project. Media reached the engine ONLY through
- * conversationContext, which is focus-scoped — so a buyer who picked a project
+ * threadContext, which is focus-scoped — so a buyer who picked a project
  * off the board was never offered its brochure, and Eldorado's 16 public
  * documents (floor plan for their own 2 BHK included) went unmentioned for the
  * whole conversation. The library is conversation-free; both paths read it.
@@ -42,7 +42,7 @@ const PROJECT = {
 
 function client(opts: { context: boolean }): NayaDeskClient {
   return {
-    conversationContext: async () =>
+    threadContext: async () =>
       opts.context
         ? {
             project: PROJECT,

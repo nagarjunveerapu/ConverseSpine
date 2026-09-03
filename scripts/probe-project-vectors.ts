@@ -11,7 +11,7 @@ const BUILDER = process.env.BUILDER_ID ?? 'lokations';
 const PHONE = `+91998${String(Date.now() % 1_000_000).padStart(6, '0')}`;
 
 interface ChatResp {
-  conversation_id: string;
+  thread_id: string;
   reply_text: string;
   turn_index: number;
 }
@@ -73,7 +73,7 @@ const SCENARIOS: Array<{ id: string; turns: string[]; assertTurn: (i: number, re
   },
 ];
 
-async function chat(text: string, convId?: string, phone = PHONE): Promise<ChatResp> {
+async function chat(text: string, threadId?: string, phone = PHONE): Promise<ChatResp> {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -81,7 +81,7 @@ async function chat(text: string, convId?: string, phone = PHONE): Promise<ChatR
       builder_id: BUILDER,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as ChatResp & { error?: string };
@@ -101,14 +101,14 @@ async function main(): Promise<void> {
 
   for (const sc of SCENARIOS) {
     const phone = `+91998${String(Date.now() % 1_000_000).padStart(6, '0')}${SCENARIOS.indexOf(sc)}`;
-    let convId: string | undefined;
+    let threadId: string | undefined;
     let ok = true;
     let detail = '';
     try {
       for (let i = 0; i < sc.turns.length; i++) {
         const text = sc.turns[i]!;
-        const resp = await chat(text, convId, phone);
-        convId = resp.conversation_id;
+        const resp = await chat(text, threadId, phone);
+        threadId = resp.thread_id;
         sc.assertTurn(i, resp.reply_text);
         console.log(`  [${sc.id} t${i + 1}] ${text.slice(0, 50)}`);
         console.log(`           → ${resp.reply_text.replace(/\s+/g, ' ').slice(0, 100)}…`);

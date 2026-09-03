@@ -10,7 +10,7 @@ import { phaseNoteFrom } from '../src/engine/compose.js';
  * propose, a confirm joins the waitlist for real (queue:true → 202), and
  * detail evidence carries one honest phase caveat.
  */
-function harness(convId: string, detailPatch?: Record<string, unknown>) {
+function harness(threadId: string, detailPatch?: Record<string, unknown>) {
   const deps = fakeDeps();
   if (detailPatch) {
     const orig = deps.data.projectDetail.bind(deps.data);
@@ -22,7 +22,7 @@ function harness(convId: string, detailPatch?: Record<string, unknown>) {
   }
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999998', channel: 'advisor_web' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999998', channel: 'advisor_web' },
       deps,
     );
   return { deps, turn };

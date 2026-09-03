@@ -117,7 +117,7 @@ describe('RTI-D+ visit follow-up', () => {
     await deps.store.save(state);
     const r = await runEngineTurn(
       {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
         text: 'yes',
         channel: 'advisor_web',
@@ -144,7 +144,7 @@ describe('RTI-F first shortlist deterministic copy', () => {
     await deps.store.save(state);
     const r = await runEngineTurn(
       {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
         text: 'Show me options',
         channel: 'advisor_web',

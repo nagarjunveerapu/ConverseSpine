@@ -8,7 +8,7 @@
  * meant editing a regex and deploying the bot, which is the pattern-ladder trap
  * this codebase is trying to leave.
  *
- * Desk has served the answer since #212: `conversation_context` returns
+ * Desk has served the answer since #212: `thread_context` returns
  * `cost_sheet[].match_terms`, already parsed, with a comment saying it exists
  * "so the bot can detect a cost-component ask — no hardcoded vocabulary".
  * Nothing on this side ever read it. Both halves of the contract were built and

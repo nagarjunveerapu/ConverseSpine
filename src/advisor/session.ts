@@ -6,7 +6,14 @@ export function sessionToPhone(sessionId: string): string {
   return `+9190${suffix}`;
 }
 
-/** Engine KV state key — one conversation per anonymous session. */
-export function sessionToConvId(sessionId: string): string {
+/**
+ * Engine L0 state key — one running chat per anonymous advisor session.
+ *
+ * SPINE-LOCAL, and neither a lead id nor a thread id. The advisor web door has
+ * no Desk identity until the A5 reveal supplies a real phone number, so the
+ * engine keys its own state on the session. Never post this value to Desk;
+ * `ThreadState.ndThreadId` is the field that names something Desk can find.
+ */
+export function sessionToStateKey(sessionId: string): string {
   return `advisor:${sessionId}`;
 }

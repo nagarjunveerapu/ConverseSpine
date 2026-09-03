@@ -70,11 +70,11 @@ function pct(sorted: number[], p: number): number | null {
 async function chat(
   buyer: string,
   text: string,
-  conversationId?: string,
+  threadId?: string,
 ): Promise<{
   ok: boolean;
   wall_ms: number;
-  conversation_id?: string;
+  thread_id?: string;
   total_ms?: number;
   cache?: Record<string, string>;
   reply?: string;
@@ -88,13 +88,13 @@ async function chat(
         builder_id: BUILDER,
         buyer_phone: buyer,
         text,
-        ...(conversationId ? { conversation_id: conversationId } : {}),
+        ...(threadId ? { thread_id: threadId } : {}),
         channel: 'api',
       }),
     });
     const wall_ms = Date.now() - t0;
     const j = (await res.json()) as {
-      conversation_id?: string;
+      thread_id?: string;
       reply?: string;
       reply_text?: string;
       debug?: { timings?: { total_ms?: number }; cache?: Record<string, string> };
@@ -102,7 +102,7 @@ async function chat(
     return {
       ok: res.ok,
       wall_ms,
-      conversation_id: j.conversation_id,
+      thread_id: j.thread_id,
       total_ms: j.debug?.timings?.total_ms,
       cache: j.debug?.cache,
       reply: j.reply_text ?? j.reply,
@@ -128,7 +128,7 @@ async function runOne(i: number): Promise<{
   for (const text of journey.turns) {
     const r = await chat(buyer, text, conv);
     walls.push(r.wall_ms);
-    if (r.conversation_id) conv = r.conversation_id;
+    if (r.thread_id) conv = r.thread_id;
     if (!r.ok || !r.reply?.trim()) pass = false;
     if (r.cache) {
       for (const v of Object.values(r.cache)) {

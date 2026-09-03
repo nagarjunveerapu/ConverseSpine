@@ -4,7 +4,7 @@ import { runEngineTurn } from '../src/engine/turn.js';
 import { stripBanned } from '../src/engine/grounding.js';
 import { currentShortlist } from '../src/engine/entity-store.js';
 import { fakeDeps } from './fakes.js';
-import type { ConversationState, Extracted } from '../src/engine/types.js';
+import type { ThreadState, Extracted } from '../src/engine/types.js';
 
 /**
  * Clarify-pick sinkhole (4q-fix3 scorecard kill #1): a facet/knowledge ask over
@@ -19,7 +19,7 @@ const OFFERED = [
   { projectId: 'coorg-estate', name: 'Coorg Hills Estate' },
 ];
 
-function stateWithShortlist(): ConversationState {
+function stateWithShortlist(): ThreadState {
   return {
     phase: 'discover',
     turnCount: 4,
@@ -32,7 +32,7 @@ function stateWithShortlist(): ConversationState {
       ignoredProbes: 0,
       recentMessages: [],
     },
-  } as unknown as ConversationState;
+  } as unknown as ThreadState;
 }
 
 const ex = (over: Partial<Extracted>): Extracted => ({ constraints: {}, ...over });
@@ -77,17 +77,17 @@ describe('decide — facet ask over shortlist routes to shortlist_answer', () =>
       location: 'Sakleshpur',
       bhk: '2bhk',
       budgetMaxInr: 7_000_000,
-    } as ConversationState['constraints'];
+    } as ThreadState['constraints'];
     const g = decide(s, ex({ askTopics: ['price'], speechAct: 'search' }));
     expect(g).toEqual({ kind: 'recommend' });
   });
 });
 
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'advisor_web' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'advisor_web' },
       deps,
     );
   return { deps, turn };

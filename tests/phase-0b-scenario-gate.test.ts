@@ -15,7 +15,7 @@ import { fakeData, fakeDeps } from './fakes.js';
 const PROJECT = 'eldorado';
 const PROJECT_NAME = 'Brigade Eldorado';
 
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const data = deps.data as ReturnType<typeof fakeData>;
   const ledgerRuns: Array<{
@@ -33,10 +33,10 @@ function harness(convId: string) {
   const turn = (text: string) =>
     runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'naya-advisor',
         text,
-        buyerPhone: `+9199${convId.replace(/\W/g, '').slice(-8).padStart(8, '0')}`,
+        buyerPhone: `+9199${threadId.replace(/\W/g, '').slice(-8).padStart(8, '0')}`,
         channel: 'advisor_web',
       },
       deps,

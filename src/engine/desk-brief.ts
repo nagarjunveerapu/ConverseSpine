@@ -3,7 +3,7 @@
  *
  * THE OMISSION THIS FIXES
  *
- * `bootstrapContext` fetches the whole Desk conversation row on every cold
+ * `bootstrapContext` fetches the whole Desk lead row on every cold
  * turn. The engine WRITES four of that row's fields back to Desk —
  * `bhk_preference` and `budget_inr` (turn.ts), `location_pref`, and
  * `shortlist_project_ids` (adapters/nayadesk.ts) — and has never read one of
@@ -32,7 +32,7 @@
 import { parseBudgetToInr } from './facts.js';
 import type { DeskBrief } from './ports.js';
 import { commitTo } from './state.js';
-import type { ConversationState, Constraints } from './types.js';
+import type { ThreadState, Constraints } from './types.js';
 
 /** Desk's `purpose` column is free-form; only these two mean anything here. */
 function readPurpose(raw: string | undefined): Constraints['purpose'] | undefined {
@@ -48,9 +48,9 @@ function readPurpose(raw: string | undefined): Constraints['purpose'] | undefine
  * with a live brief takes a byte-identical path to before.
  */
 export function seedFromDeskBrief(
-  state: ConversationState,
+  state: ThreadState,
   brief: DeskBrief | undefined,
-): { state: ConversationState; seeded: string[] } {
+): { state: ThreadState; seeded: string[] } {
   if (!brief) return { state, seeded: [] };
 
   const seeded: string[] = [];
@@ -141,7 +141,7 @@ export function seedFromDeskBrief(
  * an answer to anybody.
  */
 export function resolveShortlistNames(
-  state: ConversationState,
+  state: ThreadState,
   live: ReadonlyArray<{ name: string }>,
   catalogNames: ReadonlyArray<{ projectId: string; name: string }> | undefined,
 ): string[] {

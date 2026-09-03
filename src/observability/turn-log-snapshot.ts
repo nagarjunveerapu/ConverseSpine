@@ -1,7 +1,7 @@
 import { detectFocusedSwitchIntent } from '../engine/project_switch.js';
 import { currentShortlist } from '../engine/entity-store.js';
 import type {
-  ConversationState,
+  ThreadState,
   EvidenceSet,
   Extracted,
   TurnDebug,
@@ -16,7 +16,7 @@ export function buildTurnLogSnapshot(input: {
     channel?: TurnIntentChannel;
     action_id?: string;
   };
-  state: ConversationState;
+  state: ThreadState;
   ex: Extracted;
   goal: TurnGoal;
   debug: TurnDebug;
@@ -43,7 +43,7 @@ export function buildTurnLogSnapshot(input: {
 
   return {
     ts: new Date().toISOString(),
-    conv_id: state.convId,
+    thread_id: state.threadId,
     turn_index: state.turnCount,
     channel: turnInput.channel ?? 'whatsapp',
     input_source: debug.input_source,

@@ -2,13 +2,13 @@
  * Reply-quality graders for Phase 1c adversarial journeys.
  * Store invariants are necessary; these catch "passed state, failed conversation."
  */
-import type { ConversationState } from '../src/engine/types.js';
+import type { ThreadState } from '../src/engine/types.js';
 import { currentShortlist, discussedList, focusedRef } from '../src/engine/entity-store.js';
 
 export type QualityFail = { turn: string; reason: string; reply: string };
 
 /** Names the buyer can reasonably expect on a compare / both turn. */
-export function discourseNames(s: ConversationState): string[] {
+export function discourseNames(s: ThreadState): string[] {
   const names = new Set<string>();
   for (const o of currentShortlist(s)) names.add(o.name);
   for (const d of discussedList(s)) names.add(d.name);
@@ -20,8 +20,8 @@ export function discourseNames(s: ConversationState): string[] {
 export function gradeOtherOne(args: {
   buyer: string;
   reply: string;
-  before: ConversationState;
-  after: ConversationState;
+  before: ThreadState;
+  after: ThreadState;
 }): QualityFail | null {
   const beforeNames = discourseNames(args.before).filter(
     (n) => n !== focusedRef(args.before)?.projectName,
@@ -68,7 +68,7 @@ export function gradeOtherOne(args: {
 export function gradeCompareBoth(args: {
   buyer: string;
   reply: string;
-  state: ConversationState;
+  state: ThreadState;
 }): QualityFail | null {
   const names = discourseNames(args.state);
   const reply = args.reply.toLowerCase();
@@ -115,8 +115,8 @@ export function gradeCompareBoth(args: {
 export function gradeShowSomethingElse(args: {
   buyer: string;
   reply: string;
-  before: ConversationState;
-  after: ConversationState;
+  before: ThreadState;
+  after: ThreadState;
 }): QualityFail | null {
   if (!/\b(?:something else|other projects?|show me (?:more|others?))\b/i.test(args.buyer)) {
     return null;

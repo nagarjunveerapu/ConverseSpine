@@ -15,7 +15,7 @@
  */
 import { rankChips, type ChipRanking } from './rank.js';
 import type { ChipEvidence } from './catalogue.js';
-import type { ConversationState, EvidenceSet, TurnGoal } from '../engine/types.js';
+import type { ThreadState, EvidenceSet, TurnGoal } from '../engine/types.js';
 import { currentShortlist } from '../engine/entity-store.js';
 
 export interface ChipShadowLog {
@@ -40,7 +40,7 @@ export function goalState(goal: TurnGoal): string {
 }
 
 export function buildChipShadow(input: {
-  state: ConversationState;
+  state: ThreadState;
   goal: TurnGoal;
   evidence: EvidenceSet;
 }): ChipShadowLog {

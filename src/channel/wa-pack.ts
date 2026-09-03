@@ -2,7 +2,7 @@
  * WhatsApp project-first packer — builder-allotted book, not Advisor brief.
  * See docs/lld/WA_PROJECT_FIRST_LLD.md
  */
-import type { ConversationState, TurnGoal } from '../engine/types.js';
+import type { ThreadState, TurnGoal } from '../engine/types.js';
 import { HANDOFF_QUESTIONS } from '../engine/book-questions.js';
 import type { Extracted } from '../engine/types.js';
 import { currentShortlist, focusedRef, projectSeenFacets } from '../engine/entity-store.js';
@@ -322,7 +322,7 @@ export type WaPacked =
 
 export interface WaPackInput {
   goal: TurnGoal;
-  state: ConversationState;
+  state: ThreadState;
   catalogNames: ReadonlyArray<{ projectId: string; name: string; description?: string }>;
   singleProject: boolean;
   briefAreas?: readonly string[];
@@ -1610,9 +1610,9 @@ export function isWaBriefActionId(actionId: string | undefined): boolean {
 }
 
 function withWaBriefStep(
-  state: ConversationState,
+  state: ThreadState,
   step: 'size' | 'budget' | undefined,
-): ConversationState {
+): ThreadState {
   if (state.discover.waBriefStep === step) return state;
   const discover = { ...state.discover };
   if (step === undefined) delete discover.waBriefStep;
@@ -1627,10 +1627,10 @@ function withWaBriefStep(
  * abandons the brief. Typing both facts at once clears it entirely.
  */
 export function advanceWaBriefState(
-  state: ConversationState,
+  state: ThreadState,
   actionId: string | undefined,
   extracted: { constraints: { bhk?: string; propertyType?: string; budgetMinInr?: number; budgetMaxInr?: number } },
-): ConversationState {
+): ThreadState {
   const aid = actionId?.trim() ?? '';
   const c = { ...state.constraints, ...extracted.constraints };
   const sizeKnown = !!c.bhk?.trim() || !!c.propertyType?.trim();
@@ -1656,9 +1656,9 @@ export function advanceWaBriefState(
 
 /** Keep the step in sync when discover itself starts the brief (help-me asks). */
 export function syncWaBriefFromGoal(
-  state: ConversationState,
+  state: ThreadState,
   goal: { kind: string; slot?: string },
-): ConversationState {
+): ThreadState {
   if (goal.kind === 'probe' && (goal.slot === 'bhk' || goal.slot === 'propertyType')) {
     return withWaBriefStep(state, 'size');
   }

@@ -6,7 +6,7 @@ import type { ConverseRuntime } from '../runtime/deps.js';
 import { runEngineTurn } from '../engine/turn.js';
 import { prefetchProjects } from '../engine/project-cache.js';
 import { currentShortlist } from '../engine/entity-store.js';
-import { commitTo, initState, markAsked, withNdConversation } from '../engine/state.js';
+import { commitTo, initState, markAsked, withNdThread } from '../engine/state.js';
 import { detectSoftPrefs } from '../engine/facts.js';
 import { derivedPriorityFromWorries } from '../engine/advisor-weights.js';
 import { mapAdvisorTurnResponse } from './map-response.js';
@@ -21,7 +21,7 @@ import {
 import { isFocusedSearchPivot } from '../engine/turn-intent/focused-intent.js';
 import { isVisitFollowUpQuestion, isVisitRouteExpand } from '../engine/phases/visit.js';
 import type { AdvisorTurnRequest, AdvisorTurnResponse } from './types.js';
-import { sessionToConvId, sessionToPhone } from './session.js';
+import { sessionToStateKey, sessionToPhone } from './session.js';
 import { resolveDurableLocation } from '../engine/geography-authority.js';
 import type { Failure } from '../engine/outcome.js';
 
@@ -61,7 +61,7 @@ export async function handleAdvisorTurn(
 
   if (!session_id) {
     return {
-      status: 'error', session_id: '', reply: '', conversation_id: '',
+      status: 'error', session_id: '', reply: '', state_key: '',
       error: 'session_id_required', suggest_refine: false,
     };
   }
@@ -71,12 +71,15 @@ export async function handleAdvisorTurn(
       session_id,
       suggest_refine: false,
       reply: '',
-      conversation_id: sessionToConvId(session_id),
+      state_key: sessionToStateKey(session_id),
       error: 'text_required',
     };
   }
 
-  const convId = body.conversation_id?.trim() || sessionToConvId(session_id);
+  // Spine's OWN engine state key, not a Desk id: the advisor door has no Desk
+  // identity before the A5 reveal. The SPA may echo the key it was given; when
+  // it does not, the session derives the same value.
+  const stateKey = body.state_key?.trim() || sessionToStateKey(session_id);
 
   let preferenceClears: import('../engine/turn-intent/types.js').PatchClearKey[] | undefined;
   let ingressFilledSlots: import('../engine/ingress.js').IngressSlotKey[] | undefined;
@@ -87,10 +90,10 @@ export async function handleAdvisorTurn(
   const pivotTurn = isFocusedSearchPivot(text);
 
   if (body.preferences && Object.keys(body.preferences).length > 0) {
-    let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
-    if (!existing.ndConversationId && buyer_phone) {
+    let existing = (await rt.engine.store.load(stateKey)) ?? initState(stateKey, builder_id);
+    if (!existing.ndThreadId && buyer_phone) {
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone, 'advisor_web').catch(() => null);
-      if (lead) existing = withNdConversation(existing, lead.conversationId, buyer_phone);
+      if (lead) existing = withNdThread(existing, lead.threadId, buyer_phone);
     }
     const inRecovery =
       existing.rti?.lastUiMode === 'search_recovery' ||
@@ -207,8 +210,8 @@ export async function handleAdvisorTurn(
           suggest_refine: false,
           reply:
             'One quick thing so I rank these right — does a shorter commute matter more, or staying on budget?',
-          conversation_id: convId,
-          ...(askedState.ndConversationId ? { nd_conversation_id: askedState.ndConversationId } : {}),
+          state_key: stateKey,
+          ...(askedState.ndThreadId ? { nd_thread_id: askedState.ndThreadId } : {}),
           phase: askedState.phase,
           // matches_hub moves the SPA out of brief_collect so nba.chips render
           // (brief_collect keeps the brief wizard's own chips in the tray).
@@ -220,10 +223,10 @@ export async function handleAdvisorTurn(
   }
 
   if (projectId && !pivotTurn && !isVisitRouteExpand(text)) {
-    let existing = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
-    if (!existing.ndConversationId && buyer_phone) {
+    let existing = (await rt.engine.store.load(stateKey)) ?? initState(stateKey, builder_id);
+    if (!existing.ndThreadId && buyer_phone) {
       const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone, 'advisor_web').catch(() => null);
-      if (lead) existing = withNdConversation(existing, lead.conversationId, buyer_phone);
+      if (lead) existing = withNdThread(existing, lead.threadId, buyer_phone);
     }
     const skipStickyFocus =
       existing.phase === 'visit' ||
@@ -245,8 +248,8 @@ export async function handleAdvisorTurn(
         currentShortlist(existing).find((p) => p.projectId === projectId)?.name ||
         existing.focus?.projectName ||
         projectId;
-      if (existing.ndConversationId) {
-        await rt.engine.crm.commitProject(existing.ndConversationId, projectId).catch(() => {});
+      if (existing.ndThreadId) {
+        await rt.engine.crm.commitProject(existing.ndThreadId, projectId).catch(() => {});
       }
       existing = commitTo(existing, projectId, name);
       existing = await prefetchProjects(rt.engine, existing, [projectId]);
@@ -258,7 +261,7 @@ export async function handleAdvisorTurn(
     const engine = await rt.engineForTurn();
     const result = await runEngineTurn(
       {
-        convId,
+        threadId: stateKey,
         builderId: builder_id,
         text,
         buyerPhone: buyer_phone,
@@ -302,7 +305,7 @@ export async function handleAdvisorTurn(
       status: 'error',
       session_id,
       reply: '',
-      conversation_id: convId,
+      state_key: stateKey,
       error: msg.slice(0, 300),
       suggest_refine: false,
     };

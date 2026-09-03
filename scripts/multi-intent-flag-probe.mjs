@@ -9,12 +9,12 @@ const SPINE = (process.env.CONVERSE_SPINE_URL
   ?? 'https://converse-spine-dev.nagarjun-arjun.workers.dev').replace(/\/+$/, '');
 const BUILDER = process.env.BUILDER_ID ?? 'naya-advisor';
 
-const say = async (phone, text, convId) => {
+const say = async (phone, text, threadId) => {
   const body = {
     builder_id: BUILDER,
     buyer_phone: phone,
     text,
-    ...(convId ? { conversation_id: convId } : {}),
+    ...(threadId ? { thread_id: threadId } : {}),
   };
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
@@ -25,7 +25,7 @@ const say = async (phone, text, convId) => {
   return {
     ok: r.ok,
     reply: String(j.reply_text ?? '').replace(/\s+/g, ' ').trim(),
-    convId: j.conversation_id ?? convId,
+    threadId: j.thread_id ?? threadId,
     goal: j.debug?.goal ?? {},
     topics: j.debug?.goal?.topics ?? j.debug?.extract_provenance?.fields?.askTopics,
     ask_topics: j.debug?.action_plan?.topics ?? j.debug?.resolved_intent?.ask_topics,
@@ -35,11 +35,11 @@ const say = async (phone, text, convId) => {
 const focusEldorado = async (phone) => {
   let conv;
   let r = await say(phone, 'hi');
-  conv = r.convId;
+  conv = r.threadId;
   r = await say(phone, '2 BHK in Whitefield under 1.5 Cr', conv);
-  conv = r.convId;
+  conv = r.threadId;
   r = await say(phone, 'tell me about Brigade Eldorado', conv);
-  return { convId: r.convId, focusReply: r.reply };
+  return { threadId: r.threadId, focusReply: r.reply };
 };
 
 const PROBES = [
@@ -110,8 +110,8 @@ const PROBES = [
 
 async function runProbe(probe) {
   const phone = `mi-flag-${probe.id}-${Date.now().toString(36)}`;
-  const { convId } = await focusEldorado(phone);
-  const r = await say(phone, probe.text, convId);
+  const { threadId } = await focusEldorado(phone);
+  const r = await say(phone, probe.text, threadId);
   const misses = [];
   for (const g of probe.good) {
     if (!g.re.test(r.reply)) misses.push(`missing:${g.name}`);

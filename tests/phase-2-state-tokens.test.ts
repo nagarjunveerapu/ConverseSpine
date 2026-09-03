@@ -19,7 +19,7 @@ import {
 } from '../src/engine/turn-routing/state-tokens.js';
 import type { TurnRoutingInput } from '../src/engine/turn-routing/types.js';
 import { commitTo, initState, recordOffered } from '../src/engine/state.js';
-import type { ConversationState, Extracted, Match } from '../src/engine/types.js';
+import type { ThreadState, Extracted, Match } from '../src/engine/types.js';
 import { embedTextForRow, planRebuild, type RegistryRow } from '../src/rebuild/intent-index.js';
 
 function base(over: Partial<TurnRoutingInput> = {}): TurnRoutingInput {
@@ -253,7 +253,7 @@ describe('Phase 2c — ask_next_step consumer (four states)', () => {
   });
 
   it('visit_pending awaiting confirm → re-propose', () => {
-    let s: ConversationState = initState('p2', 'lokations');
+    let s: ThreadState = initState('p2', 'lokations');
     s = commitTo(s, 'ayana', 'Ayana');
     s = {
       ...s,

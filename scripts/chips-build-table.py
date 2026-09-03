@@ -28,7 +28,7 @@ import argparse, hashlib, json, subprocess, sys, datetime
 
 SQL = """
 WITH t AS (
-  SELECT conversation_id, created_at, composer,
+  SELECT thread_id, created_at, composer,
          COALESCE(json_extract(action_plan_json,'$.kind'), json_extract(resolved_intent_json,'$.goal')) kind,
          COALESCE(json_extract(action_plan_json,'$.topic'),'') topic,
          COALESCE(json_extract(snapshot_in_json,'$.phase'),'') phase
@@ -36,14 +36,14 @@ WITH t AS (
 ), f AS (
   SELECT * FROM t WHERE kind IS NOT NULL AND kind <> 'commit'
 ), s AS (
-  SELECT conversation_id,
+  SELECT thread_id,
          kind || CASE WHEN topic <> '' THEN '/'||topic ELSE '' END AS state,
          LEAD(kind || CASE WHEN topic <> '' THEN '/'||topic ELSE '' END)
-           OVER (PARTITION BY conversation_id ORDER BY created_at) AS next_state,
+           OVER (PARTITION BY thread_id ORDER BY created_at) AS next_state,
          phase AS post_phase
   FROM f
 )
-SELECT post_phase ph, state st, next_state nx, COUNT(*) n, COUNT(DISTINCT conversation_id) c
+SELECT post_phase ph, state st, next_state nx, COUNT(*) n, COUNT(DISTINCT thread_id) c
 FROM s WHERE next_state IS NOT NULL AND post_phase IS NOT NULL AND post_phase <> ''
 GROUP BY 1,2,3
 """

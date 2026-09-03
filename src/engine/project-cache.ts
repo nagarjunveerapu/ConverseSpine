@@ -1,5 +1,5 @@
 import type { DataResult, EngineDeps } from './ports.js';
-import type { ConversationState, Match, ProjectDetail } from './types.js';
+import type { ThreadState, Match, ProjectDetail } from './types.js';
 import { currentShortlist, discussedList } from './entity-store.js';
 import {
   getProjectCard,
@@ -12,7 +12,7 @@ import {
  * project are authoritative for a name; the projectId never is.
  */
 function knownIdentity(
-  s: ConversationState,
+  s: ThreadState,
   projectId: string,
 ): { name: string; microMarket: string } | null {
   const offered = [...currentShortlist(s), ...discussedList(s)].find(
@@ -109,8 +109,8 @@ export function isUsableProjectCard(detail: ProjectDetail | null | undefined): b
 /** Seed conversation projectCache from L2 when focus is cold (cross-turn). */
 export async function seedProjectCacheFromL2(
   deps: EngineDeps,
-  s: ConversationState,
-): Promise<ConversationState> {
+  s: ThreadState,
+): Promise<ThreadState> {
   const focusId = s.focus?.projectId;
   if (!focusId) return s;
   const existing = s.projectCache?.[focusId];
@@ -128,7 +128,7 @@ export async function seedProjectCacheFromL2(
 
 export async function hydrateProjectDetail(
   deps: EngineDeps,
-  s: ConversationState,
+  s: ThreadState,
   projectId: string,
 ): Promise<HydrateProjectDetailResult> {
   const memoized = memoGet(deps, projectId);
@@ -155,7 +155,7 @@ export async function hydrateProjectDetail(
   }
   markCache(deps, 'proj', 'miss');
 
-  const nd = s.ndConversationId;
+  const nd = s.ndThreadId;
   if (!nd) return { detail: cached ?? null };
 
   // Detail and units are independent Desk calls; neither feeds the other.
@@ -206,7 +206,7 @@ export async function hydrateProjectDetail(
     };
   }
 
-  // No live detail: Desk's conversationContext is focus-scoped, so hydrating a
+  // No live detail: Desk's threadContext is focus-scoped, so hydrating a
   // project that is not the current focus (every prefetch past the focused one)
   // legitimately returns nothing. Units are NOT an identity — naming the card
   // after the project id is what put "*brigade-eldorado-naya-advisor*" into
@@ -237,10 +237,10 @@ export async function hydrateProjectDetail(
 
 export async function prefetchProjects(
   deps: EngineDeps,
-  s: ConversationState,
+  s: ThreadState,
   projectIds: string[],
-): Promise<ConversationState> {
-  const nd = s.ndConversationId;
+): Promise<ThreadState> {
+  const nd = s.ndThreadId;
   if (!nd || projectIds.length === 0) return s;
 
   const cache = { ...(s.projectCache ?? {}) };

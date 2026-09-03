@@ -24,13 +24,13 @@ import {
   recordOffered,
 } from '../src/engine/state.js';
 import { runEngineTurn } from '../src/engine/turn.js';
-import type { ConversationState, Match } from '../src/engine/types.js';
+import type { ThreadState, Match } from '../src/engine/types.js';
 import { fakeDeps } from '../tests/fakes.js';
 import {
   gradeCompareBoth,
   gradeOtherOne,
   gradeShowSomethingElse,
-} from '../tests/phase-1c-conversation-quality.js';
+} from '../tests/phase-1c-chat-quality.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -52,7 +52,7 @@ const KRISHNAJA: Match = {
   matchReasons: [],
 };
 
-function poisonMirror(s: ConversationState): ConversationState {
+function poisonMirror(s: ThreadState): ThreadState {
   return {
     ...s,
     discover: {
@@ -65,7 +65,7 @@ function poisonMirror(s: ConversationState): ConversationState {
   };
 }
 
-function snap(s: ConversationState) {
+function snap(s: ThreadState) {
   return {
     phase: s.phase,
     focus: focusedRef(s) ?? null,
@@ -91,14 +91,14 @@ function esc(s: string): string {
 async function journeyPoisonThrash(): Promise<Row> {
   const id = 'ADV-J6-poison-thrash';
   const deps = fakeDeps();
-  const convId = 'report-j6';
+  const threadId = 'report-j6';
   const failures: string[] = [];
   const turns: Row['turns'] = [];
 
   const say = async (buyer: string) => {
-    const before = (await deps.store.load(convId)) ?? initState(convId, 'lokations');
+    const before = (await deps.store.load(threadId)) ?? initState(threadId, 'lokations');
     const r = await runEngineTurn(
-      { convId, builderId: 'lokations', text: buyer, buyerPhone: '+919900009901', channel: 'advisor_web' },
+      { threadId, builderId: 'lokations', text: buyer, buyerPhone: '+919900009901', channel: 'advisor_web' },
       deps,
     );
     const notes: string[] = [];
@@ -169,13 +169,13 @@ async function journeyPoisonThrash(): Promise<Row> {
 async function journeySiblingGoBack(): Promise<Row> {
   const id = 'ADV-J2-sibling-go-back';
   const deps = fakeDeps();
-  const convId = 'report-j2';
+  const threadId = 'report-j2';
   const failures: string[] = [];
   const turns: Row['turns'] = [];
   const say = async (buyer: string) => {
     const r = await runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'naya-advisor',
         text: buyer,
         buyerPhone: '+919900009902',
@@ -204,15 +204,15 @@ async function journeySiblingGoBack(): Promise<Row> {
 async function journeyCompareBothVsPoison(): Promise<Row> {
   const id = 'ADV-J1-compare-vs-poison';
   const deps = fakeDeps();
-  const convId = 'report-j1';
-  let s = recordOffered(initState(convId, 'lokations'), [AYANA, KRISHNAJA]);
+  const threadId = 'report-j1';
+  let s = recordOffered(initState(threadId, 'lokations'), [AYANA, KRISHNAJA]);
   s = commitTo(s, 'ayana', 'Ayana');
   s = recordDiscussed(s, [{ projectId: 'krishnaja', name: 'Krishnaja Greens' }]);
   await deps.store.save(poisonMirror(s));
 
   const r = await runEngineTurn(
     {
-      convId,
+      threadId,
       builderId: 'lokations',
       text: 'compare both',
       buyerPhone: '+919900009903',

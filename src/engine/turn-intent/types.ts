@@ -93,7 +93,7 @@ export interface TurnIntentInput {
 }
 
 export interface TurnIntentApplyResult {
-  state: import('../types.js').ConversationState;
+  state: import('../types.js').ThreadState;
   clearedKeys: Set<PatchClearKey>;
   /** When set, skip normal goal pipeline and return this reply with stored recovery. */
   probeReply?: string;

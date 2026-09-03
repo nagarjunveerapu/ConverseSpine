@@ -10,7 +10,7 @@ import { answerRequirements, deliveredFactKeys } from './answer-contract.js';
 import { currentShortlist, focusedRef } from './entity-store.js';
 import { detectFocusedSwitchIntent } from './project_switch.js';
 import type {
-  ConversationState,
+  ThreadState,
   EvidenceSet,
   Extracted,
   TurnGoal,
@@ -90,7 +90,7 @@ function toolProducedEvidence(name: string, ev: EvidenceSet): boolean {
 }
 
 export function buildLedgerWritePayload(input: {
-  state: ConversationState;
+  state: ThreadState;
   ex: Extracted;
   goal: TurnGoal;
   evidence: EvidenceSet;

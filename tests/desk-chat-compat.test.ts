@@ -8,7 +8,7 @@ describe('toDeskChatResponse — NayaDesk Auto/Vault contract', () => {
       reply_text: 'Available configurations: 2 BHK — 740 sqft.',
       composer: 'answer',
       turn_index: 3,
-      conversation_id: 'conv:test',
+      thread_id: 'conv:test',
       debug: {
         phase: 'focused',
         tools: ['listUnits', 'detail'],
@@ -19,7 +19,7 @@ describe('toDeskChatResponse — NayaDesk Auto/Vault contract', () => {
     const desk = toDeskChatResponse(raw);
     expect(desk.status).toBe('ok');
     expect(desk.reply).toBe(raw.reply_text);
-    expect(desk.conversation_id).toBe('conv:test');
+    expect(desk.thread_id).toBe('conv:test');
     expect(desk.debug.classifier.intent).toBe('answer');
     expect(desk.debug.brain.tool_calls).toEqual([
       { name: 'listUnits', success: true },

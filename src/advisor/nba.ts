@@ -6,7 +6,7 @@
  *   dimension (next facet/lens) + journey (progress) + escape rails.
  * Cap 6. Board owns depth; chips never dump the full tree.
  */
-import type { ConversationState, TurnDebug, TurnGoal } from '../engine/types.js';
+import type { ThreadState, TurnDebug, TurnGoal } from '../engine/types.js';
 import { currentShortlist, discussedList, focusedRef } from '../engine/entity-store.js';
 import { nextProbeChipLabels } from '../engine/answer-homes.js';
 import { rankChips } from '../chips/rank.js';
@@ -70,7 +70,7 @@ function goalTopic(goal: TurnGoal): string | undefined {
 }
 
 /** Engaged / explored ids — discover offers + focus, stable order. */
-export function engagedProjectIds(state: ConversationState): string[] {
+export function engagedProjectIds(state: ThreadState): string[] {
   const ids: string[] = [];
   const seen = new Set<string>();
   const push = (id: string | undefined) => {
@@ -104,7 +104,7 @@ function railsFor(board: AdvisorNbaBoard, goal: TurnGoal): string[] {
 }
 
 function dimensionAndJourney(
-  state: ConversationState,
+  state: ThreadState,
   goal: TurnGoal,
   board: AdvisorNbaBoard,
 ): string[] {
@@ -268,7 +268,7 @@ const RANKER_GOALS: ReadonlySet<string> = new Set([
  * chipsForGoal, so navigation can never be displaced by a ranked answer chip.
  */
 function rankedPrimaryChips(
-  state: ConversationState,
+  state: ThreadState,
   goal: TurnGoal,
   limit: number,
 ): Array<{ label: string; actionId?: string }> {
@@ -296,7 +296,7 @@ function rankedPrimaryChips(
  * chips carry no action_id; only ranker content chips do.
  */
 function chipsForGoal(
-  state: ConversationState,
+  state: ThreadState,
   goal: TurnGoal,
   board: AdvisorNbaBoard,
   chipRankLive: boolean,
@@ -325,7 +325,7 @@ function chipsForGoal(
 }
 
 export function buildAdvisorNba(
-  state: ConversationState,
+  state: ThreadState,
   debug: TurnDebug,
   chipRankLive = false,
 ): AdvisorNba {
@@ -395,7 +395,7 @@ export function buildAdvisorNba(
   };
 }
 
-export function buildChecklistSnapshot(state: ConversationState): AdvisorChecklistSnapshot {
+export function buildChecklistSnapshot(state: ThreadState): AdvisorChecklistSnapshot {
   return {
     phase: state.phase,
     ...(state.focus?.projectId

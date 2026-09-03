@@ -1,7 +1,7 @@
 import type { SuggestedAction } from '../recovery-planner.js';
 import { constraintsFromAdvisorPreferences } from '../../advisor/apply-preferences.js';
 import { commitTo, releaseToDiscover } from '../state.js';
-import type { ConversationState } from '../types.js';
+import type { ThreadState } from '../types.js';
 import { isBudgetFitQuestion, isCostComponentAsk } from '../facts.js';
 import { hasExplicitProjectCue } from '../project_switch.js';
 import { extractRecoveryPatchFromText } from './extract-recovery-patch.js';
@@ -230,7 +230,7 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
   return null;
 }
 
-export function shouldRunTurnIntent(state: ConversationState, actionId?: string, text?: string): boolean {
+export function shouldRunTurnIntent(state: ThreadState, actionId?: string, text?: string): boolean {
   // Destructive opt-out confirm owns bare affirm — never divert to RTI probe.
   if (state.stopConfirmPending) return false;
   if (text && isCompareAmongOfferedTurn(text)) return false;
@@ -272,12 +272,12 @@ export function shouldRunTurnIntent(state: ConversationState, actionId?: string,
   return false;
 }
 
-export function focusedUiMode(state: ConversationState): TurnIntentInput['ui_mode'] {
+export function focusedUiMode(state: ThreadState): TurnIntentInput['ui_mode'] {
   if (state.phase === 'focused') return 'focused';
   return recoveryUiMode(state);
 }
 
-export function recoveryUiMode(state: ConversationState): TurnIntentInput['ui_mode'] {
+export function recoveryUiMode(state: ThreadState): TurnIntentInput['ui_mode'] {
   if (state.rti?.lastUiMode === 'preference_refine') return 'preference_refine';
   if (
     state.rti?.lastUiMode === 'search_recovery' ||
@@ -307,7 +307,7 @@ export async function classifyTurnIntent(
 }
 
 export function applyTurnIntentResult(
-  state: ConversationState,
+  state: ThreadState,
   intent: TurnIntentResult,
   actions: readonly SuggestedAction[],
 ): TurnIntentApplyResult {
@@ -455,7 +455,7 @@ export function applyTurnIntentResult(
 }
 
 export function buildTurnIntentInput(
-  state: ConversationState,
+  state: ThreadState,
   text: string,
   channel: TurnIntentInput['channel'],
   uiMode: TurnIntentInput['ui_mode'],

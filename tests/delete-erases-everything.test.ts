@@ -15,11 +15,11 @@ import { fakeDeps } from './fakes.js';
  * were read straight back. A sentence that says everything is gone has to be
  * true of everything the buyer can still be shown.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999931', channel: 'whatsapp' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999931', channel: 'whatsapp' },
       deps,
     );
   return { turn, deps };
@@ -63,7 +63,7 @@ describe('DELETE erases what it says it erases', () => {
     // mapper builds its HTTP response out of it. So the Desk pointer and the
     // phone must be gone from the object too, not only from storage.
     // `freshSession`, which used to run here, carries both forward by design.
-    expect(stop.state.ndConversationId).toBeUndefined();
+    expect(stop.state.ndThreadId).toBeUndefined();
     expect(stop.state.ndBuyerPhone).toBeUndefined();
     // `optedOut` used to be asserted here. It was set by this door and read by
     // no one — a flag standing in for silence that silenced nothing. Silence

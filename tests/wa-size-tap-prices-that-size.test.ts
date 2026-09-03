@@ -9,7 +9,7 @@ import { fakeDeps } from './fakes.js';
  * That gap is the signature of reading the buyer's size a turn too late, so
  * the assert is on what the pricing port was ASKED, not on the sentence.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const pricingCalls: Array<string | undefined> = [];
   const inner = deps.data.pricing.bind(deps.data);
@@ -20,7 +20,7 @@ function harness(convId: string) {
   const turn = (text: string, actionId?: string) =>
     runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text,
         buyerPhone: '+919999999993',

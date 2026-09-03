@@ -67,7 +67,7 @@ describe('experience copy', () => {
 
 describe('decide', () => {
   const emptyMemory: MemoryView = {
-    conversation: {
+    lead: {
       id: 'c1', buyer_phone: '+91', builder_id: 'lokations',
       budget: null, bhk: null, location: null, purpose: null,
       focused_project_id: null, shortlist_json: '[]', status: 'new', pending_json: null,
@@ -144,7 +144,7 @@ describe('decide', () => {
 
 describe('extractors', () => {
   const emptyMemory: MemoryView = {
-    conversation: {
+    lead: {
       id: 'c1', buyer_phone: '+91', builder_id: 'lokations',
       budget: null, bhk: null, location: null, purpose: null,
       focused_project_id: null, shortlist_json: '[]', status: 'new', pending_json: null,

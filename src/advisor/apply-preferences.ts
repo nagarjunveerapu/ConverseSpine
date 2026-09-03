@@ -1,7 +1,7 @@
 import { parseBudgetToInr } from '../engine/facts.js';
 import type { IngressSlotKey } from '../engine/ingress.js';
 import type { PatchClearKey } from '../engine/turn-intent/types.js';
-import type { Constraints, ConversationState, ProbeKind } from '../engine/types.js';
+import type { Constraints, ThreadState, ProbeKind } from '../engine/types.js';
 
 /** Deterministic brief → search constraints (advisor UI is source of truth). */
 export function constraintsFromAdvisorPreferences(
@@ -140,7 +140,7 @@ export function advisorPrefsSnapshot(
  * A3 — panel-filled hard slots are treated as already asked so discover /
  * ask_next_step never re-probes them. Does not bump ignoredProbes (filled ≠ ignored).
  */
-export function markAskedFromAdvisorConstraints(s: ConversationState): ConversationState {
+export function markAskedFromAdvisorConstraints(s: ThreadState): ThreadState {
   const c = s.constraints;
   const toMark: ProbeKind[] = [];
   if (c.location?.trim()) toMark.push('location');

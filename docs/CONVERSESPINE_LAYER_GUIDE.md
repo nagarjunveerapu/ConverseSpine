@@ -27,7 +27,7 @@ Routes HTTP/webhook traffic into the same kernel with channel-specific **pre-sta
 
 | Entry | File | Extra before engine |
 |-------|------|---------------------|
-| `POST /chat` | `worker/routes.ts` → `turn/run-turn.ts` | Upsert lead if no `conversation_id` |
+| `POST /chat` | `worker/routes.ts` → `turn/run-turn.ts` | Upsert lead if no `thread_id` |
 | `POST /api/advisor/turn` | `advisor/handle-turn.ts` | Merge `preferences`, sticky `project_id`, `action_id` |
 | `POST /webhook` | `webhook/whatsapp.ts` → `runTurn` | Debounce, phone resolve |
 | `npm run chat` | `chat-repl.ts` | Same as `/chat` |
@@ -56,12 +56,12 @@ Advisor UI sends structured state the engine cannot infer from text alone. Ingre
 
 ### What it does
 
-- **`store.load(convId)`** — read `ConversationState` from KV (`TURN_CACHE`).
+- **`store.load(threadId)`** — read `ThreadState` from KV (`TURN_CACHE`).
 - **`bootstrapContext(nd)`** — merge NayaDesk context: returning buyer, recent messages, rejected projects, builder persona.
 
 ### When it runs
 
-Every turn with a valid NayaDesk conversation id.
+Every turn with a valid NayaDesk thread id.
 
 ### When it skips
 
@@ -267,7 +267,7 @@ Handles vague phrasing without making embeddings the primary authority. Regex wi
 
 ### What it does
 
-Merges `Extracted` into `ConversationState`:
+Merges `Extracted` into `ThreadState`:
 
 - Updates `constraints` (respecting RTI `clearedKeys`)
 - Sets discover flags, rejected projects, transcript hooks

@@ -1,5 +1,5 @@
 import type { Env } from '../env.js';
-import type { ConversationState } from '../engine/types.js';
+import type { ThreadState } from '../engine/types.js';
 import { sendTyping } from '../channel/whatsapp-client.js';
 import { deliverWhatsAppTurn } from '../channel/wa-deliver.js';
 import { fileTurnReceipts } from '../channel/delivery-receipt.js';
@@ -20,8 +20,8 @@ const SEEN_KEY = 'seen_wamids';
 const SEEN_MAX = 50;
 
 /**
- * Conversation DO — WhatsApp debounce + L0 hot conversation state.
- * State routes use DO name `state:{convId}` from store-kv; enqueue uses
+ * Thread DO — WhatsApp debounce + L0 hot chat state.
+ * State routes use DO name `state:{threadId}` from store-kv; enqueue uses
  * `builderId:phone` from the WhatsApp webhook.
  */
 export class TurnDebouncer implements DurableObject {
@@ -37,17 +37,17 @@ export class TurnDebouncer implements DurableObject {
     }
     if (path.endsWith('/state') || path.endsWith('/state/')) {
       if (request.method === 'GET') {
-        const state = (await this.state.storage.get<ConversationState>(L0_STATE_KEY)) ?? null;
+        const state = (await this.state.storage.get<ThreadState>(L0_STATE_KEY)) ?? null;
         return Response.json({ state });
       }
       if (request.method === 'PUT') {
-        let body: { state?: ConversationState };
+        let body: { state?: ThreadState };
         try {
-          body = (await request.json()) as { state?: ConversationState };
+          body = (await request.json()) as { state?: ThreadState };
         } catch {
           return Response.json({ error: 'invalid_json' }, { status: 400 });
         }
-        if (!body.state?.convId) {
+        if (!body.state?.threadId) {
           return Response.json({ error: 'state_required' }, { status: 400 });
         }
         await this.state.storage.put(L0_STATE_KEY, body.state);
@@ -59,7 +59,7 @@ export class TurnDebouncer implements DurableObject {
       // the next turn read it back as if nothing had happened.
       //
       // deleteAll, not just the state key: this class is addressed two ways
-      // and each address holds something of the buyer's. `state:{convId}`
+      // and each address holds something of the buyer's. `state:{threadId}`
       // holds l0_state; `builderId:phone` holds their phone number, the
       // WhatsApp phone_number_id, and `inbox` — their raw message text,
       // sitting unprocessed. Erasing one and leaving the other would be the
@@ -158,7 +158,7 @@ export class TurnDebouncer implements DurableObject {
       // Before the drain below, deliberately. A receipt is part of answering
       // the buyer, not bookkeeping done afterwards — and if the alarm retries,
       // it re-files the same rows rather than losing them.
-      await fileTurnReceipts(rt.crm, builder_id, result.nd_conversation_id, report);
+      await fileTurnReceipts(rt.crm, builder_id, result.nd_thread_id, report);
     }
 
     // The drain happens HERE, after the reply is out — and it removes exactly

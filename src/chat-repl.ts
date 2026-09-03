@@ -17,7 +17,7 @@ function freshBuyerPhone(): string {
 }
 
 interface ChatResponse {
-  conversation_id: string;
+  thread_id: string;
   reply_text: string;
   composer: string;
   turn_index: number;
@@ -36,7 +36,7 @@ async function health(): Promise<boolean> {
 async function sendTurn(
   text: string,
   buyerPhone: string,
-  conversationId?: string,
+  threadId?: string,
 ): Promise<ChatResponse> {
   const r = await fetch(`${SPINE_URL}/chat`, {
     method: 'POST',
@@ -45,7 +45,7 @@ async function sendTurn(
       builder_id: BUILDER_ID,
       buyer_phone: buyerPhone,
       text,
-      ...(conversationId ? { conversation_id: conversationId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as ChatResponse & { error?: string };
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
 ╚══════════════════════════════════════════════════════════════╝
 `);
 
-  let conversationId: string | undefined;
+  let threadId: string | undefined;
 
   const rl = readline.createInterface({ input, output });
 
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
 
     if (lower === 'quit' || lower === 'exit') break;
     if (lower === '/new') {
-      conversationId = undefined;
+      threadId = undefined;
       buyerPhone = freshBuyerPhone();
       console.log(`\n[new session — phone ${buyerPhone}, fresh lead on next message]`);
       continue;
@@ -101,10 +101,10 @@ async function main(): Promise<void> {
     }
 
     try {
-      const result = await sendTurn(line, buyerPhone, conversationId);
-      conversationId = result.conversation_id;
+      const result = await sendTurn(line, buyerPhone, threadId);
+      threadId = result.thread_id;
       console.log(`\nBot [${result.composer}, turn ${result.turn_index}]:\n${result.reply_text}`);
-      console.log(`\n(conv ${conversationId.slice(0, 8)}… · ${buyerPhone})`);
+      console.log(`\n(conv ${threadId.slice(0, 8)}… · ${buyerPhone})`);
     } catch (err) {
       console.error('\nTurn failed:', err instanceof Error ? err.message : err);
     }
