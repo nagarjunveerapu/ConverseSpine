@@ -316,9 +316,18 @@ export function mapLocationIntel(raw: NdLocationIntelRow | null | undefined) {
  * thread id and returns the pursuit when the thread's focused project names one
  * of the buyer's, or the buyer has exactly one. Otherwise it answers 409
  * `ambiguous_lead` (a buyer chasing two projects) or hands back a thread-shaped
- * row with `lead_id: null`. Both mean the same thing here: THERE IS NO ONE
- * LEAD, and a door that needs one must be skipped rather than fed a thread id
- * that will 404.
+ * row with `lead_id: null`. Both mean THERE IS NO ONE LEAD *for that question*,
+ * and a door that needs one must be skipped rather than fed a thread id that
+ * will 404.
+ *
+ * `forProject` is the important exception, and the reason ambiguity is not the
+ * end of the road. "No one lead" is a property of the QUESTION, not of the
+ * buyer: `get` has to refuse because nothing in it names a project, but a quote
+ * names one, a landed cost names one, and a comparison leads with one. For
+ * those, `GET /api/v1/threads/:id/leads` hands over the candidates and the
+ * project id picks among them. That is a lookup, not a guess — and skipping it
+ * would silently strip pricing from exactly the two-project buyer this whole
+ * split exists to model.
  *
  * Memoised per adapter (one per turn), so a turn that hits two lead doors pays
  * for one extra Desk call, not two.
@@ -326,6 +335,11 @@ export function mapLocationIntel(raw: NdLocationIntelRow | null | undefined) {
 interface LeadResolver {
   /** Resolve, calling Desk if we have not already. */
   get(threadId: string): Promise<string | null>;
+  /**
+   * Resolve when the caller names the project — survives `ambiguous_lead`,
+   * because the project is the thing that disambiguates. Falls back to `get`.
+   */
+  forProject(threadId: string, projectId: string): Promise<string | null>;
   /** What we already know, without a network call. Used on the search hot path. */
   peek(threadId: string): string | null;
   /** Seed from a thread-context bundle we were fetching anyway. */
@@ -340,6 +354,25 @@ function leadResolver(crm: NayaDeskClient): LeadResolver {
   const clean = (threadId: string, id: string | null | undefined) =>
     id && id !== threadId ? id : null;
 
+  const resolveOne = (threadId: string): Promise<string | null> => {
+    const key = threadId.trim();
+    if (!key) return Promise.resolve(null);
+    const seen = known.get(key);
+    if (seen) return Promise.resolve(seen);
+    const running = inflight.get(key);
+    if (running) return running;
+    const p = crm
+      .getLead(key)
+      .then((r) => clean(key, r.lead?.lead_id))
+      .catch(() => null)
+      .then((id) => {
+        known.set(key, id);
+        return id;
+      });
+    inflight.set(key, p);
+    return p;
+  };
+
   return {
     peek(threadId) {
       return known.get(threadId.trim()) ?? null;
@@ -353,23 +386,23 @@ function leadResolver(crm: NayaDeskClient): LeadResolver {
       if (id) known.set(key, id);
       else if (!known.has(key)) known.set(key, null);
     },
-    get(threadId) {
+    get: resolveOne,
+    async forProject(threadId, projectId) {
       const key = threadId.trim();
-      if (!key) return Promise.resolve(null);
-      const seen = known.get(key);
-      if (seen) return Promise.resolve(seen);
-      const running = inflight.get(key);
-      if (running) return running;
-      const p = crm
-        .getLead(key)
-        .then((r) => clean(key, r.lead?.lead_id))
-        .catch(() => null)
-        .then((id) => {
-          known.set(key, id);
-          return id;
-        });
-      inflight.set(key, p);
-      return p;
+      const project = projectId.trim();
+      if (!key) return null;
+      // The unambiguous path already answers, and it is memoised. Only a buyer
+      // with more than one pursuit ever reaches the second call.
+      const one = await resolveOne(key);
+      if (one) return one;
+      if (!project) return null;
+      const byProject = await crm
+        .threadLeads(key)
+        .then((r) => r.leads.find((l) => l.project_id === project)?.lead_id ?? null)
+        .catch(() => null);
+      // Deliberately NOT written into `known`: it is the answer for THIS
+      // project, and the next door may name a different one.
+      return byProject ? clean(key, byProject) : null;
     },
   };
 }
@@ -726,9 +759,10 @@ export function nayadeskData(
       const t0 = Date.now();
       try {
         // LEAD door: `nd` is a thread id and Desk's quote lane is
-        // `WHERE lead_id = ?`. No resolvable pursuit means no quote to give —
-        // absent, not a 404 the buyer pays for.
-        const leadId = await leads.get(nd);
+        // `WHERE lead_id = ?`. A quote names its project, so a buyer chasing
+        // two of them is still answerable — `forProject` picks by that name
+        // rather than refusing. Only a genuinely leadless thread goes absent.
+        const leadId = await leads.forProject(nd, projectId);
         if (!leadId) return dataAbsent(Date.now() - t0);
         const q = await crm.pricingQuote({
           project_id: projectId,
@@ -792,8 +826,8 @@ export function nayadeskData(
     async landedCost(_builderId, nd, projectId, unitType) {
       const t0 = Date.now();
       try {
-        // LEAD door — see `leadResolver`.
-        const leadId = await leads.get(nd);
+        // LEAD door — see `leadResolver`. Named project, so `forProject`.
+        const leadId = await leads.forProject(nd, projectId);
         if (!leadId) return dataAbsent(Date.now() - t0);
         const r = await crm.landedCost({ project_id: projectId, lead_id: leadId, unit_type: unitType });
         if (!r?.base_price_display) return dataAbsent(Date.now() - t0);
@@ -825,7 +859,11 @@ export function nayadeskData(
       try {
         // LEAD door — see `leadResolver`. null degrades to the caller's own
         // "cannot compare" path, which is what a 404 produced anyway.
-        const leadId = await leads.get(nd);
+        //
+        // A comparison names several projects and the quote hangs off ONE
+        // pursuit, so the first id is the anchor: it is the project the buyer
+        // led with, and it is the only one of the set we can defend picking.
+        const leadId = await leads.forProject(nd, projectIds[0] ?? '');
         if (!leadId) return null;
         const resp = await crm.compareProjects({ lead_id: leadId, project_ids: projectIds });
         return {
@@ -1257,7 +1295,12 @@ export function nayadeskCrm(
         buyer_phone: buyerPhone,
         ...(channel ? { channel } : {}),
       });
-      return { threadId: resp.thread_id };
+      // A Desk that answered without a `thread_id` has told us nothing usable.
+      // Returning `{ threadId: undefined }` would be TRUTHY at every call site,
+      // so `withNdThread` would write `undefined` into the session and every
+      // later door would address `/api/v1/leads//...`. `null` is the honest
+      // answer, and the callers already handle it by simply not binding.
+      return resp.thread_id ? { threadId: resp.thread_id } : null;
     },
     async appendMessage(threadId, direction, content, meta) {
       await crm.appendMessage(threadId, { direction, content });

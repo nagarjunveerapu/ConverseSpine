@@ -481,6 +481,28 @@ export class NayaDeskClient {
   }
 
   /**
+   * The counterpart to 409 `ambiguous_lead`: when one thread carries two
+   * pursuits, this is how the caller learns their names instead of guessing.
+   *
+   * `getLead` has to refuse on ambiguity — nothing in that request says which
+   * project the buyer means. But most of our lead doors DO name one (a quote is
+   * for a project, a landed cost is for a project), so there the answer is
+   * determinate and degrading to "absent" throws away a fact we hold. Desk
+   * answers `{ thread_id, focused_project_id, leads[] }` with a `project_id`
+   * per lead; we match on it. See `leadResolver.forProject`.
+   *
+   * The 409 body carries the same candidates, but `call` truncates error text
+   * to 300 chars, so this door is the reliable one.
+   */
+  threadLeads(thread_id: string): Promise<{
+    thread_id: string;
+    focused_project_id: string | null;
+    leads: Array<{ lead_id: string; project_id: string | null; stage?: string }>;
+  }> {
+    return this.call('GET', `/api/v1/threads/${encodeURIComponent(thread_id)}/leads`);
+  }
+
+  /**
    * Desk's `guardLead` accepts a LEAD id or a THREAD id here: a thread resolves
    * only when its focused project names one of the buyer's pursuits, or the
    * buyer has exactly one. Otherwise Desk answers 409 `ambiguous_lead` and this

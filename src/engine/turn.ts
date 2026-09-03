@@ -2138,7 +2138,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // asked us to keep messaging with an offer to delete their details.
   if (ex.stop && keepsOneChannel(trimmedText)) {
     const reply =
-      `Noted — no calls, we'll keep everything here on WhatsApp. Nothing gets deleted, and it's on this conversation so the team sees it too. ` +
+      `Noted — no calls, we'll keep everything here on WhatsApp. Nothing gets deleted, and it's on this chat so the team sees it too. ` +
       (state.focus?.projectName
         ? `Carry on whenever you like — pricing for *${state.focus.projectName}*, the configurations, the legal papers, or a site visit.`
         : `Carry on whenever you like — pick any project below, or tell me a size or budget.`);
@@ -6285,6 +6285,22 @@ async function syncFacts(
   buyerText: string,
 ): Promise<void> {
   if (!nd) return;
+  // These writes are INDEPENDENT of one another, and until the lead/thread
+  // split they could not fail selectively: one id addressed one row, so a
+  // refusal meant every write was doomed anyway and letting the first throw
+  // cost nothing. That is no longer true. Desk's lead doors now answer 409
+  // `ambiguous_lead` for a buyer chasing two projects, while the message and
+  // pending-action doors take a thread and never refuse — so an unguarded
+  // throw here would let the transcript keep moving over a CRM row that had
+  // silently stopped. `soft` keeps each write's failure to itself and names
+  // it in the log, because a refusal nobody can see is the worse bug.
+  const soft = (label: string, p: Promise<unknown>): Promise<void> =>
+    p.then(
+      () => undefined,
+      (err: unknown) => {
+        console.log('crm sync skipped', JSON.stringify({ nd, write: label, error: String(err).slice(0, 200) }));
+      },
+    );
   const facts: Record<string, string | undefined> = {};
   if (ex.nameIntro) facts.buyer_name = ex.nameIntro;
   if (s.constraints.bhk) facts.bhk_preference = s.constraints.bhk;
@@ -6292,7 +6308,7 @@ async function syncFacts(
   if (s.constraints.location) facts.location_pref = s.constraints.location;
   if (s.constraints.purpose) facts.purpose = s.constraints.purpose;
   if (goal.kind === 'visit_booked') facts.visit_date_pref = goal.label;
-  if (Object.keys(facts).length) await deps.crm.updateFacts(nd, facts);
+  if (Object.keys(facts).length) await soft('facts', deps.crm.updateFacts(nd, facts));
 
   // CRM safety net: mirror visit window await / clear on book.
   if (goal.kind === 'visit_ask' && goal.ask === 'window' && goal.state.pendingDayIso) {
@@ -6312,37 +6328,37 @@ async function syncFacts(
   }
 
   if ((goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend') && ev.matches?.length) {
-    await deps.crm.syncShortlist(nd, ev.matches.map((m) => m.projectId));
-    await deps.crm.syncMatching(nd, ev.matches.map((m) => m.projectId));
+    await soft('shortlist', deps.crm.syncShortlist(nd, ev.matches.map((m) => m.projectId)));
+    await soft('matching', deps.crm.syncMatching(nd, ev.matches.map((m) => m.projectId)));
     // Phase 0a — choice events carry observed status, not hardcoded ok.
     const choiceStatus = ev.failure
       ? 'error'
       : ev.notices?.length || ev.faqMiss?.keys.length || ev.noMatch
         ? 'partial'
         : 'ok';
-    await deps.crm.postChoiceEvent(
+    await soft('choice_event', deps.crm.postChoiceEvent(
       s.builderId,
       s.ndBuyerPhone ?? '',
       nd,
       ev.matches.map((m) => ({ projectId: m.projectId, name: m.name })),
       s.constraints as Record<string, unknown>,
       choiceStatus,
-    );
+    ));
   }
   if (ex.rejected) {
     await deps.crm.postChoiceResponse(nd, buyerText, 'rejected').catch(() => {});
     const rejectedId = s.discover.rejectedProjectIds.at(-1);
     if (rejectedId) {
-      await deps.crm.postJourneySignals(s.builderId, s.ndBuyerPhone ?? '', nd, { rejected: true }, { rejectedAdd: [rejectedId] });
+      await soft('journey_signals', deps.crm.postJourneySignals(s.builderId, s.ndBuyerPhone ?? '', nd, { rejected: true }, { rejectedAdd: [rejectedId] }));
     }
   }
   if (goal.kind === 'answer' && s.focus) {
     const topic = goal.topics?.[0] ?? goal.topic;
     const factKind = answerFactKind(topic);
-    if (factKind) await deps.crm.appendSharedFact(nd, factKind, s.focus.projectId, s.turnCount);
+    if (factKind) await soft('shared_fact', deps.crm.appendSharedFact(nd, factKind, s.focus.projectId, s.turnCount));
   }
-  if (goal.kind === 'visit_booked') await deps.crm.setStage(nd, 'visit_booked');
-  if (goal.kind === 'handoff') await deps.crm.setStage(nd, 'escalated');
+  if (goal.kind === 'visit_booked') await soft('stage', deps.crm.setStage(nd, 'visit_booked'));
+  if (goal.kind === 'handoff') await soft('stage', deps.crm.setStage(nd, 'escalated'));
 }
 
 /** BPE lane — buyer_facts via /api/profile/observations (separate from conv columns). */
