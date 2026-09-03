@@ -106,11 +106,11 @@ async function main() {
   // Desk dossier
   await new Promise((r) => setTimeout(r, 800));
   const profile = await fetch(
-    `${DESK}/api/profile?builder_id=lokations&buyer_phone=${encodeURIComponent(phone)}`,
+    `${DESK}/api/v1/profile?builder_id=lokations&buyer_phone=${encodeURIComponent(phone)}`,
     { headers: deskHeaders() },
   ).then((r) => r.json() as Promise<{ facts?: Record<string, unknown>; error?: string }>);
   const journey = await fetch(
-    `${DESK}/api/journey?builder_id=lokations&buyer_phone=${encodeURIComponent(phone)}`,
+    `${DESK}/api/v1/journey?builder_id=lokations&buyer_phone=${encodeURIComponent(phone)}`,
     { headers: deskHeaders() },
   ).then((r) => r.json() as Promise<{ journey?: { stage?: string } | null; trail?: unknown[]; error?: string }>);
 

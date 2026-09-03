@@ -348,7 +348,7 @@ async function cmdFill(cfg, { dryRun }) {
   console.log(`  education-rebuild  HTTP ${edu.status} ${JSON.stringify(edu.json.report ?? edu.json).slice(0, 200)}`);
 
   if (!dryRun) {
-    const names = await http('POST', `${cfg.desk}/api/projects/reconcile-project-vectors`, {
+    const names = await http('POST', `${cfg.desk}/api/v1/projects/reconcile-project-vectors`, {
       headers: { 'x-bot-secret': secret }, body: {}, timeoutMs: 300_000 });
     console.log(`  desk-reconcile     HTTP ${names.status} ${JSON.stringify(names.json).slice(0, 200)}`);
   } else {

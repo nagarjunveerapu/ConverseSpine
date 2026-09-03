@@ -826,16 +826,25 @@ export class NayaDeskClient {
     // query, and Desk resolves the builder from the project when it is absent.
     // Two fields the leftover DTO synthesised are not columns and do not come
     // back: `price_display` (callers already default it to '') and
-    // `is_available`, which is derived here from `availability_state` so
-    // sold-out configs stay filtered exactly as before. `disclosure_tier` IS a
-    // real column and still arrives, so the admin_only suppression holds.
+    // `is_available`, which is recomputed here. It reproduces the RETIRED
+    // rule verbatim (NayaDesk src/lib/desk_v2_catalog.ts:210-217, served by
+    // origin/main GET /api/projects/:project_id/units) rather than a simpler
+    // one: `availability_state` defaults to 'unknown', so
+    // `state !== 'sold_out' ? 1 : 0` would have flipped every 'unknown' and
+    // 'coming_soon' config from hidden to VISIBLE — a URL swap silently
+    // widening what the bot offers a buyer. `disclosure_tier` IS a real column
+    // and still arrives, so the admin_only suppression holds.
     const res = await this.call<{ configs?: Array<Record<string, unknown>> }>(
       'GET',
       `/api/v1/configs?project_id=${encodeURIComponent(project_id)}`,
     );
     const units = (res.configs ?? []).map((cfg) => ({
       ...cfg,
-      is_available: cfg['availability_state'] === 'sold_out' ? 0 : 1,
+      is_available: (
+        Number(cfg['available_units_count'] ?? 0) > 0
+        || cfg['availability_state'] === 'available'
+        || cfg['availability_state'] === 'limited'
+      ) ? 1 : 0,
     }));
     return { units } as { units: Array<{
       unit_type: string;
