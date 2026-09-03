@@ -104,23 +104,23 @@ describe('Wave 4 Spine posts leftover colliding doors on /api/v1', () => {
     );
   });
 
-  it('threadContext POSTs /api/thread-context', async () => {
+  it('threadContext POSTs /api/v1/thread-context', async () => {
     const fetchMock = stubJson({ lead: {}, recent_messages: [] });
     await crm().threadContext('c1');
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
-      'https://desk.test/api/thread-context',
+      'https://desk.test/api/v1/thread-context',
     );
   });
 
-  it('commitProject POSTs /api/threads/:id/commit-project', async () => {
+  it('commitProject POSTs /api/v1/threads/:id/commit-project', async () => {
     const fetchMock = stubJson({ ok: true, thread_id: 'c1', project_id: 'p1', project_state: 'focused' });
     await crm().commitProject('c1', 'p1');
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
-      'https://desk.test/api/threads/c1/commit-project',
+      'https://desk.test/api/v1/threads/c1/commit-project',
     );
   });
 
-  it('reportWhatsAppDelivery still POSTs leftover /api/whatsapp/delivery', async () => {
+  it('reportWhatsAppDelivery POSTs /api/v1/whatsapp/delivery', async () => {
     const fetchMock = stubJson({ ok: true, matched: 1 });
     await crm().reportWhatsAppDelivery({
       builder_id: 'sandbox',
@@ -128,7 +128,7 @@ describe('Wave 4 Spine posts leftover colliding doors on /api/v1', () => {
       reports: [{ content: 'hi', wamid: 'wamid.1', status: 'sent' }],
     });
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
-      'https://desk.test/api/whatsapp/delivery',
+      'https://desk.test/api/v1/whatsapp/delivery',
     );
   });
 

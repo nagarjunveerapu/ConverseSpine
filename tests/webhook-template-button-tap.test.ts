@@ -82,7 +82,7 @@ describe('a template quick-reply tap', () => {
     } as unknown as Env;
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).includes('/api/builders')) {
+      if (String(url).includes('/api/v1/builders')) {
         return new Response(JSON.stringify({
           builders: [{ builder_id: BUILDER, meta_phone_number_id: PHONE_NUMBER_ID }],
         }), { status: 200 });
