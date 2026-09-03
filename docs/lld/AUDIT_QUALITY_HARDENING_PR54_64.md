@@ -74,7 +74,7 @@
 
 **Files:** `src/engine/adapters/nayadesk.ts`
 
-- Context/`conversationContext` path correctly uses `startingPriceDisplayFrom(...)`.
+- Context/`threadContext` path correctly uses `startingPriceDisplayFrom(...)`.
 - **`getProject` fallback still sets** `startingPriceDisplay: p.entry_price_band` (raw).
 - **`pricing()`** still seeds `startingDisplay` from `ctx?.project?.entry_price_band`.
 - `#64` added a **second** helper `priceBandDisplayFrom` for overview cards → “one price truth” became two policies (min-from vs low–high band).

@@ -1,4 +1,4 @@
-# Conversation quality — scenario catalog (visible checklist)
+# Chat quality — scenario catalog (visible checklist)
 
 **Date:** 2026-07-11  
 **Honest status:** Closed-beta **must-have script is green** on local `:8789` (MED/PIV/SW/VIS/STY/HIN-01). **HIN-02..06 + multi-visit seed pack** (BUYER-LOK-02, SA-G02/G02b, VIS-03/04) verified on this branch. Still **not** open-beta (advisor MED-02, full origin-route UAT depth).
@@ -34,7 +34,7 @@ This doc is the **list first**. Do not treat unchecked rows as green.
 
 ## Phase 4 Desk surface → buyer scenarios (holds / units / media)
 
-NayaDesk Phase 4 added physical inventory, hold-by-type, waitlist, series floor plans, and `holdable_units` on conversation-context. Spine today: **hold propose/book wired**; waitlist queue + live “N left” counts **not** yet mapped — do not assert those until wired.
+NayaDesk Phase 4 added physical inventory, hold-by-type, waitlist, series floor plans, and `holdable_units` on thread-context. Spine today: **hold propose/book wired**; waitlist queue + live “N left” counts **not** yet mapped — do not assert those until wired.
 
 | ID | Status | Pass if |
 |----|--------|---------|

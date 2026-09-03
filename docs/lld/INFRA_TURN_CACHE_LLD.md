@@ -6,7 +6,7 @@
 
 | Layer | Key | Owner |
 |-------|-----|--------|
-| L0 | Conversation DO (`TurnDebouncer` `/state`, name `state:{convId}`) + `ce:state:` KV | `store-kv.ts` |
+| L0 | Thread DO (`TurnDebouncer` `/state`, name `state:{threadId}`) + `ce:state:` KV | `store-kv.ts` |
 | L1 | `seg:{builder}:{area}:{type}` | `nayadeskData.search` |
 | L2 | Cache API + `proj:{projectId}` KV | `hydrateProjectDetail` + turn-local `projectCardMemo` |
 | L3 | `emb:{projection}:{hash(text)}` | `cache/embed.ts` (routing + enrich) |

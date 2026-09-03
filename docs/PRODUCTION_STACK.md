@@ -15,7 +15,7 @@ WhatsApp / HTTP POST /chat
 ┌────────────────────────────────────────────────────────────┐
 │  ConverseSpine Worker (src/index.ts)                        │
 │                                                             │
-│  1. SNAPSHOT    buildMemory ← NayaDesk conversation-context │
+│  1. SNAPSHOT    buildMemory ← NayaDesk thread-context │
 │  2. UNDERSTAND  regex + Vectorize embedder + DeepSeek classify │
 │  3. DECIDE      pure rules → ONE composer + tool_plan       │
 │  4. ACT         tools → NayaDesk search/pricing/leads       │

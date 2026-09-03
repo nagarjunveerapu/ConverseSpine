@@ -40,7 +40,7 @@ src/engine/
   grounding.ts            Verifier + banned phrase strip
   phases/                 discover, focused, visit, handoff goal tables
   adapters/               NayaDesk data + DeepSeek LLM
-  store-kv.ts             Conversation state in TURN_CACHE KV
+  store-kv.ts             Chat state in TURN_CACHE KV
 ```
 
 ## Invariants

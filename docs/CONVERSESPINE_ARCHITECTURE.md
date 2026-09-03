@@ -66,7 +66,7 @@ mindmap
       store-kv TURN_CACHE
     Advisor adapter
       apply-preferences
-      session sessionToConvId
+      session sessionToStateKey
       map-response
       map-visit-queue
       map-visit-itinerary
@@ -148,7 +148,7 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-  START(["runEngineTurn input"]) --> LOAD["store.load → ConversationState"]
+  START(["runEngineTurn input"]) --> LOAD["store.load → ThreadState"]
   LOAD --> BOOT["data.bootstrapContext returning buyer, transcript"]
   BOOT --> RTI{"turn-intent shouldRun?"}
 
@@ -384,7 +384,7 @@ src/
   engine/
     turn.ts                     Main loop
     facts.ts                    Regex + LLM signals
-    state.ts                    ConversationState, applyExtracted, commitTo
+    state.ts                    ThreadState, applyExtracted, commitTo
     compose.ts                  Prompt + fallbackReply
     grounding.ts                Verifier
     phases/                     Phase goal tables

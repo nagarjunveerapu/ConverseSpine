@@ -93,7 +93,7 @@ No store distinguishes *"the project has no price"* from *"the price fetch faile
 { ok: true, value: T } | { ok: false, reason: 'absent' | 'transport' }
 ```
 
-But ~15 methods use nullable contracts today (`projectDetail`, `pricing`, `compare`, `mediaShare`, `conversationContext`, `builder`, …). Migrating all of them is not a day's work, so the phase is tiered and **only 0a is required to close it**:
+But ~15 methods use nullable contracts today (`projectDetail`, `pricing`, `compare`, `mediaShare`, `threadContext`, `builder`, …). Migrating all of them is not a day's work, so the phase is tiered and **only 0a is required to close it**:
 
 | tier | scope | size |
 |---|---|---|
@@ -348,7 +348,7 @@ Discourse entities live in `discover.lastOffered`, `discover.discussedProjects`,
 
 Replace the scattered arrays with one store. Sketch, not final:
 
-`ConversationState` is persisted as JSON — `store-kv.ts:28` is `JSON.stringify(state)`. `Map`, `Set` and methods do **not** survive that:
+`ThreadState` is persisted as JSON — `store-kv.ts:28` is `JSON.stringify(state)`. `Map`, `Set` and methods do **not** survive that:
 
 ```
 JSON round-trip of { entities: Map, roles: Set }  →  {"entities":{},"roles":{}}
@@ -368,12 +368,12 @@ interface DiscourseEntityRecord {
   microMarket?: string;
 }
 
-// on ConversationState (durable, JSON-safe):
+// on ThreadState (durable, JSON-safe):
 //   entities: Record<string, DiscourseEntityRecord>;
 //   focusStack: string[];       // most recent first; depth > 1
 //
 // pure helper, not a method:
-function salience(state: ConversationState): DiscourseEntityRecord[];
+function salience(state: ThreadState): DiscourseEntityRecord[];
 ```
 
 A turn may build a `Map` in memory for convenience — never as the stored field. Same pattern `disclosedFacts` already uses.
@@ -635,7 +635,7 @@ An earlier draft claimed Lane B "mostly resolves inside Phases 1–3." It does n
 ### 14.1 Phase 1 durable shape — no `Map` / `Set` / methods on persisted state
 
 **Finding (P1):** The §4 sketch uses `Map<string, DiscourseEntity>`,
-`Set<EntityRole>`, and `salience()` as a method on state. `ConversationState`
+`Set<EntityRole>`, and `salience()` as a method on state. `ThreadState`
 (`src/engine/types.ts`) is JSON-shaped durable KV/ledger state today. Literal
 `Map`/`Set`/methods will not survive persistence cleanly.
 
@@ -653,12 +653,12 @@ interface DiscourseEntityRecord {
   microMarket?: string;
 }
 
-// On ConversationState (durable):
+// On ThreadState (durable):
 //   entities: Record<string, DiscourseEntityRecord>;
 //   focusStack: string[];  // most recent first
 
 /** Pure helper — not a method on persisted state. */
-function salience(state: ConversationState): DiscourseEntityRecord[];
+function salience(state: ThreadState): DiscourseEntityRecord[];
 ```
 
 Runtime may build a `Map` inside a turn for convenience; **never** as the stored
@@ -716,7 +716,7 @@ independence from Phase 1 for multi-topic answers.
 
 **Finding (P2):** §3 proposes `EngineData` methods return discriminated results
 instead of `T | null`. Many methods use nullable contracts today (`projectDetail`,
-`pricing`, `compare`, `mediaShare`, `conversationContext`, `builder`, …). Right
+`pricing`, `compare`, `mediaShare`, `threadContext`, `builder`, …). Right
 direction; “small, one day” only holds if scoped.
 
 **Recommendation — tier Phase 0 when folding §3:**

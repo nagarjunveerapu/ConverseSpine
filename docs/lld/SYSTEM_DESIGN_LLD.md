@@ -138,7 +138,7 @@ Single Cloudflare Worker, `main = src/index.ts`, `compatibility_date = 2026-05-0
 
 **Three stores, three lifetimes:**
 
-1. **KV (`TURN_CACHE`) — hot, machine-read.** (a) Per-conversation `ConversationState` (stage 2/9). (b) The rate-limit counter. (c) **The segment/area warm cache** — see below.
+1. **KV (`TURN_CACHE`) — hot, machine-read.** (a) Per-conversation `ThreadState` (stage 2/9). (b) The rate-limit counter. (c) **The segment/area warm cache** — see below.
 2. **Vectorize ×3 — corpus geometry.** Intent, project-name, education. Rebuilt by cron / the single intent writer; never written by a buyer turn.
 3. **Desk (D1 over the binding) — warm, human-read, the truth.** Catalog, project detail/FAQs, education, geography registry, CP graph, CRM dossier. CS *reads* at stage 6, *writes* at stage 10.
 
@@ -146,7 +146,7 @@ Single Cloudflare Worker, `main = src/index.ts`, `compatibility_date = 2026-05-0
 
 **Freshness contract (or the cache becomes a lie).** A stale card served confidently is a grounding violation that *looks* grounded. So: cache the **stable** fields warm (name, builder, area, property_type), and keep **price/inventory on a short leash** — short TTL or live fetch, with **push-invalidation on Desk publish** (event-driven, not periodic; §11). "Warm data, compose on tap" is only safe for the stable half.
 
-**Keep the state blob lean.** `ConversationState` holds *ids and pointers* (focus/shortlist project ids, the resolved segment, the requirement bundle) — never full project payloads. Detail comes from the shared segment cache by id, so the per-turn KV read/write stays small even as catalogs grow.
+**Keep the state blob lean.** `ThreadState` holds *ids and pointers* (focus/shortlist project ids, the resolved segment, the requirement bundle) — never full project payloads. Detail comes from the shared segment cache by id, so the per-turn KV read/write stays small even as catalogs grow.
 
 **Consistency note (→ §11).** The next turn reads KV; today KV is eventually consistent, which at scale reads as the bot "forgetting" the last turn. The scale answer is a per-conversation Durable Object.
 
@@ -254,8 +254,8 @@ The catalog is *not* small; the saving grace is that **each conversation is boun
 - **Ingestion is event-driven.** Thousands of churning projects break the weekly full rebuild; Desk publishes `project vN` → push-invalidate the segment card + re-embed *that* project's vectors.
 
 **Write side (conversations/telemetry) — the real explosion:**
-- **KV → per-conversation Durable Object.** Eventually-consistent KV reads as "the bot forgot the last turn" at scale. A `ConversationDO` (evolving the existing `TurnDebouncer`) gives strong consistency, serialized turns, and in-memory hot state.
-- **Telemetry offload seam (greenfield):** `turn_ledger` (unbounded, machine-read) → **Analytics Engine** (no 10 GB wall, ~20× cheaper writes); CRM (facts/transcript, bounded) → **D1 via a queue consumer**. The **queue is the seam**; batch (queue timeout or 5-min cron) — the agent reads the dossier later, not on the next turn. Consumers idempotent on `(convId, turn)`. Phase 1 is just `waitUntil` (same stores, ~1 s, no new infra).
+- **KV → per-conversation Durable Object.** Eventually-consistent KV reads as "the bot forgot the last turn" at scale. A `ThreadDO` (evolving the existing `TurnDebouncer`) gives strong consistency, serialized turns, and in-memory hot state.
+- **Telemetry offload seam (greenfield):** `turn_ledger` (unbounded, machine-read) → **Analytics Engine** (no 10 GB wall, ~20× cheaper writes); CRM (facts/transcript, bounded) → **D1 via a queue consumer**. The **queue is the seam**; batch (queue timeout or 5-min cron) — the agent reads the dossier later, not on the next turn. Consumers idempotent on `(threadId, turn)`. Phase 1 is just `waitUntil` (same stores, ~1 s, no new infra).
 
 **The LLM is the real ceiling** (cost + throughput + provider + residency): every fast-path turn is a DeepSeek call *saved*, so the perceived-latency work is also a **cost and throughput lever**. Needs backpressure + circuit-breaker (shed to template/warm when saturated), provider failover (`makeEngineLlm` already abstracts), and a call on Indian-PII residency before a million.
 
@@ -330,7 +330,7 @@ Sequenced to bank cheap/safe wins before the risky rewrite, and to build the qua
 4. **[quality]** Confidence-floor routing + composer shadow-compare + grounding-pass-rate SLO — before the compose rewrite.
 5. **[core, flagged]** Slot composer primary (`COMPOSE_SLOTS`), `goal_kind × property_type`, LLM leaf.
 6. **[SPA]** Chip fast path + streaming leaf.
-7. **[scale]** `ConversationDO` state; `TELEMETRY_OFFLOAD_LLD` (queue + Analytics Engine); event-driven ingestion; speculative segment prefetch.
+7. **[scale]** `ThreadDO` state; `TELEMETRY_OFFLOAD_LLD` (queue + Analytics Engine); event-driven ingestion; speculative segment prefetch.
 
 **Open questions:** (a) per-stage latency split (unmeasured); (b) how far compose-standardisation goes before the semantic decline-floor forces an LLM leaf; (c) the segment-cache freshness contract (TTL vs push-invalidate boundary for price/inventory); (d) the CP lead-attribution model; (e) LLM PII-residency decision.
 

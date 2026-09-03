@@ -55,10 +55,10 @@ The founder's non-negotiable: latency/scale work must not drop bot quality. So e
 ## Scalability
 
 ### Stage 4 — Materialize the `project_doc` / segment card
-**Change:** materialize the denormalized `{project, units, faqs, holdable}` that `conversation_context.ts` assembles today — as a KV segment card (and/or a D1 `json_set` column) — with **event-driven invalidation on catalog publish**.
+**Change:** materialize the denormalized `{project, units, faqs, holdable}` that `thread_context.ts` assembles today — as a KV segment card (and/or a D1 `json_set` column) — with **event-driven invalidation on catalog publish**.
 **Strict gates:**
 - G4.1 **Freshness = grounding (the strict one)** — on publish, the card refreshes/invalidates within a bounded window (assert publish→card-updated in a test). A **staleness canary** compares card vs live Desk truth for a sample; ANY mismatch on a **stable** field (name/builder/area/type) = fail. **Price/inventory fields carry a freshness stamp and fall back to live when older than TTL** — never served stale.
-- G4.2 **Projection faithfulness** — reply built from the card is byte-identical to the reply from live `conversation_context` on the same state (shadow-compare 100% on persona set).
+- G4.2 **Projection faithfulness** — reply built from the card is byte-identical to the reply from live `thread_context` on the same state (shadow-compare 100% on persona set).
 - G4.3 **Grounding** — M1 holds; zero cases of a card serving a value that differs from current Desk truth.
 - G4.4 **Perf** — focused-answer fetch has no live Desk round trip on cache hit; hit-rate ≥ target on a soak.
 

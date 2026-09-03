@@ -10,7 +10,7 @@
 
 ## Improvisation vs original plan (2026-07-25)
 
-Audit finding: much of the "dead" half is already on Desk's wire — `conversationContext` does `SELECT *` on `projects`, so investment + visit + `spec_json` already ship when focused. The bot adapter **drops** them. Market intel already has `GET /api/market-intel` (approved-only); it was never folded into `ProjectDetail`.
+Audit finding: much of the "dead" half is already on Desk's wire — `threadContext` does `SELECT *` on `projects`, so investment + visit + `spec_json` already ship when focused. The bot adapter **drops** them. Market intel already has `GET /api/market-intel` (approved-only); it was never folded into `ProjectDetail`.
 
 | Original A1 assumption | Reality / fix |
 |---|---|
@@ -42,7 +42,7 @@ Coverage audit: bot reaches ~20 of ~45 dimensions. Dead half = advisor different
 ## 3. Part A — Data exposure
 
 ### A1. Desk
-- `POST /api/conversation-context` → optional `market_intel` (approved + matched to `project.micro_market`, else `null`).
+- `POST /api/thread-context` → optional `market_intel` (approved + matched to `project.micro_market`, else `null`).
 - `GET /api/projects/:id` → same sibling key (fallback path).
 - Investment/visit/`spec_json` remain on `project` (no nested reshape required for Phase 1–2).
 
