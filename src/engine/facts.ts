@@ -6,7 +6,7 @@ import type { EngineLlm } from './ports.js';
 import { matchesCostTerm } from './cost-terms.js';
 import type { IngressSlotKey } from './ingress.js';
 import { hasTextOverride, isSlotWritable, stripTextOverride } from './ingress.js';
-import type { ConversationState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic, LocationCategoryKey } from './types.js';
+import type { ThreadState, Extracted, OfferedProject, AnswerTopic, ObjectionTopic, LocationCategoryKey } from './types.js';
 import { extractDayWord, isVisitDayUtterance } from './visit-slot.js';
 import { isAdvisorBriefChipPhrase } from './advisor-brief-chips.js';
 import { answerRequirements } from './answer-contract.js';
@@ -92,7 +92,7 @@ export function extractFactsChip(text: string): Extracted {
 
 export async function extractFacts(
   text: string,
-  s: ConversationState,
+  s: ThreadState,
   llm: EngineLlm,
   options?: ExtractFactsOptions,
 ): Promise<Extracted> {
@@ -327,7 +327,7 @@ export function isFirstHomeHelpText(text: string): boolean {
 /** Sync extraction for unit tests without LLM. */
 export function extractFactsSync(
   text: string,
-  s: ConversationState,
+  s: ThreadState,
   options?: ExtractFactsOptions,
 ): Extracted {
   if (options?.inputSource === 'chip') {
@@ -556,7 +556,7 @@ function offeredNameTokens(name: string): string[] {
   return tokens.length ? tokens : distinctive.length >= 3 ? [distinctive] : [];
 }
 
-function resolveNamed(text: string, s: ConversationState): OfferedProject[] {
+function resolveNamed(text: string, s: ThreadState): OfferedProject[] {
   // Discourse pool (entity store) — full catalog names still come from PROJECT_VECTORS.
   // Store membership includes discussed that fell off the legacy last-6 cap.
   const fromStore = discourseOffered(s);
@@ -781,7 +781,7 @@ function detectTransition(text: string): Extracted['transition'] | undefined {
   return undefined;
 }
 
-function detectShownName(_text: string, _s: ConversationState): string | undefined {
+function detectShownName(_text: string, _s: ThreadState): string | undefined {
   // Shown-name substring matching removed — project identity is PROJECT_VECTORS.
   return undefined;
 }
@@ -1253,13 +1253,13 @@ export function isDetailAskTurn(
 }
 
 export type ExtractLocationContext = {
-  phase?: ConversationState['phase'];
+  phase?: ThreadState['phase'];
   askTopics?: AnswerTopic[];
   /** Shortlist + focus names — "in Eldorado" is a project ref, not a locality. */
   projectNameHints?: readonly string[];
 };
 
-function projectNameHints(s: ConversationState): string[] {
+function projectNameHints(s: ThreadState): string[] {
   const names = currentShortlist(s).map((o) => o.name);
   for (const d of discussedList(s)) names.push(d.name);
   if (s.focus?.projectName) names.push(s.focus.projectName);
@@ -1267,7 +1267,7 @@ function projectNameHints(s: ConversationState): string[] {
 }
 
 function locationExtractCtx(
-  s: ConversationState,
+  s: ThreadState,
   askTopics: AnswerTopic[],
   text?: string,
 ): ExtractLocationContext {
@@ -1759,7 +1759,7 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   return undefined;
 }
 
-function detectDetailsPick(text: string, s: ConversationState): string | undefined {
+function detectDetailsPick(text: string, s: ThreadState): string | undefined {
   const m =
     /\b(?:details on|tell me about|more about|info on|show me details on|want full details on|full details on|give me (?:more )?details on|more details on)\s+([A-Za-z][A-Za-z0-9\s'-]{2,28}?)(?:\?|\.|!|$|\s+(?:please|project))/i.exec(
       text,

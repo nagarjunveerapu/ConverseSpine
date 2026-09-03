@@ -22,12 +22,12 @@ import { extractFactsSync } from '../src/engine/facts.js';
 import { runEngineTurn } from '../src/engine/turn.js';
 import { initState } from '../src/engine/state.js';
 import { fakeDeps } from './fakes.js';
-import type { ConversationState, Extracted } from '../src/engine/types.js';
+import type { ThreadState, Extracted } from '../src/engine/types.js';
 
 const ex = (o: Partial<Extracted> = {}): Extracted => ({ constraints: {}, ...o }) as Extracted;
 
 /** A buyer who has said nothing yet, on the turn after the greeting. */
-function cold(over: Partial<ConversationState> = {}): ConversationState {
+function cold(over: Partial<ThreadState> = {}): ThreadState {
   const base = initState('c1', 'naya-advisor');
   return { ...base, turnCount: 1, ...over };
 }
@@ -57,9 +57,9 @@ describe('F1 · a greeting is a knock, not noise', () => {
   // has to survive the whole path, not just the phase that ends up agreeing.
   it('a whole turn greets a knock and still refuses smash', async () => {
     const deps = fakeDeps();
-    const say = (convId: string, text: string) =>
+    const say = (threadId: string, text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900001001', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900001001', channel: 'advisor_web' },
         deps,
       );
     const knock = await say('f1-knock', 'hi');
@@ -137,10 +137,10 @@ describe('F4 · a first objection with nothing on the board is a misread turn', 
   // from dev, replaying the turn that produced it.
   it('a budget answer does not end the conversation', async () => {
     const deps = fakeDeps();
-    const convId = 'f4-early-objection';
+    const threadId = 'f4-early-objection';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900004001', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900004001', channel: 'advisor_web' },
         deps,
       );
     await say('hi');
@@ -151,10 +151,10 @@ describe('F4 · a first objection with nothing on the board is a misread turn', 
 
   it('a real objection with a board is still handled as one', async () => {
     const deps = fakeDeps();
-    const convId = 'f4-real-objection';
+    const threadId = 'f4-real-objection';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900004002', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900004002', channel: 'advisor_web' },
         deps,
       );
     await say('hi');
@@ -198,10 +198,10 @@ describe('F5 · a widened area is declared, never listed as a fit', () => {
         },
       },
     } as typeof base;
-    const convId = 'f5-silent-widen';
+    const threadId = 'f5-silent-widen';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900005001', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900005001', channel: 'advisor_web' },
         deps,
       );
     await say('hi');
@@ -211,10 +211,10 @@ describe('F5 · a widened area is declared, never listed as a fit', () => {
 
   it('stays quiet when every card really is in the asked area', async () => {
     const deps = fakeDeps();
-    const convId = 'f5-exact-area';
+    const threadId = 'f5-exact-area';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900005002', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900005002', channel: 'advisor_web' },
         deps,
       );
     await say('hi');

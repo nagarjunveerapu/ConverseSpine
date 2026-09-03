@@ -1,12 +1,12 @@
 import { currentShortlist, discussedList, focusedRef } from '../entity-store.js';
 import { detectTopics } from '../facts.js';
-import type { ConversationState, Extracted, TurnGoal } from '../types.js';
+import type { ThreadState, Extracted, TurnGoal } from '../types.js';
 import { BARE_BHK_CONFIG_RE, catalogAskOwns } from '../turn-routing/intent-authority.js';
 import { decide as focusedDecide } from './focused.js';
 
 /** Pin for catalog escape when sticky handoff lost focus after advisor book. */
 function catalogPin(
-  s: ConversationState,
+  s: ThreadState,
 ): { projectId: string; projectName: string } | undefined {
   const focus = focusedRef(s);
   if (focus) return focus;
@@ -27,7 +27,7 @@ function catalogPin(
  * Escape: focus still set + clear catalog ask → re-enter focused answer.
  * True human/stop asks stay handoff (no catalog ownership).
  */
-export function decide(s: ConversationState, ex: Extracted, text = ''): TurnGoal {
+export function decide(s: ThreadState, ex: Extracted, text = ''): TurnGoal {
   if (ex.recallConstraints) return { kind: 'recall_constraints' };
   if (ex.recall) return { kind: 'visit_recall' };
   if (ex.postVisitAck || (ex.affirm && !ex.askTopic && !ex.isQuestion) || ex.smalltalk) {

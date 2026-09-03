@@ -1,10 +1,10 @@
 /**
  * P2b — map NayaDesk turn_ledger `/context`.prior → TurnFeedForward,
- * then gap-fill ConversationState (never overwrite live KV).
+ * then gap-fill ThreadState (never overwrite live KV).
  */
 import { excerptReply } from './turn-intent/pending-prompt.js';
 import type { PendingPrompt } from './turn-intent/types.js';
-import type { ConversationState, FocusState, Phase } from './types.js';
+import type { ThreadState, FocusState, Phase } from './types.js';
 
 export interface LedgerPriorRow {
   turn_index: number;
@@ -123,9 +123,9 @@ export function mapLedgerPrior(prior: LedgerPriorRow | null | undefined): TurnFe
  * Restores RTI pending + reply excerpt + last goal when missing after cold start.
  */
 export function hydrateStateFromFeedForward(
-  state: ConversationState,
+  state: ThreadState,
   ff: TurnFeedForward | null | undefined,
-): ConversationState {
+): ThreadState {
   if (!ff) return state;
 
   let next = state;

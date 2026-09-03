@@ -150,7 +150,7 @@ import {
   recordDiscussed,
   recordOffered,
   releaseToDiscover,
-  withNdConversation,
+  withNdThread,
 } from './state.js';
 import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply, waBookFirstGreet } from './compose.js';
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
@@ -208,7 +208,7 @@ import { constraintsSnapshot } from './recovery-planner.js';
 import type {
   CatalogEnvelope,
   ComposeRequest,
-  ConversationState,
+  ThreadState,
   EvidenceSet,
   Extracted,
   LocationCategoryKey,
@@ -224,7 +224,7 @@ import type {
 import type { DataResult, EngineDeps, UnitConfig } from './ports.js';
 
 export interface EngineTurnInput {
-  convId: string;
+  threadId: string;
   builderId: string;
   text: string;
   buyerPhone: string;
@@ -254,7 +254,7 @@ export interface EngineTurnInput {
 
 export interface EngineTurnOutput {
   reply: string;
-  state: ConversationState;
+  state: ThreadState;
   debug: TurnDebug;
   compareMatrix?: import('./types.js').CompareMatrixPayload;
   searchRecovery?: SearchRecoveryEnvelope;
@@ -294,15 +294,15 @@ export interface EngineTurnOutput {
  * mapper reads `result.state` to build the HTTP response, so whatever is left
  * on it goes back over the wire on the very turn we said everything was
  * deleted. It has to be empty of the person: no focus, no shortlist, no brief,
- * and no `ndConversationId`/`ndBuyerPhone` pointing back at Desk.
+ * and no `ndThreadId`/`ndBuyerPhone` pointing back at Desk.
  *
  * `initState`, not `freshSession` — freshSession deliberately keeps the Desk
  * conversation id and the buyer's phone so an ordinary restart stays attached
  * to the same lead. That is right for "start over" and wrong for this.
  */
-function erasedState(prev: ConversationState): ConversationState {
+function erasedState(prev: ThreadState): ThreadState {
   return {
-    ...initState(prev.convId, prev.builderId),
+    ...initState(prev.threadId, prev.builderId),
     phase: 'handoff',
     turnCount: prev.turnCount + 1,
   };
@@ -352,9 +352,9 @@ export async function runEngineTurn(
       // Written down as well as sent, for the same reason the consent line is:
       // an outbound the transcript has no record of is not something we can
       // later say we said.
-      if (state.ndConversationId) {
+      if (state.ndThreadId) {
         await deps.crm
-          .appendMessage(state.ndConversationId, 'outbound', welcome, { replyKey: 'welcome' })
+          .appendMessage(state.ndThreadId, 'outbound', welcome, { replyKey: 'welcome' })
           .catch(() => {});
       }
       out = { ...out, state, welcome };
@@ -377,9 +377,9 @@ export async function runEngineTurn(
   // Written down as well as sent. "We told them" is the consent evidence, and
   // evidence that exists only in a message we hoped got delivered is not
   // evidence.
-  if (state.ndConversationId) {
+  if (state.ndThreadId) {
     await deps.crm
-      .appendMessage(state.ndConversationId, 'outbound', CONSENT_NOTICE, {
+      .appendMessage(state.ndThreadId, 'outbound', CONSENT_NOTICE, {
         replyKey: 'consent_notice',
       })
       .catch(() => {});
@@ -408,7 +408,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     },
   };
   let state = hydrateLegacyDiscourse(
-    (await deps.store.load(input.convId)) ?? initState(input.convId, input.builderId),
+    (await deps.store.load(input.threadId)) ?? initState(input.threadId, input.builderId),
   );
   // Snapshot BEFORE anything in this turn can consume it: several lanes clear
   // pendingPrompt on their way through, so reading it at write time cannot tell
@@ -448,7 +448,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   const canonicalTap = waCanonicalUtterance(input.action_id);
   const trimmedText = canonicalTap ?? input.text.trim();
   if (isSessionResetText(trimmedText) && !input.action_id) {
-    const keptNd = state.ndConversationId;
+    const keptNd = state.ndThreadId;
     const keptPhone = state.ndBuyerPhone ?? input.buyerPhone;
     // "Starting fresh" was only ever fresh on this side: the visits live in
     // Desk, so an old booking kept clashing with the new walk two resets later.
@@ -458,7 +458,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       await deps.data.cancelSiteVisits(keptNd).catch(() => 0);
     }
     state = freshSession(state);
-    if (keptNd) state = withNdConversation(state, keptNd, keptPhone);
+    if (keptNd) state = withNdThread(state, keptNd, keptPhone);
     const channel: TurnIntentChannel = input.channel ?? 'whatsapp';
     const skipBrief = deps.waProjectFirst === true && channel === 'whatsapp';
     const catalog = await deps.data.catalog(state.builderId).catch(() => null);
@@ -511,13 +511,13 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     };
   }
 
-  if (!state.ndConversationId) {
+  if (!state.ndThreadId) {
     const crmT0 = deps.clock.nowMs();
     const lead = await deps.crm.ensureLead(input.builderId, input.buyerPhone).catch(() => null);
     crmPreMs += deps.clock.nowMs() - crmT0;
-    if (lead) state = withNdConversation(state, lead.conversationId, input.buyerPhone);
+    if (lead) state = withNdThread(state, lead.threadId, input.buyerPhone);
   }
-  const nd = state.ndConversationId ?? '';
+  const nd = state.ndThreadId ?? '';
 
   // Which of the buyer's own fields came from Desk rather than this session.
   // Carried to debug so "the bot knew my budget" is a checkable claim about a
@@ -528,8 +528,8 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   //
   // The condition used to be `turnCount === 0`, described as "only on cold
   // conversations (first turn)". The session is what turns cold; the buyer is
-  // not. `handleChat` resolves this `convId` from Desk's `upsertLead`, Desk's
-  // `conversations` row is `UNIQUE(builder_id, buyer_phone)`, and the same id
+  // not. `handleChat` resolves this `threadId` from Desk's `upsertLead`, Desk's
+  // `threads` row is unique per (builder, buyer, channel), and the same id
   // keys the Durable Object — so a person gets exactly one turn 0, ever, and
   // every fact Desk recorded after it went into a row nobody would read again.
   // That is the whole reason a buyer who filled the registration form got a
@@ -590,16 +590,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     state = { ...state, turnCount: state.turnCount + 1 };
     await deps.store.save(state);
     await deps.crm
-      .appendMessage(nd || input.convId, 'inbound', input.text)
+      .appendMessage(nd || input.threadId, 'inbound', input.text)
       .catch(() => {});
     await deps.crm
-      .appendMessage(nd || input.convId, 'outbound', reply, {
+      .appendMessage(nd || input.threadId, 'outbound', reply, {
         replyKey: `failure:${input.ingressFailure.subject}`,
       })
       .catch(() => {});
     await appendEarlyFailureLedger({
       deps,
-      nd: nd || input.convId,
+      nd: nd || input.threadId,
       input,
       state,
       ex: { constraints: {} },
@@ -706,8 +706,8 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         };
         state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
         await deps.store.save(state);
-        await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
-        await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'type_floor' }).catch(() => {});
+        await deps.crm.appendMessage(nd || input.threadId, 'inbound', input.text).catch(() => {});
+        await deps.crm.appendMessage(nd || input.threadId, 'outbound', reply, { replyKey: 'type_floor' }).catch(() => {});
         return {
           reply,
           state,
@@ -973,8 +973,8 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       };
       state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
       await deps.store.save(state);
-      await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
-      await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'rti_probe' }).catch(() => {});
+      await deps.crm.appendMessage(nd || input.threadId, 'inbound', input.text).catch(() => {});
+      await deps.crm.appendMessage(nd || input.threadId, 'outbound', reply, { replyKey: 'rti_probe' }).catch(() => {});
       const uiMode: AdvisorUiMode =
         searchRecovery.mode === 'preference_refine' ? 'preference_refine' : 'search_recovery';
       return {
@@ -1519,16 +1519,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
             }
             await deps.store.save(state);
             await deps.crm
-              .appendMessage(nd || input.convId, 'inbound', input.text)
+              .appendMessage(nd || input.threadId, 'inbound', input.text)
               .catch(() => {});
             await deps.crm
-              .appendMessage(nd || input.convId, 'outbound', reply, {
+              .appendMessage(nd || input.threadId, 'outbound', reply, {
                 replyKey: 'failure:outside_served',
               })
               .catch(() => {});
             await appendEarlyFailureLedger({
               deps,
-              nd: nd || input.convId,
+              nd: nd || input.threadId,
               input,
               state,
               ex,
@@ -1612,16 +1612,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
           }
           await deps.store.save(state);
           await deps.crm
-            .appendMessage(nd || input.convId, 'inbound', input.text)
+            .appendMessage(nd || input.threadId, 'inbound', input.text)
             .catch(() => {});
           await deps.crm
-            .appendMessage(nd || input.convId, 'outbound', reply, {
+            .appendMessage(nd || input.threadId, 'outbound', reply, {
               replyKey: 'failure:outside_served',
             })
             .catch(() => {});
           await appendEarlyFailureLedger({
             deps,
-            nd: nd || input.convId,
+            nd: nd || input.threadId,
             input,
             state,
             ex,
@@ -1726,7 +1726,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // left untouched so the post-brief first turn behaves exactly as today.
   if (input.briefExtract) {
     await deps.store.save(state);
-    await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+    await deps.crm.appendMessage(nd || input.threadId, 'inbound', input.text).catch(() => {});
     return {
       reply: '',
       state,
@@ -1946,7 +1946,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         await deps.data
           .enqueueEducationMiss({
             buyerText: input.text,
-            conversationId: nd || input.convId,
+            threadId: nd || input.threadId,
             suggestedTopic: unsupportedFailure.subject,
             source: 'education_miss',
           })
@@ -1985,16 +1985,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     ));
     await deps.store.save(state);
     await deps.crm
-      .appendMessage(nd || input.convId, 'inbound', input.text)
+      .appendMessage(nd || input.threadId, 'inbound', input.text)
       .catch(() => {});
     await deps.crm
-      .appendMessage(nd || input.convId, 'outbound', reply, {
+      .appendMessage(nd || input.threadId, 'outbound', reply, {
         replyKey,
       })
       .catch(() => {});
     await appendEarlyFailureLedger({
       deps,
-      nd: nd || input.convId,
+      nd: nd || input.threadId,
       input,
       state,
       ex,
@@ -2052,9 +2052,9 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       // and the same "removed your details" sentence as the branch below.
       // Both doors now run the same erasure.
       const run = await performErasure(deps, {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
-        ndConversationId: nd,
+        ndThreadId: nd,
         buyerPhone: state.ndBuyerPhone ?? input.buyerPhone ?? '',
         scope: 'all',
       });
@@ -2078,9 +2078,9 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         "Understood — I'll keep your property search and continue in this chat. I haven't deleted your details.";
       state = { ...state, turnCount: state.turnCount + 1 };
       await deps.store.save(state);
-      await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+      await deps.crm.appendMessage(nd || input.threadId, 'inbound', input.text).catch(() => {});
       await deps.crm
-        .appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'stop_scope_keep' })
+        .appendMessage(nd || input.threadId, 'outbound', reply, { replyKey: 'stop_scope_keep' })
         .catch(() => {});
       return {
         reply,
@@ -2106,13 +2106,13 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         turnCount: state.turnCount + 1,
       };
       await deps.store.save(state);
-      await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
+      await deps.crm.appendMessage(nd || input.threadId, 'inbound', input.text).catch(() => {});
       await deps.crm
-        .appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'stop_scope' })
+        .appendMessage(nd || input.threadId, 'outbound', reply, { replyKey: 'stop_scope' })
         .catch(() => {});
       await appendEarlyFailureLedger({
         deps,
-        nd: nd || input.convId,
+        nd: nd || input.threadId,
         input,
         state,
         ex,
@@ -2181,16 +2181,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       // in advance.
       const buyerPhone = state.ndBuyerPhone ?? input.buyerPhone ?? '';
       const run = await performErasure(deps, {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
-        ndConversationId: nd,
+        ndThreadId: nd,
         buyerPhone,
         scope,
       });
-      // `freshSession` + `withNdConversation` used to stand here. Both were
+      // `freshSession` + `withNdThread` used to stand here. Both were
       // wrong once the state is really gone: the first WRITES a blank state
       // over the record rather than removing it, and — read it — `freshSession`
-      // itself carries `ndConversationId` and `ndBuyerPhone` forward, so the
+      // itself carries `ndThreadId` and `ndBuyerPhone` forward, so the
       // Desk pointer and the phone number survived the erasure inside the very
       // helper meant to clear them. `optedOut` went with them; nothing ever
       // read it, and a flag on a state we no longer keep cannot silence
@@ -2657,7 +2657,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     const res = nd
       ? await deps.data
           .placeHold(
-            { ndConversationId: nd, builderId: state.builderId },
+            { ndThreadId: nd, builderId: state.builderId },
             {
               projectId: goal.projectId,
               unitType: goal.unitType,
@@ -2742,7 +2742,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   }
   evidenceMs = deps.clock.nowMs() - evidenceT0;
   // C9 resilience — a focused answer whose live Desk fetch flaked (a transient
-  // conversationContext + getProject miss returns null detail) must NOT
+  // threadContext + getProject miss returns null detail) must NOT
   // false-decline facts the project HAS ("I don't have price on file" when it
   // does). Fall back to the full detail we already prefetched into projectCache,
   // so the buyer gets the real answer. A no_data decline stays honest only when
@@ -3528,7 +3528,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   if (goal.kind === 'visit_booked' && nd && goal.iso) {
     await deps.data
       .recordVisit(
-        { ndConversationId: nd, buyerPhone: state.ndBuyerPhone ?? input.buyerPhone, builderId: state.builderId },
+        { ndThreadId: nd, buyerPhone: state.ndBuyerPhone ?? input.buyerPhone, builderId: state.builderId },
         {
           projectId: goal.projectId,
           projectName: goal.projectName,
@@ -3557,18 +3557,18 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // Desk capture (transcript + facts) must land before the HTTP response returns —
   // waitUntil tails were not completing reliably on dev, leaving CRM empty while
   // the buyer saw a reply. Telemetry / catalog watching stay deferred (~1s).
-  const convIdForCrm = nd || input.convId;
+  const threadIdForCrm = nd || input.threadId;
   await (async () => {
-    await deps.crm.appendMessage(convIdForCrm, 'inbound', input.text).catch(() => {});
-    await deps.crm.appendMessage(convIdForCrm, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
+    await deps.crm.appendMessage(threadIdForCrm, 'inbound', input.text).catch(() => {});
+    await deps.crm.appendMessage(threadIdForCrm, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
     await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
-    await syncProfileObservations(deps, convIdForCrm, input, goal, state).catch(() => {});
+    await syncProfileObservations(deps, threadIdForCrm, input, goal, state).catch(() => {});
   })();
 
   const telemetryTail = (async () => {
     await deps.store
       .logTurn({
-        convId: state.convId,
+        threadId: state.threadId,
         turnIndex: state.turnCount,
         buyerText: input.text,
         reply,
@@ -3602,7 +3602,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       crm: deps.crm,
       builderId: state.builderId,
       projectId: state.focus?.projectId ?? '',
-      conversationId: convIdForCrm,
+      ndThreadId: threadIdForCrm,
       buyerText: trimmedText || input.text,
       reply,
       routingBind: (routing?.bind ?? extractProvenance?.routing_bind ?? null) as {
@@ -3824,7 +3824,7 @@ async function reportCatalogWatchFromTurn(args: {
   crm: EngineDeps['crm'];
   builderId: string;
   projectId: string;
-  conversationId: string;
+  ndThreadId: string;
   buyerText: string;
   reply: string;
   routingBind: { top_kind?: string; facet?: string; bind_source?: string } | null;
@@ -3852,7 +3852,7 @@ async function reportCatalogWatchFromTurn(args: {
   await args.crm.reportCatalogWatchAsk({
     builderId: args.builderId,
     projectId: args.projectId,
-    conversationId: args.conversationId,
+    threadId: args.ndThreadId,
     phrase: args.buyerText.slice(0, 500),
     answerOk,
     truthPresent,
@@ -3891,12 +3891,12 @@ export function replyFingerprint(reply: string): string {
 }
 
 /** Times this exact line has already been sent in the recent window. */
-function timesAlreadySent(reply: string, s: ConversationState): number {
+function timesAlreadySent(reply: string, s: ThreadState): number {
   const fp = replyFingerprint(reply);
   return (s.recentReplies ?? []).filter((x) => x === fp).length;
 }
 
-function rememberReply(s: ConversationState, reply: string): string[] {
+function rememberReply(s: ThreadState, reply: string): string[] {
   return [replyFingerprint(reply), ...(s.recentReplies ?? [])].slice(0, REPEAT_WINDOW);
 }
 
@@ -3910,9 +3910,9 @@ function rememberReply(s: ConversationState, reply: string): string[] {
  * guard noticing, because those turns never wrote `lastReply` at all.
  */
 function guardOutbound(
-  s: ConversationState,
+  s: ThreadState,
   reply: string,
-): { reply: string; state: ConversationState } {
+): { reply: string; state: ThreadState } {
   const out =
     /\?$/.test(reply.trim()) && timesAlreadySent(reply, s) >= 2 ? breakRepeatLoop() : reply;
   return { reply: out, state: { ...s, lastReply: out, recentReplies: rememberReply(s, out) } };
@@ -3975,7 +3975,7 @@ function holdExpiryLabel(expiresAtMs: number): string {
  * moves up, and lateral states (escalated etc.) are Desk-side protected.
  */
 function decideStageRung(
-  s: ConversationState,
+  s: ThreadState,
   goal: TurnGoal,
 ): 'engaged' | 'qualified' | null {
   if (!s.focus) return null;
@@ -3988,7 +3988,7 @@ function decideStageRung(
 }
 
 function decideGoal(
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   visitCtx: visit.VisitCtx | null,
   text = '',
@@ -4035,7 +4035,7 @@ function decideGoal(
 }
 
 async function decideGoalAsync(
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   visitCtx: visit.VisitCtx | null,
   deps: EngineDeps,
@@ -4121,7 +4121,7 @@ async function decideGoalAsync(
 
 async function fetchRecommend(
   base: TurnGoal,
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   deps: EngineDeps,
   buyerText: string,
@@ -4139,11 +4139,12 @@ async function fetchRecommend(
   let filters = discover.searchFilters(s.constraints);
   // Trade-off Advisor: only the recommend path carries preference inputs.
   // Explicit in-state weights (chip answer this session) win Desk-side;
-  // conversation_id lets the Desk fall back to stored BPE facts for a
-  // returning buyer whose KV state expired. Catalog/facet/recovery-count
+  // the resolved lead id lets the Desk fall back to stored BPE facts for a
+  // returning buyer whose KV state expired (the adapter resolves thread→lead;
+  // with no lead the call still runs, unranked). Catalog/facet/recovery-count
   // calls never set either (meaningless there). Advisor-web only — WA must
   // not re-rank on soft NL heuristics.
-  if (s.ndConversationId) filters = { ...filters, conversationId: s.ndConversationId };
+  if (s.ndThreadId) filters = { ...filters, ndThreadId: s.ndThreadId };
   // Soft-rank: full prefs on advisor-web; WA only when the buyer explicitly
   // weighs value/investment (CRM Phase 4) — never re-rank WA on soft NL heuristics.
   const prefs = advisorSearchPrefs(s.constraints);
@@ -4781,7 +4782,7 @@ function rawToMatches(
 /** Soft nearby CTA when the exact board is thin (1 card) and type+area are set. */
 async function maybeNearbyOfferEvidence(input: {
   listed: Match[];
-  s: ConversationState;
+  s: ThreadState;
   filters: import('./types.js').SearchFilters;
   deps: EngineDeps;
   excludeIds: Set<string>;
@@ -4885,7 +4886,7 @@ async function broadenInitialShortlist(
 
 async function fetchObjection(
   goal: Extract<TurnGoal, { kind: 'objection' }>,
-  s: ConversationState,
+  s: ThreadState,
   deps: EngineDeps,
   nd: string,
 ): Promise<{ goal: TurnGoal; evidence: EvidenceSet }> {
@@ -4966,7 +4967,7 @@ async function fetchObjection(
  * number was ours. Recompute on it, and stamp where it came from, because a
  * figure carried forward silently is a figure the buyer cannot correct.
  */
-function recalledEmiBasis(s: ConversationState):
+function recalledEmiBasis(s: ThreadState):
   | {
       input: { principalInr: number } | { projectPriceInr: number };
       source: NonNullable<import('./types.js').EmiEvidence['basisSource']>;
@@ -4989,7 +4990,7 @@ function recalledEmiBasis(s: ConversationState):
   return undefined;
 }
 
-function fetchEmiCalculation(ex: Extracted, s: ConversationState): EvidenceSet {
+function fetchEmiCalculation(ex: Extracted, s: ThreadState): EvidenceSet {
   const recalled = ex.emiPrincipalInr === undefined ? recalledEmiBasis(s) : undefined;
   const outcome = computeEmi({
     ...(ex.emiPrincipalInr !== undefined
@@ -5019,7 +5020,7 @@ const SHORTLIST_MATRIX_ROWS: Partial<Record<import('./types.js').AnswerTopic, re
 
 async function fetchShortlistAnswer(
   goal: Extract<TurnGoal, { kind: 'shortlist_answer' }>,
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   deps: EngineDeps,
   nd: string,
@@ -5195,7 +5196,7 @@ function failureAlternatives(
 
 async function gatherPriceEvidencePatch(args: {
   deps: EngineDeps;
-  s: ConversationState;
+  s: ThreadState;
   nd: string;
   projectId: string;
   unitType: string | undefined;
@@ -5286,7 +5287,7 @@ async function gatherPriceEvidencePatch(args: {
 
 async function gatherEmiEvidencePatch(args: {
   deps: EngineDeps;
-  s: ConversationState;
+  s: ThreadState;
   nd: string;
   projectId: string;
   unitType: string | undefined;
@@ -5325,7 +5326,7 @@ async function gatherEmiEvidencePatch(args: {
 
 async function gatherMediaEvidencePatch(args: {
   deps: EngineDeps;
-  s: ConversationState;
+  s: ThreadState;
   nd: string;
   projectId: string;
   unitType: string | undefined;
@@ -5402,7 +5403,7 @@ async function gatherMediaEvidencePatch(args: {
 
 async function gatherAvailabilityEvidencePatch(args: {
   deps: EngineDeps;
-  s: ConversationState;
+  s: ThreadState;
   nd: string;
   projectId: string;
   focusName: string;
@@ -5481,7 +5482,7 @@ async function gatherAvailabilityEvidencePatch(args: {
 
 async function gatherFaqEvidencePatch(args: {
   deps: EngineDeps;
-  s: ConversationState;
+  s: ThreadState;
   projectId: string;
   focusName: string;
   buyerText?: string;
@@ -5542,7 +5543,7 @@ async function gatherFaqEvidencePatch(args: {
 
 async function fetchAnswer(
   goal: Extract<TurnGoal, { kind: 'answer' }>,
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   deps: EngineDeps,
   nd: string,
@@ -6018,7 +6019,7 @@ function buildLocationEvidence(
 }
 
 async function fetchVisitRecall(
-  s: ConversationState,
+  s: ThreadState,
   deps: EngineDeps,
   nd: string,
 ): Promise<EvidenceSet> {
@@ -6073,7 +6074,7 @@ async function enrichDetailLegal(
   detail: ProjectDetail,
 ): Promise<ProjectDetail> {
   if (detail.reraNumber?.trim() && detail.phases?.length) return detail;
-  const ctx = await deps.data.conversationContext(nd).catch(() => null);
+  const ctx = await deps.data.threadContext(nd).catch(() => null);
   // Context is Desk-focus-scoped — never overlay another project's RERA/phases.
   if (!ctx?.project?.project_id || ctx.project.project_id !== detail.projectId) {
     return detail;
@@ -6101,7 +6102,7 @@ async function enrichDetailLegal(
   return next;
 }
 
-async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineDeps): Promise<EvidenceSet> {
+async function fetchEvidence(goal: TurnGoal, s: ThreadState, deps: EngineDeps): Promise<EvidenceSet> {
   if (goal.kind === 'clarify_project_pick') {
     const matches = matchesFromLastOffered(s).slice(0, 3);
     return { tools: ['lastOffered'], matches };
@@ -6136,7 +6137,7 @@ async function fetchEvidence(goal: TurnGoal, s: ConversationState, deps: EngineD
   return { tools: [] };
 }
 
-function compareIds(s: ConversationState): string[] {
+function compareIds(s: ThreadState): string[] {
   const discussed = discussedList(s);
   if (discussed.length >= 2) return discussed.map((p) => p.projectId).slice(0, 3);
   const ids = currentShortlist(s).map((o) => o.projectId);
@@ -6144,7 +6145,7 @@ function compareIds(s: ConversationState): string[] {
   return ids.slice(0, 3);
 }
 
-function applyGoalToState(s: ConversationState, goal: TurnGoal, ev: EvidenceSet): ConversationState {
+function applyGoalToState(s: ThreadState, goal: TurnGoal, ev: EvidenceSet): ThreadState {
   switch (goal.kind) {
     case 'commit':
       return commitTo(s, goal.projectId, goal.projectName);
@@ -6279,7 +6280,7 @@ async function syncFacts(
   nd: string,
   ex: Extracted,
   goal: TurnGoal,
-  s: ConversationState,
+  s: ThreadState,
   ev: EvidenceSet,
   buyerText: string,
 ): Promise<void> {
@@ -6350,7 +6351,7 @@ async function syncProfileObservations(
   nd: string,
   input: EngineTurnInput,
   goal: TurnGoal,
-  state: ConversationState,
+  state: ThreadState,
 ): Promise<void> {
   if (!nd) return;
   const buyerPhone = state.ndBuyerPhone ?? input.buyerPhone;
@@ -6429,7 +6430,7 @@ async function appendEarlyFailureLedger(input: {
   deps: EngineDeps;
   nd: string;
   input: EngineTurnInput;
-  state: ConversationState;
+  state: ThreadState;
   ex: Extracted;
   extractProvenance: ExtractProvenance | undefined;
   inputSource: TurnInputSource;
@@ -6465,7 +6466,7 @@ async function appendEarlyFailureLedger(input: {
 
   await deps.crm
     .appendTurnLedger({
-      conversationId: nd,
+      threadId: nd,
       turnIndex: state.turnCount,
       builderId: state.builderId,
       buyerPhone: state.ndBuyerPhone ?? turnInput.buyerPhone,
@@ -6512,7 +6513,7 @@ async function syncTelemetry(
   input: EngineTurnInput,
   goal: TurnGoal,
   evidence: EvidenceSet,
-  state: ConversationState,
+  state: ThreadState,
   reply: string,
   opts?: {
     ex?: Extracted;
@@ -6545,7 +6546,7 @@ async function syncTelemetry(
   // signals (dossier: Bot strategy present, Buyer profile + Journey empty).
   await deps.crm
     .appendTurnLedger({
-      conversationId: nd,
+      threadId: nd,
       turnIndex: state.turnCount,
       builderId: state.builderId,
       buyerPhone,
@@ -6587,7 +6588,7 @@ async function syncTelemetry(
     await deps.crm
       .enqueueIntentReview({
         builderId: state.builderId,
-        conversationId: nd,
+        threadId: nd,
         buyerPhone: buyerPhone || 'unknown',
         turnIndex: state.turnCount,
         buyerText: input.text.slice(0, 2000),
@@ -6651,7 +6652,7 @@ function emptyCatalog(): CatalogEnvelope {
 export type { AdvisorUiMode } from './recovery-planner.js';
 
 function deriveAdvisorUiMode(
-  state: import('./types.js').ConversationState,
+  state: import('./types.js').ThreadState,
   goal: import('./types.js').TurnGoal,
   evidence: import('./types.js').EvidenceSet,
   ex: import('./types.js').Extracted,
@@ -6681,7 +6682,7 @@ function deriveAdvisorUiMode(
 }
 
 async function completeRtiFocusCommit(
-  state: ConversationState,
+  state: ThreadState,
   focus: { projectId: string; projectName: string },
   input: EngineTurnInput,
   deps: EngineDeps,
@@ -6733,7 +6734,7 @@ async function completeRtiFocusCommit(
 
   await deps.store.save(s);
   await deps.store.logTurn({
-    convId: s.convId,
+    threadId: s.threadId,
     turnIndex: s.turnCount,
     buyerText,
     reply,
@@ -6741,8 +6742,8 @@ async function completeRtiFocusCommit(
     goal: 'commit',
     grounding: 'pass',
   });
-  await deps.crm.appendMessage(nd || input.convId, 'inbound', input.text).catch(() => {});
-  await deps.crm.appendMessage(nd || input.convId, 'outbound', reply, { replyKey: 'rti_confirm' }).catch(() => {});
+  await deps.crm.appendMessage(nd || input.threadId, 'inbound', input.text).catch(() => {});
+  await deps.crm.appendMessage(nd || input.threadId, 'outbound', reply, { replyKey: 'rti_confirm' }).catch(() => {});
 
   return {
     reply,
@@ -6762,7 +6763,7 @@ function recoveryHintFromEvidence(ev: EvidenceSet): RecoveryHint {
   return 'general';
 }
 
-function recoveryHintFromState(state: ConversationState): RecoveryHint {
+function recoveryHintFromState(state: ThreadState): RecoveryHint {
   const k = state.rti?.lastEvidenceKind;
   if (k === 'property_type_gap') return 'property_type';
   if (k === 'budget_gap') return 'budget';
@@ -6772,7 +6773,7 @@ function recoveryHintFromState(state: ConversationState): RecoveryHint {
 
 async function freshSearchRecovery(
   deps: EngineDeps,
-  state: ConversationState,
+  state: ThreadState,
   channel: TurnIntentChannel,
   hint?: RecoveryHint,
 ): Promise<SearchRecoveryEnvelope> {
@@ -6788,7 +6789,7 @@ async function freshSearchRecovery(
   });
 }
 
-function storedSearchRecovery(state: ConversationState): SearchRecoveryEnvelope | undefined {
+function storedSearchRecovery(state: ThreadState): SearchRecoveryEnvelope | undefined {
   const actions = state.rti?.lastSuggestedActions;
   if (!actions?.length) return undefined;
   return {
@@ -6825,8 +6826,8 @@ type CompareEvidence = import('./types.js').CompareEvidence;
  * Not on pure facet asks (stay on current board / focus). No locality hardcode.
  */
 function shouldInvalidateLastOffered(
-  prev: ConversationState['constraints'],
-  next: ConversationState['constraints'],
+  prev: ThreadState['constraints'],
+  next: ThreadState['constraints'],
   text: string,
   ex: Extracted,
 ): boolean {
@@ -6864,14 +6865,14 @@ function withIngressDebug(
  * Never let a catalog read decide whether the buyer gets a reply.
  */
 async function cacheCostTerms(
-  state: ConversationState,
+  state: ThreadState,
   deps: EngineDeps,
   nd: string,
   projectId: string,
   projectName: string,
-): Promise<ConversationState> {
+): Promise<ThreadState> {
   const next = commitTo(state, projectId, projectName);
-  const ctx = await deps.data.conversationContext(nd).catch(() => null);
+  const ctx = await deps.data.threadContext(nd).catch(() => null);
   // Desk scopes the bundle to its own focus — never adopt another project's sheet.
   if (!ctx || ctx.project?.project_id !== projectId) return next;
   const costTerms = costTermsFromCostSheet(ctx.cost_sheet);

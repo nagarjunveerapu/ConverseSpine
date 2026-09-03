@@ -100,7 +100,7 @@ function catalogExtras(p: NdProjectSummary): Pick<
   // amenity list. The file itself is RERA, khata, possession, price, media. A
   // mis-typed catalog column (parking_on_site arrives as 0/1, not text) once
   // threw here, and because the throw surfaced as "no project detail" the buyer
-  // lost the whole file and saw four money rows for the entire conversation.
+  // lost the whole file and saw four money rows for the entire chat.
   // Trimmings may go missing; the file may not.
   let investment: ReturnType<typeof mapInvestmentFromProject>;
   let visitLogistics: ReturnType<typeof mapVisitLogisticsFromProject>;
@@ -300,6 +300,80 @@ export function mapLocationIntel(raw: NdLocationIntelRow | null | undefined) {
   } as LocationPoiCategories & { nearbyPois?: string[]; driveTimes?: string[] };
 }
 
+
+/**
+ * THREAD → LEAD, because Spine only ever holds one id and it is a thread id.
+ *
+ * `PUT /api/v1/leads` answers `{ ok, thread_id, created }` when no project is
+ * named, so `ThreadState.ndThreadId` is builder x buyer x CHANNEL. Several Desk
+ * doors — pricing/quote, pricing/landed-cost, projects/compare, the advisor
+ * soft-rank on projects/search, leads/:id/erase — resolve their id with a
+ * literal `WHERE lead_id = ?` and answer 404 `lead_not_found` for anything
+ * else. Handing them the thread id is not a naming problem, it is a broken
+ * call, so the seam translates instead of the engine pretending.
+ *
+ * `GET /api/v1/leads/:id` is the translator: Desk's `resolveLead` accepts a
+ * thread id and returns the pursuit when the thread's focused project names one
+ * of the buyer's, or the buyer has exactly one. Otherwise it answers 409
+ * `ambiguous_lead` (a buyer chasing two projects) or hands back a thread-shaped
+ * row with `lead_id: null`. Both mean the same thing here: THERE IS NO ONE
+ * LEAD, and a door that needs one must be skipped rather than fed a thread id
+ * that will 404.
+ *
+ * Memoised per adapter (one per turn), so a turn that hits two lead doors pays
+ * for one extra Desk call, not two.
+ */
+interface LeadResolver {
+  /** Resolve, calling Desk if we have not already. */
+  get(threadId: string): Promise<string | null>;
+  /** What we already know, without a network call. Used on the search hot path. */
+  peek(threadId: string): string | null;
+  /** Seed from a thread-context bundle we were fetching anyway. */
+  note(threadId: string, leadId: string | null | undefined): void;
+}
+
+function leadResolver(crm: NayaDeskClient): LeadResolver {
+  const known = new Map<string, string | null>();
+  const inflight = new Map<string, Promise<string | null>>();
+  // The bundle lends its thread id to `lead.lead_id` when no single pursuit
+  // resolves, so an id equal to the thread id means NO LEAD, not this lead.
+  const clean = (threadId: string, id: string | null | undefined) =>
+    id && id !== threadId ? id : null;
+
+  return {
+    peek(threadId) {
+      return known.get(threadId.trim()) ?? null;
+    },
+    note(threadId, leadId) {
+      const key = threadId.trim();
+      if (!key) return;
+      const id = clean(key, leadId);
+      // Only ever upgrade: a bundle that could not resolve a pursuit must not
+      // erase one an earlier call proved.
+      if (id) known.set(key, id);
+      else if (!known.has(key)) known.set(key, null);
+    },
+    get(threadId) {
+      const key = threadId.trim();
+      if (!key) return Promise.resolve(null);
+      const seen = known.get(key);
+      if (seen) return Promise.resolve(seen);
+      const running = inflight.get(key);
+      if (running) return running;
+      const p = crm
+        .getLead(key)
+        .then((r) => clean(key, r.lead?.lead_id))
+        .catch(() => null)
+        .then((id) => {
+          known.set(key, id);
+          return id;
+        });
+      inflight.set(key, p);
+      return p;
+    },
+  };
+}
+
 export function nayadeskData(
   crm: NayaDeskClient,
   env?: Pick<
@@ -316,11 +390,25 @@ export function nayadeskData(
 ): EngineData {
   const kv = env?.TURN_CACHE;
   const stats = env?.cacheStats;
+  const leads = leadResolver(crm);
+  /**
+   * Every thread-context read goes through here so the bundle's `lead.lead_id`
+   * seeds the resolver. The turn is fetching the bundle anyway, so the lead-only
+   * doors below usually cost no extra Desk call at all. Throw semantics are the
+   * client's — callers keep their own `.catch`.
+   */
+  const readBundle = async (nd: string, limit?: number): Promise<NdContextBundle> => {
+    const b = limit === undefined
+      ? await crm.threadContext(nd)
+      : await crm.threadContext(nd, limit);
+    leads.note(nd, b?.lead?.lead_id);
+    return b;
+  };
   return {
     async search(builderId, filters) {
       const locations = filters.locations ? splitCsv(filters.locations) : undefined;
       const projectTypes = filters.projectTypes ? splitCsv(filters.projectTypes) : undefined;
-      // Soft-rank prefs must not share hard-constraint memo. conversation_id alone
+      // Soft-rank prefs must not share hard-constraint memo. thread_id alone
       // (BPE fallback) is still hard-constraint searchable — keep L4 eligible.
       const softRank = Boolean(
         filters.commuteHub ||
@@ -337,7 +425,7 @@ export function nayadeskData(
         searchText: filters.searchText ?? null,
         max: filters.maxResults ?? 5,
       });
-      // L4 — hard-constraint search memo (skip when soft-rank / conversation prefs).
+      // L4 — hard-constraint search memo (skip when soft-rank / lead prefs).
       if (!softRank) {
         const memo = await getSearchMemo(kv, builderId, constraintHash);
         if (memo?.matches) {
@@ -382,7 +470,14 @@ export function nayadeskData(
         project_types: projectTypes,
         purpose: filters.purpose,
         ...(filters.searchText ? { search_text: filters.searchText } : {}),
-        ...(filters.conversationId ? { conversation_id: filters.conversationId } : {}),
+        // LEAD door, and the ONE that degrades silently: Desk resolves advisor
+        // soft-rank weights with `WHERE lead_id = ?` and simply returns an
+        // un-narrated rank when it finds nothing. Search is the hot path, so we
+        // spend no round trip here — we send the lead id only when a bundle
+        // read this turn already proved one.
+        ...(filters.ndThreadId && leads.peek(filters.ndThreadId)
+          ? { lead_id: leads.peek(filters.ndThreadId)! }
+          : {}),
         ...(filters.preferenceWeights ? { preference_weights: filters.preferenceWeights } : {}),
         ...(filters.commuteHub ? { commute_hub: filters.commuteHub } : {}),
         ...(filters.budgetTargetInr ? { budget_target_inr: filters.budgetTargetInr } : {}),
@@ -491,14 +586,14 @@ export function nayadeskData(
 
     async projectDetail(_builderId, nd, projectId) {
       const t0 = Date.now();
-      // Isolate failures — a throwing conversationContext used to reject the
+      // Isolate failures — a throwing threadContext used to reject the
       // whole Promise.all and drop a successful getProject, forcing identityOnly
       // shells that poisoned L2 (proj miss every focused turn on dig).
       const [ctx, fullProject, liRow, libraryMedia] = await Promise.all([
-        crm.conversationContext(nd).catch(() => null),
+        readBundle(nd).catch(() => null),
         crm.getProject(projectId).catch(() => null),
         crm.getLocationIntelligence(projectId).catch(() => null),
-        // The library, fetched WITHOUT a conversation. Media used to arrive only
+        // The library, fetched WITHOUT a thread. Media used to arrive only
         // on the focus-scoped bundle below, so a buyer who picked a project off
         // the board was never offered its brochure — 16 public documents sat
         // unmentioned on Eldorado, floor plan for their own size included.
@@ -588,8 +683,8 @@ export function nayadeskData(
       }
       try {
         // S1 — LI ships on the project GET too, so location answers work even
-        // when conversation context is unavailable (e.g. advisor-door sessions
-        // whose Desk conversation row differs from the engine's nd).
+        // when thread context is unavailable (e.g. advisor-door sessions
+        // whose Desk thread differs from the engine's nd).
         const location =
           mapLocationIntel(liRow) ?? mapLocationIntel(catalog.location_intelligence);
         const marketIntel = await resolveMarketIntel(crm, catalog.market_intel, catalog.micro_market);
@@ -614,7 +709,7 @@ export function nayadeskData(
             ecStatus: catalog.ec_status,
             loanEligibility: catalog.loan_eligibility,
             ...(location ? { location } : {}),
-            // The library is conversation-free, so this branch — the one a
+            // The library is thread-free, so this branch — the one a
             // pick turn actually takes — can finally offer the documents.
             ...mediaFields(publicMedia),
             ...extras,
@@ -630,12 +725,17 @@ export function nayadeskData(
     async pricing(_builderId, nd, projectId, unitType) {
       const t0 = Date.now();
       try {
+        // LEAD door: `nd` is a thread id and Desk's quote lane is
+        // `WHERE lead_id = ?`. No resolvable pursuit means no quote to give —
+        // absent, not a 404 the buyer pays for.
+        const leadId = await leads.get(nd);
+        if (!leadId) return dataAbsent(Date.now() - t0);
         const q = await crm.pricingQuote({
           project_id: projectId,
-          conversation_id: nd,
+          lead_id: leadId,
           unit_type: unitType,
         });
-        const rawCtx = await crm.conversationContext(nd).catch(() => null);
+        const rawCtx = await readBundle(nd).catch(() => null);
         const ctx = ctxForProject(rawCtx, projectId);
         // Name from matching context, else the requested project's catalog row —
         // never Desk focus when answering a different projectId (cost-sheet bleed).
@@ -692,9 +792,12 @@ export function nayadeskData(
     async landedCost(_builderId, nd, projectId, unitType) {
       const t0 = Date.now();
       try {
-        const r = await crm.landedCost({ project_id: projectId, conversation_id: nd, unit_type: unitType });
+        // LEAD door — see `leadResolver`.
+        const leadId = await leads.get(nd);
+        if (!leadId) return dataAbsent(Date.now() - t0);
+        const r = await crm.landedCost({ project_id: projectId, lead_id: leadId, unit_type: unitType });
         if (!r?.base_price_display) return dataAbsent(Date.now() - t0);
-        const rawCtx = await crm.conversationContext(nd).catch(() => null);
+        const rawCtx = await readBundle(nd).catch(() => null);
         const ctx = ctxForProject(rawCtx, projectId);
         let projectName = ctx?.project?.name?.trim() || '';
         if (!projectName) {
@@ -720,7 +823,11 @@ export function nayadeskData(
 
     async compare(nd, projectIds) {
       try {
-        const resp = await crm.compareProjects({ conversation_id: nd, project_ids: projectIds });
+        // LEAD door — see `leadResolver`. null degrades to the caller's own
+        // "cannot compare" path, which is what a 404 produced anyway.
+        const leadId = await leads.get(nd);
+        if (!leadId) return null;
+        const resp = await crm.compareProjects({ lead_id: leadId, project_ids: projectIds });
         return {
           tableText: resp.table_text ?? '',
           projects: resp.projects ?? [],
@@ -750,7 +857,12 @@ export function nayadeskData(
       let lastErr: unknown;
       if (unitType) {
         try {
-          const r = await crm.landedCost({ project_id: projectId, conversation_id: nd, unit_type: unitType });
+          // LEAD door — see `leadResolver`. Without a pursuit this falls
+          // through to the thread-context unit prices below, exactly as a
+          // thrown landed-cost already did.
+          const leadId = await leads.get(nd);
+          if (!leadId) throw new Error('no_lead_for_thread');
+          const r = await crm.landedCost({ project_id: projectId, lead_id: leadId, unit_type: unitType });
           if (r && typeof r.base_price_low_inr === 'number' && r.base_price_low_inr > 0) {
             return dataOk(
               {
@@ -766,7 +878,7 @@ export function nayadeskData(
         }
       }
       try {
-        const rawCtx = await crm.conversationContext(nd);
+        const rawCtx = await readBundle(nd);
         const ctx = ctxForProject(rawCtx, projectId);
         const prices = (ctx?.units ?? [])
           .map((u) => Math.round((u.price_min_paise ?? 0) / 100))
@@ -802,7 +914,7 @@ export function nayadeskData(
       try {
         const resp = await crm.mediaShare({
           project_id: projectId,
-          conversation_id: nd,
+          thread_id: nd,
           asset_kind: assetKind,
           ...(unitType ? { unit_type_filter: unitType } : {}),
           ...(phaseId ? { phase_id: phaseId } : {}),
@@ -821,9 +933,9 @@ export function nayadeskData(
       }
     },
 
-    async conversationContext(nd) {
+    async threadContext(nd) {
       try {
-        return await crm.conversationContext(nd);
+        return await readBundle(nd);
       } catch {
         return null;
       }
@@ -842,7 +954,7 @@ export function nayadeskData(
 
     async objectionContext(nd) {
       try {
-        const ctx = await crm.conversationContext(nd);
+        const ctx = await readBundle(nd);
         const playbooks = (ctx.objection_playbooks ?? []).map((p) => ({
           topic: (p.objection_topic ?? '').toLowerCase(),
           reframeAngles: parseJsonArray(p.reframe_angles),
@@ -921,7 +1033,7 @@ export function nayadeskData(
         // Desk visits.scheduled_at is IST wall-clock 'YYYY-MM-DD HH:MM'.
         const scheduled_at = isoToIstWallClock(visit.iso);
         if (!scheduled_at) return false;
-        await crm.proposeVisit(ids.ndConversationId, {
+        await crm.proposeVisit(ids.ndThreadId, {
           scheduled_at,
           project_id: visit.projectId,
           status: 'confirmed',
@@ -938,7 +1050,7 @@ export function nayadeskData(
           builder_id: ids.builderId,
           project_id: hold.projectId,
           unit_type: hold.unitType,
-          conversation_id: ids.ndConversationId,
+          thread_id: ids.ndThreadId,
           ...(hold.buyerName ? { buyer_name: hold.buyerName } : {}),
           ...(hold.queue ? { queue: true } : {}),
           ttl_minutes: hold.ttlMinutes ?? 24 * 60,
@@ -965,7 +1077,7 @@ export function nayadeskData(
 
     async bootstrapContext(nd) {
       const [ctx, ledger] = await Promise.all([
-        crm.conversationContext(nd, 12).catch(() => null),
+        readBundle(nd, 12).catch(() => null),
         crm.turnLedgerContext(nd).catch(() => null),
       ]);
       const recentMessages = (ctx?.recent_messages ?? []).map((m) => ({
@@ -974,13 +1086,13 @@ export function nayadeskData(
         atMs: m.created_at,
       }));
       const returning = ctx?.returning_buyer;
-      // The conversation row was already in `ctx`. Every field below has been
+      // The CRM row was already in `ctx`. Every field below has been
       // arriving on this call since the column existed; this function used to
       // map recent_messages, returning_buyer and builder out of the bundle and
       // drop the rest on the floor. Reading it costs nothing — no extra call,
       // no extra latency — which is what makes the four-field blind spot a
       // wiring omission rather than a trade-off anybody made.
-      const conv = ctx?.conversation;
+      const conv = ctx?.lead;
       const deskBrief: DeskBrief | undefined = conv
         ? {
             ...(conv.buyer_name?.trim() ? { buyerName: conv.buyer_name.trim() } : {}),
@@ -1111,7 +1223,7 @@ export function nayadeskData(
           buyer_text: input.buyerText,
           suggested_topic: input.suggestedTopic,
           source: input.source ?? 'education_miss',
-          conversation_id: input.conversationId,
+          thread_id: input.threadId,
         });
       } catch {
         /* fire-and-forget */
@@ -1137,6 +1249,7 @@ export function nayadeskCrm(
     understandingCapture?: boolean;
   },
 ): EngineCrm {
+  const leads = leadResolver(crm);
   return {
     async ensureLead(builderId, buyerPhone, channel) {
       const resp = await crm.upsertLead({
@@ -1144,26 +1257,26 @@ export function nayadeskCrm(
         buyer_phone: buyerPhone,
         ...(channel ? { channel } : {}),
       });
-      return { conversationId: resp.conversation_id };
+      return { threadId: resp.thread_id };
     },
-    async appendMessage(conversationId, direction, content, meta) {
-      await crm.appendMessage(conversationId, { direction, content });
+    async appendMessage(threadId, direction, content, meta) {
+      await crm.appendMessage(threadId, { direction, content });
       void meta;
     },
-    async updateFacts(conversationId, facts) {
+    async updateFacts(threadId, facts) {
       const patch: Record<string, string> = {};
       if (facts.buyer_name) patch.buyer_name = facts.buyer_name;
       if (facts.bhk_preference) patch.bhk_preference = facts.bhk_preference;
       if (facts.budget_inr) patch.budget_inr = facts.budget_inr;
       if (facts.visit_date_pref) patch.visit_date_pref = facts.visit_date_pref;
       if (facts.purpose) patch.purpose = facts.purpose;
-      if (Object.keys(patch).length) await crm.patchFacts(conversationId, patch);
+      if (Object.keys(patch).length) await crm.patchFacts(threadId, patch);
       if (facts.location_pref) {
-        await crm.applyStateWrites(conversationId, [{ op: 'set_slot', slot: 'location', value: facts.location_pref }]);
+        await crm.applyStateWrites(threadId, [{ op: 'set_slot', slot: 'location', value: facts.location_pref }]);
       }
     },
-    async setPendingAction(conversationId, pending) {
-      await crm.applyStateWrites(conversationId, [
+    async setPendingAction(threadId, pending) {
+      await crm.applyStateWrites(threadId, [
         {
           op: 'set_pending_action',
           pending: pending
@@ -1172,29 +1285,29 @@ export function nayadeskCrm(
         },
       ]);
     },
-    async commitProject(conversationId, projectId) {
-      await crm.commitProject(conversationId, projectId);
+    async commitProject(threadId, projectId) {
+      await crm.commitProject(threadId, projectId);
     },
-    async releaseProject(conversationId) {
-      await crm.releaseProject(conversationId);
+    async releaseProject(threadId) {
+      await crm.releaseProject(threadId);
     },
-    async syncShortlist(conversationId, projectIds) {
+    async syncShortlist(threadId, projectIds) {
       if (!projectIds.length) return;
-      await crm.applyStateWrites(conversationId, [
+      await crm.applyStateWrites(threadId, [
         { op: 'set_shortlist_project_ids', project_ids: projectIds.slice(0, 3) },
       ]);
     },
-    async syncMatching(conversationId, projectIds) {
+    async syncMatching(threadId, projectIds) {
       if (!projectIds.length) return;
-      await crm.applyStateWrites(conversationId, [
+      await crm.applyStateWrites(threadId, [
         { op: 'set_matching_project_ids', project_ids: projectIds.slice(0, 10) },
       ]);
     },
-    async setStage(conversationId, stage, opts) {
-      await crm.patchStage(conversationId, stage, opts?.onlyForward);
+    async setStage(threadId, stage, opts) {
+      await crm.patchStage(threadId, stage, opts?.onlyForward);
     },
-    async appendSharedFact(conversationId, factKind, projectId, turnIndex) {
-      await crm.applyStateWrites(conversationId, [
+    async appendSharedFact(threadId, factKind, projectId, turnIndex) {
+      await crm.applyStateWrites(threadId, [
         {
           op: 'append_shared_fact',
           fact: { fact_kind: factKind, project_id: projectId, shared_at_turn: turnIndex },
@@ -1203,7 +1316,7 @@ export function nayadeskCrm(
     },
     async appendTurnLedger(entry) {
       await crm.appendTurnLedger({
-        conversation_id: entry.conversationId,
+        thread_id: entry.threadId,
         turn_index: entry.turnIndex,
         builder_id: entry.builderId,
         buyer_phone: entry.buyerPhone,
@@ -1238,35 +1351,35 @@ export function nayadeskCrm(
           })),
       });
     },
-    async postJourneySignals(builderId, buyerPhone, conversationId, signals, extras) {
+    async postJourneySignals(builderId, buyerPhone, threadId, signals, extras) {
       await crm.postJourneySignals({
         builder_id: builderId,
         buyer_phone: buyerPhone,
-        conversation_id: conversationId,
+        thread_id: threadId,
         signals,
         ...(extras?.shortlistAdd ? { shortlist_add: extras.shortlistAdd } : {}),
         ...(extras?.rejectedAdd ? { rejected_add: extras.rejectedAdd } : {}),
       });
     },
-    async postJourneyTurnSnapshot(builderId, buyerPhone, conversationId, goal, phase) {
+    async postJourneyTurnSnapshot(builderId, buyerPhone, threadId, goal, phase) {
       await crm.postJourneyTurnSnapshot({
         builder_id: builderId,
         buyer_phone: buyerPhone,
-        conversation_id: conversationId,
+        thread_id: threadId,
         turn_goal: goal,
         strategist_reason: phase,
         matched_rules: [],
         snapshot: { phase, goal },
       });
     },
-    async postProfileObservations(builderId, buyerPhone, conversationId, observations) {
-      await crm.postProfileObservations({ builder_id: builderId, buyer_phone: buyerPhone, conversation_id: conversationId, observations });
+    async postProfileObservations(builderId, buyerPhone, threadId, observations) {
+      await crm.postProfileObservations({ builder_id: builderId, buyer_phone: buyerPhone, thread_id: threadId, observations });
     },
-    async postChoiceEvent(builderId, buyerPhone, conversationId, matches, constraints, engineStatus) {
+    async postChoiceEvent(builderId, buyerPhone, threadId, matches, constraints, engineStatus) {
       await crm.postChoiceEvent({
         builder_id: builderId,
         buyer_phone: buyerPhone,
-        conversation_id: conversationId,
+        thread_id: threadId,
         // Phase 0a — observed status from the turn (default ok only when caller
         // did not pass a status; never invent success after a known failure).
         engine_status: engineStatus ?? 'ok',
@@ -1275,18 +1388,25 @@ export function nayadeskCrm(
         constraints,
       });
     },
-    async postChoiceResponse(conversationId, responseText, responseIntent) {
+    async postChoiceResponse(threadId, responseText, responseIntent) {
       await crm.postChoiceResponse({
-        conversation_id: conversationId,
+        thread_id: threadId,
         response_text: responseText,
         ...(responseIntent ? { response_intent: responseIntent } : {}),
       });
     },
-    async eraseBuyer(conversationId, scope) {
-      return crm.eraseBuyer(conversationId, scope);
+    async eraseBuyer(threadId, scope) {
+      // LEAD door: `POST /api/leads/:lead_id/erase` is a literal
+      // `WHERE lead_id = ?1` (Desk `loadScopedLead`), and Spine holds a thread
+      // id. Resolve it or return no receipt — `composeErasureReply` then says
+      // a person will finish the job, which is the honest answer. It must never
+      // send the thread id and read the 404 as "nothing to erase".
+      const leadId = await leads.get(threadId);
+      if (!leadId) return null;
+      return crm.eraseBuyer(leadId, scope);
     },
-    async mirrorMemory(conversationId) {
-      await crm.mirrorMemory(conversationId);
+    async mirrorMemory(threadId) {
+      await crm.mirrorMemory(threadId);
     },
     async reportCatalogWatchAsk(p) {
       await crm.reportCatalogWatchAsk({
@@ -1298,7 +1418,7 @@ export function nayadeskCrm(
         ...(p.facetKey ? { facet_key: p.facetKey } : {}),
         ...(p.phrase ? { phrase: p.phrase } : {}),
         ...(p.reviewedIntent ? { reviewed_intent: p.reviewedIntent } : {}),
-        ...(p.conversationId ? { conversation_id: p.conversationId } : {}),
+        ...(p.threadId ? { thread_id: p.threadId } : {}),
         ...(p.failReason ? { fail_reason: p.failReason } : {}),
       });
     },
@@ -1306,7 +1426,7 @@ export function nayadeskCrm(
       ? {
           async enqueueIntentReview(p: {
             builderId: string;
-            conversationId: string;
+            threadId: string;
             buyerPhone: string;
             turnIndex: number;
             buyerText: string;
@@ -1324,7 +1444,7 @@ export function nayadeskCrm(
             // defaults (abstained) ON PURPOSE — see the port doc.
             await crm.enqueueIntentReview({
               builder_id: p.builderId,
-              conversation_id: p.conversationId,
+              thread_id: p.threadId,
               buyer_phone: p.buyerPhone,
               turn_index: p.turnIndex,
               buyer_text: p.buyerText,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { extractFacts } from '../src/engine/facts.js';
 import { noopEngineLlm } from '../src/engine/adapters/llm.js';
-import type { ConversationState } from '../src/engine/types.js';
+import type { ThreadState } from '../src/engine/types.js';
 
 /**
  * "Actually show me something in Whitefield instead" used to be ignored.
@@ -15,15 +15,15 @@ import type { ConversationState } from '../src/engine/types.js';
  * The SPA grew eleven regexes (`extractLooseLocationPivot`) to paper over this
  * from the browser. This fixes it where it belongs.
  */
-function stateWith(location?: string): ConversationState {
+function stateWith(location?: string): ThreadState {
   return {
-    convId: 'c1',
+    threadId: 'c1',
     builderId: 'naya-advisor',
     phase: 'discover',
     turnCount: 1,
     constraints: location ? { location } : {},
     discover: { lastOffered: [], oriented: true, ignoredProbes: 0 },
-  } as unknown as ConversationState;
+  } as unknown as ThreadState;
 }
 
 /** No LLM: the pivot must work on the deterministic path alone, since that is

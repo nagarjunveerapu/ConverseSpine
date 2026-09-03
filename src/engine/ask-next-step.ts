@@ -20,12 +20,12 @@ import { firstMissingSlot } from './phases/discover.js';
 import { catalogAskOwns } from './turn-routing/intent-authority.js';
 import { discourseStateToken } from './turn-routing/state-tokens.js';
 import { isNonPlaceUtterance } from './placeability.js';
-import type { ConversationState, Extracted, TurnGoal } from './types.js';
+import type { ThreadState, Extracted, TurnGoal } from './types.js';
 
 export { ASK_NEXT_STEP_RE, isAskNextStepText } from './ask-next-step-detect.js';
 
 export function shouldConsumeAskNextStep(
-  s: ConversationState,
+  s: ThreadState,
   ex: Extracted,
   text: string,
 ): boolean {
@@ -47,7 +47,7 @@ export function shouldConsumeAskNextStep(
 }
 
 export function resolveAskNextStepGoal(
-  s: ConversationState,
+  s: ThreadState,
   channel?: 'whatsapp' | 'advisor_web',
 ): TurnGoal {
   const board = currentShortlist(s);

@@ -43,7 +43,7 @@ function depsWithTaughtFacet(opts: { withFaqRow: boolean }) {
 async function focusAyana(deps: ReturnType<typeof fakeDeps>) {
   const turn = (text: string) =>
     runEngineTurn(
-      { convId: 'facet-e2e', builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
+      { threadId: 'facet-e2e', builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
       deps,
     );
   await turn('coorg, 50 Lakhs');

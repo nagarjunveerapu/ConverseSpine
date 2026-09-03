@@ -50,8 +50,8 @@ function deps() {
   return d;
 }
 
-const ask = (convId: string, text: string) =>
-  runEngineTurn({ convId, builderId: 'lokations', text, buyerPhone: '+919999900123' }, deps());
+const ask = (threadId: string, text: string) =>
+  runEngineTurn({ threadId, builderId: 'lokations', text, buyerPhone: '+919999900123' }, deps());
 
 describe('a city we do not serve is not dialogue noise', () => {
   it('names Mumbai back instead of listing Bengaluru as if it fit', async () => {

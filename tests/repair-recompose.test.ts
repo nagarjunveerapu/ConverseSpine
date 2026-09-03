@@ -33,7 +33,7 @@ describe('W1 repair re-compose', () => {
     deps.llm = { ...deps.llm, compose: llm.compose };
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'w1-repair', builderId: 'lokations', text, buyerPhone: '+919999999999', channel: 'advisor_web' },
+        { threadId: 'w1-repair', builderId: 'lokations', text, buyerPhone: '+919999999999', channel: 'advisor_web' },
         deps,
       );
     await turn('plantation in sakleshpur under 50 lakhs');
@@ -59,7 +59,7 @@ describe('W1 repair re-compose', () => {
     deps.llm = { ...deps.llm, compose: llm.compose };
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'w1-floor', builderId: 'lokations', text, buyerPhone: '+919999999990', channel: 'advisor_web' },
+        { threadId: 'w1-floor', builderId: 'lokations', text, buyerPhone: '+919999999990', channel: 'advisor_web' },
         deps,
       );
     await turn('plantation in sakleshpur under 50 lakhs');
@@ -79,7 +79,7 @@ describe('W1 repair re-compose', () => {
     deps.llm = { ...deps.llm, compose: llm.compose };
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: 'w1-budget', builderId: 'lokations', text, buyerPhone: '+919999999989', channel: 'advisor_web' },
+        { threadId: 'w1-budget', builderId: 'lokations', text, buyerPhone: '+919999999989', channel: 'advisor_web' },
         deps,
       );
     await turn('plantation in sakleshpur under 50 lakhs');

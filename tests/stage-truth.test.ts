@@ -10,12 +10,12 @@ import type { EngineCrm } from '../src/engine/ports.js';
  * write carries onlyForward so Desk can never be downgraded, and each rung
  * is written at most once per conversation.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const crm = deps.crm as EngineCrm & { calls: string[] };
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
       deps,
     );
   const stageCalls = () => crm.calls.filter((c) => c.startsWith('stage:'));

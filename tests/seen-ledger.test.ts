@@ -6,9 +6,9 @@ import {
   recordEntities,
 } from '../src/engine/entity-store.js';
 import { initState } from '../src/engine/state.js';
-import type { ConversationState } from '../src/engine/types.js';
+import type { ThreadState } from '../src/engine/types.js';
 
-function withEntity(id = 'p1', name = 'Brigade Cornerstone'): ConversationState {
+function withEntity(id = 'p1', name = 'Brigade Cornerstone'): ThreadState {
   return recordEntities(initState('c1', 'brigade-group'), [{ projectId: id, name }], 'offered', 1);
 }
 
@@ -53,7 +53,7 @@ describe('seen ledger — per-project console facet history', () => {
   it('survives the durable JSON round-trip (store-kv is stringify-wholesale)', () => {
     let s = withEntity();
     s = markFacetSeen(s, 'p1', 'brochure');
-    const revived = JSON.parse(JSON.stringify(s)) as ConversationState;
+    const revived = JSON.parse(JSON.stringify(s)) as ThreadState;
     expect(projectSeenFacets(revived, 'p1')).toEqual(['brochure']);
   });
 });

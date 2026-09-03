@@ -8,7 +8,7 @@
  * One primary token per turn (mutually exclusive, most-specific wins):
  *   <visit_pending> > <focused> > <board:N> > <cold>
  */
-import type { ConversationState } from '../types.js';
+import type { ThreadState } from '../types.js';
 import { currentShortlist } from '../entity-store.js';
 import type { TurnRoutingInput } from './types.js';
 
@@ -18,7 +18,7 @@ export type DiscourseStateToken =
   | '<visit_pending>'
   | `<board:${number}>`;
 
-export function boardCountFromState(state: ConversationState): number {
+export function boardCountFromState(state: ThreadState): number {
   return currentShortlist(state).length;
 }
 

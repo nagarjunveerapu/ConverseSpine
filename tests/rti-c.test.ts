@@ -134,7 +134,7 @@ describe('RTI-C end-to-end', () => {
 
     const out = await runEngineTurn(
       {
-        convId: 'rti-c',
+        threadId: 'rti-c',
         builderId: 'lokations',
         text: 'what is the minimum budget I need to keep for villa in Bangalore?',
         buyerPhone: '+919988776655',
@@ -177,7 +177,7 @@ describe('RTI-C end-to-end', () => {
 
     const out = await runEngineTurn(
       {
-        convId: 'rti-c2',
+        threadId: 'rti-c2',
         builderId: 'lokations',
         text: 'In bangalore',
         buyerPhone: '+919988776655',

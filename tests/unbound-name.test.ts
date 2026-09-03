@@ -26,15 +26,15 @@ const CATALOG = [
   { projectId: 'sanctuary', name: 'Brigade Sanctuary' },
 ];
 
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'naya-advisor',
         text,
-        buyerPhone: `+9199${convId.replace(/\W/g, '').slice(-8).padStart(8, '0')}`,
+        buyerPhone: `+9199${threadId.replace(/\W/g, '').slice(-8).padStart(8, '0')}`,
         channel: 'advisor_web',
       },
       deps,
@@ -44,20 +44,20 @@ function harness(convId: string) {
 
 async function seedShortlist(
   deps: ReturnType<typeof fakeDeps>,
-  convId: string,
+  threadId: string,
   offered: ReadonlyArray<{ projectId: string; name: string }> = SHORTLIST,
 ) {
   await runEngineTurn(
     {
-      convId,
+      threadId,
       builderId: 'naya-advisor',
       text: 'hi',
-      buyerPhone: `+9199${convId.replace(/\W/g, '').slice(-8).padStart(8, '0')}`,
+      buyerPhone: `+9199${threadId.replace(/\W/g, '').slice(-8).padStart(8, '0')}`,
       channel: 'advisor_web',
     },
     deps,
   );
-  const s = await deps.store.load(convId);
+  const s = await deps.store.load(threadId);
   expect(s).toBeTruthy();
   s!.discover.lastOffered = offered.map((o) => ({ ...o }));
   await deps.store.save(s!);

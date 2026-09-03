@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { buildLedgerWritePayload } from '../src/engine/ledger-write.js';
 import type {
-  ConversationState,
+  ThreadState,
   EvidenceSet,
   TurnGoal,
 } from '../src/engine/types.js';
@@ -22,13 +22,13 @@ import type {
  */
 
 const state = {
-  convId: 'c1',
+  threadId: 'c1',
   builderId: 'b1',
   phase: 'focused',
   turnCount: 3,
   constraints: {},
   discover: { lastOffered: [], discussedProjects: [] },
-} as unknown as ConversationState;
+} as unknown as ThreadState;
 const goal = { kind: 'answer', topic: 'price' } as TurnGoal;
 const evidence = { tools: [] } as unknown as EvidenceSet;
 const ex = { constraints: {} };

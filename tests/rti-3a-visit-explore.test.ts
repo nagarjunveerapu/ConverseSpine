@@ -128,7 +128,7 @@ describe('RTI-3A visit vs explore routing', () => {
 
     const r = await runEngineTurn(
       {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
         text: 'what about the unit configurations of Eldorado?',
         buyerPhone: '+919999999991',
@@ -163,7 +163,7 @@ describe('RTI-3A visit vs explore routing', () => {
 
     const r = await runEngineTurn(
       {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
         text: 'what about Eldorado pricing?',
         buyerPhone: '+919999999992',
@@ -196,7 +196,7 @@ describe('RTI-3A visit vs explore routing', () => {
 
     const r = await runEngineTurn(
       {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
         text: 'Tuesday',
         buyerPhone: '+919999999993',

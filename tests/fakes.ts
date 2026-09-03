@@ -429,10 +429,11 @@ export function fakeData(): EngineData & {
     async marketIntel(_microMarket) {
       return null; // fakes have no approved corridor intel — honest absence
     },
-    async conversationContext(_nd) {
+    async threadContext(_nd) {
       return {
-        conversation: {
-          conversation_id: 'nd:test',
+        lead: {
+          lead_id: 'ld_test',
+          thread_id: 'nd:test',
           builder_id: 'lokations',
           buyer_phone: '+919999999999',
           buyer_name: '',
@@ -644,7 +645,7 @@ export function fakeCrm(): EngineCrm & { calls: string[] } {
     calls,
     async ensureLead(_b, phone) {
       calls.push(`lead:${phone}`);
-      return { conversationId: `nd:${phone}` };
+      return { threadId: `nd:${phone}` };
     },
     async appendMessage(_nd, direction) {
       // Recorded so a test can assert the ABSENCE of a write — erasure must
@@ -686,11 +687,12 @@ export function fakeCrm(): EngineCrm & { calls: string[] } {
       return {
         scope,
         deleted: { messages: 4, buyer_memory: 1, buyer_facts: 2 },
-        redacted: { conversations: 1 },
+        redacted: { threads: 1 },
         retained: { bookings: 'a signed agreement is kept by law' },
         retained_counts: {},
         failed: [],
-        conversation_ids: [_nd],
+        lead_ids: [`ld_${_nd}`],
+        thread_ids: [_nd],
         unteach_phrasing_ids: [],
         tombstone_written: true,
         erased_at: 1_700_000_000_000,
@@ -701,16 +703,16 @@ export function fakeCrm(): EngineCrm & { calls: string[] } {
 }
 
 export function fakeStore(): EngineStore {
-  const mem = new Map<string, import('../src/engine/types.js').ConversationState>();
+  const mem = new Map<string, import('../src/engine/types.js').ThreadState>();
   return {
     async load(id) {
       return mem.get(id) ?? null;
     },
     async save(s) {
-      mem.set(s.convId, s);
+      mem.set(s.threadId, s);
     },
-    async purge(convId) {
-      mem.delete(convId);
+    async purge(threadId) {
+      mem.delete(threadId);
     },
     async logTurn() {},
   };

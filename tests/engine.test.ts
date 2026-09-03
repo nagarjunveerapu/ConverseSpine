@@ -439,7 +439,7 @@ describe('Coorg funnel (deterministic)', () => {
     const deps = fakeDeps();
     const input = (text: string) =>
       runEngineTurn(
-        { convId: 'coorg-funnel', builderId: 'lokations', text, buyerPhone: '+919999999999' },
+        { threadId: 'coorg-funnel', builderId: 'lokations', text, buyerPhone: '+919999999999' },
         deps,
       );
 
@@ -469,7 +469,7 @@ describe('Coorg funnel (deterministic)', () => {
   it('coorg location does not stretch to Sakleshpur shortlist (W2)', async () => {
     const deps = fakeDeps();
     const t = await runEngineTurn(
-      { convId: 'coorg-loc', builderId: 'lokations', text: 'coorg, 50 Lakhs', buyerPhone: '+919999999998' },
+      { threadId: 'coorg-loc', builderId: 'lokations', text: 'coorg, 50 Lakhs', buyerPhone: '+919999999998' },
       deps,
     );
     expect(t.state.constraints.location?.toLowerCase()).toMatch(/coorg/);
@@ -528,7 +528,7 @@ describe('Focused project switch', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'switch-test', builderId: 'lokations', text, buyerPhone: '+919999999997' },
+        { threadId: 'switch-test', builderId: 'lokations', text, buyerPhone: '+919999999997' },
         deps,
       );
 
@@ -549,7 +549,7 @@ describe('Focused project switch', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'switch-price', builderId: 'lokations', text, buyerPhone: '+919999999996' },
+        { threadId: 'switch-price', builderId: 'lokations', text, buyerPhone: '+919999999996' },
         deps,
       );
 
@@ -568,7 +568,7 @@ describe('Post-visit ack', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'visit-ack', builderId: 'lokations', text, buyerPhone: '+919999999995' },
+        { threadId: 'visit-ack', builderId: 'lokations', text, buyerPhone: '+919999999995' },
         deps,
       );
 
@@ -595,7 +595,7 @@ describe('Mysuru funnel fixes', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'mysuru-details', builderId: 'lokations', text, buyerPhone: '+919999999993' },
+        { threadId: 'mysuru-details', builderId: 'lokations', text, buyerPhone: '+919999999993' },
         deps,
       );
 
@@ -612,7 +612,7 @@ describe('Mysuru funnel fixes', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'mysuru-price', builderId: 'lokations', text, buyerPhone: '+919999999992' },
+        { threadId: 'mysuru-price', builderId: 'lokations', text, buyerPhone: '+919999999992' },
         deps,
       );
 
@@ -628,7 +628,7 @@ describe('Mysuru funnel fixes', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'mysuru-type', builderId: 'lokations', text, buyerPhone: '+919999999991' },
+        { threadId: 'mysuru-type', builderId: 'lokations', text, buyerPhone: '+919999999991' },
         deps,
       );
 
@@ -647,7 +647,7 @@ describe('Brochure on commit turn', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'brochure-commit', builderId: 'lokations', text, buyerPhone: '+919999999994' },
+        { threadId: 'brochure-commit', builderId: 'lokations', text, buyerPhone: '+919999999994' },
         deps,
       );
 
@@ -666,7 +666,7 @@ describe('Sakleshpur funnel (deterministic)', () => {
     const deps = fakeDeps();
     const say = (text: string) =>
       runEngineTurn(
-        { convId: 'sakleshpur', builderId: 'lokations', text, buyerPhone: '+919999999998' },
+        { threadId: 'sakleshpur', builderId: 'lokations', text, buyerPhone: '+919999999998' },
         deps,
       );
 

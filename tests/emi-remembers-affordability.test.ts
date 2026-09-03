@@ -17,14 +17,14 @@ import { fakeData, fakeDeps } from './fakes.js';
  * still sitting in state as `budgetMaxInr: 7900000` while it asked. Whatever
  * the buyer says next, they have already said this.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   deps.failureTools = true;
   const data = deps.data as ReturnType<typeof fakeData>;
   const turn = (text: string) =>
     runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text,
         buyerPhone: '+919999991150',

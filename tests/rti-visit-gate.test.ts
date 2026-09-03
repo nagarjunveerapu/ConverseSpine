@@ -53,19 +53,19 @@ describe('RTI visit gate end-to-end', () => {
     await deps.store.save(state);
 
     let r = await runEngineTurn(
-      { convId: state.convId, builderId: state.builderId, text: 'visit ayana and krishnaja', channel: 'advisor_web' },
+      { threadId: state.threadId, builderId: state.builderId, text: 'visit ayana and krishnaja', channel: 'advisor_web' },
       deps,
     );
     expect(r.state.phase).toBe('visit');
 
     r = await runEngineTurn(
-      { convId: state.convId, builderId: state.builderId, text: 'Saturday morning', channel: 'advisor_web' },
+      { threadId: state.threadId, builderId: state.builderId, text: 'Saturday morning', channel: 'advisor_web' },
       deps,
     );
     expect(r.debug.goal.kind).toBe('visit_propose');
 
     r = await runEngineTurn(
-      { convId: state.convId, builderId: state.builderId, text: 'yes', channel: 'advisor_web' },
+      { threadId: state.threadId, builderId: state.builderId, text: 'yes', channel: 'advisor_web' },
       deps,
     );
     expect(r.debug.goal.kind).toBe('visit_booked');
@@ -75,7 +75,7 @@ describe('RTI visit gate end-to-end', () => {
 
     r = await runEngineTurn(
       {
-        convId: state.convId,
+        threadId: state.threadId,
         builderId: state.builderId,
         text: 'what about Krishnaja Greens?',
         channel: 'advisor_web',
@@ -87,7 +87,7 @@ describe('RTI visit gate end-to-end', () => {
     expect(r.reply.toLowerCase()).toMatch(/which day|day works/);
 
     r = await runEngineTurn(
-      { convId: state.convId, builderId: state.builderId, text: 'Compare all 3', channel: 'advisor_web' },
+      { threadId: state.threadId, builderId: state.builderId, text: 'Compare all 3', channel: 'advisor_web' },
       deps,
     );
     expect(r.debug.goal.kind).toBe('answer');

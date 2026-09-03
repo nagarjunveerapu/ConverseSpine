@@ -12,7 +12,7 @@ describe('NAME-06 sibling switch', () => {
     const say = (text: string) =>
       runEngineTurn(
         {
-          convId: 'name06',
+          threadId: 'name06',
           builderId: 'naya-advisor',
           text,
           buyerPhone: '+919900000006',
@@ -37,7 +37,7 @@ describe('NAME-06 sibling switch', () => {
     const say = (text: string) =>
       runEngineTurn(
         {
-          convId: 'name06dig',
+          threadId: 'name06dig',
           builderId: 'naya-advisor',
           text,
           buyerPhone: '+919900000007',

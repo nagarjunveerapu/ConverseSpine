@@ -14,7 +14,7 @@ import type { ErasureReceipt } from '../src/engine/ports.js';
  * Erasure, from Spine's side.
  *
  * Desk owns the database sweep and the tombstone. Spine owns three things Desk
- * cannot reach — the site visits, the live conversation state, and the sentence
+ * cannot reach — the site visits, the live chat state, and the sentence
  * the buyer actually reads — and got all three wrong:
  *
  *   - the delete-confirm door cancelled no visits at all,
@@ -75,7 +75,7 @@ describe('purge removes the state, it does not overwrite it', () => {
     expect(await store.load('conv-purge-1')).toBeNull();
     expect(map.has('ce:state:conv-purge-1'), 'the KV copy would have lived 30 more days').toBe(false);
 
-    // Two addresses, one class. `state:{convId}` holds L0; the debouncer's
+    // Two addresses, one class. `state:{threadId}` holds L0; the debouncer's
     // `{builderId}:{phone}` instance holds the buyer's phone number, their
     // WhatsApp number id and the raw text of messages not yet processed.
     // Deleting one and not the other leaves the buyer in the other.
@@ -96,11 +96,11 @@ describe('purge removes the state, it does not overwrite it', () => {
 });
 
 describe('both doors do the same work', () => {
-  const harness = (convId: string) => {
+  const harness = (threadId: string) => {
     const deps = fakeDeps();
     const turn = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919999999932', channel: 'whatsapp' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919999999932', channel: 'whatsapp' },
         deps,
       );
     return { deps, turn };
@@ -126,7 +126,7 @@ describe('both doors do the same work', () => {
     expect(done.state.focus, 'the session outlived the delete').toBeUndefined();
   });
 
-  it('writes nothing back into the conversation it just erased', async () => {
+  it('writes nothing back into the chat it just erased', async () => {
     // Both doors used to append the buyer's message AND the reply to Desk
     // after the sweep. `messages` is on the erasure manifest, so those two
     // rows are the buyer's own words landing back in a table we had emptied
@@ -148,11 +148,12 @@ describe('the sentence tracks the run', () => {
   const base: ErasureReceipt = {
     scope: 'all',
     deleted: { messages: 12, buyer_memory: 1 },
-    redacted: { conversations: 1 },
+    redacted: { threads: 1 },
     retained: { bookings: 'a signed agreement is kept by law' },
     retained_counts: {},
     failed: [],
-    conversation_ids: ['nd-1'],
+    lead_ids: ['ld-1'],
+    thread_ids: ['nd-1'],
     unteach_phrasing_ids: [],
     tombstone_written: true,
     erased_at: 1_700_000_000_000,
@@ -182,9 +183,9 @@ describe('the sentence tracks the run', () => {
     const run = await performErasure(
       { crm: deps.crm, data: deps.data, store: { ...deps.store, purge: undefined } },
       {
-        convId: 'trace-1',
+        threadId: 'trace-1',
         builderId: 'lokations',
-        ndConversationId: 'nd-1',
+        ndThreadId: 'nd-1',
         buyerPhone: '+919999999933',
         scope: 'all',
       },

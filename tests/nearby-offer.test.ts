@@ -58,14 +58,14 @@ describe('findNearbyTypeOffer', () => {
 describe('nearby offer engine turns', () => {
   it('singleton Sakleshpur plantation soft-offers nearby in reply + chip', async () => {
     const deps = fakeDeps();
-    const convId = 'nearby-soft';
+    const threadId = 'nearby-soft';
     await runEngineTurn(
-      { convId, builderId: 'lokations', text: 'hi', buyerPhone: '+919900002001', channel: 'advisor_web' },
+      { threadId, builderId: 'lokations', text: 'hi', buyerPhone: '+919900002001', channel: 'advisor_web' },
       deps,
     );
     const r = await runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text: 'plantation in sakleshpur under 50 lakhs',
         buyerPhone: '+919900002001',
@@ -86,10 +86,10 @@ describe('nearby offer engine turns', () => {
 
   it('show me other projects too widens to Krishnaja / Coorg Hills', async () => {
     const deps = fakeDeps();
-    const convId = 'nearby-wants-more';
+    const threadId = 'nearby-wants-more';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900002002', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900002002', channel: 'advisor_web' },
         deps,
       );
     await say('hi');
@@ -107,15 +107,15 @@ describe('nearby offer engine turns', () => {
 
   it('yes after nearby CTA widens location and lists nearby estates', async () => {
     const deps = fakeDeps();
-    const convId = 'nearby-yes';
+    const threadId = 'nearby-yes';
     const say = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919900002003', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919900002003', channel: 'advisor_web' },
         deps,
       );
     await say('hi');
     await say('plantation in sakleshpur under 50 lakhs');
-    const mid = await deps.store.load(convId);
+    const mid = await deps.store.load(threadId);
     expect(mid?.rti?.pendingPrompt?.kind).toBe('location_broaden');
     const r = await say('yes, show me those nearby estates');
     // A4 advisor_web: names live on the board / shortlist, not in chat dump.

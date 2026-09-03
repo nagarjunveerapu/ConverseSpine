@@ -368,8 +368,13 @@ export type InvalidateRequest = {
   type: 'segment' | 'project' | 'search' | 'embed' | 'all' | 'lead';
   builderId?: string;
   projectId?: string;
-  /** `'lead'` only — Desk's `conversations.conversation_id`. */
-  conversationId?: string;
+  /**
+   * `'lead'` only — Desk's CRM key (`lead_id`), which is what
+   * `invalidateSpineLead` sends. It is NOT the thread id the engine stores
+   * session state under, so the handler has to translate before it can find a
+   * session (see worker/routes.ts handleCacheInvalidate).
+   */
+  leadId?: string;
   areaNorm?: string;
   propertyType?: string;
   keys?: string[];

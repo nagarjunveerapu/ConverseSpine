@@ -12,15 +12,15 @@ export async function runTurn(
   input: TurnInput,
   ctx?: ExecutionContext,
 ): Promise<TurnResult> {
-  const { conversation_id, buyer_text, builder_id, buyer_phone } = input;
+  const { thread_id, buyer_text, builder_id, buyer_phone } = input;
 
   const engine = await rt.engineForTurn();
   const result = await runEngineTurn(
     {
-      convId: conversation_id,
+      threadId: thread_id,
       builderId: builder_id ?? rt.defaultBuilderId(),
       text: buyer_text,
-      buyerPhone: buyer_phone ?? `web:${conversation_id}`,
+      buyerPhone: buyer_phone ?? `web:${thread_id}`,
       // W6 — the engine's channel is TurnIntentChannel (chip/action budgets
       // only — advisor gets wider menus). 'api' callers keep the tight
       // whatsapp budgets they always had; the CRM door label ('api', 'whatsapp',
@@ -33,11 +33,11 @@ export async function runTurn(
     engine,
   );
 
-  if (result.state.ndConversationId) {
+  if (result.state.ndThreadId) {
     postTurnEgress(rt, ctx, {
       builder_id: result.state.builderId,
       buyer_phone: result.state.ndBuyerPhone ?? buyer_phone ?? '',
-      conversation_id: result.state.ndConversationId,
+      thread_id: result.state.ndThreadId,
       buyer_text,
       understood: { intents: [{ kind: result.debug.goal.kind }], slot_writes: [] },
       visitBooked: result.debug.goal.kind === 'visit_booked',
@@ -66,7 +66,7 @@ export async function runTurn(
     reply_text: result.reply,
     composer: result.debug.goal.kind,
     turn_index: result.state.turnCount,
-    ...(result.state.ndConversationId ? { nd_conversation_id: result.state.ndConversationId } : {}),
+    ...(result.state.ndThreadId ? { nd_thread_id: result.state.ndThreadId } : {}),
     ...(result.welcome ? { welcome_message: result.welcome } : {}),
     ...(result.consentNotice ? { consent_notice: result.consentNotice } : {}),
     ...(result.whatsappActions ? { whatsapp_actions: result.whatsappActions } : {}),
@@ -116,5 +116,5 @@ export async function bootDemo(rt: ConverseRuntime, buyerPhone?: string): Promis
   const phone = buyerPhone ?? '+919990000001';
   const builderId = rt.defaultBuilderId();
   const upsert = await rt.crm.upsertLead({ builder_id: builderId, buyer_phone: phone });
-  return upsert.conversation_id;
+  return upsert.thread_id;
 }

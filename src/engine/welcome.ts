@@ -12,7 +12,7 @@
  *      official-channel line, no template in the way."
  *
  * None of that existed here. Desk built the sender; Spine had no receiver —
- * the fourth time a `conversation_context` field has crossed the wire into a
+ * the fourth time a `thread_context` field has crossed the wire into a
  * type that never declared it. The buyer typed six things into a form, tapped
  * a link that opened WhatsApp, and was met by a bot that greeted them as a
  * stranger and asked for the same six things again.
@@ -37,7 +37,7 @@ import type { Constraints } from './types.js';
 
 export interface WelcomeInput {
   channel: string;
-  /** `conversations.source_detail === 'self_registered'`. */
+  /** `leads.source_detail === 'self_registered'`. */
   selfRegistered?: boolean;
   /** Set once the buyer has been welcomed. Presence is what stops a repeat. */
   welcomedAt?: number;
@@ -50,7 +50,7 @@ export interface WelcomeInput {
 }
 
 /**
- * Whether this conversation still owes the buyer their welcome.
+ * Whether this chat still owes the buyer their welcome.
  *
  * WhatsApp only: the advisor app opens on a screen that shows the profile
  * back, so a sentence describing what we hold would be narrating something

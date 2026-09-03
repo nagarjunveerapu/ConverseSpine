@@ -1,10 +1,10 @@
 import { currentShortlist } from '../engine/entity-store.js';
 import { prefetchProjects } from '../engine/project-cache.js';
-import { commitTo, initState, withNdConversation } from '../engine/state.js';
+import { commitTo, initState, withNdThread } from '../engine/state.js';
 import type { ConverseRuntime } from '../runtime/deps.js';
 import { mapProjectDetailDto, type AdvisorProjectDetailDto } from './map-project-detail.js';
 import { scopeFocusedConfigurations } from './map-response.js';
-import { sessionToConvId, sessionToPhone } from './session.js';
+import { sessionToStateKey, sessionToPhone } from './session.js';
 
 const DEFAULT_ADVISOR_BUILDER = 'naya-advisor';
 
@@ -28,15 +28,15 @@ export async function handleAdvisorProjectDetail(
   if (!session_id) return { status: 'error', error: 'session_id_required' };
   if (!project_id) return { status: 'error', error: 'project_id_required' };
 
-  const convId = sessionToConvId(session_id);
-  let state = (await rt.engine.store.load(convId)) ?? initState(convId, builder_id);
+  const stateKey = sessionToStateKey(session_id);
+  let state = (await rt.engine.store.load(stateKey)) ?? initState(stateKey, builder_id);
 
-  if (!state.ndConversationId && buyer_phone) {
+  if (!state.ndThreadId && buyer_phone) {
     const lead = await rt.engine.crm.ensureLead(builder_id, buyer_phone).catch(() => null);
-    if (lead) state = withNdConversation(state, lead.conversationId, buyer_phone);
+    if (lead) state = withNdThread(state, lead.threadId, buyer_phone);
   }
 
-  const nd = state.ndConversationId;
+  const nd = state.ndThreadId;
   if (!nd) return { status: 'error', error: 'lead_unavailable' };
 
   const projectName =

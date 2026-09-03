@@ -1,4 +1,4 @@
-import type { ConversationState, Extracted } from '../types.js';
+import type { ThreadState, Extracted } from '../types.js';
 import { currentShortlist, discussedList } from '../entity-store.js';
 
 /**
@@ -50,7 +50,7 @@ export function hasTeachCompareStamp(ex: Extracted): boolean {
 /** Merge compare intent — prefer named pair, then discussed set, then shortlist. */
 export function prepareCompareExtracted(
   text: string,
-  state: ConversationState,
+  state: ThreadState,
   ex: Extracted,
 ): Extracted {
   // Open "which location / which is better …" reaches here via SIL compare_projects
@@ -99,7 +99,7 @@ export function prepareCompareExtracted(
 }
 
 /** When buyer already has a multi-project shortlist, do not emit budget-gap no_fit on compare-ish turns. */
-export function shouldAllowBudgetGapNoFit(state: ConversationState, text: string): boolean {
+export function shouldAllowBudgetGapNoFit(state: ThreadState, text: string): boolean {
   if (currentShortlist(state).length < 2) return true;
   if (isCompareAmongOfferedTurn(text)) return false;
   if (/\bcompare\b/i.test(text)) return false;

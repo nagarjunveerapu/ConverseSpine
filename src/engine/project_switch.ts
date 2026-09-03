@@ -1,7 +1,7 @@
 /**
  * Focused-phase project switch — commit when PROJECT_VECTORS fills namedProjects.
  */
-import type { AnswerTopic, ConversationState, Extracted, OfferedProject, TurnGoal } from './types.js';
+import type { AnswerTopic, ThreadState, Extracted, OfferedProject, TurnGoal } from './types.js';
 import type { EngineDeps } from './ports.js';
 import { bearingTokensOf, tokenizeName } from './name-index.js';
 import { discourseOffered, resolveAlternateProject, currentShortlist, discussedList } from './entity-store.js';
@@ -342,7 +342,7 @@ function exactPoolPick(pool: readonly OfferedProject[], pickName: string): Offer
   return null;
 }
 
-function poolOf(s: ConversationState): OfferedProject[] {
+function poolOf(s: ThreadState): OfferedProject[] {
   const fromStore = discourseOffered(s);
   if (fromStore.length > 0) return fromStore;
   // Pre-1a sessions.
@@ -367,7 +367,7 @@ export function isAlternateDeixis(text: string): boolean {
 export function detectFocusedSwitchIntent(
   _text: string,
   ex: Extracted,
-  s: ConversationState,
+  s: ThreadState,
 ): (SwitchIntent & { commit: OfferedProject }) | null {
   if (!s.focus) return null;
   if (ex.recall || ex.stop || ex.transition === 'see_others' || ex.wantsMore || ex.transition === 'want_visit') {
@@ -477,7 +477,7 @@ export function detectFocusedSwitchIntent(
 export async function resolveFocusedSwitchGoal(
   text: string,
   ex: Extracted,
-  s: ConversationState,
+  s: ThreadState,
   _deps: EngineDeps,
 ): Promise<TurnGoal | null> {
   const intent = detectFocusedSwitchIntent(text, ex, s);

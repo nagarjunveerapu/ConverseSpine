@@ -1,4 +1,4 @@
-import type { ConversationState } from '../engine/types.js';
+import type { ThreadState } from '../engine/types.js';
 import type { StoredVisit } from '../engine/ports.js';
 
 export type ItineraryStopStatus = 'queued' | 'proposed' | 'booked';
@@ -22,7 +22,7 @@ export interface AdvisorVisitItinerary {
   stops: AdvisorItineraryStop[];
 }
 
-export function mapVisitItinerary(state: ConversationState): AdvisorVisitItinerary | undefined {
+export function mapVisitItinerary(state: ThreadState): AdvisorVisitItinerary | undefined {
   const booked: StoredVisit[] =
     state.visitBookedCache?.map((v) => ({
       projectId: v.projectId,

@@ -7,11 +7,11 @@ import { fakeDeps } from './fakes.js';
  * confirm gate. propose → bare affirm → hold placed via the Desk port; the
  * confirm window is one-shot; visit phrasing must not be hijacked.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999992', channel: 'advisor_web' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999992', channel: 'advisor_web' },
       deps,
     );
   return { deps, turn };

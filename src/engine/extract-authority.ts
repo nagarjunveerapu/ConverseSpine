@@ -60,7 +60,7 @@ import {
   mayWriteSearchConstraints,
 } from './speech-act/index.js';
 import type { ChipResolution } from './speech-act/types.js';
-import type { ConversationState, Extracted } from './types.js';
+import type { ThreadState, Extracted } from './types.js';
 
 export interface ExtractTurnDeps {
   llm: EngineLlm;
@@ -112,7 +112,7 @@ export interface ExtractTurnResult {
  */
 export async function extractTurnAuthority(
   text: string,
-  state: ConversationState,
+  state: ThreadState,
   builderId: string,
   deps: ExtractTurnDeps,
   options: ExtractTurnOptions,
@@ -648,7 +648,7 @@ export function mergeExtractedAuthority(
 /** Drop embedder namedProjects on focused pure-facet / location-correction turns. */
 export function scrubEmbedderIdentityNoise(
   text: string,
-  phase: ConversationState['phase'],
+  phase: ThreadState['phase'],
   extracted: Extracted,
   sessionPool?: ReadonlyArray<{ name: string }>,
   catalogNames: ReadonlyArray<{ projectId?: string; name: string }> = [],
@@ -722,7 +722,7 @@ export function scrubEmbedderIdentityNoise(
  */
 export function demoteNonSearchOnFreshSearch(
   text: string,
-  state: ConversationState,
+  state: ThreadState,
   resolution: ChipResolution,
 ): ChipResolution {
   if (state.focus || currentShortlist(state).length > 0) return resolution;
@@ -739,7 +739,7 @@ export function demoteNonSearchOnFreshSearch(
 /** @deprecated use demoteNonSearchOnFreshSearch */
 export function demoteVisitBookOnFreshSearch(
   text: string,
-  state: ConversationState,
+  state: ThreadState,
   resolution: ChipResolution,
 ): ChipResolution {
   return demoteNonSearchOnFreshSearch(text, state, resolution);

@@ -44,16 +44,16 @@ export function statusDetail(s: MetaStatus): string {
 export async function fileTurnReceipts(
   crm: NayaDeskClient,
   builder_id: string,
-  conversation_id: string | undefined,
+  thread_id: string | undefined,
   report: WhatsAppDeliveryReport,
 ): Promise<void> {
-  // No Desk conversation means no rows to file against — an eval turn or a
+  // No Desk thread means no rows to file against — an eval turn or a
   // demo. Silence here is correct; it is not a dropped receipt.
-  if (!conversation_id || !builder_id || report.parts.length === 0) return;
+  if (!thread_id || !builder_id || report.parts.length === 0) return;
   await crm
     .reportWhatsAppDelivery({
       builder_id,
-      conversation_id,
+      thread_id,
       reports: report.parts.map((p) => ({
         content: p.content,
         status: p.status,

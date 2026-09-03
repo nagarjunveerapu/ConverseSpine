@@ -11,7 +11,7 @@ describe('placeHold posts /api/v1/holds', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sends builder, project, type, and conversation on the v1 door', async () => {
+  it('sends builder, project, type, and thread on the v1 door', async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({
@@ -31,7 +31,7 @@ describe('placeHold posts /api/v1/holds', () => {
       builder_id: 'sandbox',
       project_id: 'proj',
       unit_type: '2 BHK',
-      conversation_id: 'c1',
+      thread_id: 'c1',
       ttl_minutes: 60,
     });
 
@@ -44,7 +44,7 @@ describe('placeHold posts /api/v1/holds', () => {
       builder_id: 'sandbox',
       project_id: 'proj',
       unit_type: '2 BHK',
-      conversation_id: 'c1',
+      thread_id: 'c1',
       ttl_minutes: 60,
     });
     expect((init.headers as Record<string, string>)['x-bot-secret']).toBe('s');

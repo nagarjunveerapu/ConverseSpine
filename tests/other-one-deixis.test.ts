@@ -80,7 +80,7 @@ describe('OTHER-01 engine turn', () => {
 
     const t = await runEngineTurn(
       {
-        convId: 'other01e2e',
+        threadId: 'other01e2e',
         builderId: 'lokations',
         text: 'what about the other one',
         buyerPhone: '+919900000061',
@@ -102,7 +102,7 @@ describe('OTHER-01 engine turn', () => {
 
     const t = await runEngineTurn(
       {
-        convId: 'other01solo',
+        threadId: 'other01solo',
         builderId: 'lokations',
         text: 'what about the other one',
         buyerPhone: '+919900000062',

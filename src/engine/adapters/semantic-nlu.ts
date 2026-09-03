@@ -1,5 +1,5 @@
 import type { Env } from '../../env.js';
-import type { AnswerTopic, ConversationState, Extracted, OfferedProject } from '../types.js';
+import type { AnswerTopic, ThreadState, Extracted, OfferedProject } from '../types.js';
 import { detectTopics, isDetailAskTurn, isLocationCorrectionTurn, looksLikeConfigAsk } from '../facts.js';
 import { getQueryCanonicalizer } from '../../nlu/vocab.js';
 import { buyerCuedOtherProject, facetNameResidue } from '../project_switch.js';
@@ -47,7 +47,7 @@ export interface SemanticNluPort {
 }
 
 export interface SemanticContext {
-  phase: ConversationState['phase'];
+  phase: ThreadState['phase'];
   microMarkets: readonly string[];
   /** Shortlist names — enables PROJECT_VECTORS on chip-miss when buyer names a match. */
   offeredProjectNames?: readonly string[];

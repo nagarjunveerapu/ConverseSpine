@@ -94,7 +94,7 @@ describe('EMI turn contract', () => {
     const deps = fakeDeps();
     const result = await runEngineTurn(
       {
-        convId: 'emi-contract-off',
+        threadId: 'emi-contract-off',
         builderId: 'lokations',
         buyerPhone: '+919999991100',
         text: 'calculate EMI at 8.5% for 20 years',
@@ -110,7 +110,7 @@ describe('EMI turn contract', () => {
     const turn = (text: string) =>
       runEngineTurn(
         {
-          convId: 'emi-explicit-turn',
+          threadId: 'emi-explicit-turn',
           builderId: 'lokations',
           buyerPhone: '+919999991101',
           text,
@@ -131,7 +131,7 @@ describe('EMI turn contract', () => {
     deps.failureTools = true;
     const result = await runEngineTurn(
       {
-        convId: 'emi-missing-turn',
+        threadId: 'emi-missing-turn',
         builderId: 'lokations',
         buyerPhone: '+919999991102',
         text: 'calculate EMI at 8.5% for 20 years',
@@ -149,7 +149,7 @@ describe('EMI turn contract', () => {
     const turn = (text: string) =>
       runEngineTurn(
         {
-          convId: 'emi-focused-turn',
+          threadId: 'emi-focused-turn',
           builderId: 'lokations',
           buyerPhone: '+919999991103',
           text,

@@ -146,8 +146,8 @@ describe('FAILURE_LOG behavior gate', () => {
       buyerPhone: '+919999990001',
       channel: 'whatsapp' as const,
     };
-    const withLog = await runEngineTurn({ ...common, convId: 'failure-log-on' }, enabled);
-    const withoutLog = await runEngineTurn({ ...common, convId: 'failure-log-off' }, disabled);
+    const withLog = await runEngineTurn({ ...common, threadId: 'failure-log-on' }, enabled);
+    const withoutLog = await runEngineTurn({ ...common, threadId: 'failure-log-off' }, disabled);
 
     expect(withLog.reply).toBe(withoutLog.reply);
     expect(withLog.debug.goal).toEqual(withoutLog.debug.goal);

@@ -118,11 +118,11 @@ export function erasureTrace(r: ErasureReceipt | null, visitsCancelled: number):
 
 /** What the doors need to run an erasure. Spine's ids, not Desk's. */
 export interface ErasureRunInput {
-  /** Spine's conversation id — the key for L0 state in the DO and in KV. */
-  convId: string;
+  /** Spine's thread id — the key for L0 state in the DO and in KV. */
+  threadId: string;
   builderId: string;
-  /** Desk's conversation id. Without one there is nothing in Desk to erase. */
-  ndConversationId: string;
+  /** Desk's thread id. Without one there is nothing in Desk to erase. */
+  ndThreadId: string;
   /** Needed for the second DO address, which is keyed `builderId:phone`. */
   buyerPhone: string;
   scope: 'all' | 'contact_only';
@@ -157,7 +157,7 @@ export interface ErasureRunResult {
  *     them. We cancel even when the Desk sweep came back partial: an unwanted
  *     site visit is never the safer failure.
  *  3. **Local state last.** Purging kills the state object that holds
- *     `ndConversationId`, so it cannot run before the two steps that need it.
+ *     `ndThreadId`, so it cannot run before the two steps that need it.
  *
  * Nothing here throws. A buyer who asked to be forgotten gets an answer either
  * way; when we cannot show the run finished, the reply says a person will
@@ -168,16 +168,16 @@ export async function performErasure(
   input: ErasureRunInput,
 ): Promise<ErasureRunResult> {
   const receipt = await deps.crm
-    .eraseBuyer(input.ndConversationId, input.scope)
+    .eraseBuyer(input.ndThreadId, input.scope)
     .catch(() => null);
 
   const visitsCancelled = await deps.data
-    .cancelSiteVisits(input.ndConversationId)
+    .cancelSiteVisits(input.ndThreadId)
     .catch(() => 0);
 
   // `freshSession()` was what stood here, and it is not a delete: it builds a
   // blank state and `save()` writes it over the old one, leaving the KV copy to
-  // live out its 30 days. The DO is addressed two ways — `state:{convId}` for
+  // live out its 30 days. The DO is addressed two ways — `state:{threadId}` for
   // L0, `{builderId}:{phone}` for the WhatsApp debouncer, which holds the
   // buyer's phone number and their raw un-processed messages — so both go.
   // Only a real erasure purges. `contact_only` means "stop messaging me" —
@@ -187,7 +187,7 @@ export async function performErasure(
   let purged = false;
   if (deps.store.purge && input.scope === 'all') {
     await deps.store
-      .purge(input.convId, { builderId: input.builderId, buyerPhone: input.buyerPhone })
+      .purge(input.threadId, { builderId: input.builderId, buyerPhone: input.buyerPhone })
       .then(() => { purged = true; })
       .catch(() => {});
   }

@@ -225,12 +225,12 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
 });
 
 describe('engine: a node tap answers with the project record (WA project-first)', () => {
-  function harness(convId: string) {
+  function harness(threadId: string) {
     const deps = { ...fakeDeps(), waProjectFirst: true };
     const turn = (text: string, actionId?: string) =>
       runEngineTurn(
         {
-          convId,
+          threadId,
           builderId: 'lokations',
           text,
           buyerPhone: '+919999991171',
@@ -272,8 +272,8 @@ describe('engine: a node tap answers with the project record (WA project-first)'
 describe('engine: a bare yes lands on the armed offer (WA project-first)', () => {
   it('yes after an offer_pricing closer answers the offered topic', async () => {
     const deps = { ...fakeDeps(), waProjectFirst: true };
-    const convId = 'wa-yes-antecedent';
-    let s = commitTo(initState(convId, 'lokations'), 'eldorado', 'Brigade Eldorado');
+    const threadId = 'wa-yes-antecedent';
+    let s = commitTo(initState(threadId, 'lokations'), 'eldorado', 'Brigade Eldorado');
     s = {
       ...s,
       rti: {
@@ -290,7 +290,7 @@ describe('engine: a bare yes lands on the armed offer (WA project-first)', () =>
 
     const out = await runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text: 'yes',
         buyerPhone: '+919999991172',
@@ -308,8 +308,8 @@ describe('engine: a bare yes lands on the armed offer (WA project-first)', () =>
 
   it('no after the same offer declines it — never the filter-adjust probe', async () => {
     const deps = { ...fakeDeps(), waProjectFirst: true };
-    const convId = 'wa-no-antecedent';
-    let s = commitTo(initState(convId, 'lokations'), 'eldorado', 'Brigade Eldorado');
+    const threadId = 'wa-no-antecedent';
+    let s = commitTo(initState(threadId, 'lokations'), 'eldorado', 'Brigade Eldorado');
     s = {
       ...s,
       rti: {
@@ -326,7 +326,7 @@ describe('engine: a bare yes lands on the armed offer (WA project-first)', () =>
 
     const out = await runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text: 'no thanks',
         buyerPhone: '+919999991173',

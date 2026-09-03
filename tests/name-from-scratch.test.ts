@@ -45,7 +45,7 @@ describe('AB-6 — cold-named project commits, not re-searches', () => {
     // villa?" must commit to it, not re-search on the type word.
     const deps = fakeDeps();
     const r = await runEngineTurn(
-      { convId: 'ab6-cold', builderId: 'lokations', text: 'is Clarks Exotica a villa project?', buyerPhone: '+919999999981' },
+      { threadId: 'ab6-cold', builderId: 'lokations', text: 'is Clarks Exotica a villa project?', buyerPhone: '+919999999981' },
       deps,
     );
     expect(r.debug.goal.kind).not.toBe('recommend');
@@ -57,7 +57,7 @@ describe('AB-6 — cold-named project commits, not re-searches', () => {
     const deps = fakeDeps();
     const r = await runEngineTurn(
       {
-        convId: 'ab6-search',
+        threadId: 'ab6-search',
         builderId: 'lokations',
         text: '2 BHK apartments in Sarjapur under 1 Cr',
         buyerPhone: '+919999999982',

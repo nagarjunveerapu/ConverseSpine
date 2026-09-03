@@ -40,7 +40,7 @@ function samePlace(a: string, b: string): boolean {
 function recoveryFilters(filters: SearchFilters): SearchFilters {
   const {
     locations: _loc,
-    conversationId: _cid,
+    ndThreadId: _cid,
     preferenceWeights: _pw,
     commuteHub: _hub,
     budgetTargetInr: _bt,

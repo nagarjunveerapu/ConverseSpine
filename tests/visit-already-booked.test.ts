@@ -11,11 +11,11 @@ import { fakeDeps } from './fakes.js';
  * from nothing. A bot that asks for a day it already has is telling the buyer
  * the booking did not happen.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'whatsapp' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'whatsapp' },
       deps,
     );
   return { turn };

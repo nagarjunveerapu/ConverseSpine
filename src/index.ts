@@ -263,7 +263,7 @@ export default {
           builder_id?: string;
           buyer_phone?: string;
           text?: string;
-          conversation_id?: string;
+          thread_id?: string;
           action_id?: string;
           channel?: 'whatsapp' | 'advisor_web' | 'api';
         };
@@ -289,7 +289,7 @@ export default {
             builder_id: parsed.builder_id,
             buyer_phone: parsed.buyer_phone,
             text: parsed.text,
-            conversation_id: parsed.conversation_id,
+            thread_id: parsed.thread_id,
             action_id: parsed.action_id,
             // W6 — label the door; bare /chat callers are 'api'.
             channel: parsed.channel ?? 'api',

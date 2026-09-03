@@ -16,7 +16,7 @@ export type ComposerKind =
   | 'llm'
   | 'early_exit:ack';
 
-export interface ConversationRow {
+export interface LeadRow {
   id: string;
   buyer_phone: string;
   builder_id: string;
@@ -41,7 +41,8 @@ export interface ProjectRow {
 }
 
 export interface MemoryView {
-  conversation: ConversationRow;
+  /** Desk's CRM row for this buyer — served under `lead` since the 0220 cutover. */
+  lead: LeadRow;
   facts: {
     budget?: string;
     bhk?: string;
@@ -51,7 +52,7 @@ export interface MemoryView {
   };
   pending: { kind: string; payload: Record<string, unknown> } | null;
   shortlist: string[];
-  /** From NayaDesk conversation-context when focused. */
+  /** From NayaDesk thread-context when focused. */
   focusedProject?: {
     project_id: string;
     name: string;
@@ -113,7 +114,7 @@ export interface DecideResult {
 }
 
 export interface TurnLedgerRow {
-  conversation_id: string;
+  thread_id: string;
   turn_index: number;
   buyer_text: string;
   composer: string;
@@ -124,7 +125,7 @@ export interface TurnLedgerRow {
 }
 
 export interface TurnInput {
-  conversation_id: string;
+  thread_id: string;
   buyer_text: string;
   builder_id?: string;
   buyer_phone?: string;
@@ -148,15 +149,19 @@ export interface TurnResult {
   /** Engine turn goal kind (e.g. recommend, answer, visit_booked). */
   composer: string;
   /**
-   * Desk's lead id for this conversation, when the engine resolved one.
+   * Desk's THREAD id for this chat, when the engine resolved one.
+   *
+   * The messaging key (builder x buyer x CHANNEL), NOT the CRM key. Its own doc
+   * used to call it "Desk's lead id", which is the confusion the 0220 cutover
+   * exists to end: a buyer chasing two projects has two leads and one thread.
    *
    * Delivery needs it. The bubbles below are written to Desk at COMPOSE time
    * and sent afterwards, so the receipt for a send has to find its way back to
-   * a conversation the sender never learned the id of. Absent for a turn that
+   * a chat the sender never learned the id of. Absent for a turn that
    * never reached Desk (eval harness, demo CLI) — an absent id means "file no
    * receipt", never "the send failed".
    */
-  nd_conversation_id?: string;
+  nd_thread_id?: string;
   turn_index: number;
   whatsapp_actions?: Array<{ id: string; label: string; patch: Record<string, string | undefined>; user_line: string; expected_matches: number }>;
   /** Native Cloud API interactive (list XOR buttons). Saarathi / webhook send this. */
@@ -186,7 +191,7 @@ export interface TurnResult {
   debug?: {
     phase?: string;
     goal?: unknown;
-    /** Turn-end conversation state. Additive, and the reason the live harness
+    /** Turn-end chat state. Additive, and the reason the live harness
      *  can grade a deployed reply as strictly as the in-process one. */
     focus?: { projectId: string; projectName: string };
     constraints?: Record<string, unknown>;

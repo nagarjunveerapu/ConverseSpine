@@ -151,10 +151,10 @@ describe('Phase 0 — the/this project binding', () => {
 describe('Phase 0 — golden focused-depth thread', () => {
   it('focused breakdown → details-of-the-project keeps depth', async () => {
     const deps = fakeDeps();
-    const convId = 'phase0-orchards-thread';
+    const threadId = 'phase0-orchards-thread';
     const turn = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919999999991', channel: 'advisor_web' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919999999991', channel: 'advisor_web' },
         deps,
       );
 
@@ -180,10 +180,10 @@ describe('Phase 0 — golden focused-depth thread', () => {
 
   it('pricing and legal both stays on focused project without location poison', async () => {
     const deps = fakeDeps();
-    const convId = 'phase0-multi-topic';
+    const threadId = 'phase0-multi-topic';
     const turn = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'lokations', text, buyerPhone: '+919999999992' },
+        { threadId, builderId: 'lokations', text, buyerPhone: '+919999999992' },
         deps,
       );
 

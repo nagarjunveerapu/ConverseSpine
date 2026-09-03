@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { classifyTurnRouting } from '../src/engine/turn-routing/classify.js';
 import { buildTurnRoutingInput } from '../src/engine/turn-routing/types.js';
 import type { TurnRoutingInput } from '../src/engine/turn-routing/types.js';
-import type { ConversationState, Extracted } from '../src/engine/types.js';
+import type { ThreadState, Extracted } from '../src/engine/types.js';
 
 /**
  * A chip tap is a BUTTON with a constant payload. Its meaning is decided at the
@@ -58,7 +58,7 @@ describe('buildTurnRoutingInput carries the source', () => {
     builderId: 'naya-advisor',
     phase: 'discover',
     discover: { lastOffered: [] },
-  } as unknown as ConversationState;
+  } as unknown as ThreadState;
   const ex = { constraints: {} } as Extracted;
 
   it('threads chip through so routing can see it', () => {

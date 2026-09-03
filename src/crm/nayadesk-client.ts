@@ -36,14 +36,36 @@ export interface ErasureReceiptDto {
   retained_counts?: Record<string, number>;
   /** Non-empty means the run was partial. Never claim completeness over this. */
   failed: string[];
-  conversation_ids: string[];
+  /**
+   * The CRM keys swept — one per (builder, buyer, PROJECT) pursuit. Desk
+   * renamed this from `conversation_ids` at the 0220 cutover; the two lists
+   * are not interchangeable, and feeding lead ids to a thread-keyed table
+   * matched nothing while reporting a clean sweep.
+   */
+  lead_ids: string[];
+  /** The messaging keys swept — one per (builder, buyer, CHANNEL). */
+  thread_ids: string[];
   unteach_phrasing_ids: string[];
   tombstone_written: boolean;
   erased_at: number;
 }
 
-export interface NdConversation {
-  conversation_id: string;
+/**
+ * Desk's CRM row for a buyer, as the bot reads it.
+ *
+ * TWO KEYS, AND THEY ARE NOT THE SAME KEY. `lead_id` is the CRM key —
+ * builder x buyer x PROJECT — and it is what every `/api/leads/*` and lead-only
+ * door wants. `thread_id` is the messaging key — builder x buyer x CHANNEL.
+ * A buyer chasing two projects on one number has TWO leads and ONE thread.
+ *
+ * `lead_id` is null when Desk found a thread and no pursuit behind it (the bot
+ * has greeted someone who has not settled on a project yet). Read it as
+ * "no lead", never as "use the thread id instead".
+ */
+export interface NdLead {
+  lead_id: string | null;
+  /** Present when Desk answered about a thread with no pursuit. */
+  thread_id?: string;
   builder_id: string;
   buyer_phone: string;
   buyer_name: string;
@@ -60,12 +82,12 @@ export interface NdConversation {
   shortlist_project_ids: string;
   turn_count: number;
   /**
-   * How this lead came into being. `/api/conversation-context` returns the
-   * WHOLE `conversations` row (`SELECT *`), so these have been arriving on
-   * every turn since the columns existed — this interface simply never
-   * declared them, which is the only reason nothing could read them.
+   * How this lead came into being. `/api/thread-context` returns the WHOLE
+   * CRM row, so these have been arriving on every turn since the columns
+   * existed — this interface simply never declared them, which is the only
+   * reason nothing could read them.
    *
-   * That is the fourth time a conversation_context field has crossed the wire
+   * That is the fourth time a thread-context field has crossed the wire
    * into a type that did not declare it. Optional because a Desk older than a
    * given column sends nothing, and an absent field must read as "not known",
    * never as "not self-registered".
@@ -181,7 +203,16 @@ export interface NdMediaAssetRow {
 }
 
 export interface NdContextBundle {
-  conversation: NdConversation;
+  /**
+   * Desk serves the CRM row under `lead` (it was `conversation` before 0220).
+   *
+   * TRAP: `lead.lead_id` falls back to the THREAD id when the thread has no
+   * single resolvable pursuit (Desk `threadAsDeskLead`: `lead?.lead_id ??
+   * thread.thread_id`). Never post this value into a lead-only door without
+   * checking it against the thread id you asked with — see `leadIdForThread`
+   * in engine/adapters/nayadesk.ts.
+   */
+  lead: NdLead;
   project: NdProjectSummary | null;
   units?: Array<{
     unit_type?: string;
@@ -252,7 +283,7 @@ export interface NdSearchMatch {
   lat?: number | null;
   lng?: number | null;
   /** Trade-off Advisor (Desk Phase 1): grounded trade-off narration, present
-   *  only when the search resolved preference weights for this conversation. */
+   *  only when the search resolved preference weights for this lead. */
   tradeoff_note?: string;
   preference_boost?: number;
   /** Four-questions receipts: typed per-dimension backing + structured absence
@@ -416,23 +447,47 @@ export class NayaDeskClient {
     budget_inr?: string;
     visit_date_pref?: string;
     purpose?: string;
-    /** W6 — ingress door label; Desk stores it on conversations.channel. */
+    /** W6 — ingress door label; Desk stores it on the thread's channel. */
     channel?: string;
     /** A5 reveal — e.g. naya_advisor. */
     source?: string;
     source_detail?: string;
     pending_action?: string;
     pending_action_payload?: unknown;
-  }): Promise<{ ok: true; conversation_id: string; created: boolean }> {
+  }): Promise<{
+    /**
+     * ALWAYS present — the messaging key. This is the id Spine keys its engine
+     * state on and the only id this door returns when no `project_id` was sent.
+     */
+    ok: true; thread_id: string;
+    /**
+     * Present ONLY when `project_id` was supplied, because only then does a
+     * pursuit exist to key. Absent is not an error; it means "no lead yet".
+     */
+    lead_id?: string;
+    created: boolean;
+  }> {
     return this.call('PUT', '/api/v1/leads', req);
   }
 
-  getLead(conversation_id: string): Promise<{ lead: NdConversation }> {
-    return this.call('GET', `/api/v1/leads/${encodeURIComponent(conversation_id)}`);
+  /**
+   * Desk's `guardLead` accepts a LEAD id or a THREAD id here: a thread resolves
+   * only when its focused project names one of the buyer's pursuits, or the
+   * buyer has exactly one. Otherwise Desk answers 409 `ambiguous_lead` and this
+   * throws NayaDeskError(409) — a buyer chasing two projects is the case.
+   */
+  getLead(lead_or_thread_id: string): Promise<{ lead: NdLead }> {
+    return this.call('GET', `/api/v1/leads/${encodeURIComponent(lead_or_thread_id)}`);
   }
 
+  /**
+   * Desk's `guardLead` accepts a LEAD id or a THREAD id here: a thread resolves
+   * only when its focused project names one of the buyer's pursuits, or the
+   * buyer has exactly one. Otherwise Desk answers 409 `ambiguous_lead` and this
+   * throws NayaDeskError(409) — a buyer chasing two projects is the case.
+   */
   patchFacts(
-    conversation_id: string,
+    lead_or_thread_id: string,
     facts: {
       buyer_name?: string;
       bhk_preference?: string;
@@ -442,29 +497,35 @@ export class NayaDeskClient {
       purpose?: string;
     },
   ): Promise<{ ok: true }> {
-    return this.call('PATCH', `/api/v1/leads/${encodeURIComponent(conversation_id)}/facts`, facts);
+    return this.call('PATCH', `/api/v1/leads/${encodeURIComponent(lead_or_thread_id)}/facts`, facts);
   }
 
-  patchStage(conversation_id: string, stage: string, only_forward?: boolean): Promise<{ ok: true }> {
+  /**
+   * Desk's `guardLead` accepts a LEAD id or a THREAD id here: a thread resolves
+   * only when its focused project names one of the buyer's pursuits, or the
+   * buyer has exactly one. Otherwise Desk answers 409 `ambiguous_lead` and this
+   * throws NayaDeskError(409) — a buyer chasing two projects is the case.
+   */
+  patchStage(lead_or_thread_id: string, stage: string, only_forward?: boolean): Promise<{ ok: true }> {
     // Store stages are new|talking|qualified|visiting|negotiating.
     // Leftover bot vocabulary maps at this seam — not in turn.ts.
     if (stage === 'escalated') {
-      return this.call('POST', `/api/v1/leads/${encodeURIComponent(conversation_id)}/escalate`, {});
+      return this.call('POST', `/api/v1/leads/${encodeURIComponent(lead_or_thread_id)}/escalate`, {});
     }
     const mapped =
       stage === 'visit_booked' ? 'visiting'
         : stage === 'engaged' ? 'talking'
           : stage;
-    return this.call('PATCH', `/api/v1/leads/${encodeURIComponent(conversation_id)}/stage`, {
+    return this.call('PATCH', `/api/v1/leads/${encodeURIComponent(lead_or_thread_id)}/stage`, {
       stage: mapped,
       ...(only_forward ? { only_forward: true } : {}),
     });
   }
 
-  commitProject(conversation_id: string, project_id: string): Promise<{ ok: true }> {
+  commitProject(thread_id: string, project_id: string): Promise<{ ok: true }> {
     return this.call(
       'POST',
-      `/api/conversations/${encodeURIComponent(conversation_id)}/commit-project`,
+      `/api/threads/${encodeURIComponent(thread_id)}/commit-project`,
       { project_id },
     );
   }
@@ -480,7 +541,7 @@ export class NayaDeskClient {
     project_id: string;
     unit_id?: string;
     unit_type?: string;
-    conversation_id?: string;
+    thread_id?: string;
     buyer_name?: string;
     ttl_minutes?: number;
     note?: string;
@@ -501,9 +562,9 @@ export class NayaDeskClient {
     return this.call('POST', '/api/v1/holds', req);
   }
 
-  conversationContext(conversation_id: string, recent_message_limit?: number): Promise<NdContextBundle> {
-    return this.call('POST', '/api/conversation-context', {
-      conversation_id,
+  threadContext(thread_id: string, recent_message_limit?: number): Promise<NdContextBundle> {
+    return this.call('POST', '/api/thread-context', {
+      thread_id,
       ...(recent_message_limit !== undefined ? { recent_message_limit } : {}),
     });
   }
@@ -562,7 +623,7 @@ export class NayaDeskClient {
     buyer_text: string;
     suggested_topic?: string;
     source?: 'education_miss' | 'unknown' | 'understanding' | 'manual';
-    conversation_id?: string;
+    thread_id?: string;
   }): Promise<{ ok: boolean; queue_id: string }> {
     return this.call('POST', '/api/buyer-education/queue', body);
   }
@@ -577,10 +638,16 @@ export class NayaDeskClient {
     project_types?: string[];
     purpose?: 'self_use' | 'investment';
     max_results?: number;
-    /** Trade-off Advisor: Desk resolves BPE weights for this conversation and
-     *  re-ranks + narrates. Recommend path only; other callers omit it. */
-    conversation_id?: string;
-    /** Explicit weights win over conversation_id resolution (Desk contract). */
+    /**
+     * Trade-off Advisor: Desk resolves BPE weights for this LEAD and re-ranks +
+     * narrates. Recommend path only; other callers omit it.
+     *
+     * LEAD id only — `src/lib/advisor_profile.ts` reads `WHERE lead_id = ?`.
+     * Unlike the other lead-only doors this one DEGRADES SILENTLY: an id it
+     * cannot resolve yields no weights and an un-narrated rank, not a 404.
+     */
+    lead_id?: string;
+    /** Explicit weights win over lead_id resolution (Desk contract). */
     preference_weights?: Record<string, number>;
     commute_hub?: string;
     budget_target_inr?: number;
@@ -597,8 +664,8 @@ export class NayaDeskClient {
 
   /**
    * Project-scoped media list — the library the catalog holds, with NO
-   * conversation needed. Media otherwise reaches the engine only through
-   * conversationContext, which is scoped to whatever project Desk already has
+   * chat needed. Media otherwise reaches the engine only through
+   * threadContext, which is scoped to whatever project Desk already has
    * in focus, so a buyer picking a project off the board could never be offered
    * its brochure. Rows come back across every disclosure tier (the route serves
    * the library UI too) — the caller keeps public and leaves entitlement to
@@ -656,17 +723,25 @@ export class NayaDeskClient {
     );
   }
 
+  /**
+   * LEAD id only. Desk resolves this with a literal `WHERE lead_id = ?` and has
+   * no thread fallback — a thread id here answers 404 `lead_not_found`.
+   */
   pricingQuote(req: {
     project_id: string;
-    conversation_id: string;
+    lead_id: string;
     unit_type?: string;
   }): Promise<NdPricingQuote & { components_withheld?: Array<{ label: string; redirect_hint?: string }> }> {
     return this.call('POST', '/api/pricing/quote', req);
   }
 
+  /**
+   * LEAD id only. Desk resolves this with a literal `WHERE lead_id = ?` and has
+   * no thread fallback — a thread id here answers 404 `lead_not_found`.
+   */
   landedCost(req: {
     project_id: string;
-    conversation_id: string;
+    lead_id: string;
     unit_type: string;
   }): Promise<{
     base_price_low_inr?: number;
@@ -679,8 +754,12 @@ export class NayaDeskClient {
     return this.call('POST', '/api/pricing/landed-cost', req);
   }
 
+  /**
+   * LEAD id only. Desk resolves this with a literal `WHERE lead_id = ?` and has
+   * no thread fallback — a thread id here answers 404 `lead_not_found`.
+   */
   compareProjects(req: {
-    conversation_id: string;
+    lead_id: string;
     project_ids: string[];
   }): Promise<{
     projects: Array<Record<string, unknown>>;
@@ -690,9 +769,11 @@ export class NayaDeskClient {
     return this.call('POST', '/api/projects/compare', req);
   }
 
+  /** Desk requires EXACTLY ONE of `lead_id` | `thread_id` (zod .refine). Spine
+   *  holds the thread key, so it sends that one. */
   mediaShare(req: {
     project_id: string;
-    conversation_id: string;
+    thread_id: string;
     asset_kind: string;
     unit_type_filter?: string;
     /** Prefer phase-scoped media when Desk has phase_id rows (R4). */
@@ -745,11 +826,17 @@ export class NayaDeskClient {
     );
   }
 
+  /**
+   * Desk's `guardLead` accepts a LEAD id or a THREAD id here: a thread resolves
+   * only when its focused project names one of the buyer's pursuits, or the
+   * buyer has exactly one. Otherwise Desk answers 409 `ambiguous_lead` and this
+   * throws NayaDeskError(409) — a buyer chasing two projects is the case.
+   */
   applyStateWrites(
-    conversation_id: string,
+    lead_or_thread_id: string,
     writes: ReadonlyArray<Record<string, unknown>>,
   ): Promise<{ ok: true; applied: number }> {
-    return this.call('POST', `/api/v1/leads/${encodeURIComponent(conversation_id)}/state-writes`, { writes });
+    return this.call('POST', `/api/v1/leads/${encodeURIComponent(lead_or_thread_id)}/state-writes`, { writes });
   }
 
   /**
@@ -763,12 +850,12 @@ export class NayaDeskClient {
   }
 
   appendMessage(
-    conversation_id: string,
+    thread_id: string,
     msg: { direction: 'inbound' | 'outbound'; content: string },
   ): Promise<{ ok: true; message_id: string }> {
     return this.call<{ message_id: string }>(
       'POST',
-      `/api/v1/threads/${encodeURIComponent(conversation_id)}/messages`,
+      `/api/v1/threads/${encodeURIComponent(thread_id)}/messages`,
       msg,
     ).then((row) => ({ ok: true as const, message_id: row.message_id }));
   }
@@ -777,7 +864,7 @@ export class NayaDeskClient {
    * File delivery receipts against the rows `appendMessage` already wrote.
    *
    * Two ways to address a row, and both are needed. At send time we have the
-   * exact text and the conversation but no id yet, so `content` finds the row
+   * exact text and the thread but no id yet, so `content` finds the row
    * and the wamid gets stamped on it. Minutes later Meta's own status webhook
    * arrives holding nothing but that wamid — `delivered`, `read`, or `failed`
    * with a reason — and it addresses the row directly.
@@ -787,7 +874,7 @@ export class NayaDeskClient {
    */
   reportWhatsAppDelivery(req: {
     builder_id: string;
-    conversation_id?: string;
+    thread_id?: string;
     reports: ReadonlyArray<{
       content?: string;
       wamid?: string;
@@ -798,11 +885,11 @@ export class NayaDeskClient {
     return this.call('POST', '/api/whatsapp/delivery', req);
   }
 
-  listMessages(conversation_id: string): Promise<{ messages: NdMessage[] }> {
-    return this.call('GET', `/api/v1/threads/${encodeURIComponent(conversation_id)}/messages?limit=50`);
+  listMessages(thread_id: string): Promise<{ messages: NdMessage[] }> {
+    return this.call('GET', `/api/v1/threads/${encodeURIComponent(thread_id)}/messages?limit=50`);
   }
 
-  turnLedgerContext(conversation_id: string): Promise<{
+  turnLedgerContext(thread_id: string): Promise<{
     prior: {
       turn_index: number;
       composer: string;
@@ -817,11 +904,11 @@ export class NayaDeskClient {
     rejected_project_ids: string[];
     next_turn_index: number;
   }> {
-    return this.call('GET', `/api/turn-ledger/context?conversation_id=${encodeURIComponent(conversation_id)}`);
+    return this.call('GET', `/api/turn-ledger/context?thread_id=${encodeURIComponent(thread_id)}`);
   }
 
   appendTurnLedger(req: {
-    conversation_id: string;
+    thread_id: string;
     turn_index: number;
     builder_id: string;
     buyer_phone: string;
@@ -850,17 +937,17 @@ export class NayaDeskClient {
     return this.call('GET', `/api/builders/${encodeURIComponent(builder_id)}`);
   }
 
-  siteVisitsItinerary(conversation_id: string): Promise<{
+  siteVisitsItinerary(thread_id: string): Promise<{
     plans: Array<{ collected?: Record<string, unknown>; status?: string }>;
   }> {
     return this.call(
       'GET',
-      `/api/plans/site-visits-itinerary?conversation_id=${encodeURIComponent(conversation_id)}`,
+      `/api/plans/site-visits-itinerary?thread_id=${encodeURIComponent(thread_id)}`,
     );
   }
 
   createPlan(req: {
-    conversation_id: string;
+    thread_id: string;
     buyer_phone: string;
     builder_id: string;
     goal: string;
@@ -886,7 +973,7 @@ export class NayaDeskClient {
   postProfileObservations(req: {
     builder_id: string;
     buyer_phone: string;
-    conversation_id: string;
+    thread_id: string;
     observations: Array<{ fact_key: string; value: unknown; provenance: string; confidence?: number }>;
   }): Promise<{ ok: boolean }> {
     return this.call('POST', '/api/profile/observations', req);
@@ -895,9 +982,9 @@ export class NayaDeskClient {
   postJourneySignals(req: {
     builder_id: string;
     buyer_phone: string;
-    conversation_id: string;
+    thread_id: string;
     signals: Record<string, unknown>;
-    context?: { conversation_status?: string; project_state?: string };
+    context?: { thread_status?: string; project_state?: string };
     shortlist_add?: string[];
     rejected_add?: string[];
   }): Promise<{ ok: boolean }> {
@@ -907,7 +994,7 @@ export class NayaDeskClient {
   postJourneyTurnSnapshot(req: {
     builder_id: string;
     buyer_phone: string;
-    conversation_id: string;
+    thread_id: string;
     turn_goal: string;
     strategist_reason: string;
     matched_rules: string[];
@@ -943,7 +1030,7 @@ export class NayaDeskClient {
   postChoiceEvent(req: {
     builder_id: string;
     buyer_phone: string;
-    conversation_id: string;
+    thread_id: string;
     engine_status: string;
     eligible: Array<Record<string, unknown>>;
     stretch: Array<Record<string, unknown>>;
@@ -953,14 +1040,14 @@ export class NayaDeskClient {
   }
 
   postChoiceResponse(req: {
-    conversation_id: string;
+    thread_id: string;
     response_text: string;
     response_intent?: string;
   }): Promise<{ ok: boolean; attached: boolean }> {
     return this.call('POST', '/api/profile/choice-response', req);
   }
 
-  getLatestChoiceEvent(conversation_id: string): Promise<{
+  getLatestChoiceEvent(thread_id: string): Promise<{
     event: {
       event_id: string;
       eligible: Array<{ project_id?: string; name?: string }>;
@@ -969,14 +1056,14 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/profile/choice-events/latest?conversation_id=${encodeURIComponent(conversation_id)}`,
+      `/api/profile/choice-events/latest?thread_id=${encodeURIComponent(thread_id)}`,
     );
   }
 
-  releaseProject(conversation_id: string): Promise<{ ok: true; project_state: string }> {
+  releaseProject(thread_id: string): Promise<{ ok: true; project_state: string }> {
     return this.call(
       'POST',
-      `/api/conversations/${encodeURIComponent(conversation_id)}/release-project`,
+      `/api/threads/${encodeURIComponent(thread_id)}/release-project`,
       {},
     );
   }
@@ -997,10 +1084,10 @@ export class NayaDeskClient {
    * would mean nothing is erased and the buyer is told it was.
    */
   async eraseBuyer(
-    conversation_id: string,
+    lead_id: string,
     scope: 'all' | 'contact_only' = 'all',
   ): Promise<ErasureReceiptDto | null> {
-    const id = encodeURIComponent(conversation_id);
+    const id = encodeURIComponent(lead_id);
     try {
       const res = await this.call<{ ok: boolean; receipt?: ErasureReceiptDto }>(
         'POST', `/api/leads/${id}/erase`, { scope },
@@ -1020,29 +1107,43 @@ export class NayaDeskClient {
     }
   }
 
-  mirrorMemory(conversation_id: string): Promise<{ ok: true }> {
-    return this.call('POST', `/api/leads/${encodeURIComponent(conversation_id)}/mirror-memory`, {});
+  /** Resolves on EITHER key — Desk's buyer_memory lookup is
+   *  `WHERE lead_id = ?1 OR thread_id = ?1`. */
+  mirrorMemory(lead_or_thread_id: string): Promise<{ ok: true }> {
+    return this.call('POST', `/api/leads/${encodeURIComponent(lead_or_thread_id)}/mirror-memory`, {});
   }
 
-  getLeadByPhone(phone: string, builder_id: string): Promise<{ lead: NdConversation }> {
+  /**
+   * LEAD → THREAD, the one direction that is exact.
+   *
+   * `guardThread` resolves a lead id by going lead → buyer → thread, so this
+   * answers with the thread row (and its `thread_id`) for either key. Spine
+   * needs it because Desk pushes CRM-keyed notifications (`invalidateSpineLead`
+   * sends a `lead_id`) at a session that is stored under the thread id.
+   */
+  getThreadFor(lead_or_thread_id: string): Promise<{ thread_id: string; lead_id: string | null }> {
+    return this.call('GET', `/api/v1/threads/${encodeURIComponent(lead_or_thread_id)}`);
+  }
+
+  getLeadByPhone(phone: string, builder_id: string): Promise<{ lead: NdLead }> {
     return this.call(
       'GET',
       `/api/leads/by-phone/${encodeURIComponent(phone)}?builder_id=${encodeURIComponent(builder_id)}`,
     );
   }
 
-  getActivePlan(conversation_id: string): Promise<{ plan: Record<string, unknown> | null }> {
-    return this.call('GET', `/api/plans/active?conversation_id=${encodeURIComponent(conversation_id)}`);
+  getActivePlan(thread_id: string): Promise<{ plan: Record<string, unknown> | null }> {
+    return this.call('GET', `/api/plans/active?thread_id=${encodeURIComponent(thread_id)}`);
   }
 
-  getActivePlans(conversation_id: string): Promise<{ plans: Array<Record<string, unknown>> }> {
-    return this.call('GET', `/api/plans/active-all?conversation_id=${encodeURIComponent(conversation_id)}`);
+  getActivePlans(thread_id: string): Promise<{ plans: Array<Record<string, unknown>> }> {
+    return this.call('GET', `/api/plans/active-all?thread_id=${encodeURIComponent(thread_id)}`);
   }
 
-  getLatestCompletedPlan(conversation_id: string, goal = 'site_visits'): Promise<{ plan: Record<string, unknown> | null }> {
+  getLatestCompletedPlan(thread_id: string, goal = 'site_visits'): Promise<{ plan: Record<string, unknown> | null }> {
     return this.call(
       'GET',
-      `/api/plans/latest-completed?conversation_id=${encodeURIComponent(conversation_id)}&goal=${encodeURIComponent(goal)}`,
+      `/api/plans/latest-completed?thread_id=${encodeURIComponent(thread_id)}&goal=${encodeURIComponent(goal)}`,
     );
   }
 
@@ -1122,7 +1223,7 @@ export class NayaDeskClient {
     facet_key?: string;
     phrase?: string;
     reviewed_intent?: string;
-    conversation_id?: string;
+    thread_id?: string;
     answer_ok: boolean;
     truth_present: boolean;
     fail_reason?: string;

@@ -8,7 +8,7 @@ import {
 import { getProjectCard, putProjectCard } from '../src/cache/turn-cache.js';
 import { fallbackReply } from '../src/engine/compose.js';
 import type {
-  ConversationState,
+  ThreadState,
   EvidenceSet,
   ProjectDetail,
   TurnGoal,
@@ -16,9 +16,9 @@ import type {
 
 const PID = 'brigade-eldorado-naya-advisor';
 
-function stateWith(over: Partial<ConversationState> = {}): ConversationState {
+function stateWith(over: Partial<ThreadState> = {}): ThreadState {
   return {
-    convId: 'c1',
+    threadId: 'c1',
     builderId: 'naya-advisor',
     phase: 'discover',
     constraints: {},
@@ -37,12 +37,12 @@ function stateWith(over: Partial<ConversationState> = {}): ConversationState {
       advancedOnce: false,
     },
     turnCount: 1,
-    ndConversationId: 'nd-1',
+    ndThreadId: 'nd-1',
     ...over,
-  } as ConversationState;
+  } as ThreadState;
 }
 
-/** Desk's conversationContext is focus-scoped: it answers for ONE project. */
+/** Desk's threadContext is focus-scoped: it answers for ONE project. */
 function depsWith(detailFor: string | null) {
   return {
     data: {

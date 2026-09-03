@@ -1,11 +1,11 @@
 import type { TurnRuntime } from '../runtime/deps.js';
-import type { ConversationRow, MemoryView, ProjectRow, TurnLedgerRow } from '../types.js';
+import type { LeadRow, MemoryView, ProjectRow, TurnLedgerRow } from '../types.js';
 import { parseShortlistIds } from './nayadesk-client.js';
-import type { NdConversation, NdProjectSummary, NdSearchMatch } from './nayadesk-client.js';
+import type { NdLead, NdProjectSummary, NdSearchMatch } from './nayadesk-client.js';
 
-let sessionConversationId: string | null = null;
+let sessionThreadId: string | null = null;
 
-function parsePending(conv: NdConversation): MemoryView['pending'] {
+function parsePending(conv: NdLead): MemoryView['pending'] {
   if (!conv.pending_action) return null;
   let payload: Record<string, unknown> = {};
   try {
@@ -16,9 +16,12 @@ function parsePending(conv: NdConversation): MemoryView['pending'] {
   return { kind: conv.pending_action, payload };
 }
 
-function mapConversation(conv: NdConversation): ConversationRow {
+function mapLead(conv: NdLead): LeadRow {
   return {
-    id: conv.conversation_id,
+    // `lead_id` is null when Desk found a thread with no pursuit behind it.
+    // This lane keys everything on the id, so an empty string is the honest
+    // "no CRM key" — never the thread id wearing the lead's name.
+    id: conv.lead_id ?? '',
     buyer_phone: conv.buyer_phone,
     builder_id: conv.builder_id,
     budget: conv.budget_inr || null,
@@ -54,46 +57,46 @@ function matchToProjectRow(m: NdSearchMatch, builderId: string): ProjectRow {
   };
 }
 
-export async function ensureConversation(
+export async function ensureThread(
   rt: TurnRuntime,
   buyerPhone: string,
   builderId?: string,
 ): Promise<string> {
-  if (sessionConversationId) return sessionConversationId;
+  if (sessionThreadId) return sessionThreadId;
   const resp = await rt.crm.upsertLead({
     builder_id: builderId ?? rt.defaultBuilderId(),
     buyer_phone: buyerPhone,
   });
-  sessionConversationId = resp.conversation_id;
-  return resp.conversation_id;
+  sessionThreadId = resp.thread_id;
+  return resp.thread_id;
 }
 
-export function setSessionConversationId(id: string): void {
-  sessionConversationId = id;
+export function setSessionThreadId(id: string): void {
+  sessionThreadId = id;
 }
 
-export async function buildMemory(rt: TurnRuntime, conversationId: string): Promise<MemoryView> {
+export async function buildMemory(rt: TurnRuntime, threadId: string): Promise<MemoryView> {
   const env = rt.env as import('../env.js').Env;
-  const cacheKey = `ctx:${conversationId}`;
+  const cacheKey = `ctx:${threadId}`;
 
   if (env.TURN_CACHE) {
     const cached = await env.TURN_CACHE.get(cacheKey, 'json') as MemoryView | null;
     if (cached) return cached;
   }
 
-  const ctx = await rt.crm.conversationContext(conversationId);
-  const conversation = mapConversation(ctx.conversation);
-  const shortlist = parseShortlistIds(ctx.conversation.shortlist_project_ids);
-  const pending = parsePending(ctx.conversation);
+  const ctx = await rt.crm.threadContext(threadId);
+  const lead = mapLead(ctx.lead);
+  const shortlist = parseShortlistIds(ctx.lead.shortlist_project_ids);
+  const pending = parsePending(ctx.lead);
 
   const memory: MemoryView = {
-    conversation,
+    lead,
     facts: {
-      budget: ctx.conversation.budget_inr || undefined,
-      bhk: ctx.conversation.bhk_preference || undefined,
-      location: ctx.conversation.location_pref || undefined,
-      purpose: ctx.conversation.purpose || undefined,
-      project_id: ctx.conversation.project_id || undefined,
+      budget: ctx.lead.budget_inr || undefined,
+      bhk: ctx.lead.bhk_preference || undefined,
+      location: ctx.lead.location_pref || undefined,
+      purpose: ctx.lead.purpose || undefined,
+      project_id: ctx.lead.project_id || undefined,
     },
     pending,
     shortlist,
@@ -101,7 +104,7 @@ export async function buildMemory(rt: TurnRuntime, conversationId: string): Prom
     builderName: ctx.builder?.name,
     builder: ctx.builder ?? undefined,
     returningBuyer: ctx.returning_buyer ?? null,
-    turnIndex: Math.max(1, ctx.conversation.turn_count || 0),
+    turnIndex: Math.max(1, ctx.lead.turn_count || 0),
     objectionPlaybooks: ctx.objection_playbooks,
   };
 
@@ -113,15 +116,15 @@ export async function buildMemory(rt: TurnRuntime, conversationId: string): Prom
 
 export async function upsertFact(
   rt: TurnRuntime,
-  conversationId: string,
+  threadId: string,
   slot: string,
   value: string,
 ): Promise<void> {
-  await rt.crm.applyStateWrites(conversationId, [{ op: 'set_slot', slot, value }]);
+  await rt.crm.applyStateWrites(threadId, [{ op: 'set_slot', slot, value }]);
   const env = rt.env as import('../env.js').Env;
-  await env.TURN_CACHE?.delete(`ctx:${conversationId}`);
+  await env.TURN_CACHE?.delete(`ctx:${threadId}`);
   if (slot === 'project_id') {
-    const lead = (await rt.crm.getLead(conversationId)).lead;
+    const lead = (await rt.crm.getLead(threadId)).lead;
     await rt.crm.upsertLead({
       builder_id: lead.builder_id,
       buyer_phone: lead.buyer_phone,
@@ -132,27 +135,27 @@ export async function upsertFact(
 
 export async function setPending(
   rt: TurnRuntime,
-  conversationId: string,
+  threadId: string,
   pending: MemoryView['pending'],
 ): Promise<void> {
   if (!pending) {
-    await rt.crm.applyStateWrites(conversationId, [{ op: 'set_pending_action', pending: null }]);
+    await rt.crm.applyStateWrites(threadId, [{ op: 'set_pending_action', pending: null }]);
     return;
   }
-  await rt.crm.applyStateWrites(conversationId, [
+  await rt.crm.applyStateWrites(threadId, [
     { op: 'set_pending_action', pending: { kind: pending.kind, payload: pending.payload } },
   ]);
 }
 
 export async function appendShortlist(
   rt: TurnRuntime,
-  conversationId: string,
+  threadId: string,
   projectId: string,
 ): Promise<void> {
-  const memory = await buildMemory(rt, conversationId);
+  const memory = await buildMemory(rt, threadId);
   const list = [...memory.shortlist];
   if (!list.includes(projectId)) list.push(projectId);
-  await rt.crm.applyStateWrites(conversationId, [
+  await rt.crm.applyStateWrites(threadId, [
     { op: 'set_shortlist_project_ids', project_ids: list.slice(0, 3) },
   ]);
 }
@@ -175,11 +178,11 @@ export async function searchProjects(
 
 export async function resolveProject(
   rt: TurnRuntime,
-  conversationId: string,
+  threadId: string,
   projectIdOrName: string,
 ): Promise<ProjectRow | undefined> {
-  const memory = await buildMemory(rt, conversationId);
-  const builderId = memory.conversation.builder_id;
+  const memory = await buildMemory(rt, threadId);
+  const builderId = memory.lead.builder_id;
 
   if (memory.focusedProject?.project_id === projectIdOrName) {
     return summaryToProjectRow(memory.focusedProject, builderId);
@@ -241,7 +244,7 @@ function summaryToProjectRow(p: NdProjectSummary, builderId: string): ProjectRow
 
 export async function fetchPricingQuote(
   rt: TurnRuntime,
-  conversationId: string,
+  threadId: string,
   projectIdOrName: string,
   unitType?: string,
 ): Promise<{
@@ -249,10 +252,16 @@ export async function fetchPricingQuote(
   starting_price_lakhs: number;
   components: Array<{ label: string; value_display: string }>;
 }> {
-  const project = await resolveProject(rt, conversationId, projectIdOrName);
+  const project = await resolveProject(rt, threadId, projectIdOrName);
   if (!project) throw new Error(`project_not_found:${projectIdOrName}`);
+  // LEAD door: `/api/pricing/quote` resolves with a literal `WHERE lead_id = ?`
+  // and has no thread fallback. This lane holds a thread id, so it resolves the
+  // thread's single pursuit first; without one there is no quote to give.
+  const resolved = await rt.crm.getLead(threadId).catch(() => null);
+  const leadId = resolved?.lead?.lead_id;
+  if (!leadId || leadId === threadId) throw new Error(`lead_not_found:${threadId}`);
   const quote = await rt.crm.pricingQuote({
-    conversation_id: conversationId,
+    lead_id: leadId,
     project_id: project.id,
     unit_type: unitType,
   });
@@ -271,11 +280,11 @@ export async function fetchPricingQuote(
 
 export async function recordVisit(
   rt: TurnRuntime,
-  conversationId: string,
+  threadId: string,
   projectId: string,
   humanLabel: string,
 ): Promise<void> {
-  const lead = (await rt.crm.getLead(conversationId)).lead;
+  const lead = (await rt.crm.getLead(threadId)).lead;
   await rt.crm.upsertLead({
     builder_id: lead.builder_id,
     buyer_phone: lead.buyer_phone,
@@ -284,21 +293,21 @@ export async function recordVisit(
   });
 }
 
-export async function listFacts(rt: TurnRuntime, conversationId: string): Promise<Record<string, string>> {
-  const memory = await buildMemory(rt, conversationId);
+export async function listFacts(rt: TurnRuntime, threadId: string): Promise<Record<string, string>> {
+  const memory = await buildMemory(rt, threadId);
   return {
     budget: memory.facts.budget ?? '',
     bhk: memory.facts.bhk ?? '',
     location: memory.facts.location ?? '',
     purpose: memory.facts.purpose ?? '',
     project_id: memory.facts.project_id ?? '',
-    project_state: memory.conversation.status,
+    project_state: memory.lead.status,
     shortlist: memory.shortlist.join(', '),
   };
 }
 
-export async function listLedger(rt: TurnRuntime, conversationId: string): Promise<TurnLedgerRow[]> {
-  const { messages } = await rt.crm.listMessages(conversationId);
+export async function listLedger(rt: TurnRuntime, threadId: string): Promise<TurnLedgerRow[]> {
+  const { messages } = await rt.crm.listMessages(threadId);
   const rows: TurnLedgerRow[] = [];
   let turn = 0;
   for (let i = 0; i < messages.length; i += 2) {
@@ -307,7 +316,7 @@ export async function listLedger(rt: TurnRuntime, conversationId: string): Promi
     if (!inbound || inbound.direction !== 'inbound') continue;
     turn += 1;
     rows.push({
-      conversation_id: conversationId,
+      thread_id: threadId,
       turn_index: turn,
       buyer_text: inbound.content,
       composer: 'nayadesk',
@@ -320,12 +329,12 @@ export async function listLedger(rt: TurnRuntime, conversationId: string): Promi
   return rows;
 }
 
-export async function nextTurnIndex(rt: TurnRuntime, conversationId: string): Promise<number> {
+export async function nextTurnIndex(rt: TurnRuntime, threadId: string): Promise<number> {
   try {
-    const ctx = await rt.crm.turnLedgerContext(conversationId);
+    const ctx = await rt.crm.turnLedgerContext(threadId);
     return ctx.next_turn_index;
   } catch {
-    const ledger = await listLedger(rt, conversationId);
+    const ledger = await listLedger(rt, threadId);
     return ledger.length ? ledger[ledger.length - 1].turn_index + 1 : 1;
   }
 }

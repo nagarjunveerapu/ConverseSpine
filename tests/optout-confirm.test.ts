@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { runEngineTurn } from '../src/engine/turn.js';
 import { extractFacts } from '../src/engine/facts.js';
 import { fakeDeps } from './fakes.js';
-import type { ConversationState } from '../src/engine/types.js';
+import type { ThreadState } from '../src/engine/types.js';
 
 const LLM = fakeDeps().llm;
 const stopOf = async (text: string) => (await extractFacts(text, S, LLM)).stop;
@@ -17,7 +17,7 @@ const S = {
   phase: 'discover',
   discover: { lastOffered: [], discussedProjects: [] },
   constraints: {},
-} as unknown as ConversationState;
+} as unknown as ThreadState;
 
 describe('STOP_RE floor', () => {
   it('bot-behavior complaints and transit words never read as opt-out', async () => {
@@ -35,18 +35,18 @@ describe('STOP_RE floor', () => {
   });
 });
 
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999993', channel: 'advisor_web' },
       deps,
     );
   return { deps, turn };
 }
 
-function phase1Harness(convId: string) {
-  const h = harness(convId);
+function phase1Harness(threadId: string) {
+  const h = harness(threadId);
   h.deps.failureTools = true;
   return h;
 }

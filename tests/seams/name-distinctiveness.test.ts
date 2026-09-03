@@ -184,7 +184,7 @@ describe('seam: a preference word must not commit a project', () => {
 
     const r = await runEngineTurn(
       {
-        convId: 'seam-green-spaces',
+        threadId: 'seam-green-spaces',
         builderId: 'naya-advisor',
         text: 'I want green spaces',
         channel: 'advisor_web',
@@ -207,7 +207,7 @@ describe('seam: a preference word must not commit a project', () => {
 
     const r = await runEngineTurn(
       {
-        convId: 'seam-krishnaja-named',
+        threadId: 'seam-krishnaja-named',
         builderId: 'naya-advisor',
         text: 'tell me about Krishnaja Greens',
         channel: 'advisor_web',

@@ -11,7 +11,7 @@ import {
   nameEvidenceIn,
 } from '../src/engine/project_switch.js';
 import { scrubEmbedderIdentityNoise } from '../src/engine/extract-authority.js';
-import type { ConversationState, Extracted, OfferedProject } from '../src/engine/types.js';
+import type { ThreadState, Extracted, OfferedProject } from '../src/engine/types.js';
 
 const ELDORADO: OfferedProject = { projectId: 'brigade-eldorado', name: 'Brigade Eldorado' };
 const CORNERSTONE: OfferedProject = { projectId: 'brigade-cornerstone', name: 'Brigade Cornerstone' };
@@ -127,13 +127,13 @@ describe('filterNamedProjectsByEvidence', () => {
   });
 });
 
-function focusedState(focus: OfferedProject, offered: OfferedProject[]): ConversationState {
+function focusedState(focus: OfferedProject, offered: OfferedProject[]): ThreadState {
   return {
     phase: 'focused',
     focus: { projectId: focus.projectId, projectName: focus.name },
     discover: { lastOffered: offered, discussedProjects: [] },
     constraints: {},
-  } as unknown as ConversationState;
+  } as unknown as ThreadState;
 }
 
 describe('detectFocusedSwitchIntent — typed name beats the pool gate', () => {

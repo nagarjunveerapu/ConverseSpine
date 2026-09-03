@@ -16,12 +16,12 @@ import { fakeDeps } from './fakes.js';
  * open — so the button that contains no date was told off for containing no
  * date.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string, action_id?: string) =>
     runEngineTurn(
       {
-        convId,
+        threadId,
         builderId: 'lokations',
         text,
         buyerPhone: '+919999999932',

@@ -31,13 +31,13 @@ import {
   focusedEntity,
   resolveAlternateProject,
   discourseEntities,
-  legacyConversationPoolIds,
+  legacyThreadPoolIds,
   currentShortlist,
   discussedList,
   type DiscourseEntityRecord,
 } from '../../src/engine/entity-store.js';
 import { initState, recordOffered, releaseToDiscover } from '../../src/engine/state.js';
-import type { ConversationState, Match } from '../../src/engine/types.js';
+import type { ThreadState, Match } from '../../src/engine/types.js';
 
 const ELDORADO = { projectId: 'eldorado', name: 'Brigade Eldorado' };
 const CORNERSTONE = { projectId: 'cornerstone', name: 'Brigade Cornerstone' };
@@ -47,11 +47,11 @@ const names = (rows: DiscourseEntityRecord[]) => rows.map((r) => r.name);
 
 describe('the store survives being persisted', () => {
   it('round-trips through JSON with its contents intact', () => {
-    let s: ConversationState = initState('c1', 'naya-advisor');
+    let s: ThreadState = initState('c1', 'naya-advisor');
     s = recordEntities(s, [ELDORADO, CORNERSTONE], 'offered', 1);
     s = pushFocus(s, ELDORADO.projectId, 2);
 
-    const revived = JSON.parse(JSON.stringify(s)) as ConversationState;
+    const revived = JSON.parse(JSON.stringify(s)) as ThreadState;
 
     expect(Object.keys(revived.entities ?? {})).toHaveLength(2);
     expect(revived.focusStack).toEqual(['eldorado']);
@@ -172,7 +172,7 @@ describe('store authority: shortlistIds + entities own the board', () => {
     const { fakeDeps } = await import('../fakes.js');
     const deps = fakeDeps();
     const say = (text: string) =>
-      runEngineTurn({ convId: 'dual-write', builderId: 'lokations', text, channel: 'advisor_web' }, deps);
+      runEngineTurn({ threadId: 'dual-write', builderId: 'lokations', text, channel: 'advisor_web' }, deps);
 
     await say('hi');
     await say('plantation in sakleshpur under 50 lakhs');
@@ -189,7 +189,7 @@ describe('store authority: shortlistIds + entities own the board', () => {
       expect(focusedEntity(s)?.name).toBe(s.focus.projectName);
     }
     const discourseIds = new Set(discourseEntities(s).map((e) => e.projectId));
-    for (const id of legacyConversationPoolIds(s)) {
+    for (const id of legacyThreadPoolIds(s)) {
       expect(discourseIds.has(id), `legacy id ${id} missing from discourseEntities`).toBe(true);
     }
   });

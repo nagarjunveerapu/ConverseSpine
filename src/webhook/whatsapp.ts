@@ -177,7 +177,7 @@ export async function handleWhatsAppWebhook(
 
           if (creds.access_token) {
             const report = await deliverWhatsAppTurn(phoneNumberId, buyerPhone, result, creds.access_token);
-            await fileTurnReceipts(rt.crm, builderId, result.nd_conversation_id, report);
+            await fileTurnReceipts(rt.crm, builderId, result.nd_thread_id, report);
           }
         };
 

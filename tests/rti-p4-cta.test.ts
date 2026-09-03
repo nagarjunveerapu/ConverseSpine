@@ -151,10 +151,10 @@ describe('P4-CTA — engine golden RTI-G02 (fake deps)', () => {
     const { runEngineTurn } = await import('../src/engine/turn.js');
     const { fakeDeps } = await import('./fakes.js');
     const deps = fakeDeps();
-    const convId = 'rti-g02-eldorado-yes';
+    const threadId = 'rti-g02-eldorado-yes';
     const turn = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'brigade-group', text, buyerPhone: '+919999000002', channel: 'whatsapp' },
+        { threadId, builderId: 'brigade-group', text, buyerPhone: '+919999000002', channel: 'whatsapp' },
         deps,
       );
 
@@ -334,10 +334,10 @@ describe('SA-3 — offer_pricing pending does not swallow size asks', () => {
     const { runEngineTurn } = await import('../src/engine/turn.js');
     const { fakeDeps } = await import('./fakes.js');
     const deps = fakeDeps();
-    const convId = 'sa3-eldorado-sizes';
+    const threadId = 'sa3-eldorado-sizes';
     const turn = (text: string) =>
       runEngineTurn(
-        { convId, builderId: 'brigade-group', text, buyerPhone: '+919999000003', channel: 'whatsapp' },
+        { threadId, builderId: 'brigade-group', text, buyerPhone: '+919999000003', channel: 'whatsapp' },
         deps,
       );
 

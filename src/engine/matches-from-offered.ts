@@ -1,8 +1,8 @@
-import type { ConversationState, Match } from './types.js';
+import type { ThreadState, Match } from './types.js';
 import { currentShortlist } from './entity-store.js';
 
 /** Rehydrate Match rows from the current shortlist for compare/re-list (no new search). */
-export function matchesFromLastOffered(state: ConversationState): Match[] {
+export function matchesFromLastOffered(state: ThreadState): Match[] {
   return currentShortlist(state).map((o) => ({
     projectId: o.projectId,
     name: o.name,

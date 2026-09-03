@@ -38,7 +38,7 @@ Scoring guide:
 Penalize: empty pricing, wrong location, visit without project, banned filler phrases.`;
 
 /** LLM judge reads full transcript — no golden asserts. */
-export async function judgeConversationQuality(
+export async function judgeChatQuality(
   env: Env,
   profile: BuyerProfile,
   transcript: TranscriptTurn[],

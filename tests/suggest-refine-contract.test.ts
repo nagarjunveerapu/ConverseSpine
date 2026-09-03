@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { mapAdvisorTurnResponse } from '../src/advisor/map-response.js';
-import type { ConversationState, TurnDebug } from '../src/engine/types.js';
+import type { ThreadState, TurnDebug } from '../src/engine/types.js';
 
 /**
  * The engine states what it did; the client never re-derives it from prose.
@@ -17,12 +17,12 @@ import type { ConversationState, TurnDebug } from '../src/engine/types.js';
  * had, arriving intact.
  */
 const state = {
-  convId: 'c1',
+  threadId: 'c1',
   phase: 'discover',
   builderId: 'naya-advisor',
   constraints: {},
   discover: { lastOffered: [] },
-} as unknown as ConversationState;
+} as unknown as ThreadState;
 
 const debugFor = (kind: string): TurnDebug =>
   ({ phase: 'discover', goal: { kind }, tools: [], grounding: 'pass' }) as unknown as TurnDebug;

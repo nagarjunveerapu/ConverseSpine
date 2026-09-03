@@ -15,7 +15,7 @@ describe('session reset', () => {
     let s = commitTo(initState('c1', 'brigade-group'), 'eldorado', 'Brigade Eldorado');
     s = {
       ...s,
-      ndConversationId: 'nd-1',
+      ndThreadId: 'nd-1',
       ndBuyerPhone: '+919591400615',
       constraints: { bhk: '2 BHK', budgetMaxInr: 80_00_000 },
       returningBuyer: { buyerName: 'Nagarjun', daysSinceLastSeen: 2 },
@@ -26,7 +26,7 @@ describe('session reset', () => {
     expect(next.constraints).toEqual({});
     expect(next.returningBuyer).toBeUndefined();
     expect(next.turnCount).toBe(0);
-    expect(next.ndConversationId).toBe('nd-1');
+    expect(next.ndThreadId).toBe('nd-1');
     expect(next.ndBuyerPhone).toBe('+919591400615');
     expect(next.builderId).toBe('brigade-group');
   });

@@ -15,11 +15,11 @@ import { fakeDeps } from './fakes.js';
  * line back, and the loop was four turns wide. A menu sent three times is not
  * an answer, and by the third send the bot should say so.
  */
-function harness(convId: string) {
+function harness(threadId: string) {
   const deps = fakeDeps();
   const turn = (text: string) =>
     runEngineTurn(
-      { convId, builderId: 'lokations', text, buyerPhone: '+919999991160', channel: 'whatsapp' },
+      { threadId, builderId: 'lokations', text, buyerPhone: '+919999991160', channel: 'whatsapp' },
       deps,
     );
   return { turn };
@@ -91,7 +91,7 @@ describe('a line sent three times inside the window', () => {
     const turn = (text: string) =>
       runEngineTurn(
         {
-          convId: 'repeat-early-return',
+          threadId: 'repeat-early-return',
           builderId: 'lokations',
           text,
           buyerPhone: '+919999991161',

@@ -11,7 +11,7 @@
  *
  * DURABLE SHAPE. `store-kv.ts` is `JSON.stringify(state)`. Never store a Map/Set.
  */
-import type { ConversationState, OfferedProject } from './types.js';
+import type { ThreadState, OfferedProject } from './types.js';
 
 export type EntityRole = 'offered' | 'discussed' | 'focused' | 'rejected' | 'queued';
 
@@ -79,11 +79,11 @@ export type EntityWrite = {
  * then discussed then rejected" is three true facts about one project.
  */
 export function recordEntities(
-  state: ConversationState,
+  state: ThreadState,
   entities: ReadonlyArray<EntityWrite>,
   role: EntityRole,
   turn: number,
-): ConversationState {
+): ThreadState {
   const next: Record<string, DiscourseEntityRecord> = { ...(state.entities ?? {}) };
   let changed = false;
 
@@ -130,9 +130,9 @@ export function recordEntities(
 
 /** Drop the `offered` role + card payload from every entity not in `keepIds`. */
 export function clearOfferedExcept(
-  state: ConversationState,
+  state: ThreadState,
   keepIds: ReadonlySet<string>,
-): ConversationState {
+): ThreadState {
   const entities = state.entities;
   if (!entities) return state;
   let changed = false;
@@ -164,10 +164,10 @@ export function clearOfferedExcept(
  * always runs after `applyGoalToState`, which records the entity).
  */
 export function markFacetSeen(
-  state: ConversationState,
+  state: ThreadState,
   projectId: string | undefined,
   facet: SeenFacet,
-): ConversationState {
+): ThreadState {
   if (!projectId) return state;
   const entity = state.entities?.[projectId];
   if (!entity) return state;
@@ -183,7 +183,7 @@ export function markFacetSeen(
 
 /** Facets already delivered for a project — `[]` when none or unknown. */
 export function projectSeenFacets(
-  state: ConversationState,
+  state: ThreadState,
   projectId: string | undefined,
 ): readonly SeenFacet[] {
   if (!projectId) return [];
@@ -191,7 +191,7 @@ export function projectSeenFacets(
 }
 
 /** Focus a project, pushing the previous focus down the stack (most recent first). */
-export function pushFocus(state: ConversationState, projectId: string, turn: number): ConversationState {
+export function pushFocus(state: ThreadState, projectId: string, turn: number): ThreadState {
   if (!projectId) return state;
   const entity = state.entities?.[projectId];
   const stack = [projectId, ...(state.focusStack ?? []).filter((id) => id !== projectId)];
@@ -216,7 +216,7 @@ export function pushFocus(state: ConversationState, projectId: string, turn: num
  * Return to the previous focus. Dual-writes legacy `focus` until focus-field
  * 1c — the stack alone must not diverge from `state.focus` while both exist.
  */
-export function popFocus(state: ConversationState): ConversationState {
+export function popFocus(state: ThreadState): ThreadState {
   const stack = state.focusStack ?? [];
   if (stack.length < 2) return state;
   const next = stack.slice(1);
@@ -239,7 +239,7 @@ export function popFocus(state: ConversationState): ConversationState {
  * last but are never removed: a rejection is information, and dropping it is
  * how a rejected project gets re-offered.
  */
-export function salience(state: ConversationState): DiscourseEntityRecord[] {
+export function salience(state: ThreadState): DiscourseEntityRecord[] {
   const stack = state.focusStack ?? [];
   const depth = new Map(stack.map((id, i) => [id, i]));
   return Object.values(state.entities ?? {}).sort((a, b) => {
@@ -255,7 +255,7 @@ export function salience(state: ConversationState): DiscourseEntityRecord[] {
  * Prefer focusStack[0] when phase is focused; fall back to legacy `state.focus`
  * for sessions that predate the stack.
  */
-export function focusedEntity(state: ConversationState): DiscourseEntityRecord | undefined {
+export function focusedEntity(state: ThreadState): DiscourseEntityRecord | undefined {
   if (state.phase === 'focused') {
     const stackId = (state.focusStack ?? [])[0];
     if (stackId && state.entities?.[stackId]) return state.entities[stackId];
@@ -276,7 +276,7 @@ export function focusedEntity(state: ConversationState): DiscourseEntityRecord |
 
 /** Legacy FocusState shape — prefer this over reading `state.focus` directly. */
 export function focusedRef(
-  state: ConversationState,
+  state: ThreadState,
 ): { projectId: string; projectName: string } | undefined {
   const e = focusedEntity(state);
   if (e) return { projectId: e.projectId, projectName: e.name };
@@ -312,7 +312,7 @@ export function entityToOffered(e: DiscourseEntityRecord): OfferedProject {
  * Prefer `shortlistIds` + entity card payload; fall back to legacy `lastOffered`
  * for pre-1c KV sessions.
  */
-export function currentShortlist(state: ConversationState): OfferedProject[] {
+export function currentShortlist(state: ThreadState): OfferedProject[] {
   const ids = state.shortlistIds;
   if (ids?.length && state.entities) {
     const out: OfferedProject[] = [];
@@ -329,7 +329,7 @@ export function currentShortlist(state: ConversationState): OfferedProject[] {
  * Discussed discourse projects (uncapped). Legacy array is a revive fallback
  * and is capped at 6 — store wins when present.
  */
-export function discussedList(state: ConversationState): OfferedProject[] {
+export function discussedList(state: ThreadState): OfferedProject[] {
   const fromStore = Object.values(state.entities ?? {})
     .filter((e) => e.roles.includes('discussed'))
     .sort((a, b) => a.firstSeenTurn - b.firstSeenTurn || a.lastTouchedTurn - b.lastTouchedTurn)
@@ -342,14 +342,14 @@ export function discussedList(state: ConversationState): OfferedProject[] {
  * Conversation-scoped entities in salience order — the pool every resolver
  * should read. Rejected rows are omitted (still retained in `state.entities`).
  */
-export function discourseEntities(state: ConversationState): DiscourseEntityRecord[] {
+export function discourseEntities(state: ThreadState): DiscourseEntityRecord[] {
   return salience(state).filter(
     (e) => !e.roles.includes('rejected') && isDiscourseRole(e.roles),
   );
 }
 
 /** OfferedProject-shaped view for visit / switch / named-resolve consumers. */
-export function discourseOffered(state: ConversationState): OfferedProject[] {
+export function discourseOffered(state: ThreadState): OfferedProject[] {
   return discourseEntities(state).map(entityToOffered);
 }
 
@@ -358,12 +358,12 @@ export function discourseOffered(state: ConversationState): OfferedProject[] {
  * `lastOffered` / `discussedProjects` are revive-only (hydrated once on load).
  * Call sites may remain until removed; this is intentionally a no-op.
  */
-export function mirrorLegacyPools(state: ConversationState): ConversationState {
+export function mirrorLegacyPools(state: ThreadState): ThreadState {
   return state;
 }
 
 /** Clear legacy mirror arrays so they cannot diverge from store authority. */
-export function stripLegacyMirrors(state: ConversationState): ConversationState {
+export function stripLegacyMirrors(state: ThreadState): ThreadState {
   if (
     (state.discover.lastOffered?.length ?? 0) === 0 &&
     (state.discover.discussedProjects?.length ?? 0) === 0
@@ -384,7 +384,7 @@ export function stripLegacyMirrors(state: ConversationState): ConversationState 
  * Legacy pool projection (discussed → focus → lastOffered) for membership
  * asserts during dual-write.
  */
-export function legacyConversationPoolIds(state: ConversationState): string[] {
+export function legacyThreadPoolIds(state: ThreadState): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   const push = (id: string | undefined) => {
@@ -405,7 +405,7 @@ export function legacyConversationPoolIds(state: ConversationState): string[] {
  * Ambiguous (0 or 2+) → undefined — never invent a subject.
  */
 export function resolveAlternateProject(
-  state: ConversationState,
+  state: ThreadState,
 ): DiscourseEntityRecord | undefined {
   const focusId = state.focus?.projectId ?? (state.focusStack ?? [])[0];
   if (!focusId) return undefined;

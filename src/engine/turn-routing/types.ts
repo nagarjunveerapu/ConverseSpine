@@ -1,6 +1,6 @@
 import type { TurnInputSource } from '../ingress.js';
 import { currentShortlist } from '../entity-store.js';
-import type { AnswerTopic, ConversationState, Extracted, Phase } from '../types.js';
+import type { AnswerTopic, ThreadState, Extracted, Phase } from '../types.js';
 
 export type TurnRoutingKind =
   | 'answer_on_project'
@@ -111,7 +111,7 @@ export interface TurnRoutingInput {
 }
 
 export function buildTurnRoutingInput(
-  state: ConversationState,
+  state: ThreadState,
   ex: Extracted,
   text: string,
   inputSource?: TurnInputSource,

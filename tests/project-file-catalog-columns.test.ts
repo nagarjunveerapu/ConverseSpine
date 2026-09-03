@@ -37,7 +37,7 @@ const PROJECT = {
 
 function client(withContext: boolean): NayaDeskClient {
   return {
-    conversationContext: async () =>
+    threadContext: async () =>
       withContext
         ? {
             project: PROJECT,

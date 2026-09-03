@@ -42,7 +42,7 @@ export interface DeskBrief {
   /**
    * The project this lead is ON, and the name to say it by.
    *
-   * Set together or not at all. `/api/conversation-context` returns the
+   * Set together or not at all. `/api/thread-context` returns the
    * project row only when Desk's own `has_project` gate passes —
    * `project_id !== '' && project_state === 'focused'` — and it re-reads the
    * row `AND builder_id = ?`, so a name arriving here has already been
@@ -171,15 +171,15 @@ export interface EngineData {
    * session shortlist. Type-only: no prices/facts.
    */
   projectNames(builderId: string): Promise<Array<{ projectId: string; name: string }>>;
-  /** conversation-context when focused; getProject fallback otherwise. */
+  /** thread-context when focused; getProject fallback otherwise. */
   projectDetail(
     builderId: string,
-    ndConversationId: string,
+    ndThreadId: string,
     projectId: string,
   ): Promise<DataResult<ProjectDetail>>;
   /** Desk location_intelligence POIs for a project (engine door). */
   locationIntel(projectId: string): Promise<LocationIntel | undefined>;
-  pricing(builderId: string, ndConversationId: string, projectId: string, unitType?: string): Promise<DataResult<{
+  pricing(builderId: string, ndThreadId: string, projectId: string, unitType?: string): Promise<DataResult<{
     projectName: string;
     startingDisplay?: string;
     components: Array<{ label: string; value: string }>;
@@ -187,18 +187,18 @@ export interface EngineData {
   }>>;
   landedCost(
     builderId: string,
-    ndConversationId: string,
+    ndThreadId: string,
     projectId: string,
     unitType: string,
   ): Promise<DataResult<LandedCostFacts>>;
-  compare(ndConversationId: string, projectIds: string[]): Promise<{
+  compare(ndThreadId: string, projectIds: string[]): Promise<{
     tableText: string;
     projects: Array<Record<string, unknown>>;
     matrix?: import('./types.js').CompareMatrixPayload;
   } | null>;
   priceBasis(
     builderId: string,
-    ndConversationId: string,
+    ndThreadId: string,
     projectId: string,
     unitType?: string,
   ): Promise<DataResult<{
@@ -207,30 +207,30 @@ export interface EngineData {
   }>>;
   listUnits(projectId: string): Promise<UnitConfig[]>;
   mediaShare(
-    ndConversationId: string,
+    ndThreadId: string,
     projectId: string,
     assetKind: string,
     unitType?: string,
     phaseId?: string,
   ): Promise<MediaShareResult | null>;
-  conversationContext(ndConversationId: string): Promise<import('../crm/nayadesk-client.js').NdContextBundle | null>;
+  threadContext(ndThreadId: string): Promise<import('../crm/nayadesk-client.js').NdContextBundle | null>;
   /** Approved corridor value intel for a micro-market string; null = honest absence. */
   marketIntel(microMarket: string): Promise<import('../crm/nayadesk-client.js').NdMarketIntel | null>;
-  objectionContext(ndConversationId: string): Promise<{
+  objectionContext(ndThreadId: string): Promise<{
     playbooks: Array<{ topic: string; reframeAngles: string[]; escalateAfter: number }>;
     escalationPhone?: string;
   } | null>;
-  siteVisitsItinerary(ndConversationId: string): Promise<readonly StoredVisit[]>;
+  siteVisitsItinerary(ndThreadId: string): Promise<readonly StoredVisit[]>;
   /**
-   * Cancel every site visit still standing for this conversation, and answer
+   * Cancel every site visit still standing for this thread, and answer
    * how many. "I've removed your details" was a promise the bot could not keep
    * — the visits lived in Desk, so the very next turn read them back. Erasure
    * has to reach the records the buyer can still see.
    */
-  cancelSiteVisits(ndConversationId: string): Promise<number>;
+  cancelSiteVisits(ndThreadId: string): Promise<number>;
   builder(builderId: string): Promise<{ siteVisitHours: string; name?: string; escalationPhone?: string } | null>;
   recordVisit(
-    ids: { ndConversationId: string; buyerPhone: string; builderId: string },
+    ids: { ndThreadId: string; buyerPhone: string; builderId: string },
     visit: { projectId: string; projectName: string; iso: string; label: string },
   ): Promise<boolean>;
   /**
@@ -240,7 +240,7 @@ export interface EngineData {
    * sold out (surface it honestly); 'error' = transport/unknown (also honest).
    */
   placeHold(
-    ids: { ndConversationId: string; builderId: string },
+    ids: { ndThreadId: string; builderId: string },
     hold: { projectId: string; unitType: string; buyerName?: string; ttlMinutes?: number; queue?: boolean },
   ): Promise<{
     ok: boolean;
@@ -252,7 +252,7 @@ export interface EngineData {
     reason?: 'none_available' | 'error';
   }>;
   /** Turn-start bundle — returning buyer, builder persona, recent messages, ledger prior. */
-  bootstrapContext(ndConversationId: string): Promise<{
+  bootstrapContext(ndThreadId: string): Promise<{
     returningBuyer?: { buyerName: string; daysSinceLastSeen: number; lastProjectId?: string };
     builderPersona?: { botName?: string; preferredTone?: string };
     recentMessages: Array<{ role: 'buyer' | 'bot'; text: string; atMs: number }>;
@@ -263,7 +263,7 @@ export interface EngineData {
     /**
      * WHAT DESK ALREADY HOLDS ABOUT THIS BUYER.
      *
-     * This adapter has always fetched the whole conversation row — one call,
+     * This adapter has always fetched the whole CRM row — one call,
      * `SELECT *` on the Desk side — and then mapped three things out of the
      * bundle and dropped the row. So `bhk_preference`, `budget_inr`,
      * `location_pref`, `purpose` and `shortlist_project_ids` arrived on every
@@ -318,7 +318,7 @@ export interface EngineData {
   /** Fire-and-forget miss → Desk curation queue. */
   enqueueEducationMiss(input: {
     buyerText: string;
-    conversationId?: string;
+    threadId?: string;
     suggestedTopic?: string;
     source?: 'education_miss' | 'unknown' | 'understanding' | 'manual';
   }): Promise<void>;
@@ -346,34 +346,43 @@ export interface ErasureReceipt {
   retained_counts?: Record<string, number>;
   /** Non-empty means partial. Never claim a clean sweep over a non-empty list. */
   failed: string[];
-  conversation_ids: string[];
+  /** CRM keys swept (builder x buyer x PROJECT). Was `conversation_ids`. */
+  lead_ids: string[];
+  /** Messaging keys swept (builder x buyer x CHANNEL). New at the 0220 cutover. */
+  thread_ids: string[];
   unteach_phrasing_ids: string[];
   tombstone_written: boolean;
   erased_at: number;
 }
 
 export interface EngineCrm {
-  ensureLead(builderId: string, buyerPhone: string, channel?: string): Promise<{ conversationId: string } | null>;
-  appendMessage(conversationId: string, direction: 'inbound' | 'outbound', content: string, meta?: { replyKey?: string }): Promise<void>;
-  updateFacts(conversationId: string, facts: Record<string, string | undefined>): Promise<void>;
+  /**
+   * Desk's `PUT /api/v1/leads` with no project named answers a THREAD id and
+   * no lead id — a pursuit does not exist until a project does. This is the
+   * only id Spine carries, which is why the seam translates for lead-only
+   * doors instead of the engine guessing (see adapters/nayadesk.ts).
+   */
+  ensureLead(builderId: string, buyerPhone: string, channel?: string): Promise<{ threadId: string } | null>;
+  appendMessage(threadId: string, direction: 'inbound' | 'outbound', content: string, meta?: { replyKey?: string }): Promise<void>;
+  updateFacts(threadId: string, facts: Record<string, string | undefined>): Promise<void>;
   /** Mirror Spine visit awaiting-window (or clear) into Desk pending_action. */
   setPendingAction(
-    conversationId: string,
+    threadId: string,
     pending: { kind: string; payload: Record<string, unknown> } | null,
   ): Promise<void>;
-  commitProject(conversationId: string, projectId: string): Promise<void>;
-  releaseProject(conversationId: string): Promise<void>;
-  syncShortlist(conversationId: string, projectIds: string[]): Promise<void>;
-  syncMatching(conversationId: string, projectIds: string[]): Promise<void>;
+  commitProject(threadId: string, projectId: string): Promise<void>;
+  releaseProject(threadId: string): Promise<void>;
+  syncShortlist(threadId: string, projectIds: string[]): Promise<void>;
+  syncMatching(threadId: string, projectIds: string[]): Promise<void>;
   setStage(
-    conversationId: string,
+    threadId: string,
     stage: 'new' | 'engaged' | 'qualified' | 'visit_booked' | 'escalated' | 'cold' | 'dropped',
     /** W5 — onlyForward: Desk skips the write if the lead is already at/past the rung. */
     opts?: { onlyForward?: boolean },
   ): Promise<void>;
-  appendSharedFact(conversationId: string, factKind: string, projectId: string, turnIndex: number): Promise<void>;
+  appendSharedFact(threadId: string, factKind: string, projectId: string, turnIndex: number): Promise<void>;
   appendTurnLedger(entry: {
-    conversationId: string;
+    threadId: string;
     turnIndex: number;
     builderId: string;
     buyerPhone: string;
@@ -410,33 +419,33 @@ export interface EngineCrm {
   postJourneySignals(
     builderId: string,
     buyerPhone: string,
-    conversationId: string,
+    threadId: string,
     signals: Record<string, unknown>,
     extras?: { shortlistAdd?: string[]; rejectedAdd?: string[] },
   ): Promise<void>;
   postJourneyTurnSnapshot(
     builderId: string,
     buyerPhone: string,
-    conversationId: string,
+    threadId: string,
     goal: string,
     phase: string,
   ): Promise<void>;
   postProfileObservations(
     builderId: string,
     buyerPhone: string,
-    conversationId: string,
+    threadId: string,
     observations: Array<{ fact_key: string; value: unknown; provenance: string }>,
   ): Promise<void>;
   postChoiceEvent(
     builderId: string,
     buyerPhone: string,
-    conversationId: string,
+    threadId: string,
     matches: Array<{ projectId: string; name: string }>,
     constraints: Record<string, unknown>,
     /** Phase 0a — observed engine status; never hardcode `"ok"`. */
     engineStatus?: string,
   ): Promise<void>;
-  postChoiceResponse(conversationId: string, responseText: string, responseIntent?: string): Promise<void>;
+  postChoiceResponse(threadId: string, responseText: string, responseIntent?: string): Promise<void>;
   /**
    * DPDP erasure. Returns the receipt so the reply is composed from what
    * actually happened — null when Desk could not be reached or is too old to
@@ -449,10 +458,10 @@ export interface EngineCrm {
    * on the delete-confirm branch, and the next bot turn wrote the row back.
    */
   eraseBuyer(
-    conversationId: string,
+    threadId: string,
     scope: 'all' | 'contact_only',
   ): Promise<ErasureReceipt | null>;
-  mirrorMemory(conversationId: string): Promise<void>;
+  mirrorMemory(threadId: string): Promise<void>;
   /**
    * Understanding Flywheel Wave A — capture this turn into Desk's intent
    * review queue (feeds the /operations/understanding board + T1 grading).
@@ -462,7 +471,7 @@ export interface EngineCrm {
    */
   enqueueIntentReview?(payload: {
     builderId: string;
-    conversationId: string;
+    threadId: string;
     buyerPhone: string;
     turnIndex: number;
     buyerText: string;
@@ -488,7 +497,7 @@ export interface EngineCrm {
     facetKey?: string;
     phrase?: string;
     reviewedIntent?: string;
-    conversationId?: string;
+    threadId?: string;
     answerOk: boolean;
     truthPresent: boolean;
     failReason?: string;
@@ -496,10 +505,10 @@ export interface EngineCrm {
 }
 
 export interface EngineStore {
-  load(convId: string): Promise<import('./types.js').ConversationState | null>;
-  save(state: import('./types.js').ConversationState): Promise<void>;
+  load(threadId: string): Promise<import('./types.js').ThreadState | null>;
+  save(state: import('./types.js').ThreadState): Promise<void>;
   /**
-   * DPDP erasure — destroy every copy of this conversation's state.
+   * DPDP erasure — destroy every copy of this thread's state.
    *
    * `freshSession()` was standing in for this and could not do the job: it
    * returns a blank state object, which `save()` then WRITES to the DO and to
@@ -509,9 +518,9 @@ export interface EngineStore {
    * Optional so an in-memory or test store can omit it; callers must handle
    * absence rather than assume the purge happened.
    */
-  purge?(convId: string, buyerKey?: { builderId: string; buyerPhone: string }): Promise<void>;
+  purge?(threadId: string, buyerKey?: { builderId: string; buyerPhone: string }): Promise<void>;
   logTurn(entry: {
-    convId: string;
+    threadId: string;
     turnIndex: number;
     buyerText: string;
     reply: string;

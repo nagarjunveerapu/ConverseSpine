@@ -86,7 +86,7 @@ describe('fair-housing keyword floor', () => {
 
     const result = await runEngineTurn(
       {
-        convId: `fh-${text.slice(0, 12)}`,
+        threadId: `fh-${text.slice(0, 12)}`,
         builderId: 'lokations',
         text,
         channel: 'advisor_web',
@@ -105,7 +105,7 @@ describe('fair-housing keyword floor', () => {
     deps.failureSearch = false;
     const result = await runEngineTurn(
       {
-        convId: 'fh-flag-off',
+        threadId: 'fh-flag-off',
         builderId: 'lokations',
         text: 'can you shortlist apartments based on caste',
         channel: 'advisor_web',

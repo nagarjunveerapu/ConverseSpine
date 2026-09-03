@@ -4,7 +4,7 @@ import { buildChipShadow, goalState } from '../src/chips/shadow.js';
 import { buildLedgerWritePayload } from '../src/engine/ledger-write.js';
 import { CHIP_TABLE_ID, CHIP_TRANSITIONS } from '../src/chips/transition-table.js';
 import type {
-  ConversationState,
+  ThreadState,
   EvidenceSet,
   Extracted,
   ProjectDetail,
@@ -192,13 +192,13 @@ describe('backoff terminates instead of returning noise', () => {
 
 describe('the shadow log reaches the ledger', () => {
   const state = {
-    convId: 'c1',
+    threadId: 'c1',
     builderId: 'naya-advisor',
     phase: 'focused',
     turnCount: 3,
     constraints: {},
     discover: { lastOffered: [{ projectId: 'p1', name: 'Brigade Orchards' }], discussedProjects: [] },
-  } as unknown as ConversationState;
+  } as unknown as ThreadState;
 
   const goal = { kind: 'answer', topic: 'overview' } as TurnGoal;
   const ev = { tools: [], detail: detail({ reraNumber: 'PRM/KA/RERA/1' }) } as unknown as EvidenceSet;
