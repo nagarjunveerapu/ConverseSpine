@@ -5814,7 +5814,7 @@ async function fetchAnswer(
       let nextDetail = priorFaqs?.length ? { ...detail, faqs: priorFaqs } : detail;
       // Advisory atoms: if the hydrated/cached detail still lacks rent bands /
       // ROI, fetch corridor intel by micro_market directly (Desk GET
-      // /api/market-intel?q=…). Covers sticky overview cache + nested miss.
+      // /api/v1/market-intel?q=…). Covers sticky overview cache + nested miss.
       if (
         advisoryDetailNeeded &&
         !nextDetail.marketIntel?.rentBands?.length &&
@@ -6361,7 +6361,7 @@ async function syncFacts(
   if (goal.kind === 'handoff') await soft('stage', deps.crm.setStage(nd, 'escalated'));
 }
 
-/** BPE lane — buyer_facts via /api/profile/observations (separate from conv columns). */
+/** BPE lane — buyer_facts via /api/v1/profile/observations (separate from conv columns). */
 async function syncProfileObservations(
   deps: EngineDeps,
   nd: string,

@@ -254,7 +254,7 @@ export async function fetchPricingQuote(
 }> {
   const project = await resolveProject(rt, threadId, projectIdOrName);
   if (!project) throw new Error(`project_not_found:${projectIdOrName}`);
-  // LEAD door: `/api/pricing/quote` resolves with a literal `WHERE lead_id = ?`
+  // LEAD door: `/api/v1/pricing/quote` resolves with a literal `WHERE lead_id = ?`
   // and has no thread fallback. This lane holds a thread id, so it resolves the
   // thread's single pursuit first; without one there is no quote to give.
   const resolved = await rt.crm.getLead(threadId).catch(() => null);

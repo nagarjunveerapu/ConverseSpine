@@ -42,7 +42,7 @@ export interface DeskBrief {
   /**
    * The project this lead is ON, and the name to say it by.
    *
-   * Set together or not at all. `/api/thread-context` returns the
+   * Set together or not at all. `/api/v1/thread-context` returns the
    * project row only when Desk's own `has_project` gate passes —
    * `project_id !== '' && project_state === 'focused'` — and it re-reads the
    * row `AND builder_id = ?`, so a name arriving here has already been

@@ -105,7 +105,7 @@ function sleep(ms) {
   await login('os');
 
   head('Enroll Watching for RERA phrase');
-  const enroll = await desk('os', 'POST', '/api/onboarding/today/watches/enroll', {
+  const enroll = await desk('os', 'POST', '/api/v1/onboarding/today/watches/enroll', {
     builder_id: BUILDER,
     project_id: PROJECT,
     slot_id: 'rera',
@@ -143,7 +143,7 @@ function sleep(ms) {
   let matchedStatus = null;
   for (let i = 0; i < 20; i++) {
     await sleep(750);
-    const today = await desk('os', 'GET', `/api/onboarding/today?builder_id=${encodeURIComponent(BUILDER)}`);
+    const today = await desk('os', 'GET', `/api/v1/onboarding/today?builder_id=${encodeURIComponent(BUILDER)}`);
     const cleared = (today.json?.stream?.just_cleared ?? []).some((x) => x.watch_id === watchId);
     const problem = (today.json?.stream?.problem_list ?? []).some((x) => x.watch_id === watchId);
     const watching = (today.json?.stream?.watching_list ?? []).some((x) => x.watch_id === watchId);
@@ -164,7 +164,7 @@ function sleep(ms) {
   head('Notify after Spine-driven fulfill');
   let notif = null;
   for (let i = 0; i < 10 && !notif; i++) {
-    const n = await desk('os', 'GET', '/api/notifications?tab=fyi&limit=40');
+    const n = await desk('os', 'GET', '/api/v1/notifications?tab=fyi&limit=40');
     notif = (n.json?.notifications ?? []).find((row) =>
       row.kind === 'catalog_watch_fulfilled' && row.entity_id === watchId);
     if (!notif) await sleep(400);

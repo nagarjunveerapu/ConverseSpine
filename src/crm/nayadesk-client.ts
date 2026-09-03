@@ -54,7 +54,7 @@ export interface ErasureReceiptDto {
  * Desk's CRM row for a buyer, as the bot reads it.
  *
  * TWO KEYS, AND THEY ARE NOT THE SAME KEY. `lead_id` is the CRM key —
- * builder x buyer x PROJECT — and it is what every `/api/leads/*` and lead-only
+ * builder x buyer x PROJECT — and it is what every `/api/v1/leads/*` and lead-only
  * door wants. `thread_id` is the messaging key — builder x buyer x CHANNEL.
  * A buyer chasing two projects on one number has TWO leads and ONE thread.
  *
@@ -82,7 +82,7 @@ export interface NdLead {
   shortlist_project_ids: string;
   turn_count: number;
   /**
-   * How this lead came into being. `/api/thread-context` returns the WHOLE
+   * How this lead came into being. `/api/v1/thread-context` returns the WHOLE
    * CRM row, so these have been arriving on every turn since the columns
    * existed — this interface simply never declared them, which is the only
    * reason nothing could read them.
@@ -400,7 +400,7 @@ export class NayaDeskClient {
   getMaskVocab(): Promise<{
     places: string[]; builders: string[]; projects: string[]; version: string;
   }> {
-    return this.call('GET', '/api/engine/mask-vocab');
+    return this.call('GET', '/api/v1/engine/mask-vocab');
   }
 
   /** Wave B safe promotion lane — human-taught phrasings from the understanding
@@ -413,7 +413,7 @@ export class NayaDeskClient {
     }>;
     count: number;
   }> {
-    return this.call('GET', '/api/engine/promoted-phrasings');
+    return this.call('GET', '/api/v1/engine/promoted-phrasings');
   }
 
   /** Wave C auto-teach step 1 — teacher-confident pending clusters. */
@@ -426,7 +426,7 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/engine/auto-candidates?min_conf=${opts.minConf}&max_clusters=${opts.maxClusters}`,
+      `/api/v1/engine/auto-candidates?min_conf=${opts.minConf}&max_clusters=${opts.maxClusters}`,
     );
   }
 
@@ -435,7 +435,7 @@ export class NayaDeskClient {
     promote: Array<{ cluster_key: string; reviewed_intent: string; note: string }>;
     flag: Array<{ cluster_key: string; note: string }>;
   }): Promise<{ ok: boolean; promoted: number; failed: number; flagged: number }> {
-    return this.call('POST', '/api/intent-review-queue/internal/auto-promote', body);
+    return this.call('POST', '/api/v1/intent-review-queue/internal/auto-promote', body);
   }
 
   upsertLead(req: {
@@ -547,7 +547,7 @@ export class NayaDeskClient {
   commitProject(thread_id: string, project_id: string): Promise<{ ok: true }> {
     return this.call(
       'POST',
-      `/api/threads/${encodeURIComponent(thread_id)}/commit-project`,
+      `/api/v1/threads/${encodeURIComponent(thread_id)}/commit-project`,
       { project_id },
     );
   }
@@ -585,7 +585,7 @@ export class NayaDeskClient {
   }
 
   threadContext(thread_id: string, recent_message_limit?: number): Promise<NdContextBundle> {
-    return this.call('POST', '/api/thread-context', {
+    return this.call('POST', '/api/v1/thread-context', {
       thread_id,
       ...(recent_message_limit !== undefined ? { recent_message_limit } : {}),
     });
@@ -597,7 +597,7 @@ export class NayaDeskClient {
    * intel = no verified data for that corridor, an honest absence.
    */
   marketIntel(q: string): Promise<{ intel: NdMarketIntel | null }> {
-    return this.call('GET', `/api/market-intel?q=${encodeURIComponent(q)}`);
+    return this.call('GET', `/api/v1/market-intel?q=${encodeURIComponent(q)}`);
   }
 
   buyerEducationCorpus(): Promise<{
@@ -613,7 +613,7 @@ export class NayaDeskClient {
       examples?: Array<{ example_id: string; phrasing: string; language?: string }>;
     }>;
   }> {
-    return this.call('GET', '/api/buyer-education/corpus?status=approved');
+    return this.call('GET', '/api/v1/buyer-education/corpus?status=approved');
   }
 
   buyerEducationLookup(input: {
@@ -638,7 +638,7 @@ export class NayaDeskClient {
     if (input.topic_key) params.set('topic_key', input.topic_key);
     if (input.q) params.set('q', input.q);
     if (input.jurisdiction) params.set('jurisdiction', input.jurisdiction);
-    return this.call('GET', `/api/buyer-education/lookup?${params.toString()}`);
+    return this.call('GET', `/api/v1/buyer-education/lookup?${params.toString()}`);
   }
 
   enqueueBuyerEducationMiss(body: {
@@ -647,7 +647,7 @@ export class NayaDeskClient {
     source?: 'education_miss' | 'unknown' | 'understanding' | 'manual';
     thread_id?: string;
   }): Promise<{ ok: boolean; queue_id: string }> {
-    return this.call('POST', '/api/buyer-education/queue', body);
+    return this.call('POST', '/api/v1/buyer-education/queue', body);
   }
 
   searchProjects(req: {
@@ -706,7 +706,7 @@ export class NayaDeskClient {
   getLocationIntelligence(project_id: string): Promise<NdLocationIntelRow | null> {
     return this.call<{ location: NdLocationIntelRow | null }>(
       'GET',
-      `/api/engine/location-intel/${encodeURIComponent(project_id)}`,
+      `/api/v1/engine/location-intel/${encodeURIComponent(project_id)}`,
     ).then((r) => r.location ?? null);
   }
 
@@ -754,7 +754,7 @@ export class NayaDeskClient {
     lead_id: string;
     unit_type?: string;
   }): Promise<NdPricingQuote & { components_withheld?: Array<{ label: string; redirect_hint?: string }> }> {
-    return this.call('POST', '/api/pricing/quote', req);
+    return this.call('POST', '/api/v1/pricing/quote', req);
   }
 
   /**
@@ -773,7 +773,7 @@ export class NayaDeskClient {
     total_display?: string;
     disclaimer?: string;
   }> {
-    return this.call('POST', '/api/pricing/landed-cost', req);
+    return this.call('POST', '/api/v1/pricing/landed-cost', req);
   }
 
   /**
@@ -788,7 +788,7 @@ export class NayaDeskClient {
     table_text?: string;
     matrix?: { projects: Array<{ project_id: string; name: string }>; rows: Array<{ key?: string; label: string; values: string[] }> };
   }> {
-    return this.call('POST', '/api/projects/compare', req);
+    return this.call('POST', '/api/v1/projects/compare', req);
   }
 
   /** Desk requires EXACTLY ONE of `lead_id` | `thread_id` (zod .refine). Spine
@@ -809,7 +809,7 @@ export class NayaDeskClient {
     return this.call('POST', '/api/v1/media/share', req);
   }
 
-  listProjectUnits(project_id: string): Promise<{
+  async listProjectUnits(project_id: string): Promise<{
     units: Array<{
       unit_type: string;
       price_display: string;
@@ -821,7 +821,41 @@ export class NayaDeskClient {
       price_max_paise?: number;
     }>;
   }> {
-    return this.call('GET', `/api/projects/${encodeURIComponent(project_id)}/units`);
+    // Desk retired the project-scoped `/units` door with the leftover prefix.
+    // The v1 noun is `configs` — same rows (unit_configs), project-scoped by
+    // query, and Desk resolves the builder from the project when it is absent.
+    // Two fields the leftover DTO synthesised are not columns and do not come
+    // back: `price_display` (callers already default it to '') and
+    // `is_available`, which is recomputed here. It reproduces the RETIRED
+    // rule verbatim (NayaDesk src/lib/desk_v2_catalog.ts:210-217, served by
+    // origin/main GET /api/projects/:project_id/units) rather than a simpler
+    // one: `availability_state` defaults to 'unknown', so
+    // `state !== 'sold_out' ? 1 : 0` would have flipped every 'unknown' and
+    // 'coming_soon' config from hidden to VISIBLE — a URL swap silently
+    // widening what the bot offers a buyer. `disclosure_tier` IS a real column
+    // and still arrives, so the admin_only suppression holds.
+    const res = await this.call<{ configs?: Array<Record<string, unknown>> }>(
+      'GET',
+      `/api/v1/configs?project_id=${encodeURIComponent(project_id)}`,
+    );
+    const units = (res.configs ?? []).map((cfg) => ({
+      ...cfg,
+      is_available: (
+        Number(cfg['available_units_count'] ?? 0) > 0
+        || cfg['availability_state'] === 'available'
+        || cfg['availability_state'] === 'limited'
+      ) ? 1 : 0,
+    }));
+    return { units } as { units: Array<{
+      unit_type: string;
+      price_display: string;
+      size_min_sqft: number;
+      size_max_sqft: number;
+      is_available: number;
+      disclosure_tier: string;
+      price_min_paise?: number;
+      price_max_paise?: number;
+    }> };
   }
 
   /**
@@ -844,7 +878,7 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/projects/${encodeURIComponent(project_id)}/units-enrichment/summary`,
+      `/api/v1/projects/${encodeURIComponent(project_id)}/units-enrichment/summary`,
     );
   }
 
@@ -862,7 +896,7 @@ export class NayaDeskClient {
   }
 
   /**
-   * Mint a store visit under the lead (IST wall-clock). Replaces leftover /api/plans.
+   * Mint a store visit under the lead (IST wall-clock). Replaces leftover /api/v1/plans.
    */
   proposeVisit(
     lead_id: string,
@@ -904,7 +938,7 @@ export class NayaDeskClient {
       detail?: string;
     }>;
   }): Promise<{ ok: true; matched: number }> {
-    return this.call('POST', '/api/whatsapp/delivery', req);
+    return this.call('POST', '/api/v1/whatsapp/delivery', req);
   }
 
   listMessages(thread_id: string): Promise<{ messages: NdMessage[] }> {
@@ -926,7 +960,7 @@ export class NayaDeskClient {
     rejected_project_ids: string[];
     next_turn_index: number;
   }> {
-    return this.call('GET', `/api/turn-ledger/context?thread_id=${encodeURIComponent(thread_id)}`);
+    return this.call('GET', `/api/v1/turn-ledger/context?thread_id=${encodeURIComponent(thread_id)}`);
   }
 
   appendTurnLedger(req: {
@@ -946,17 +980,17 @@ export class NayaDeskClient {
     disclosed_facts?: unknown[];
     verify?: Record<string, unknown>;
   }): Promise<{ ok: boolean }> {
-    return this.call('POST', '/api/turn-ledger/append', req);
+    return this.call('POST', '/api/v1/turn-ledger/append', req);
   }
 
   listBuilders(): Promise<{ builders: Array<{ builder_id: string; meta_phone_number_id: string; name: string }> }> {
-    return this.call('GET', '/api/builders');
+    return this.call('GET', '/api/v1/builders');
   }
 
   getBuilder(builder_id: string): Promise<{
     builder?: { builder_id: string; name?: string; site_visit_hours?: string; escalation_phone?: string };
   }> {
-    return this.call('GET', `/api/builders/${encodeURIComponent(builder_id)}`);
+    return this.call('GET', `/api/v1/builders/${encodeURIComponent(builder_id)}`);
   }
 
   siteVisitsItinerary(thread_id: string): Promise<{
@@ -964,7 +998,7 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/plans/site-visits-itinerary?thread_id=${encodeURIComponent(thread_id)}`,
+      `/api/v1/plans/site-visits-itinerary?thread_id=${encodeURIComponent(thread_id)}`,
     );
   }
 
@@ -977,11 +1011,11 @@ export class NayaDeskClient {
     current_step: string;
     collected: Record<string, unknown>;
   }): Promise<{ ok: boolean; plan_id: string }> {
-    return this.call('POST', '/api/plans', req);
+    return this.call('POST', '/api/v1/plans', req);
   }
 
   patchPlan(plan_id: string, body: { status?: string; collected?: Record<string, unknown> }): Promise<{ ok: boolean }> {
-    return this.call('PATCH', `/api/plans/${encodeURIComponent(plan_id)}`, body);
+    return this.call('PATCH', `/api/v1/plans/${encodeURIComponent(plan_id)}`, body);
   }
 
   getWhatsAppCreds(builder_id: string): Promise<{
@@ -989,7 +1023,7 @@ export class NayaDeskClient {
     phone_number_id: string;
     access_token: string;
   }> {
-    return this.call('GET', `/api/whatsapp/${encodeURIComponent(builder_id)}/creds`);
+    return this.call('GET', `/api/v1/whatsapp/${encodeURIComponent(builder_id)}/creds`);
   }
 
   postProfileObservations(req: {
@@ -998,7 +1032,7 @@ export class NayaDeskClient {
     thread_id: string;
     observations: Array<{ fact_key: string; value: unknown; provenance: string; confidence?: number }>;
   }): Promise<{ ok: boolean }> {
-    return this.call('POST', '/api/profile/observations', req);
+    return this.call('POST', '/api/v1/profile/observations', req);
   }
 
   postJourneySignals(req: {
@@ -1010,7 +1044,7 @@ export class NayaDeskClient {
     shortlist_add?: string[];
     rejected_add?: string[];
   }): Promise<{ ok: boolean }> {
-    return this.call('POST', '/api/journey/signals', req);
+    return this.call('POST', '/api/v1/journey/signals', req);
   }
 
   postJourneyTurnSnapshot(req: {
@@ -1022,7 +1056,7 @@ export class NayaDeskClient {
     matched_rules: string[];
     snapshot?: Record<string, unknown>;
   }): Promise<{ ok: boolean; snapshot_id: string }> {
-    return this.call('POST', '/api/journey/turn-snapshot', req);
+    return this.call('POST', '/api/v1/journey/turn-snapshot', req);
   }
 
   getJourney(builder_id: string, buyer_phone: string): Promise<{
@@ -1035,7 +1069,7 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/journey?builder_id=${encodeURIComponent(builder_id)}&buyer_phone=${encodeURIComponent(buyer_phone)}`,
+      `/api/v1/journey?builder_id=${encodeURIComponent(builder_id)}&buyer_phone=${encodeURIComponent(buyer_phone)}`,
     );
   }
 
@@ -1045,7 +1079,7 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/profile?builder_id=${encodeURIComponent(builder_id)}&buyer_phone=${encodeURIComponent(buyer_phone)}`,
+      `/api/v1/profile?builder_id=${encodeURIComponent(builder_id)}&buyer_phone=${encodeURIComponent(buyer_phone)}`,
     );
   }
 
@@ -1058,7 +1092,7 @@ export class NayaDeskClient {
     stretch: Array<Record<string, unknown>>;
     constraints: Record<string, unknown>;
   }): Promise<{ ok: boolean; event_id: string }> {
-    return this.call('POST', '/api/profile/choice-events', req);
+    return this.call('POST', '/api/v1/profile/choice-events', req);
   }
 
   postChoiceResponse(req: {
@@ -1066,7 +1100,7 @@ export class NayaDeskClient {
     response_text: string;
     response_intent?: string;
   }): Promise<{ ok: boolean; attached: boolean }> {
-    return this.call('POST', '/api/profile/choice-response', req);
+    return this.call('POST', '/api/v1/profile/choice-response', req);
   }
 
   getLatestChoiceEvent(thread_id: string): Promise<{
@@ -1078,14 +1112,14 @@ export class NayaDeskClient {
   }> {
     return this.call(
       'GET',
-      `/api/profile/choice-events/latest?thread_id=${encodeURIComponent(thread_id)}`,
+      `/api/v1/profile/choice-events/latest?thread_id=${encodeURIComponent(thread_id)}`,
     );
   }
 
   releaseProject(thread_id: string): Promise<{ ok: true; project_state: string }> {
     return this.call(
       'POST',
-      `/api/threads/${encodeURIComponent(thread_id)}/release-project`,
+      `/api/v1/threads/${encodeURIComponent(thread_id)}/release-project`,
       {},
     );
   }
@@ -1112,7 +1146,7 @@ export class NayaDeskClient {
     const id = encodeURIComponent(lead_id);
     try {
       const res = await this.call<{ ok: boolean; receipt?: ErasureReceiptDto }>(
-        'POST', `/api/leads/${id}/erase`, { scope },
+        'POST', `/api/v1/leads/${id}/erase`, { scope },
       );
       return res.receipt ?? null;
     } catch (err) {
@@ -1123,7 +1157,7 @@ export class NayaDeskClient {
       // deleting more than the buyer asked for.
       if (scope !== 'all') return null;
       const legacy = await this.call<{ ok: true; deleted: number; receipt?: ErasureReceiptDto }>(
-        'DELETE', `/api/leads/${id}/buyer-memory`,
+        'DELETE', `/api/v1/leads/${id}/buyer-memory`,
       );
       return legacy.receipt ?? null;
     }
@@ -1132,7 +1166,7 @@ export class NayaDeskClient {
   /** Resolves on EITHER key — Desk's buyer_memory lookup is
    *  `WHERE lead_id = ?1 OR thread_id = ?1`. */
   mirrorMemory(lead_or_thread_id: string): Promise<{ ok: true }> {
-    return this.call('POST', `/api/leads/${encodeURIComponent(lead_or_thread_id)}/mirror-memory`, {});
+    return this.call('POST', `/api/v1/leads/${encodeURIComponent(lead_or_thread_id)}/mirror-memory`, {});
   }
 
   /**
@@ -1150,22 +1184,22 @@ export class NayaDeskClient {
   getLeadByPhone(phone: string, builder_id: string): Promise<{ lead: NdLead }> {
     return this.call(
       'GET',
-      `/api/leads/by-phone/${encodeURIComponent(phone)}?builder_id=${encodeURIComponent(builder_id)}`,
+      `/api/v1/leads/by-phone/${encodeURIComponent(phone)}?builder_id=${encodeURIComponent(builder_id)}`,
     );
   }
 
   getActivePlan(thread_id: string): Promise<{ plan: Record<string, unknown> | null }> {
-    return this.call('GET', `/api/plans/active?thread_id=${encodeURIComponent(thread_id)}`);
+    return this.call('GET', `/api/v1/plans/active?thread_id=${encodeURIComponent(thread_id)}`);
   }
 
   getActivePlans(thread_id: string): Promise<{ plans: Array<Record<string, unknown>> }> {
-    return this.call('GET', `/api/plans/active-all?thread_id=${encodeURIComponent(thread_id)}`);
+    return this.call('GET', `/api/v1/plans/active-all?thread_id=${encodeURIComponent(thread_id)}`);
   }
 
   getLatestCompletedPlan(thread_id: string, goal = 'site_visits'): Promise<{ plan: Record<string, unknown> | null }> {
     return this.call(
       'GET',
-      `/api/plans/latest-completed?thread_id=${encodeURIComponent(thread_id)}&goal=${encodeURIComponent(goal)}`,
+      `/api/v1/plans/latest-completed?thread_id=${encodeURIComponent(thread_id)}&goal=${encodeURIComponent(goal)}`,
     );
   }
 
@@ -1180,7 +1214,7 @@ export class NayaDeskClient {
   }
 
   engineConfig(builder_id: string): Promise<{ builder_id: string; config: Record<string, unknown> }> {
-    return this.call('GET', `/api/engine/config?builder_id=${encodeURIComponent(builder_id)}`);
+    return this.call('GET', `/api/v1/engine/config?builder_id=${encodeURIComponent(builder_id)}`);
   }
 
   resolveGeo(text: string): Promise<{
@@ -1193,7 +1227,7 @@ export class NayaDeskClient {
     source?: 'area_registry' | 'cache' | 'geocoder' | 'gazetteer';
     reason?: 'geocoder_not_configured' | 'no_geocode_result';
   }> {
-    return this.call('POST', '/api/engine/geo/resolve', { text });
+    return this.call('POST', '/api/v1/engine/geo/resolve', { text });
   }
 
   areasInRegion(region: string, builder_id?: string): Promise<{
@@ -1201,15 +1235,15 @@ export class NayaDeskClient {
     areas: Array<{ area_id: string; name: string; distance_km: number }>;
     nearby?: Array<{ area_id: string; name: string; distance_km: number }>;
   }> {
-    return this.call('POST', '/api/engine/geo/areas-in-region', builder_id ? { region, builder_id } : { region });
+    return this.call('POST', '/api/v1/engine/geo/areas-in-region', builder_id ? { region, builder_id } : { region });
   }
 
   areasNear(area_id: string, max_km = 5): Promise<{ areas: Array<{ area_id: string; name: string; distance_km: number }> }> {
-    return this.call('POST', '/api/engine/geo/areas-near', { area_id, max_km });
+    return this.call('POST', '/api/v1/engine/geo/areas-near', { area_id, max_km });
   }
 
   areasSemantic(query: string, k = 5): Promise<{ areas: Array<{ area_id: string; name: string; score: number }> }> {
-    return this.call('POST', '/api/engine/geo/areas-semantic', { query, k });
+    return this.call('POST', '/api/v1/engine/geo/areas-semantic', { query, k });
   }
 
   faqLookup(project_id: string, question_key: string): Promise<{
@@ -1222,15 +1256,15 @@ export class NayaDeskClient {
   }
 
   ingestExternalLink(builder_id: string, url: string): Promise<Record<string, unknown>> {
-    return this.call('POST', '/api/external/ingest', { builder_id, url });
+    return this.call('POST', '/api/v1/external/ingest', { builder_id, url });
   }
 
   ragCorpus(builder_id: string): Promise<{ builder_id: string; projects: Array<Record<string, unknown>> }> {
-    return this.call('GET', `/api/rag-corpus?builder_id=${encodeURIComponent(builder_id)}`);
+    return this.call('GET', `/api/v1/rag-corpus?builder_id=${encodeURIComponent(builder_id)}`);
   }
 
   enqueueIntentReview(payload: Record<string, unknown>): Promise<{ ok: boolean; queue_id: string }> {
-    return this.call('POST', '/api/intent-review-queue/internal/enqueue', payload);
+    return this.call('POST', '/api/v1/intent-review-queue/internal/enqueue', payload);
   }
 
   /**
@@ -1250,6 +1284,6 @@ export class NayaDeskClient {
     truth_present: boolean;
     fail_reason?: string;
   }): Promise<{ ok: boolean; matched?: boolean; status?: string; watch_id?: string }> {
-    return this.call('POST', '/api/onboarding/today/live-ask', payload);
+    return this.call('POST', '/api/v1/onboarding/today/live-ask', payload);
   }
 }

@@ -66,7 +66,7 @@ describe('a status-only webhook', () => {
     posts = [];
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
-      if (String(url).includes('/api/builders')) {
+      if (String(url).includes('/api/v1/builders')) {
         return new Response(JSON.stringify({
           builders: [{ builder_id: BUILDER, meta_phone_number_id: PHONE_NUMBER_ID }],
         }), { status: 200 });
@@ -89,7 +89,7 @@ describe('a status-only webhook', () => {
     await settle();
 
     expect(res.status).toBe(200);
-    const filed = posts.find((p) => p.url.includes('/api/whatsapp/delivery'));
+    const filed = posts.find((p) => p.url.includes('/api/v1/whatsapp/delivery'));
     expect(filed, 'the status webhook must reach Desk').toBeTruthy();
     expect(filed!.body.builder_id).toBe(BUILDER);
     expect(filed!.body.reports).toEqual([
@@ -104,6 +104,6 @@ describe('a status-only webhook', () => {
     await settle();
 
     expect(res.status).toBe(200);
-    expect(posts.filter((p) => p.url.includes('/api/whatsapp/delivery'))).toHaveLength(0);
+    expect(posts.filter((p) => p.url.includes('/api/v1/whatsapp/delivery'))).toHaveLength(0);
   });
 });

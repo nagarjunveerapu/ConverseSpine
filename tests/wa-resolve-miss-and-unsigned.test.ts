@@ -27,7 +27,7 @@ import type { Env } from '../src/env.js';
 const PHONE_NUMBER_ID = '773311992244001';
 const BUILDER = 'builder-late';
 
-/** What GET /api/builders currently answers. Cases mutate this mid-test. */
+/** What GET /api/v1/builders currently answers. Cases mutate this mid-test. */
 let listed: Array<{ builder_id: string; meta_phone_number_id: string }> = [];
 let listCalls = 0;
 
@@ -44,7 +44,7 @@ describe('resolving a number that was connected a moment ago', () => {
     listCalls = 0;
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).includes('/api/builders')) {
+      if (String(url).includes('/api/v1/builders')) {
         listCalls += 1;
         return new Response(JSON.stringify({ builders: listed }), { status: 200 });
       }
@@ -58,7 +58,7 @@ describe('resolving a number that was connected a moment ago', () => {
   });
 
   it('refetches on a miss instead of serving a stale map for the rest of the TTL', async () => {
-    const crm = { listBuilders: () => fetch('https://desk.test/api/builders').then((r) => r.json()) } as never;
+    const crm = { listBuilders: () => fetch('https://desk.test/api/v1/builders').then((r) => r.json()) } as never;
 
     // The map is built before this tenant exists.
     expect(await resolveBuilderByPhoneNumberId(crm, PHONE_NUMBER_ID)).toBeNull();
@@ -73,7 +73,7 @@ describe('resolving a number that was connected a moment ago', () => {
   });
 
   it('does not refetch per message for a number that belongs to nobody', async () => {
-    const crm = { listBuilders: () => fetch('https://desk.test/api/builders').then((r) => r.json()) } as never;
+    const crm = { listBuilders: () => fetch('https://desk.test/api/v1/builders').then((r) => r.json()) } as never;
 
     await resolveBuilderByPhoneNumberId(crm, 'pn-belongs-to-nobody');
     await resolveBuilderByPhoneNumberId(crm, 'pn-belongs-to-nobody');
@@ -86,7 +86,7 @@ describe('resolving a number that was connected a moment ago', () => {
 
   it('serves a hit from cache without any refetch', async () => {
     listed = [{ builder_id: BUILDER, meta_phone_number_id: PHONE_NUMBER_ID }];
-    const crm = { listBuilders: () => fetch('https://desk.test/api/builders').then((r) => r.json()) } as never;
+    const crm = { listBuilders: () => fetch('https://desk.test/api/v1/builders').then((r) => r.json()) } as never;
 
     expect(await resolveBuilderByPhoneNumberId(crm, PHONE_NUMBER_ID)).toBe(BUILDER);
     vi.advanceTimersByTime(30_000);
@@ -100,7 +100,7 @@ describe('a webhook payload nobody signed', () => {
     __resetPhoneResolveCache();
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).includes('/api/builders')) {
+      if (String(url).includes('/api/v1/builders')) {
         return new Response(JSON.stringify({
           builders: [{ builder_id: BUILDER, meta_phone_number_id: PHONE_NUMBER_ID }],
         }), { status: 200 });
