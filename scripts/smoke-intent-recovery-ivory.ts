@@ -17,7 +17,7 @@ const SPINE = (
 
 type Turn = { text: string; check?: (reply: string, debug: Record<string, unknown>) => string[] };
 
-async function chat(builderId: string, phone: string, text: string, convId?: string) {
+async function chat(builderId: string, phone: string, text: string, threadId?: string) {
   const t0 = Date.now();
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
@@ -26,7 +26,7 @@ async function chat(builderId: string, phone: string, text: string, convId?: str
       builder_id: builderId,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as Record<string, unknown>;
@@ -36,7 +36,7 @@ async function chat(builderId: string, phone: string, text: string, convId?: str
   }
   return {
     reply: String(body.reply_text ?? body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     debug: (body.debug as Record<string, unknown>) ?? {},
     ms,
   };
@@ -170,7 +170,7 @@ async function main() {
       const t = j.turns[i]!;
       try {
         const resp = await chat(j.builder_id, phone, t.text, conv);
-        conv = resp.conversation_id || conv;
+        conv = resp.thread_id || conv;
         const fails = t.check?.(resp.reply, resp.debug) ?? [];
         const pass = fails.length === 0;
         if (!pass) ok = false;

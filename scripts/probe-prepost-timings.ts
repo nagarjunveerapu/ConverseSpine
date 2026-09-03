@@ -59,7 +59,7 @@ async function chat(phone: string, text: string, cid?: string) {
       buyer_phone: phone,
       text,
       channel: 'api',
-      ...(cid ? { conversation_id: cid } : {}),
+      ...(cid ? { thread_id: cid } : {}),
     }),
   });
   return (await r.json()) as Record<string, unknown>;
@@ -78,7 +78,7 @@ async function main() {
   console.log('phone', phone);
   for (const text of turns) {
     const d = await chat(phone, text, cid);
-    cid = (d.conversation_id as string | undefined) || cid;
+    cid = (d.thread_id as string | undefined) || cid;
     const dbg = (d.debug as Record<string, unknown> | undefined) || {};
     const t = dbg.timings as Timings | undefined;
     const reply = String(d.reply_text ?? d.reply ?? '')

@@ -22,7 +22,7 @@ from collections import Counter
 
 SQL = """
 WITH t AS (
-  SELECT conversation_id cid, created_at,
+  SELECT thread_id cid, created_at,
          json_extract(action_plan_json,'$.chip_shadow') shadow,
          COALESCE(json_extract(action_plan_json,'$.kind'),'') kind,
          COALESCE(json_extract(action_plan_json,'$.topic'),'') topic,

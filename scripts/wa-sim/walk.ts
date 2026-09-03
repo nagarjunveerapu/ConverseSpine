@@ -195,7 +195,7 @@ async function post(body: Record<string, unknown>): Promise<Record<string, unkno
 
 async function runScenario(sc: Scenario, phone: string): Promise<TurnRecord[]> {
   const out: TurnRecord[] = [];
-  let convId: string | undefined;
+  let threadId: string | undefined;
   let lastRows: Row[] = [];
   const steps = [...sc.steps];
 
@@ -223,10 +223,10 @@ async function runScenario(sc: Scenario, phone: string): Promise<TurnRecord[]> {
       buyer_phone: phone,
       text: label,
       channel: 'whatsapp',
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
       ...(actionId ? { action_id: actionId } : {}),
     });
-    convId = (res.conversation_id as string) ?? convId;
+    threadId = (res.thread_id as string) ?? threadId;
     const reply = String(res.reply_text ?? res.reply ?? '');
     const media = (res.media as TurnRecord['media']) ?? [];
     lastRows = rowsOf(res.whatsapp_interactive);

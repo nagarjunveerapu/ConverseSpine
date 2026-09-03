@@ -161,10 +161,10 @@ async function chatTurn(
   builderId: string,
   phone: string,
   text: string,
-  convId?: string,
+  threadId?: string,
 ): Promise<{
   reply: string;
-  conversation_id: string;
+  thread_id: string;
   debug: Record<string, unknown>;
   whatsapp_actions?: unknown;
   tools?: string[];
@@ -176,7 +176,7 @@ async function chatTurn(
       builder_id: builderId,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as Record<string, unknown>;
@@ -184,7 +184,7 @@ async function chatTurn(
   const debug = (body.debug as Record<string, unknown>) ?? {};
   return {
     reply: String(body.reply_text ?? body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     debug,
     whatsapp_actions: body.whatsapp_actions,
     tools: (debug.tools as string[]) ?? [],
@@ -336,7 +336,7 @@ async function runChatScenario(sc: Scenario, section: string): Promise<ScenRec> 
     const t = sc.turns[i]!;
     try {
       const resp = await chatTurn(sc.builder_id, phone, t.text, conv);
-      conv = resp.conversation_id || conv;
+      conv = resp.thread_id || conv;
       const media = hasMediaSignal(resp.reply, resp.whatsapp_actions, resp.tools ?? []);
       const failures = check(resp.reply, resp.debug, t.assert, media);
       const pass = failures.length === 0;

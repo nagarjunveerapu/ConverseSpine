@@ -272,7 +272,7 @@ async function runChatNative() {
   ];
 
   let n = 0;
-  let conversation_id: string | undefined;
+  let thread_id: string | undefined;
 
   for (const step of steps) {
     n += 1;
@@ -282,9 +282,9 @@ async function runChatNative() {
       buyer_phone: phone,
       text: step.text,
       channel: 'whatsapp',
-      ...(conversation_id ? { conversation_id } : {}),
+      ...(thread_id ? { thread_id } : {}),
     });
-    conversation_id = json.conversation_id ?? json.conversationId ?? conversation_id;
+    thread_id = json.thread_id ?? json.threadId ?? thread_id;
 
     const reply = String(json.reply ?? json.message ?? json.error ?? '');
     let note: string | undefined;

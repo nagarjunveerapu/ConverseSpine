@@ -95,8 +95,8 @@ async function chatTurn(
   builderId: string,
   phone: string,
   text: string,
-  convId?: string,
-): Promise<{ reply: string; conversation_id: string; debug?: Record<string, unknown> }> {
+  threadId?: string,
+): Promise<{ reply: string; thread_id: string; debug?: Record<string, unknown> }> {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: {
@@ -108,14 +108,14 @@ async function chatTurn(
       buyer_phone: phone,
       text,
       channel: 'whatsapp',
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as Record<string, unknown>;
   if (!r.ok) throw new Error(String(body.error ?? `HTTP ${r.status}`));
   return {
     reply: String(body.reply_text ?? body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     debug: body.debug as Record<string, unknown> | undefined,
   };
 }
@@ -124,7 +124,7 @@ async function advisorTurn(
   builderId: string,
   sessionId: string,
   text: string,
-): Promise<{ reply: string; conversation_id: string; debug?: Record<string, unknown> }> {
+): Promise<{ reply: string; thread_id: string; debug?: Record<string, unknown> }> {
   const r = await fetch(`${SPINE}/api/advisor/turn`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -146,7 +146,7 @@ async function advisorTurn(
     } as Record<string, unknown>);
   return {
     reply: String(body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     debug,
   };
 }
@@ -183,7 +183,7 @@ async function runScenario(
   const stamp = Date.now();
   const phone = `+9199${String(stamp % 1e10).padStart(10, '0')}`;
   const sessionId = `mv-${sc.id}-${channel}-${stamp}`;
-  let convId: string | undefined;
+  let threadId: string | undefined;
   const turns: Array<{
     index: number;
     buyer: string;
@@ -200,9 +200,9 @@ async function runScenario(
     try {
       const resp =
         channel === 'chat'
-          ? await chatTurn(sc.builder_id, phone, turn.text, convId)
+          ? await chatTurn(sc.builder_id, phone, turn.text, threadId)
           : await advisorTurn(sc.builder_id, sessionId, turn.text);
-      if (resp.conversation_id) convId = resp.conversation_id;
+      if (resp.thread_id) threadId = resp.thread_id;
       const failures = turn.assert ? checkAssert(resp.reply, resp.debug, turn.assert) : [];
       const pass = failures.length === 0;
       if (!pass) ok = false;

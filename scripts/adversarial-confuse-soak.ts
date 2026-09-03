@@ -113,7 +113,7 @@ const JOURNEYS: Journey[] = [
   },
 ];
 
-async function chat(builderId: string, phone: string, text: string, convId?: string) {
+async function chat(builderId: string, phone: string, text: string, threadId?: string) {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -121,7 +121,7 @@ async function chat(builderId: string, phone: string, text: string, convId?: str
       builder_id: builderId,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as Record<string, unknown>;
@@ -129,7 +129,7 @@ async function chat(builderId: string, phone: string, text: string, convId?: str
   const debug = (body.debug as Record<string, unknown>) ?? {};
   return {
     reply: String(body.reply_text ?? body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     debug,
   };
 }
@@ -187,7 +187,7 @@ async function main() {
       const t = j.turns[i]!;
       try {
         const resp = await chat(j.builder_id, phone, t.text, conv);
-        conv = resp.conversation_id || conv;
+        conv = resp.thread_id || conv;
         const failures = check(resp.reply, t, resp.debug);
         const pass = failures.length === 0;
         if (!pass) ok = false;

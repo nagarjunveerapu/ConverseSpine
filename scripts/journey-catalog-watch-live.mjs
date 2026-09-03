@@ -66,7 +66,7 @@ async function desk(k, method, path, body) {
   return { status: r.status, ok: r.ok, json };
 }
 
-async function chat(text, conversationId) {
+async function chat(text, threadId) {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -74,7 +74,7 @@ async function chat(text, conversationId) {
       builder_id: BUILDER,
       buyer_phone: phone,
       text,
-      ...(conversationId ? { conversation_id: conversationId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const j = await r.json().catch(() => ({}));
@@ -82,7 +82,7 @@ async function chat(text, conversationId) {
     status: r.status,
     ok: r.ok,
     reply: (j.reply_text ?? j.reply ?? '').replace(/\s+/g, ' ').trim(),
-    cid: j.conversation_id,
+    cid: j.thread_id,
     bind: j.debug?.extract_provenance?.routing_bind
       ?? j.debug?.routing?.bind
       ?? {},

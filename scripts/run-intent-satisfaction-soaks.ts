@@ -207,7 +207,7 @@ const JOURNEYS: Journey[] = [
   },
 ];
 
-async function chat(builderId: string, phone: string, text: string, convId?: string) {
+async function chat(builderId: string, phone: string, text: string, threadId?: string) {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -215,7 +215,7 @@ async function chat(builderId: string, phone: string, text: string, convId?: str
       builder_id: builderId,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as Record<string, unknown>;
@@ -223,7 +223,7 @@ async function chat(builderId: string, phone: string, text: string, convId?: str
   const debug = (body.debug as Record<string, unknown>) ?? {};
   return {
     reply: String(body.reply_text ?? body.reply ?? ''),
-    conversation_id: String(body.conversation_id ?? ''),
+    thread_id: String(body.thread_id ?? ''),
     goal: debug.goal,
     phase: debug.phase,
     tools: debug.tools,
@@ -275,7 +275,7 @@ async function main() {
       const text = j.turns[i]!;
       try {
         const resp = await chat(j.builder_id, phone, text, conv);
-        conv = resp.conversation_id || conv;
+        conv = resp.thread_id || conv;
         turns.push({
           index: i + 1,
           buyer: text,

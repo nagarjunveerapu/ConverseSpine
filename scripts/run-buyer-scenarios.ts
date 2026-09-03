@@ -109,7 +109,7 @@ interface TurnRecord {
   index: number;
   buyer: string;
   reply: string;
-  conversation_id: string;
+  thread_id: string;
   media_attachments?: MediaAttachmentRecord[];
   debug?: Record<string, unknown>;
   pass: boolean;
@@ -160,10 +160,10 @@ async function chat(
   builderId: string,
   phone: string,
   text: string,
-  convId?: string,
+  threadId?: string,
 ): Promise<{
   reply_text: string;
-  conversation_id: string;
+  thread_id: string;
   debug?: Record<string, unknown>;
   whatsapp_actions?: unknown[];
   media_attachments?: MediaAttachmentRecord[];
@@ -180,13 +180,13 @@ async function chat(
       builder_id: builderId,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as {
     reply_text?: string;
     reply?: string;
-    conversation_id?: string;
+    thread_id?: string;
     debug?: Record<string, unknown>;
     whatsapp_actions?: unknown[];
     media_attachments?: MediaAttachmentRecord[];
@@ -195,7 +195,7 @@ async function chat(
   if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
   return {
     reply_text: body.reply_text ?? body.reply ?? '',
-    conversation_id: body.conversation_id ?? '',
+    thread_id: body.thread_id ?? '',
     debug: body.debug,
     whatsapp_actions: body.whatsapp_actions,
     media_attachments: body.media_attachments,
@@ -206,11 +206,11 @@ async function advisor(
   builderId: string,
   sessionId: string,
   text: string,
-  convId?: string,
+  threadId?: string,
   preferences?: Record<string, string | undefined>,
 ): Promise<{
   reply_text: string;
-  conversation_id: string;
+  thread_id: string;
   debug?: Record<string, unknown>;
   whatsapp_actions?: unknown[];
   media_attachments?: MediaAttachmentRecord[];
@@ -228,7 +228,7 @@ async function advisor(
       builder_id: builderId,
       session_id: sessionId,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
       ...(preferences && Object.keys(preferences).length > 0
         ? { preferences }
         : {}),
@@ -236,7 +236,7 @@ async function advisor(
   });
   const body = (await r.json()) as {
     reply?: string;
-    conversation_id?: string;
+    thread_id?: string;
     debug?: Record<string, unknown>;
     media_attachments?: MediaAttachmentRecord[];
     prefs_snapshot?: Record<string, string>;
@@ -249,7 +249,7 @@ async function advisor(
   }
   return {
     reply_text: body.reply ?? '',
-    conversation_id: body.conversation_id ?? '',
+    thread_id: body.thread_id ?? '',
     debug: body.debug,
     media_attachments: body.media_attachments,
     prefs_snapshot: body.prefs_snapshot,
@@ -403,7 +403,7 @@ async function main(): Promise<void> {
     const phone = `+9199${String(Date.now() % 1e10).padStart(10, '0')}${sc.id.length % 10}`;
     const channel = sc.channel === 'advisor' ? 'advisor' : 'chat';
     const sessionId = `adv-scen-${sc.id}-${Date.now().toString(36)}`;
-    let convId: string | undefined;
+    let threadId: string | undefined;
     const turns: TurnRecord[] = [];
     let ok = true;
     let lastProjects: Array<{ id?: string; name?: string }> = [];
@@ -415,9 +415,9 @@ async function main(): Promise<void> {
       try {
         const resp =
           channel === 'advisor'
-            ? await advisor(sc.builder_id, sessionId, turn.text, convId, turn.preferences)
-            : await chat(sc.builder_id, phone, turn.text, convId);
-        convId = resp.conversation_id || convId;
+            ? await advisor(sc.builder_id, sessionId, turn.text, threadId, turn.preferences)
+            : await chat(sc.builder_id, phone, turn.text, threadId);
+        threadId = resp.thread_id || threadId;
         const projects =
           'projects' in resp ? (resp.projects as Array<{ id?: string; name?: string }> | undefined) : undefined;
         if (projects?.length) lastProjects = projects;
@@ -438,7 +438,7 @@ async function main(): Promise<void> {
           index: i + 1,
           buyer: turn.text,
           reply: resp.reply_text,
-          conversation_id: convId ?? '',
+          thread_id: threadId ?? '',
           ...(resp.media_attachments?.length
             ? { media_attachments: resp.media_attachments }
             : {}),
@@ -474,7 +474,7 @@ async function main(): Promise<void> {
           index: i + 1,
           buyer: turn.text,
           reply: '',
-          conversation_id: convId ?? '',
+          thread_id: threadId ?? '',
           pass: false,
           failures: [msg],
         });
@@ -500,7 +500,7 @@ async function main(): Promise<void> {
           index: turns.length + 1,
           buyer: '[reveal]',
           reply: '',
-          conversation_id: convId ?? '',
+          thread_id: threadId ?? '',
           pass: false,
           failures: revealFailures,
         });
@@ -525,7 +525,7 @@ async function main(): Promise<void> {
             status?: string;
             source_builder_id?: string;
             source_project_id?: string;
-            conversation_id?: string;
+            thread_id?: string;
             error?: string;
           };
           if (!r.ok || body.status === 'error') {
@@ -556,9 +556,9 @@ async function main(): Promise<void> {
             index: turns.length + 1,
             buyer: `[reveal] ${rev.buyer_name} ${rev.buyer_phone}`,
             reply: pass
-              ? `ok · source=${body.source_builder_id}/${body.source_project_id} · lead=${body.conversation_id}`
+              ? `ok · source=${body.source_builder_id}/${body.source_project_id} · lead=${body.thread_id}`
               : body.error ?? 'reveal_failed',
-            conversation_id: body.conversation_id ?? convId ?? '',
+            thread_id: body.thread_id ?? threadId ?? '',
             pass,
             failures: revealFailures,
             debug: { reveal: body },
@@ -578,7 +578,7 @@ async function main(): Promise<void> {
             index: turns.length + 1,
             buyer: '[reveal]',
             reply: '',
-            conversation_id: convId ?? '',
+            thread_id: threadId ?? '',
             pass: false,
             failures: [msg],
           });

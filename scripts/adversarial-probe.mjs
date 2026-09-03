@@ -25,12 +25,12 @@ const BUILDER = 'naya-advisor';
 const say = async (phone, text, cid) => {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ builder_id: BUILDER, buyer_phone: phone, text, ...(cid ? { conversation_id: cid } : {}) }),
+    body: JSON.stringify({ builder_id: BUILDER, buyer_phone: phone, text, ...(cid ? { thread_id: cid } : {}) }),
   });
   const b = await r.json();
   return {
     reply: (b.reply_text ?? '').replace(/\s+/g, ' ').trim(),
-    cid: b.conversation_id,
+    cid: b.thread_id,
     goal: b.debug?.goal ?? {},
     bind: b.debug?.extract_provenance?.routing_bind ?? {},
   };

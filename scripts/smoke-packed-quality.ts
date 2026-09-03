@@ -14,7 +14,7 @@ async function chat(phone: string, text: string, cid?: string) {
       buyer_phone: phone,
       text,
       channel: 'api',
-      ...(cid ? { conversation_id: cid } : {}),
+      ...(cid ? { thread_id: cid } : {}),
     }),
   });
   const d = (await r.json()) as Record<string, unknown>;
@@ -78,7 +78,7 @@ async function main() {
         flags++;
         break;
       }
-      cid = String(d.conversation_id ?? '');
+      cid = String(d.thread_id ?? '');
       const replyFull = fullReply(d);
       const reply = replyFull.slice(0, 260).replace(/\n/g, ' ');
       const dbg = (d.debug as Record<string, unknown>) || {};

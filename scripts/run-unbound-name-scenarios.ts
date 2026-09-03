@@ -154,7 +154,7 @@ async function localCases(): Promise<CaseRow[]> {
     const phone = `+9199${id.replace(/\W/g, '').slice(-8).padStart(8, '0')}`;
     const turn = (text: string) =>
       runEngineTurn(
-        { convId: id, builderId: 'naya-advisor', text, buyerPhone: phone, channel: 'advisor_web' },
+        { threadId: id, builderId: 'naya-advisor', text, buyerPhone: phone, channel: 'advisor_web' },
         deps,
       );
     const turns: CaseRow['turns'] = [];
@@ -218,7 +218,7 @@ async function localCases(): Promise<CaseRow[]> {
     const failures: string[] = [];
     try {
       await runEngineTurn(
-        { convId: id, builderId: 'naya-advisor', text: 'hi', buyerPhone: phone, channel: 'advisor_web' },
+        { threadId: id, builderId: 'naya-advisor', text: 'hi', buyerPhone: phone, channel: 'advisor_web' },
         deps,
       );
       const s = await deps.store.load(id);
@@ -234,7 +234,7 @@ async function localCases(): Promise<CaseRow[]> {
       turns.push({ role: 'seed-shortlist+discussed', reply: 'Ayana, Krishnaja Greens' });
       const r = await runEngineTurn(
         {
-          convId: id,
+          threadId: id,
           builderId: 'naya-advisor',
           text: 'compare both',
           buyerPhone: phone,

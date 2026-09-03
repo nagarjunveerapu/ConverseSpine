@@ -112,8 +112,8 @@ async function chat(
   builderId: string,
   phone: string,
   text: string,
-  convId?: string,
-): Promise<{ reply_text: string; conversation_id: string; debug?: Record<string, unknown> }> {
+  threadId?: string,
+): Promise<{ reply_text: string; thread_id: string; debug?: Record<string, unknown> }> {
   const r = await fetch(`${SPINE}/chat`, {
     method: 'POST',
     headers: {
@@ -124,20 +124,20 @@ async function chat(
       builder_id: builderId,
       buyer_phone: phone,
       text,
-      ...(convId ? { conversation_id: convId } : {}),
+      ...(threadId ? { thread_id: threadId } : {}),
     }),
   });
   const body = (await r.json()) as {
     reply_text?: string;
     reply?: string;
-    conversation_id?: string;
+    thread_id?: string;
     debug?: Record<string, unknown>;
     error?: string;
   };
   if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
   return {
     reply_text: body.reply_text ?? body.reply ?? '',
-    conversation_id: body.conversation_id ?? '',
+    thread_id: body.thread_id ?? '',
     debug: body.debug,
   };
 }
@@ -320,15 +320,15 @@ async function main(): Promise<void> {
   const rows: ScenarioRow[] = [];
   for (const sc of scenarios) {
     const phone = `+9199${String(Date.now() % 1e10).padStart(10, '0')}${sc.id.length % 10}`;
-    let convId: string | undefined;
+    let threadId: string | undefined;
     const turns: TurnRow[] = [];
     let ok = true;
     console.log(`\n══ ${sc.id} ══`);
     for (let i = 0; i < sc.turns.length; i++) {
       const turn = sc.turns[i]!;
       try {
-        const resp = await chat(sc.builder_id, phone, turn.text, convId);
-        convId = resp.conversation_id || convId;
+        const resp = await chat(sc.builder_id, phone, turn.text, threadId);
+        threadId = resp.thread_id || threadId;
         const failures = turn.assert ? checkAssert(resp.reply_text, resp.debug, turn.assert) : [];
         const pass = failures.length === 0;
         if (!pass) ok = false;
