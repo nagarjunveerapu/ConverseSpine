@@ -2043,6 +2043,7 @@ interface UnitConfigRow {
   priceDisplay: string;
   sizeDisplay?: string;
   holdableUnits?: number;
+  availabilityBasis?: string;
 }
 
 /** What the buyer asked for on THIS turn — the input to answering yes or no. */
@@ -2228,9 +2229,23 @@ export function summarizeUnitConfigs(
     return `No — *${asked.family}* isn't on file${projectName ? ` at *${projectName}*` : ''}. What is: ${onFile()}. Exact availability depends on live inventory`;
   }
 
+  // Desk's Hour Engine found 87 dev configurations saying "available" with no
+  // units counted and nobody's statement behind them, and holds them for the
+  // owner. Until the owner answers, Desk keeps the row (hiding it would be the
+  // bigger lie) and marks its basis `unsupported`. Here that costs the row its
+  // verdict word: a family whose every layout is unsupported is "listed", not
+  // "Yes — on file", and the closing hedge says who has to confirm. Counted
+  // and stated rows, and rows from a Desk that does not send the field, read
+  // exactly as before.
+  const unconfirmed = (rows: UnitRow[]): boolean =>
+    rows.length > 0 && rows.every((r) => r.availabilityBasis === 'unsupported');
+  const UNCONFIRMED_TAIL = 'Nobody has confirmed it is still open to book; I’ll check with the team';
+
   if (families.length === 1 && families[0]![1].length === 1) {
     const u = families[0]![1][0]!;
-    return `${lead}${formatUnitConfigLine(u)}`;
+    return unconfirmed([u])
+      ? `${lead}${formatUnitConfigLine(u)} — listed, not yet confirmed as open`
+      : `${lead}${formatUnitConfigLine(u)}`;
   }
 
   // "2 2 BHK variants on file. 2 BHK: 2 variants ranges from …" — the head and
@@ -2240,12 +2255,21 @@ export function summarizeUnitConfigs(
     const [family, rows] = families[0]!;
     const sizes = sizesOf(rows);
     const layouts = `${rows.length} layout${rows.length > 1 ? 's' : ''}`;
+    if (unconfirmed(rows)) {
+      return sizes
+        ? `${lead}*${family}* is listed, in ${layouts}: ${sizes}. ${UNCONFIRMED_TAIL}`
+        : `${lead}*${family}* is listed, in ${layouts}. ${UNCONFIRMED_TAIL}`;
+    }
     return sizes
       ? `${lead}Yes — *${family}* is on file, in ${layouts}: ${sizes}. Exact availability depends on live inventory`
       : `${lead}Yes — *${family}* is on file, in ${layouts}. Exact availability depends on live inventory`;
   }
 
-  const head = `Yes — ${families.length} sizes on file (${families.map(([f]) => f).join(', ')})`;
+  const unconfirmedFamilies = families.filter(([, rows]) => unconfirmed(rows)).map(([f]) => f);
+  const allUnconfirmed = unconfirmedFamilies.length === families.length;
+  const head = allUnconfirmed
+    ? `${families.length} sizes listed (${families.map(([f]) => f).join(', ')})`
+    : `Yes — ${families.length} sizes on file (${families.map(([f]) => f).join(', ')})`;
   const lines = families.slice(0, 4).map(([family, rows]) => {
     const sizes = sizesOf(rows);
     if (rows.length === 1) {
@@ -2254,7 +2278,12 @@ export function summarizeUnitConfigs(
     return `${family} — ${rows.length} layouts${sizes ? `, ${sizes}` : ''}`;
   });
 
-  return `${lead}${head}. ${lines.join('. ')}. Exact availability depends on live inventory`;
+  const tail = allUnconfirmed
+    ? 'Nobody has confirmed these are still open to book; I’ll check with the team'
+    : unconfirmedFamilies.length
+      ? `Exact availability depends on live inventory; ${joinWithAnd(unconfirmedFamilies)} not yet confirmed as open`
+      : 'Exact availability depends on live inventory';
+  return `${lead}${head}. ${lines.join('. ')}. ${tail}`;
 }
 
 function projectTypeLine(d: import('./types.js').ProjectDetail): string {

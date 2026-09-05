@@ -13,12 +13,31 @@ export function formatSizeDisplay(
   return v != null ? `${v} sqft` : undefined;
 }
 
+/**
+ * Desk's `availability_basis` (NayaDesk src/lib/hour_engine/check.ts
+ * availabilityBasis): what stands behind a configuration's "available".
+ *   counted     — live units tracked; the count is the answer
+ *   stated      — a person said so, dated and signed
+ *   unsupported — "available" with no units counted and nobody's statement;
+ *                 the Hour Engine holds these for the owner and the bot must
+ *                 not put a verdict word in front of them
+ *   unknown     — Desk does not offer it
+ * Anything else (an older Desk, a field missing) reads as undefined: the
+ * phrasing stays exactly what it was before the field existed.
+ */
+export type AvailabilityBasis = 'counted' | 'stated' | 'unsupported' | 'unknown';
+
+export function asAvailabilityBasis(v: unknown): AvailabilityBasis | undefined {
+  return v === 'counted' || v === 'stated' || v === 'unsupported' || v === 'unknown' ? v : undefined;
+}
+
 export function mapEnrichmentSummaryToUnitConfigs(summary: {
   unit_types: Array<{
     type: string;
     price_range: { min: number; max: number; display: string };
     size_range: { min: number | null; max: number | null; unit: string };
     disclosure_tier?: string;
+    availability_basis?: string;
   }>;
 }): UnitConfig[] {
   return summary.unit_types
@@ -29,6 +48,7 @@ export function mapEnrichmentSummaryToUnitConfigs(summary: {
         Number.isFinite(u.price_range.min) && u.price_range.min > 0
           ? Math.round(u.price_range.min / 100)
           : 0;
+      const availabilityBasis = asAvailabilityBasis(u.availability_basis);
       return {
         unitType: u.type,
         priceDisplay: u.price_range.display || '',
@@ -36,6 +56,7 @@ export function mapEnrichmentSummaryToUnitConfigs(summary: {
         ...(sizeDisplay ? { sizeDisplay } : {}),
         ...(u.size_range.min != null ? { sizeMinSqft: u.size_range.min } : {}),
         ...(u.size_range.max != null ? { sizeMaxSqft: u.size_range.max } : {}),
+        ...(availabilityBasis ? { availabilityBasis } : {}),
       };
     });
 }
@@ -49,6 +70,7 @@ export function mapLegacyUnitsToUnitConfigs(
     is_available?: number;
     disclosure_tier?: string;
     price_min_paise?: number;
+    availability_basis?: string;
   }>,
 ): UnitConfig[] {
   return units
@@ -57,6 +79,7 @@ export function mapLegacyUnitsToUnitConfigs(
       const sizeDisplay = formatSizeDisplay(u.size_min_sqft, u.size_max_sqft);
       const priceMinInr =
         u.price_min_paise && u.price_min_paise > 0 ? Math.round(u.price_min_paise / 100) : 0;
+      const availabilityBasis = asAvailabilityBasis(u.availability_basis);
       return {
         unitType: u.unit_type,
         priceDisplay: u.price_display ?? '',
@@ -64,6 +87,7 @@ export function mapLegacyUnitsToUnitConfigs(
         ...(sizeDisplay ? { sizeDisplay } : {}),
         ...(u.size_min_sqft != null ? { sizeMinSqft: u.size_min_sqft } : {}),
         ...(u.size_max_sqft != null ? { sizeMaxSqft: u.size_max_sqft } : {}),
+        ...(availabilityBasis ? { availabilityBasis } : {}),
       };
     });
 }

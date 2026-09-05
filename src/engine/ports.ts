@@ -101,6 +101,8 @@ export interface UnitConfig {
   sizeMaxSqft?: number;
   /** W7 — live count of holdable physical units of this type (Desk #203); absent = unknown. */
   holdableUnits?: number;
+  /** What stands behind "available" (NayaDesk availability_basis): counted | stated | unsupported | unknown. Absent on an older Desk. */
+  availabilityBasis?: 'counted' | 'stated' | 'unsupported' | 'unknown';
 }
 
 /** S1 — structured POI categories (schools/hospitals/metro/…) ride alongside the legacy display strings. */
