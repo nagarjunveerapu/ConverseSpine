@@ -238,6 +238,7 @@ export interface EngineData {
    * cheapest available unit atomically (one-active-hold enforced by its DB),
    * so unit numbers never cross this port. reason 'none_available' = the type
    * sold out (surface it honestly); 'error' = transport/unknown (also honest).
+   * Prefer requestHold for buyer "yes" — this remains for waitlist queue:true.
    */
   placeHold(
     ids: { ndThreadId: string; builderId: string },
@@ -249,6 +250,18 @@ export interface EngineData {
     /** W7 — queue:true joined the waitlist instead of holding (202). */
     waiting?: boolean;
     position?: number;
+    reason?: 'none_available' | 'error';
+  }>;
+  /**
+   * Buyer asked to hold — open a Desk hold_request. Never mints unit_holds.
+   */
+  requestHold(
+    ids: { ndThreadId: string; builderId: string },
+    hold: { projectId: string; unitType: string; buyerName?: string },
+  ): Promise<{
+    ok: boolean;
+    requestId?: string;
+    alreadyOpen?: boolean;
     reason?: 'none_available' | 'error';
   }>;
   /** Turn-start bundle — returning buyer, builder persona, recent messages, ledger prior. */

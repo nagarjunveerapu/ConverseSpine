@@ -515,6 +515,7 @@ export function nayadeskData(
         ...(filters.commuteHub ? { commute_hub: filters.commuteHub } : {}),
         ...(filters.budgetTargetInr ? { budget_target_inr: filters.budgetTargetInr } : {}),
         ...(filters.askSizeSqft ? { ask_size_sqft: filters.askSizeSqft } : {}),
+        ...(filters.audience ? { audience: filters.audience } : {}),
         max_results: filters.maxResults ?? 5,
       });
       const matches = resp.matches.map((m) => ({
@@ -1106,6 +1107,29 @@ export function nayadeskData(
       } catch (err) {
         // 409 = no_units_available (type fully sold, or already_waiting) — an
         // expected outcome the copy must reflect; 404 = unknown type name.
+        if (err instanceof NayaDeskError && (err.status === 409 || err.status === 404)) {
+          return { ok: false, reason: 'none_available' };
+        }
+        return { ok: false, reason: 'error' };
+      }
+    },
+
+    async requestHold(ids, hold) {
+      try {
+        const r = await crm.createHoldRequest({
+          builder_id: ids.builderId,
+          project_id: hold.projectId,
+          unit_type: hold.unitType,
+          thread_id: ids.ndThreadId,
+          ...(hold.buyerName ? { buyer_name: hold.buyerName } : {}),
+          source: 'bot',
+        });
+        return {
+          ok: true,
+          requestId: r.request_id,
+          ...(r.already_open ? { alreadyOpen: true } : {}),
+        };
+      } catch (err) {
         if (err instanceof NayaDeskError && (err.status === 409 || err.status === 404)) {
           return { ok: false, reason: 'none_available' };
         }
