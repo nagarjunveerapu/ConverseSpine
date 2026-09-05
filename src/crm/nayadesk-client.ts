@@ -847,6 +847,7 @@ export class NayaDeskClient {
       disclosure_tier: string;
       price_min_paise?: number;
       price_max_paise?: number;
+      availability_basis?: string;
     }>;
   }> {
     // Desk retired the project-scoped `/units` door with the leftover prefix.
@@ -883,6 +884,7 @@ export class NayaDeskClient {
       disclosure_tier: string;
       price_min_paise?: number;
       price_max_paise?: number;
+      availability_basis?: string;
     }> };
   }
 
@@ -902,6 +904,7 @@ export class NayaDeskClient {
       available: number;
       disclosure_tier: string;
       media_ids: string[];
+      availability_basis?: string;
     }>;
   }> {
     return this.call(
