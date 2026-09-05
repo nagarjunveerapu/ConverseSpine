@@ -584,6 +584,33 @@ export class NayaDeskClient {
     return this.call('POST', '/api/v1/holds', req);
   }
 
+  /**
+   * Open a hold *request* — buyer yes never mints unit_holds. Staff Place
+   * on Desk posts /api/v1/holds then marks the request.
+   */
+  createHoldRequest(req: {
+    builder_id: string;
+    project_id: string;
+    thread_id?: string;
+    lead_id?: string;
+    unit_type?: string;
+    unit_id?: string;
+    buyer_name?: string;
+    note?: string;
+    source?: 'bot' | 'desk';
+  }): Promise<{
+    request_id: string;
+    status: string;
+    already_open?: boolean;
+    unit_type?: string;
+    project_id: string;
+  }> {
+    return this.call('POST', '/api/v1/hold-requests', {
+      ...req,
+      source: req.source ?? 'bot',
+    });
+  }
+
   threadContext(thread_id: string, recent_message_limit?: number): Promise<NdContextBundle> {
     return this.call('POST', '/api/v1/thread-context', {
       thread_id,
@@ -674,6 +701,7 @@ export class NayaDeskClient {
     commute_hub?: string;
     budget_target_inr?: number;
     ask_size_sqft?: number;
+    audience?: 'buyer' | 'desk_chat';
   }): Promise<{
     matches: NdSearchMatch[];
     expanded_locations?: string[];

@@ -18,7 +18,7 @@ function harness(threadId: string) {
 }
 
 describe('unit hold flow (launch ops)', () => {
-  it('propose → yes → hold placed with deterministic confirmation', async () => {
+  it('propose → yes → hold request opened with deterministic confirmation', async () => {
     const { deps, turn } = harness('hold-happy');
     await turn('coorg, 50 Lakhs');
     await turn('tell me about Ayana'); // → focused on ayana
@@ -31,7 +31,8 @@ describe('unit hold flow (launch ops)', () => {
 
     const booked = await turn('yes');
     expect(booked.debug.goal).toMatchObject({ kind: 'hold_booked', placed: true });
-    expect(booked.reply).toMatch(/held for you/i);
+    expect(booked.reply).toMatch(/asked our team to hold/i);
+    expect(booked.reply).not.toMatch(/held for you/i);
     expect(booked.state.hold).toBeUndefined();
     expect(deps.data.holdsPlaced).toHaveLength(1);
     expect(deps.data.holdsPlaced[0]).toMatchObject({ projectId: 'ayana', unitType: '2 BHK' });
@@ -126,9 +127,9 @@ describe('unit hold flow (launch ops)', () => {
     expect(r.debug.goal.kind).not.toBe('hold_propose');
   });
 
-  it('type sold out mid-conversation → honest "just taken" copy, no invented hold', async () => {
+  it('type sold out mid-conversation → honest request-fail copy, no invented hold', async () => {
     const { deps, turn } = harness('hold-sold-out');
-    deps.data.placeHold = async () => ({ ok: false, reason: 'none_available' as const });
+    deps.data.requestHold = async () => ({ ok: false, reason: 'none_available' as const });
     await turn('coorg, 50 Lakhs');
     await turn('tell me about Ayana');
     const propose = await turn('hold a 2 bhk for me');
@@ -136,7 +137,7 @@ describe('unit hold flow (launch ops)', () => {
 
     const booked = await turn('yes');
     expect(booked.debug.goal).toMatchObject({ kind: 'hold_booked', placed: false });
-    expect(booked.reply).toMatch(/just taken/i);
+    expect(booked.reply).toMatch(/couldn't open|could not open|hold request/i);
     expect(booked.reply).not.toMatch(/held for you/i);
   });
 });

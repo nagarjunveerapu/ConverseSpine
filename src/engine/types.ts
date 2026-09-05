@@ -646,6 +646,11 @@ export interface SearchFilters {
   /** Buyer's asked size — Desk's budget dimension prices THEIR unit. */
   askSizeSqft?: number;
   budgetTargetInr?: number;
+  /**
+   * Desk audience: live WhatsApp = buyer (public only). Desk Chat / Bot lab
+   * / playground = desk_chat (silent projects stay searchable for test).
+   */
+  audience?: 'buyer' | 'desk_chat';
 }
 
 export interface PricingEvidence {

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Spine — yes hold → hold request</title>
+<style>
+  body{font:15px/1.5 system-ui;max-width:720px;margin:40px auto;padding:0 20px;color:#1a1a1a}
+  h1{font-size:1.4rem} table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{border:1px solid #e4e4e4;padding:8px;text-align:left;vertical-align:top} th{background:#fafafa}
+  code{font-size:12.5px;background:#f3f3f3;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Spine design note — yes hold → hold request</h1>
+<p>Paired with Desk buyer-visibility + <code>thread_id</code> on hold-requests.</p>
+<table>
+  <tr><th>Layer</th><th>Change</th></tr>
+  <tr><td><code>nayadesk-client.createHoldRequest</code></td><td><code>POST /api/v1/hold-requests</code> with thread_id</td></tr>
+  <tr><td><code>ports</code> + adapter</td><td><code>requestHold</code>; waitlist still <code>placeHold(queue)</code></td></tr>
+  <tr><td><code>turn.ts</code> hold_booked</td><td>Evidence: requestHold when not queue</td></tr>
+  <tr><td><code>compose.ts</code></td><td>“asked our team to hold…” not unit mint copy</td></tr>
+  <tr><td>search audience</td><td><code>api</code>/<code>advisor_web</code> → <code>desk_chat</code>; whatsapp → <code>buyer</code></td></tr>
+</table>
+<p><b>Why not compose-only:</b> mint happens in evidence. <b>Why not RTI:</b> intent already reaches hold_booked. <b>Consumers:</b> Desk Today open requests; staff Place via /holds. <b>Quality:</b> yes → open hold_request, zero unit_holds.</p>
+</body>
+</html>

@@ -2649,24 +2649,33 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     }
   }
   if (goal.kind === 'hold_booked') {
-    // Place the hold NOW (evidence stage — commitProject precedent) so the
-    // deterministic confirmation copy can reflect the real outcome: held
-    // until <time>, queued on the waitlist, or the type just sold out. Desk
-    // auto-picks the unit; the one-active-hold invariant lives in its DB.
+    // Buyer yes opens a hold *request* — staff Place mints via /api/v1/holds.
+    // Waitlist (queue:true) still joins Desk waitlist — different machine.
     const wantQueue = state.hold?.queue === true;
     const res = nd
-      ? await deps.data
-          .placeHold(
-            { ndThreadId: nd, builderId: state.builderId },
-            {
-              projectId: goal.projectId,
-              unitType: goal.unitType,
-              ...(state.buyerName ? { buyerName: state.buyerName } : {}),
-              ...(wantQueue ? { queue: true } : {}),
-              ttlMinutes: 24 * 60,
-            },
-          )
-          .catch(() => ({ ok: false as const }))
+      ? wantQueue
+        ? await deps.data
+            .placeHold(
+              { ndThreadId: nd, builderId: state.builderId },
+              {
+                projectId: goal.projectId,
+                unitType: goal.unitType,
+                ...(state.buyerName ? { buyerName: state.buyerName } : {}),
+                queue: true,
+                ttlMinutes: 24 * 60,
+              },
+            )
+            .catch(() => ({ ok: false as const }))
+        : await deps.data
+            .requestHold(
+              { ndThreadId: nd, builderId: state.builderId },
+              {
+                projectId: goal.projectId,
+                unitType: goal.unitType,
+                ...(state.buyerName ? { buyerName: state.buyerName } : {}),
+              },
+            )
+            .catch(() => ({ ok: false as const }))
       : { ok: false as const };
     goal = {
       ...goal,
@@ -4137,6 +4146,11 @@ async function fetchRecommend(
   };
 
   let filters = discover.searchFilters(s.constraints);
+  // Live WhatsApp = public only. Desk Chat / playground /api = silent OK.
+  filters = {
+    ...filters,
+    audience: channel === 'whatsapp' ? 'buyer' : 'desk_chat',
+  };
   // Trade-off Advisor: only the recommend path carries preference inputs.
   // Explicit in-state weights (chip answer this session) win Desk-side;
   // the resolved lead id lets the Desk fall back to stored BPE facts for a
