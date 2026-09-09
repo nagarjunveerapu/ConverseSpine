@@ -947,6 +947,15 @@ function fallbackReplyBody(req: ComposeRequest): string {
         const markets = (ev.catalog?.microMarkets ?? []).filter(Boolean).slice(0, 3);
         const min = ev.catalog?.priceMinInr ?? 0;
         const max = ev.catalog?.priceMaxInr ?? 0;
+        // One project is not "1 projects", and it is not a book to cut either —
+        // name it and offer what it holds, the same answer the sticky-clarify
+        // discover branch now gives.
+        const onlyName = total === 1 ? ev.catalog?.projectNames?.[0]?.name?.trim() : undefined;
+        if (onlyName) {
+          const only = `*${onlyName}*`;
+          const place = markets.length ? ` in ${joinPlaceLabels(markets)}` : '';
+          return `I'm not sure I followed that one. ${only}${place} is the one project here — want the price, the legal papers, the sizes, or a site visit?`;
+        }
         const have = total > 0 ? `${total} projects` : 'the full book';
         const where = markets.length ? ` across ${joinPlaceLabels(markets)}` : '';
         const band =

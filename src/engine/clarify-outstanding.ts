@@ -14,6 +14,12 @@ export interface StickyClarifyInput {
   constraints?: Constraints;
   /** advisor_web → slightly less form-clerk tone. */
   channel?: 'whatsapp' | 'advisor_web';
+  /**
+   * The builder's whole book. A one-project builder has nothing to narrow, so
+   * asking for locality/budget/BHK there is a form for a filter that cannot
+   * filter — name the project instead.
+   */
+  bookNames?: readonly string[];
 }
 
 /** Null → caller keeps generic unknown_request / clarify copy. */
@@ -74,6 +80,17 @@ export function speakStickyClarify(input: StickyClarifyInput): string | null {
   }
 
   if (input.phase === 'discover' || input.phase === 'handoff') {
+    // One project on the book: there is no shortlist to cut, so the brief
+    // questions are a form for a filter that cannot filter. Name what the
+    // builder has and let the buyer open it — the same reasoning the focused
+    // branch above already applies, which discover never got.
+    const book = input.bookNames?.filter((n) => n.trim()) ?? [];
+    if (book.length === 1) {
+      const only = book[0]!.trim();
+      return advisor
+        ? `Let me put that plainly — *${only}* is the project on the book here. Open it and I can give you the price, the legal papers, or the sizes.`
+        : `Let me put that plainly — *${only}* is the one project here. Want the price, the legal papers, the sizes, or a site visit?`;
+    }
     const c = input.constraints ?? {};
     const bits: string[] = [];
     if (!c.location) bits.push('locality');

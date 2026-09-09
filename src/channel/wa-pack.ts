@@ -1072,6 +1072,18 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
 
   // Honest probe on a miss — three doors, never a re-dump.
   if (goal.kind === 'clarify_intent' && !focus) {
+    // Size and budget are filters, and a book of one has nothing to filter:
+    // those two doors ask the buyer to narrow their way to the only answer
+    // there is. Hand them the project instead — one row, and the tap opens
+    // its file. Seen live: "Show me your projects" met with a brief form on a
+    // builder whose whole book is one project.
+    if (bag.length === 1) {
+      return {
+        kind: 'list',
+        button: 'See project',
+        sections: [{ title: 'Projects', rows: projectRows(bag, shortlistIds) }],
+      };
+    }
     return {
       kind: 'buttons',
       buttons: [

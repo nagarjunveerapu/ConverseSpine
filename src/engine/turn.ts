@@ -1974,6 +1974,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
               priorTopics: state.feedForward?.priorTopics,
               constraints: state.constraints,
               channel,
+              bookNames: (catalogForTurn?.projectNames ?? []).map((p) => p.name),
             })
           : null;
       reply = sticky ?? speakFailure(unsupportedFailure);
@@ -2005,6 +2006,31 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       ...(evidence.education ? { evidence } : {}),
       goal,
     });
+    // A turn we could not read is the ONE turn the buyer most needs a door on,
+    // and this return used to send text alone — every other return packs. On
+    // WhatsApp that meant "I couldn't make sense of that. …please share your
+    // locality, budget, BHK?" arriving with nothing to tap, so the only way
+    // out was to guess better words. A builder with ONE project felt it worst:
+    // there is nothing to narrow, and the single row that would have ended the
+    // turn was the row we withheld.
+    //
+    // The pack is cut from what the builder actually has, so it cannot invent
+    // an option: focused → that project's own file menu, otherwise the book.
+    // `clarify_intent` is not a bag goal, so it lands on the book fallback —
+    // which is the honest answer to "show me your projects" even on the turn we
+    // failed to parse those words.
+    const failurePacked =
+      channel === 'whatsapp'
+        ? packWhatsAppInteractive({
+            goal,
+            state,
+            catalogNames: catalogForTurn?.projectNames ?? [],
+            briefAreas: catalogForTurn?.microMarkets ?? [],
+            singleProject: (catalogForTurn?.projectNames?.length ?? 0) <= 1,
+            catalog: catalogForTurn,
+          })
+        : undefined;
+    const failureActions = failurePacked ? packedToSuggestedActions(failurePacked) : undefined;
     return {
       reply,
       state,
@@ -2017,6 +2043,10 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         },
         inputSource,
       ),
+      ...(failureActions ? { whatsappActions: failureActions } : {}),
+      ...(failurePacked && failurePacked.kind !== 'text'
+        ? { whatsappInteractive: failurePacked }
+        : {}),
     };
   }
 
