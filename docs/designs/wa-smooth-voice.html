@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp voice — Today vs Smooth</title>
+<style>
+  :root {
+    --bg: #0b141a; --ink: #e9edef; --dim: #8696a0; --line: #2a3942;
+    --bot: #202c33; --buyer: #005c4b; --accent: #00a884; --sheet: #182229;
+    --card: #111b21; --dead: #f15c6d; --ok: #3dcc9a; --warn: #e9c46a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { display: grid; grid-template-columns: 1fr 340px; min-height: 100vh; }
+  .main { padding: 20px 24px 64px; }
+  .rail { padding: 20px 16px 48px; border-left: 1px solid var(--line); background: #0e171d; }
+  h1 { font-size: 18px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin: 8px 0 16px; max-width: 72ch; }
+  .steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+  .steps button, .chip {
+    background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 11px; font: inherit; cursor: pointer;
+  }
+  .steps button.on { background: var(--accent); color: #04251c; font-weight: 600; border-color: var(--accent); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .col h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+  .col.smooth h2 { color: var(--ok); }
+  .col.today h2 { color: var(--warn); }
+  .phone {
+    width: 100%; max-width: 360px; background: #0b141a; border: 1px solid var(--line);
+    border-radius: 18px; overflow: hidden; min-height: 560px; display: flex; flex-direction: column;
+  }
+  .ph-head { background: #1f2c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .ph-head b { font-size: 14px; }
+  .ph-head span { color: var(--dim); font-size: 11px; }
+  .thread { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 94%; padding: 8px 11px; border-radius: 8px; white-space: pre-wrap; font-size: 13.5px; }
+  .bot { background: var(--bot); align-self: flex-start; }
+  .me { background: var(--buyer); align-self: flex-end; }
+  .header-img {
+    height: 88px; border-radius: 8px 8px 0 0; margin: -8px -11px 8px; display: flex; align-items: flex-end;
+    padding: 8px 11px; font-size: 11px; color: #fff; letter-spacing: .04em;
+    background: linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.55)),
+      linear-gradient(120deg, #2d5a4a, #1a3a4a 55%, #3d4a2a);
+  }
+  .btns { display: flex; flex-direction: column; gap: 6px; align-self: stretch; }
+  .btns button, .list .row {
+    background: var(--sheet); color: var(--accent); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .list { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; align-self: stretch; }
+  .list .cta { padding: 8px 12px; text-align: center; color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--line); }
+  .list .row { width: 100%; border: 0; border-top: 1px solid var(--line); border-radius: 0; color: var(--ink); font-weight: 500; }
+  .list .row .d { font-size: 12px; color: var(--dim); margin-top: 2px; font-weight: 400; }
+  .note { margin-top: 16px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+  .note b { color: var(--ok); }
+  .rail h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 16px 0 8px; }
+  .rail h3:first-child { margin-top: 0; }
+  .rail p, .rail li { color: var(--dim); font-size: 13px; margin: 0 0 8px; }
+  .rail ul { padding-left: 18px; }
+  .rail code { font-size: 11.5px; background: #1c262d; padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+  .law { padding: 10px 12px; background: #0f1c19; border-left: 3px solid var(--ok); font-size: 13px; margin: 0 0 12px; }
+  .dead { border-left-color: var(--dead); background: #1a1214; }
+  @media (max-width: 980px) {
+    .page { grid-template-columns: 1fr; }
+    .rail { border-left: 0; border-top: 1px solid var(--line); }
+    .pair { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="main">
+    <h1>Same facts. Realtor spacing.</h1>
+    <p class="sub">Sumadhura / NoBroker / GIVA are not smarter about inventory. They break the message: name, blank line, one sentence, blank line, one ask. WhatsApp already renders that. Ours currently glues it into one machine line.</p>
+    <div class="steps" id="steps"></div>
+    <div class="pair">
+      <div class="col today">
+        <h2>Today — live Brigade</h2>
+        <div class="phone" id="today"></div>
+      </div>
+      <div class="col smooth">
+        <h2>Smooth — how it should read</h2>
+        <div class="phone" id="smooth"></div>
+      </div>
+    </div>
+    <div class="note">
+      <b>Tap a step</b> or tap the Smooth buttons to walk the same Brigade file. Header photos are a later packer field (interactive image header). The body language ships without that — newlines, <code>*bold*</code> on names and prices, unicode ✓, one question.
+    </div>
+  </div>
+  <aside class="rail">
+    <div class="law">WhatsApp session replies already allow blank lines, *bold*, _italic_, and ✓. Those brand screenshots add a template/image header. Copy the rhythm, not the insurance spam.</div>
+    <div class="law" style="margin-top:10px">Never say “the book” or “inventory” to the buyer. Say we don’t have it, or say the projects.</div>
+    <h3>Files / layers</h3>
+    <ul>
+      <li><code>compose.ts</code> — greet, size, budget, matches, no-fit, commit on <code>waProjectFirst</code></li>
+      <li><code>turn.ts</code> — “tell me the name” know-path string</li>
+      <li>Tests + the 30-walk flag that used to require the word <code>Noted:</code></li>
+    </ul>
+    <h3>Why this layer</h3>
+    <p>Kind is already known. The miss is language after compose: one concatenated clause, a “Noted: *bits*” stamp, almost no <code>\n\n</code>.</p>
+    <h3>Why not other layers</h3>
+    <p>Not RTI / embeddings / regex — open speech is already bound. Not packer ids — doors stay. Not Graph templates — those need Meta approval and read as ads. Header image is optional later in <code>wa-pack.ts</code> + <code>whatsapp-client.ts</code>.</p>
+    <h3>Consumers</h3>
+    <p><code>fallbackReply</code> → packed <code>body.text</code> → Cloud API interactive/text body (1024 / 4096). Advisor web is untouched.</p>
+    <h3>Quality</h3>
+    <p>Same honesty: empty cut stays empty, villa bands stay villa, silent catalog rows stay out. Walks still read replies, not substring theater — only the stamp <code>Noted:</code> goes away.</p>
+    <div class="law dead" style="margin-top:16px">Do not copy “CHECK MY PREMIUM” energy. One human paragraph, one ask, buttons for the rest.</div>
+  </aside>
+</div>
+<script>
+const STEPS = [
+  {
+    id: 'greet',
+    label: '1 · Greet',
+    buyer: 'Hi',
+    today: {
+      text: "Hi — I'm here for *Brigade*. I can help you find a home that fits, or open a project you already know.",
+      doors: ['Help me find a home', 'See the projects', 'I know the name'],
+    },
+    smooth: {
+      header: 'BRIGADE',
+      text: "Hi Nagarjun,\n\nThank you for reaching out to *Brigade*.\n\nI can help you find a home that fits, or open a project you already know.",
+      doors: ['Help me find a home', 'See the projects', 'I know the name'],
+    },
+  },
+  {
+    id: 'size',
+    label: '2 · Size',
+    buyer: 'Help me find a home',
+    today: {
+      text: 'How many bedrooms are you looking at?',
+      list: { cta: 'Choose size', rows: ['1 BHK', '2 BHK', '3 BHK', '4+ BHK', 'More types'] },
+    },
+    smooth: {
+      text: 'How many bedrooms are you looking at?',
+      list: { cta: 'Choose size', rows: ['1 BHK', '2 BHK', '3 BHK', '4+ BHK', 'More types'] },
+    },
+  },
+  {
+    id: 'budget',
+    label: '3 · Budget',
+    buyer: '1 BHK',
+    today: {
+      text: 'Got it — 1 BHK. For a 1 BHK, prices here go from ₹31 L to about ₹79 L. What budget feels comfortable?',
+      list: { cta: 'Set budget', rows: ['Under ₹45 L', '₹45 L – ₹65 L', '₹65 L – ₹90 L', 'Any budget'] },
+    },
+    smooth: {
+      text: 'Got it — *1 BHK*.\n\nPrices for this size go from ₹31 L to about ₹79 L.\n\nWhat budget feels comfortable?',
+      list: { cta: 'Set budget', rows: ['Under ₹45 L', '₹45 L – ₹65 L', '₹65 L – ₹90 L', 'Any budget'] },
+    },
+  },
+  {
+    id: 'matches',
+    label: '4 · Matches',
+    buyer: 'Under ₹45 L',
+    today: {
+      text: 'Noted: *1 BHK · under ₹45 L*. 3 homes fit. Tap one and I\'ll open it.',
+      list: {
+        cta: 'Open a home',
+        rows: [
+          ['Brigade Eldorado', 'Aerospace Park · from ₹31 L'],
+          ['Brigade Oasis', 'Devanahalli · from ₹39 L'],
+          ['Brigade Meadows', 'Kanakapura · from ₹42 L'],
+        ],
+      },
+    },
+    smooth: {
+      text: 'For a *1 BHK* under ₹45 L, 3 homes fit.\n\nTap one and I\'ll open it.',
+      list: {
+        cta: 'Open a home',
+        rows: [
+          ['Brigade Eldorado', 'Aerospace Park · from ₹31 L'],
+          ['Brigade Oasis', 'Devanahalli · from ₹39 L'],
+          ['Brigade Meadows', 'Kanakapura · from ₹42 L'],
+        ],
+      },
+    },
+  },
+  {
+    id: 'open',
+    label: '5 · Open file',
+    buyer: 'Brigade Eldorado',
+    today: {
+      text: '*Brigade Eldorado* — 3 sizes on file. Pick the one you\'re after and I\'ll price it, or go straight to the full price list or a visit.',
+      doors: ['Price', 'Visit', 'Projects'],
+    },
+    smooth: {
+      header: 'ELDORADO',
+      text: "You're looking at *Brigade Eldorado*.\n\n✓ 3 sizes to pick from\n✓ Price, papers, and a visit when you're ready\n\nPick a size below, or tell me what you want to know.",
+      doors: ['Price', 'Visit', 'Other projects'],
+    },
+  },
+  {
+    id: 'nofit',
+    label: '6 · Honest miss',
+    buyer: '1 BHK · ₹45–65 L',
+    today: {
+      text: 'Noted: *1 BHK · ₹45 L – ₹65 L*. Nothing in the book fits that exactly. Change bedrooms or budget, or see all the projects.',
+      doors: ['Change bedrooms', 'Change budget', 'See the projects'],
+    },
+    smooth: {
+      text: "I don't have a *1 BHK* in ₹45 L – ₹65 L.\n\nYou can change bedrooms, change budget, or see all the projects.",
+      doors: ['Change bedrooms', 'Change budget', 'See the projects'],
+    },
+  },
+];
+
+function fmt(s) {
+  return s.replace(/\*([^*]+)\*/g, '<b>$1</b>');
+}
+
+function renderPhone(el, step, side) {
+  const spec = step[side];
+  const brand = side === 'smooth' ? 'Brigade' : 'Brigade';
+  let html = `<div class="ph-head"><b>${brand}</b><span>${side === 'today' ? 'Today' : 'Smooth'}</span></div><div class="thread">`;
+  html += `<div class="bubble me">${step.buyer}</div>`;
+  html += `<div class="bubble bot">`;
+  if (spec.header) html += `<div class="header-img">${spec.header} · later, from project media</div>`;
+  html += fmt(spec.text);
+  html += `</div>`;
+  if (spec.doors) {
+    html += `<div class="btns">` + spec.doors.map((d, i) =>
+      `<button type="button" data-go="${nextFrom(step.id, i, spec.doors)}">${d}</button>`
+    ).join('') + `</div>`;
+  }
+  if (spec.list) {
+    html += `<div class="list"><div class="cta">${spec.list.cta}</div>`;
+    html += spec.list.rows.map((r, i) => {
+      const title = Array.isArray(r) ? r[0] : r;
+      const desc = Array.isArray(r) ? `<div class="d">${r[1]}</div>` : '';
+      return `<button type="button" class="row" data-go="${nextFromList(step.id, title)}">${title}${desc}</button>`;
+    }).join('');
+    html += `</div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function nextFrom(id, i, doors) {
+  if (id === 'greet') return i === 0 ? 'size' : id;
+  if (id === 'open') return id;
+  if (id === 'nofit') return i === 0 ? 'size' : i === 1 ? 'budget' : 'greet';
+  return id;
+}
+function nextFromList(id, title) {
+  if (id === 'size' && /BHK/.test(title)) return 'budget';
+  if (id === 'budget') return /45 L –/.test(title) ? 'nofit' : 'matches';
+  if (id === 'matches') return 'open';
+  return id;
+}
+
+let current = 'greet';
+function show(id) {
+  current = id;
+  const step = STEPS.find((s) => s.id === id);
+  document.querySelectorAll('.steps button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+  renderPhone(document.getElementById('today'), step, 'today');
+  renderPhone(document.getElementById('smooth'), step, 'smooth');
+}
+
+document.getElementById('steps').innerHTML = STEPS.map((s) =>
+  `<button type="button" data-id="${s.id}">${s.label}</button>`
+).join('');
+document.getElementById('steps').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) show(b.dataset.id);
+});
+document.querySelector('.pair').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-go]');
+  if (b && b.dataset.go) show(b.dataset.go);
+});
+show('greet');
+</script>
+</body>
+</html>

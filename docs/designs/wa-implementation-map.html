@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Implementation map — WA next steps, English, lifecycle</title>
+<style>
+  :root { --bg:#0b141a; --ink:#e9edef; --dim:#8696a0; --line:#2a3942; --card:#111b21; --ok:#00a884; --dead:#f15c6d; --warn:#e9c46a; }
+  * { box-sizing:border-box; margin:0 }
+  body { background:var(--bg); color:var(--ink); font:15px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif; padding:28px 20px 80px }
+  .w { max-width:980px; margin:0 auto }
+  h1 { font-size:22px; font-weight:600 }
+  h2 { font-size:17px; margin:28px 0 8px }
+  h3 { font-size:14px; margin:18px 0 6px; color:var(--ok) }
+  .sub { color:var(--dim); margin:6px 0 18px; max-width:72ch }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin:8px 0 16px }
+  th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--dim); font-weight:600 }
+  code { font-size:12px; background:#1c262d; padding:1px 5px; border-radius:4px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:0 0 14px }
+  .ok { border-left:3px solid var(--ok) }
+  .dead { border-left:3px solid var(--dead) }
+  .warn { border-left:3px solid var(--warn) }
+  ol { padding-left:20px } li { margin:0 0 6px }
+  .ph { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em; color:#04251c; background:var(--ok); padding:2px 7px; border-radius:4px }
+</style>
+</head>
+<body>
+<div class="w">
+<h1>Implementation map — before any code</h1>
+<p class="sub">Approved voice + step walks stay as the spec. This page is the file-level map: what changes, why that layer, what we will not touch, tests, and ship order. Nothing below has been written yet.</p>
+
+<div class="card dead">
+  <b>Do not start with lifecycle.</b> The villa dump and See-everything blank list are one line in <code>turn.ts</code>: when matches are empty, the packer is handed the <i>whole book</i>. Fix that first or new English will still dump Eldorado.
+</div>
+
+<h2>Root causes (already in the live walks)</h2>
+<table>
+  <tr><th>What you saw</th><th>Exact mechanism</th></tr>
+  <tr><td>Villa / plot miss dumps apartments + Desk V2 Gold</td><td><code>turn.ts</code> ~3733: <code>catalogNames: evidence.matches?.length ? matches : catalog.projectNames</code>. Empty match list is replaced by the full catalog. Packer has no no-fit branch.</td></tr>
+  <tr><td>See everything says “here’s the book” then three buttons</td><td>SEE sets <code>bookOpen</code>, then goal lands on <code>clarify_intent</code>. Packer returns Choose size / Set budget / Projects <i>before</i> the project-list branch. Extract treats <code>wa.menu.see</code> unlike <code>wa.menu.projects</code>.</td></tr>
+  <tr><td>← Back / Switch / See everything feel like one control</td><td>One id: <code>wa.menu.projects</code>. Size sheet, visit days, console, and Know’s fallback all use it. <code>releaseToDiscover</code> wipes <code>focusStack</code>. <code>popFocus</code> exists and is unused here.</td></tr>
+  <tr><td>Budget after 1 BHK quotes ₹31 L – ₹2.41 Cr</td><td><code>waBudgetRows</code> reads whole-book <code>catalog.priceMinInr/Max</code>. Atmosphere’s villa floor is the max. Size is ignored.</td></tr>
+  <tr><td>English is blunt</td><td><code>compose.ts</code>: cut the book, ceiling, Couldn’t nail, Here’s the book, What do you want to check?</td></tr>
+  <tr><td>Visit / hold / booked still get Help me choose</td><td>Desk has <code>has_hold</code>, <code>has_booking</code>, <code>next_visit_at</code>, <code>buyer_journey</code>. <code>threadAsDeskLead</code> does not send them. <code>getJourney</code> is written in Spine and never called. Greet is always <code>waBookFirstGreet</code>.</td></tr>
+</table>
+
+<h2>Why these layers</h2>
+<table>
+  <tr><th>Layer</th><th>Why</th><th>Why not somewhere else</th></tr>
+  <tr><td><code>turn.ts</code> packer input</td><td>Empty matches must stay empty. SEE must open the book.</td><td>Not compose — compose already says “nothing fits”; chrome lies after.</td></tr>
+  <tr><td><code>wa-pack.ts</code></td><td>Options are packer-owned. Labels, way-back, size rows, budget bands, no-fit buttons, standing acts.</td><td>Not regex. Not playground. Not RTI.</td></tr>
+  <tr><td><code>compose.ts</code> (WA project-first only)</td><td>The words on the bubble. Gate on <code>context.waProjectFirst</code>.</td><td>Do not rewrite Advisor copy in this pass.</td></tr>
+  <tr><td><code>applyWaInteractiveExtract</code></td><td>SEE must wipe search like Projects. New back-size id must be a brief answer, not an ask.</td><td>Speech-act catalog is exact-id only; new ids belong here, not in embeddings.</td></tr>
+  <tr><td>Desk <code>thread_context.ts</code></td><td>Turn start already fetches this. Additive lifecycle fields. One round trip.</td><td>Do not add a second <code>getJourney</code> call on every turn. Do not GET /holds from Spine until context is insufficient.</td></tr>
+  <tr><td><code>desk-brief.ts</code> + greet branch</td><td>Same gap-fill rule as BHK/budget already: live session wins; Desk seeds cold turns.</td><td>Not compose regex on “hold” in the buyer text.</td></tr>
+  <tr><td><code>wa-console.ts</code></td><td>Card closer and standing acts once lifecycle is known.</td><td>After P3. Dead without the read.</td></tr>
+</table>
+
+<h2>Out of scope this pass</h2>
+<div class="card">
+  Yield / ROI / operator wiring (dead CRM data). Per-unit floor/facing. Playground WhatsApp chrome (already shows whatever Spine packs). Advisor web copy. New intent vectors for “back”. Changing ranking away from cheapest-first (except no-fit must not use the full book). Making Desk V2 Gold silent — catalog hygiene, not packer; we will stop listing it only when it is not in <code>projectNames</code> or not public.
+</div>
+
+<h2>WhatsApp limits (titles)</h2>
+<table>
+  <tr><th>Wanted line</th><th>Fits?</th><th>Ship as</th></tr>
+  <tr><td>Help me find a home</td><td>20 / 20 button</td><td><code>Help me find a home</code></td></tr>
+  <tr><td>Show me the projects</td><td>21 — no</td><td><code>See the projects</code> (16)</td></tr>
+  <tr><td>I already have a name</td><td>22 — no</td><td><code>I know the name</code> (14)</td></tr>
+  <tr><td>See other projects</td><td>18 / 24 list</td><td>keep</td></tr>
+  <tr><td>What would you like to know about Cornerstone?</td><td>bubble, fine</td><td>keep</td></tr>
+</table>
+<p class="sub">Ids stay stable in P0–P1 so old messages still tap. New ids only in P2 (<code>wa.back.size</code>, optional <code>wa.menu.other</code>).</p>
+
+<h2>Ship order</h2>
+
+<h3><span class="ph">P0</span> English — same ids, new words</h3>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/engine/compose.ts</code></td><td>
+    <code>waBookFirstGreet</code> (multi-project): “Hi — I’m here for {brand}. I can help you find a home that fits, or open a project you already know.”<br>
+    Probe size: “How many bedrooms are you looking at?”<br>
+    Probe budget: ack the size, quote <i>size</i> spread if we pass it, “What budget feels comfortable?”<br>
+    <code>relaxedLead</code> WA: “There isn’t a {size} in that range. I can show {size}s that do exist, or other homes in this budget.”<br>
+    Recommend with matches: “{n} {size}s in this budget. Tap one and I’ll open it.” — <b>do not reprint names</b> (they are the list).<br>
+    Empty matches: stop saying “Here’s everything”.<br>
+    Book screen override in <code>turn.ts</code> ~3207: “These are {brand}’s projects. Tap one to open it.”<br>
+    Know early-return ~631: “Tell me the name — even roughly is fine.”<br>
+    Commit card closer: “What would you like to know about {name}?”
+  </td></tr>
+  <tr><td><code>src/channel/wa-pack.ts</code></td><td>Button/row <i>titles only</i>: Help me find a home / See the projects / I know the name. Console: See other projects (still <code>WA_MENU_PROJECTS</code>). List CTA: Choose bedrooms / Set budget. Drop ✨ on Help me choose.</td></tr>
+  <tr><td>Tests</td><td><code>wa-minimal-brief.test.ts</code>, <code>wa-buyer-console-live.test.ts</code> — string asserts. <code>isAdvisorBriefChipPhrase</code> must accept the new greet titles (Advisor chips, not WA packing).</td></tr>
+</table>
+<p class="sub">Consumers: WhatsApp + playground (channel mapped to whatsapp). Advisor <code>advisor_web</code> unchanged.</p>
+
+<h3><span class="ph">P1</span> Honest chrome — still mostly same ids</h3>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>turn.ts</code> packer call ~3733</td><td><b>Never</b> substitute full <code>projectNames</code> when the buyer just finished a brief. Pass <code>evidence.matches ?? []</code> and <code>briefCut: boolean</code> (waBriefStep just cleared or constraints.bhk/budget set).</td></tr>
+  <tr><td><code>wa-pack.ts</code> <code>packWhatsAppInteractive</code></td><td>
+    If <code>bookOpen</code>, skip the <code>clarify_intent</code> three-button return — emit project list.<br>
+    If <code>briefCut</code> and names.length === 0: three buttons Change bedrooms / Change budget / closest project if compose named one. No list dump.<br>
+    Size sheet: BHKs that exist in catalog (need <code>catalog.bhks</code> or types). Villa/Plot stay behind See the projects or a “More types” row if types exist. <b>No <code>withWayBack</code> on the first brief step</b> (<code>waBriefStep === 'size'</code>).<br>
+    Budget sheet: <code>waBudgetRows</code> from size-scoped min/max passed in <code>catalog</code> (computed in turn from units matching current BHK). Way-back label ← Bedrooms — still <code>WA_MENU_CHOOSE</code> in P1 (reopens size), not Projects.<br>
+    Visit day list: way-back <code>WA_BACK_FILE</code>, not Projects.
+  </td></tr>
+  <tr><td><code>applyWaInteractiveExtract</code></td><td><code>WA_MENU_SEE</code> same wipe as Projects (<code>speechAct: 'search'</code>).</td></tr>
+  <tr><td><code>turn.ts</code> catalog for pack</td><td>When <code>constraints.bhk</code> set and packing budget, recompute price min/max from matching configs (listUnits across catalog names, or catalog API if it already has per-type spread — it does not today; derive).</td></tr>
+  <tr><td>Tests</td><td>New: empty matches + briefCut → no <code>wa.pick.*</code>. SEE → <code>wa.pick.*</code> present. Size sheet has no <code>WA_MENU_PROJECTS</code>. Budget bands move between 1 BHK and villa (unit test with two catalog spreads).</td></tr>
+</table>
+
+<div class="card warn">
+  Ranking stays cheapest-first when there <i>are</i> matches. P1 only stops feeding the packer the whole book on a miss, and stops quoting Atmosphere as the 1 BHK ceiling.
+</div>
+
+<h3><span class="ph">P2</span> Navigation ids + last project</h3>
+<table>
+  <tr><th>New id</th><th>Title</th><th>State</th></tr>
+  <tr><td><code>wa.back.size</code></td><td>← Bedrooms</td><td>Keep constraints except budget; <code>waBriefStep = 'size'</code>. Add to <code>isWaBriefActionId</code> + extract as answer.</td></tr>
+  <tr><td><code>wa.menu.other</code></td><td>See other projects</td><td>Release focus, <b>keep</b> size/budget, <b>do not</b> clear <code>focusStack</code> until we pack. Peek: row <code>← {lastName}</code> via <code>popFocus</code> if stack has a prior. Distinct from SEE (clear brief).</td></tr>
+  <tr><td>keep <code>wa.menu.see</code></td><td>See the projects</td><td>Release + clear brief + full public list.</td></tr>
+  <tr><td>keep <code>wa.back.file</code></td><td>← {project} or Back</td><td>Stay focused, root console. Visit-day back uses this.</td></tr>
+  <tr><td>deprecate reuse of <code>wa.menu.projects</code> as Back</td><td>—</td><td>Still accept it (old messages) = SEE/other depending on whether constraints exist — document one compatibility rule: old id + constraints on → other; else SEE.</td></tr>
+</table>
+<p class="sub"><code>releaseToDiscover</code> today clears <code>focusStack</code>. P2: split “leave project, keep stack peek” vs “wipe stack”. Do not change <code>popFocus</code> semantics in entity-store; change the caller in <code>turn.ts</code> ~652.</p>
+
+<h3><span class="ph">P3</span> Lifecycle read (Desk + Spine)</h3>
+<p class="sub">Additive. Old Desk without the fields must mean “unknown”, never crash. Gap-fill only — live visit FSM still wins.</p>
+<table>
+  <tr><th>Repo</th><th>File</th><th>Change</th></tr>
+  <tr><td>NayaDesk <code>ND-issues-docx-fixes</code></td><td><code>src/api/thread_context.ts</code> <code>threadAsDeskLead</code></td><td>Add optional <code>has_hold</code>, <code>has_booking</code>, <code>next_visit_at</code> (already mapped as <code>visit_scheduled_at</code> — confirm it reaches Spine). Add <code>lifecycle: { stage, hold?: { projectId, unitType, until }, visit?: { projectId, iso, label } }</code> built from lead + active hold row + next visit. Stop hardcoding <code>shortlist_project_ids: '[]'</code> — use journey shortlist if present.</td></tr>
+  <tr><td>Spine</td><td><code>crm/nayadesk-client.ts</code> <code>NdLead</code></td><td>Optional fields. Do not require them.</td></tr>
+  <tr><td>Spine</td><td><code>ports.ts</code> <code>DeskBrief</code></td><td><code>lifecycle?: { kind: 'exploring' \| 'visit_planned' \| 'on_hold' \| 'unit_booked'; ... }</code></td></tr>
+  <tr><td>Spine</td><td>adapter + <code>desk-brief.ts</code></td><td>Seed <code>ThreadState.buyerLifecycle</code> (new optional field on types.ts). Do not overwrite an in-session <code>visit</code> draft or <code>hold.awaitingConfirm</code>.</td></tr>
+  <tr><td>Spine</td><td><code>turn.ts</code> greet / Know / Choose early paths</td><td>If lifecycle is visit_planned / on_hold / unit_booked, do not emit three explore doors. Pack the Better greet buttons from the map. Copy in compose, chrome in packer. <code>getJourney</code> stays unused — thread-context is the one fetch.</td></tr>
+</table>
+<p class="sub">Desk PR also needs BOOK.html per their close-the-pr skill. Spine does not.</p>
+
+<h3><span class="ph">P4</span> File standing acts follow lifecycle</h3>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>wa-pack.ts</code> <code>waConsoleRows</code> acts</td><td>If visit_planned: Your visit — {day} instead of Book a visit. If on_hold: Your hold. If unit_booked: Payment plan (money) as the standing act, not visit_book.</td></tr>
+  <tr><td><code>wa-console.ts</code></td><td>Card lead line can mention the visit/hold. Closer stays “What would you like to know about {name}?”</td></tr>
+  <tr><td>After a money answer</td><td>If ≤3 next jobs, pack <b>buttons</b> (EMI, visit or file) instead of reprinting Compare + Switch. Optional; only if still in budget this PR.</td></tr>
+</table>
+
+<h2>State field to add (P3)</h2>
+<table>
+  <tr><th>Today</th><th>Add</th></tr>
+  <tr><td><code>phase: discover \| focused \| visit \| handoff</code></td><td>Keep. Overlay <code>buyerLifecycle?: exploring \| visit_planned \| on_hold \| unit_booked</code> so greet/packer can read it without overloading <code>phase</code> (visit FSM is not the same as “visit already booked on Desk”).</td></tr>
+  <tr><td><code>hold.awaitingConfirm</code> one-shot</td><td>Do not replace. Durable hold is lifecycle overlay.</td></tr>
+  <tr><td><code>visitBookedCache</code> only when phase===visit</td><td>Also fill when lifecycle.visit_planned on a discover greet.</td></tr>
+</table>
+
+<h2>Consumers traced</h2>
+<table>
+  <tr><th>Producer</th><th>Readers</th></tr>
+  <tr><td>Packed interactive</td><td>WhatsApp Cloud API, playground <code>whatsapp-playground-thread.tsx</code> (no playground code change if ids/titles still parse)</td></tr>
+  <tr><td><code>waBookFirstGreet</code></td><td><code>turn.ts</code> greet + reset, <code>compose.ts</code> greet/smalltalk</td></tr>
+  <tr><td><code>WA_MENU_*</code></td><td><code>turn.ts</code> early returns, <code>advanceWaBriefState</code>, extract, packer, tests</td></tr>
+  <tr><td>thread-context lead</td><td><code>adapters/nayadesk.ts</code> → DeskBrief → <code>seedFromDeskBrief</code></td></tr>
+  <tr><td>has_booking today</td><td>Desk <code>buyerReach</code> disclosure only — keep that; add chat policy as a second reader</td></tr>
+</table>
+
+<h2>Quality check (do not ship on scoreboard green alone)</h2>
+<ol>
+  <li>Replay the 30 size×budget taps on dig/playground: no <code>wa.pick</code> on true no-fit; budget copy after 1 BHK must not say ₹2.41 Cr; See the projects must return pick rows.</li>
+  <li>Read the bubbles: names are not duplicated in prose when the list holds them.</li>
+  <li>Nav: size step has no Switch; visit-day back stays on the project; Other projects keeps 2 BHK filter and offers ← last project (P2).</li>
+  <li>Returning buyer (P3): seed a lead with <code>next_visit_at</code> / <code>has_hold</code> / <code>has_booking</code> and Hi — explore doors must not be first.</li>
+  <li>Ablation: open acts still bind with regex off (<code>VISIT_EMBED_ACTS_ONLY</code> / SIL embed-first). This pass is packer+compose+context, not new regex.</li>
+  <li>Gates: Spine <code>npm run typecheck</code> and <code>npx vitest run</code> on touched tests. Desk: GitHub PR CI only, plus BOOK.html if thread_context changes.</li>
+</ol>
+
+<h2>Suggested PRs</h2>
+<table>
+  <tr><th>PR</th><th>Repo</th><th>Contains</th></tr>
+  <tr><td>1</td><td>ConverseSpine</td><td>P0 + P1 — English + honest chrome. Unblocks the dump bugs without Desk deploy.</td></tr>
+  <tr><td>2</td><td>ConverseSpine</td><td>P2 — new nav ids + popFocus peek.</td></tr>
+  <tr><td>3</td><td>ND-issues-docx-fixes then Spine</td><td>P3 + P4 — thread-context lifecycle, then greet/console. Desk first so Spine fields are not empty in prod.</td></tr>
+</table>
+
+<div class="card ok">
+  <b>Waiting to implement.</b> Next action is PR1 (P0+P1) unless you want P0 copy-only first. Spec walks: <code>docs/designs/wa-flow-step-walks.html</code>. Tap prototype: <code>docs/designs/wa-lifecycle-next-steps.html</code>.
+</div>
+</div>
+</body>
+</html>

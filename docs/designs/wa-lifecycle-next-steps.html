@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Next steps · back/switch · buyer lifecycle</title>
+<style>
+  :root {
+    --bg: #0b141a; --panel: #111b21; --bot: #202c33; --buyer: #005c4b;
+    --ink: #e9edef; --dim: #8696a0; --accent: #00a884; --sheet: #182229;
+    --line: #2a3942; --dead: #f15c6d; --warn: #e9c46a; --ok: #00a884;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .page { display: grid; grid-template-columns: 380px 1fr; min-height: 100vh; }
+  .stage { padding: 20px 18px 40px; border-right: 1px solid var(--line); }
+  .stage h1 { font-size: 18px; font-weight: 600; }
+  .stage .sub { color: var(--dim); margin: 6px 0 16px; font-size: 13px; }
+  .toggles { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  button.chip {
+    background: transparent; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit;
+  }
+  button.chip.on { background: var(--accent); color: #04251c; border-color: var(--accent); font-weight: 600; }
+  button.chip.ghost.on { background: #1f3b34; color: var(--accent); }
+  .life {
+    font-size: 12px; color: var(--accent); letter-spacing: .04em; text-transform: uppercase;
+    margin: 12px 0 8px;
+  }
+  .phone {
+    width: 340px; background: #0b141a; border: 1px solid var(--line); border-radius: 18px;
+    overflow: hidden; min-height: 560px; display: flex; flex-direction: column;
+  }
+  .ph-head {
+    background: #1f2c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .ph-head b { font-size: 14px; }
+  .ph-head span { color: var(--dim); font-size: 11px; }
+  .thread { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 88%; padding: 8px 11px; border-radius: 8px; white-space: pre-wrap; font-size: 13.5px; }
+  .bot { background: var(--bot); align-self: flex-start; }
+  .me { background: var(--buyer); align-self: flex-end; }
+  .btns { display: flex; flex-direction: column; gap: 6px; align-self: stretch; margin-top: 4px; }
+  .btns button {
+    background: var(--sheet); color: var(--accent); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .list {
+    background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; align-self: stretch;
+  }
+  .list .cta { padding: 8px 12px; text-align: center; color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--line); }
+  .list .row {
+    width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid var(--line);
+    color: var(--ink); padding: 9px 12px; cursor: pointer; font: inherit;
+  }
+  .list .row .t { font-size: 14px; }
+  .list .row .d { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .list .row.escape .t { color: var(--dim); }
+  .composer { border-top: 1px solid var(--line); padding: 8px 12px; color: var(--dim); font-size: 12px; }
+  .aside { padding: 20px 28px 48px; max-width: 720px; }
+  .aside h2 { font-size: 16px; margin: 18px 0 8px; }
+  .aside h2:first-child { margin-top: 0; }
+  .aside p, .aside li { color: var(--ink); font-size: 14px; }
+  .aside li { margin: 0 0 6px; }
+  .aside .dim { color: var(--dim); }
+  .flag { border-left: 3px solid var(--dead); padding: 8px 12px; background: #1a1214; margin: 10px 0; font-size: 13px; }
+  .flag.ok { border-color: var(--ok); background: #0f1c19; }
+  .flag.warn { border-color: var(--warn); background: #1c1910; }
+  code { font-size: 12px; background: #1c262d; padding: 1px 5px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 16px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  .tag { font-size: 11px; font-weight: 700; }
+  .tag.dead { color: var(--dead); } .tag.ok { color: var(--ok); } .tag.warn { color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="stage">
+    <h1>Seamless next steps</h1>
+    <p class="sub">Tap the phone. Switch Today / Better and the buyer’s real stage. This is the packing + lifecycle design — not a code drop.</p>
+    <div class="toggles" id="modeToggles"></div>
+    <div class="life">Buyer is</div>
+    <div class="toggles" id="lifeToggles"></div>
+    <div class="phone" id="phone"></div>
+    <p class="sub" style="margin-top:12px">WhatsApp still allows 3 reply buttons <i>or</i> one list. Better never mixes them. Better never labels Switch as Back.</p>
+  </div>
+  <div class="aside" id="aside"></div>
+</div>
+<script>
+const MODES = [
+  { id: 'today', label: 'Today' },
+  { id: 'better', label: 'Better' },
+];
+const LIVES = [
+  { id: 'fresh', label: 'Exploring' },
+  { id: 'focused', label: 'In a file' },
+  { id: 'visit', label: 'Visit booked' },
+  { id: 'hold', label: 'Unit on hold' },
+  { id: 'booked', label: 'Unit booked' },
+];
+
+let mode = 'today';
+let life = 'fresh';
+let screen = 'greet';
+let focus = null;      // eldorado | cornerstone
+let prev = null;
+let size = null;
+let budget = null;
+let seenCost = false;
+
+function resetFromLife() {
+  seenCost = false; size = null; budget = null; prev = null;
+  if (life === 'fresh') { focus = null; screen = 'greet'; }
+  if (life === 'focused') { focus = 'eldorado'; size = '2 BHK'; budget = 'Under ₹1 Cr'; screen = 'file'; }
+  if (life === 'visit') { focus = 'eldorado'; size = '2 BHK'; screen = 'greet'; }
+  if (life === 'hold') { focus = 'eldorado'; size = '2 BHK'; screen = 'greet'; }
+  if (life === 'booked') { focus = 'eldorado'; size = '2 BHK'; screen = 'greet'; }
+}
+
+function nameOf(id) {
+  return id === 'eldorado' ? 'Brigade Eldorado' : id === 'cornerstone' ? 'Brigade Cornerstone' : 'the book';
+}
+
+function renderToggles() {
+  document.getElementById('modeToggles').innerHTML = MODES.map(m =>
+    `<button class="chip ${mode===m.id?'on':''}" data-mode="${m.id}">${m.label}</button>`
+  ).join('');
+  document.getElementById('lifeToggles').innerHTML = LIVES.map(m =>
+    `<button class="chip ghost ${life===m.id?'on':''}" data-life="${m.id}">${m.label}</button>`
+  ).join('');
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; resetFromLife(); draw(); });
+  document.querySelectorAll('[data-life]').forEach(b => b.onclick = () => { life = b.dataset.life; resetFromLife(); draw(); });
+}
+
+function bubble(who, text) {
+  return `<div class="bubble ${who}">${text}</div>`;
+}
+function buttons(rows) {
+  return `<div class="btns">${rows.map(r =>
+    `<button data-go="${r.go}">${r.title}</button>`
+  ).join('')}</div>`;
+}
+function list(cta, rows) {
+  return `<div class="list"><div class="cta">${cta}</div>${rows.map(r =>
+    `<button class="row ${r.escape?'escape':''}" data-go="${r.go}">
+      <div class="t">${r.title}</div>${r.d?`<div class="d">${r.d}</div>`:''}
+    </button>`
+  ).join('')}</div>`;
+}
+
+function viewToday() {
+  const L = life;
+  if (screen === 'greet') {
+    if (L === 'visit') return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', 'Welcome to *Brigade Group*. I can help you shortlist, compare, or book a visit. What are you looking for?'),
+        buttons([
+          { title: 'Help me choose', go: 'size' },
+          { title: 'See everything', go: 'seeBroken' },
+          { title: 'I know the project', go: 'know' },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Visit is already booked on Desk. Greet still opens like a stranger. No “your visit Saturday” row. Bot never loaded has_booking / itinerary on a cold discover turn.',
+    };
+    if (L === 'hold') return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', 'Welcome to *Brigade Group*. I can help you shortlist, compare, or book a visit.'),
+        buttons([
+          { title: 'Help me choose', go: 'size' },
+          { title: 'See everything', go: 'seeBroken' },
+          { title: 'I know the project', go: 'know' },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'A 2 BHK at Eldorado is on hold until Friday. Chat has no idea. Desk has unit_holds + leads.has_hold. Spine never GETs them. Next step offered is “Help me choose” — the buyer already chose.',
+    };
+    if (L === 'booked') return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', 'Welcome to *Brigade Group*. I can help you shortlist, compare, or book a visit.'),
+        buttons([
+          { title: 'Help me choose', go: 'size' },
+          { title: 'See everything', go: 'seeBroken' },
+          { title: 'I know the project', go: 'know' },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Unit is booked. Desk uses has_booking only to unlock disclosure media — the bot is never told. Primary chrome is still explore.',
+    };
+    return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', 'Welcome to *Brigade Group*. I can help you shortlist, compare, or book a visit. What are you looking for?'),
+        buttons([
+          { title: 'Help me choose', go: 'size' },
+          { title: 'See everything', go: 'seeBroken' },
+          { title: 'I know the project', go: 'know' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Welcome is the only honest screen today: three doors, one job each.',
+    };
+  }
+  if (screen === 'size') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'Help me choose'),
+      bubble('bot', 'Two quick taps and I\'ll cut the book to fit. First — how much space do you need?'),
+      list('Choose size', [
+        { title: '1 BHK', go: 'budget' },
+        { title: '2 BHK', go: 'budget2' },
+        { title: '3 BHK', go: 'budget' },
+        { title: '4+ BHK', go: 'budget' },
+        { title: 'Villa', go: 'villaMiss' },
+        { title: 'Plot / land', go: 'budget' },
+        { title: 'Any size', go: 'budget' },
+        { title: '← Back to projects', go: 'seeBroken', escape: true },
+      ]),
+    ],
+    flag: 'dead',
+    note: 'Way-back on step 1 uses the same id as Switch (wa.menu.projects). Villa is a type, not a size. “Two quick taps” is four (CTA → row → Send).',
+  };
+  if (screen === 'budget' || screen === 'budget2') {
+    if (screen === 'budget2') size = '2 BHK';
+    return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('me', size || '2 BHK'),
+        bubble('bot', `Got it — ${size || '2 BHK'}. Homes here run ₹31 L – ₹2.41 Cr. Tap a band.`),
+        list('Set budget', [
+          { title: 'Under ₹1 Cr', go: 'matches' },
+          { title: '₹1 Cr – ₹1.8 Cr', go: 'matches' },
+          { title: 'Above ₹1.8 Cr', go: 'matchesHigh' },
+          { title: 'Any budget', go: 'matches' },
+          { title: '← Back to projects', go: 'seeBroken', escape: true },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Spread is catalog-wide (Atmosphere floor as the “max”). Same four bands after 1 BHK, villa, or plot. Back still means Switch, not “change size”.',
+    };
+  }
+  if (screen === 'matches') {
+    budget = 'Under ₹1 Cr';
+    return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('me', 'Under ₹1 Cr'),
+        bubble('bot', 'Noted: *2 BHK · under ₹1 Cr*. Here\'s what lines up:\n*Brigade Cornerstone* from ₹45 L; *Brigade Eldorado* from ₹57.5 L; *Brigade Orchards* from ₹68 L.'),
+        list('See matches', [
+          { title: '1. Brigade Cornerstone', d: '₹45 L', go: 'fileC' },
+          { title: '2. Brigade Eldorado', d: '₹57.5 L', go: 'fileE' },
+          { title: '3. Brigade Orchards', d: '₹68 L', go: 'fileE' },
+        ]),
+      ],
+      flag: 'warn',
+      note: 'Prices match catalog. Names dump in the bubble AND the list — a tap-only buyer types a name instead of wa.pick.*. Same three names on most apartment briefs.',
+    };
+  }
+  if (screen === 'matchesHigh') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'Above ₹1.8 Cr'),
+      bubble('bot', 'Noted: *2 BHK · above ₹1.75 Cr*. Couldn\'t nail that size exactly — here\'s what we do have: *Brigade Eldorado* from ₹1.55 Cr…'),
+      list('See matches', [
+        { title: '1. Brigade Eldorado', d: '₹1.55 Cr', go: 'fileE' },
+        { title: '2. Brigade Cornerstone …', d: '₹1.55 Cr', go: 'fileC' },
+        { title: '3. Brigade Sanctuary', go: 'fileE' },
+      ]),
+    ],
+    flag: 'warn',
+    note: 'Copy admits miss. List still leads with Eldorado. Quoted “from” is another size.',
+  };
+  if (screen === 'villaMiss') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'Villa'),
+      bubble('bot', 'Nothing starts within ₹1 Cr — closest is *Brigade Atmosphere* from ₹2.41 Cr. Want me to open it?'),
+      list('See projects', [
+        { title: '1. Brigade Eldorado', go: 'fileE' },
+        { title: '2. Brigade Cornerstone', go: 'fileC' },
+        { title: '3. Brigade Orchards', go: 'fileE' },
+        { title: '4. Brigade Calista', go: 'fileE' },
+        { title: '5. Desk V2 Gold', go: 'fileE' },
+        { title: '6. Brigade Oasis', go: 'fileE' },
+      ]),
+    ],
+    flag: 'dead',
+    note: 'no_fit has no packer branch. Bubble is honest; chrome dumps the apartment book including a test project. Atmosphere — the answer — is not in the list.',
+  };
+  if (screen === 'seeBroken') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'See everything'),
+      bubble('bot', 'Here\'s the book — Aerospace Park / Devanahalli, Devanahalli… Pick a project, or tap Help me choose.'),
+      buttons([
+        { title: 'Choose size', go: 'size' },
+        { title: 'Set budget', go: 'budget' },
+        { title: 'Projects', go: 'seeBroken' },
+      ]),
+    ],
+    flag: 'dead',
+    note: 'wa.menu.see releases focus then packs as clarify_intent: three doors, zero picks. Copy says “here’s the book”. Tap-only cannot open a project. Same id family as Switch / Back.',
+  };
+  if (screen === 'know') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'I know the project'),
+      bubble('bot', 'Which project? Type the name — even roughly — and I’ll pull up its file.'),
+      buttons([{ title: 'See everything', go: 'seeBroken' }]),
+    ],
+    flag: 'ok',
+    note: 'This door is honest: it needs a name. The only chrome is See everything — which today is broken (above).',
+  };
+  if (screen === 'fileE' || screen === 'fileC' || screen === 'file') {
+    if (screen === 'fileE') { prev = focus; focus = 'eldorado'; }
+    if (screen === 'fileC') { prev = focus; focus = 'cornerstone'; }
+    const n = nameOf(focus);
+    return {
+      head: n,
+      thread: [
+        bubble('bot', `*${n}*\nUnit — 2 BHK on file\nMoney — from ₹57.5 L\nTrust — RERA · A-Khata\n\nWhat do you want to check?`),
+        list('More', [
+          { title: 'Total cost — 2 BHK', d: 'all charges counted in', go: 'cost' },
+          { title: 'Money', d: 'all-in, EMI, payment plan', go: 'money' },
+          { title: 'Trust & legal', d: 'RERA · khata · EC', go: 'trust' },
+          { title: 'Place', d: 'metro · schools', go: 'file' },
+          { title: 'Life', d: 'amenities · brochure', go: 'file' },
+          { title: 'Time', d: 'possession', go: 'file' },
+          { title: 'The unit', d: 'sizes · floor plan', go: 'file' },
+          { title: 'Book a visit', d: 'pick a day and a time', go: 'visitAsk' },
+          { title: 'Compare with another', go: 'switch' },
+          { title: 'Switch project', go: 'switch' },
+        ]),
+      ],
+      flag: L === 'visit' || L === 'hold' || L === 'booked' ? 'dead' : 'warn',
+      note: L === 'visit'
+        ? 'File still leads with Book a visit. Visit is already on the calendar. Standing acts are hardcoded: visit_book + compare + wa.menu.projects.'
+        : 'Console can deliver money/trust/place/life/time/unit/visit — when the record has data. Switch uses the same id as ← Back to projects. Compare is a row with no destination in this walk. popFocus exists and is unused: you cannot go back to the last project, only dump to discover.',
+    };
+  }
+  if (screen === 'cost') {
+    seenCost = true;
+    return {
+      head: nameOf(focus),
+      thread: [
+        bubble('me', 'Total cost — 2 BHK'),
+        bubble('bot', `*${nameOf(focus)}* 2 BHK all-in is ₹72 L (base ₹57.5 L + GST + parking).`),
+        list('More', [
+          { title: 'Money', d: 'EMI, payment plan', go: 'money' },
+          { title: 'Trust & legal', go: 'trust' },
+          { title: 'Book a visit', go: 'visitAsk' },
+          { title: 'Compare with another', go: 'switch' },
+          { title: 'Switch project', go: 'switch' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Seen ledger correctly drops Total cost. Next steps are still the same three standing acts — not “EMI next?” as the natural follow.',
+    };
+  }
+  if (screen === 'money') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('me', 'Money'),
+      bubble('bot', 'Which part?'),
+      list('Money — what to check', [
+        { title: 'Total cost — 2 BHK', go: 'cost' },
+        { title: 'Monthly EMI', go: 'file' },
+        { title: 'Payment plan', go: 'file' },
+        { title: '← Back to the file', go: 'file', escape: true },
+        { title: 'Book a visit', go: 'visitAsk' },
+      ]),
+    ],
+    flag: 'warn',
+    note: 'File-back is correct (keeps focus). But Back to the file vs Switch project vs Back to projects are three different words for two different mutations.',
+  };
+  if (screen === 'trust') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('me', 'Trust & legal'),
+      bubble('bot', `*${nameOf(focus)} — trust & legal*\nRERA: PRM/KA/…\nKhata: A-Khata\nEC: Available on request`),
+      list('Trust & legal', [
+        { title: 'RERA registration', go: 'file' },
+        { title: 'Khata & title', go: 'file' },
+        { title: '← Back to the file', go: 'file', escape: true },
+        { title: 'Book a visit', go: 'visitAsk' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Authored screens are honest when data exists. Money/Unit sections still fall through to engine compose — inconsistent with Trust/Place.',
+  };
+  if (screen === 'switch') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'Switch project'),
+      bubble('bot', 'Here\'s the book. Pick a project — or tap Help me choose.'),
+      list('See projects', [
+        { title: '✨ Help me choose', d: '2 taps — size, then budget', go: 'size' },
+        { title: '1. Brigade Eldorado', go: 'fileE' },
+        { title: '2. Brigade Cornerstone', go: 'fileC' },
+        { title: '3. Brigade Orchards', go: 'fileE' },
+      ]),
+    ],
+    flag: 'dead',
+    note: 'releaseToDiscover clears focus AND the focus stack. Size/budget constraints stay, but chrome says “the book”. No “← Eldorado”. Switching is a one-way eject.',
+  };
+  if (screen === 'visitAsk') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('me', 'Book a visit'),
+      bubble('bot', 'Which day works? Site visits usually Mon–Sun.'),
+      list('Pick a day', [
+        { title: 'Sat 14 Sep', d: 'weekend', go: 'file' },
+        { title: 'Sun 15 Sep', go: 'file' },
+        { title: '← Back to projects', go: 'switch', escape: true },
+      ]),
+    ],
+    flag: 'dead',
+    note: 'Way-back on a visit day list is again wa.menu.projects — leaves the project you were booking. Should be ← the file.',
+  };
+  return viewToday();
+}
+
+function viewBetter() {
+  const L = life;
+  if (screen === 'greet') {
+    if (L === 'visit') return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', 'Your visit to *Brigade Eldorado* is *Sat 14 Sep, 11:00*. I still have the file if you want to go deeper — or we can add a stop.'),
+        buttons([
+          { title: 'Visit details', go: 'visitCard' },
+          { title: 'Continue the file', go: 'file' },
+          { title: 'Other projects', go: 'switch' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Cold greet reads journey + itinerary. Three doors are the buyer’s actual jobs. Book a visit is not re-offered as if nothing happened.',
+    };
+    if (L === 'hold') return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', '*2 BHK* at *Brigade Eldorado* is on hold until *Fri 19 Sep*. I can walk the file, extend the hold, or you can still look at other projects — the hold stays unless you drop it.'),
+        buttons([
+          { title: 'Hold details', go: 'holdCard' },
+          { title: 'Continue the file', go: 'file' },
+          { title: 'Other projects', go: 'switch' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Loaded from unit_holds + has_hold at turn start. Explore is door 3, never door 1. Looking around does not release the hold.',
+    };
+    if (L === 'booked') return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', 'You\'re booked on *Brigade Eldorado* · 2 BHK. I can open payment plan, possession, or put you through to your RM. You can still look at other projects — this booking stays.'),
+        buttons([
+          { title: 'Payment plan', go: 'money' },
+          { title: 'Talk to RM', go: 'file' },
+          { title: 'Other projects', go: 'switch' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'has_booking is a policy input, not only a media disclosure gate. Help me choose is gone. Explore is door 3, quieter. Booking is not cancelled by browsing.',
+    };
+    if (L === 'focused') {
+      screen = 'file';
+      return viewBetter();
+    }
+    return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('bot', 'Welcome to *Brigade Group*. I can shortlist, open a file, or pick up a name you already know.'),
+        buttons([
+          { title: 'Help me choose', go: 'size' },
+          { title: 'See everything', go: 'see' },
+          { title: 'I know the project', go: 'know' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Same three doors — only when journey is discovery and nothing is held/booked/visited.',
+    };
+  }
+  if (screen === 'size') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'Help me choose'),
+      bubble('bot', 'How much space?'),
+      buttons([
+        { title: '1 BHK', go: 'budget1' },
+        { title: '2 BHK', go: 'budget2' },
+        { title: '3 BHK', go: 'budget3' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Reply buttons for BHKs that exist (max 3). Villa/Plot are types — later, behind See everything. No way-back on step 1. No 4+ unless the book has one.',
+  };
+  if (screen === 'budget2' || screen === 'budget1' || screen === 'budget3') {
+    size = screen === 'budget1' ? '1 BHK' : screen === 'budget3' ? '3 BHK' : '2 BHK';
+    const bands = size === '1 BHK'
+      ? [{ title: 'Under ₹60 L', go: 'matches' }, { title: '₹60 L – ₹1 Cr', go: 'matches' }, { title: 'Any 1 BHK', go: 'matches' }]
+      : [{ title: 'Under ₹1 Cr', go: 'matches' }, { title: '₹1 – 1.5 Cr', go: 'matches' }, { title: 'Any 2 BHK', go: 'matches' }];
+    return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('me', size),
+        bubble('bot', size === '1 BHK'
+          ? '1 BHK here runs ₹31 L – ₹95 L. Ceiling?'
+          : '2 BHK here runs ₹45 L – ₹1.50 Cr. Ceiling?'),
+        list('Set budget', bands.concat([{ title: '← Size', go: 'size', escape: true }])),
+      ],
+      flag: 'ok',
+      note: 'Bands cut from the SIZE just committed, not Atmosphere’s villa floor. Back is ← Size (new id), never ← Projects. Four rows ⇒ list (WhatsApp: buttons XOR list).',
+    };
+  }
+  if (screen === 'matches') {
+    budget = 'Under ₹1 Cr';
+    return {
+      head: 'Brigade Group',
+      thread: [
+        bubble('me', 'Under ₹1 Cr'),
+        bubble('bot', 'Three 2 BHKs under ₹1 Cr. Names are the next tap.'),
+        buttons([
+          { title: 'Cornerstone · ₹45 L', go: 'fileC' },
+          { title: 'Eldorado · ₹58 L', go: 'fileE' },
+          { title: 'Orchards · ₹68 L', go: 'fileE' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Receipt only. No prose dump of the same three names. ≤3 → reply buttons. 4–9 → list without reprinting. Extra matches (Meadows ₹87 L) sit behind “More matches”, not silent truncation.',
+    };
+  }
+  if (screen === 'see') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'See everything'),
+      bubble('bot', 'The book — tap a file. Filters are off.'),
+      list('Projects', [
+        { title: 'Brigade Eldorado', d: '1–4 BHK · from ₹31 L', go: 'fileE' },
+        { title: 'Brigade Cornerstone', d: 'Studio–3 BHK · from ₹33 L', go: 'fileC' },
+        { title: 'Brigade Orchards', d: '1–4 BHK · from ₹41 L', go: 'fileE' },
+        { title: 'Brigade Atmosphere', d: 'Villa · from ₹2.41 Cr', go: 'fileE' },
+        { title: 'Brigade Oasis', d: 'Plots · from ₹89 L', go: 'fileE' },
+        { title: 'Help me choose', d: 'cut by size, then budget', go: 'size', escape: true },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'See everything is a project list. Not clarify buttons. Test projects (Desk V2 Gold) are not public. Distinct id from Switch.',
+  };
+  if (screen === 'know') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'I know the project'),
+      bubble('bot', 'Type the name — even roughly.'),
+      buttons([{ title: 'See the book', go: 'see' }]),
+    ],
+    flag: 'ok',
+    note: 'Same door. Fallback chrome actually opens the book.',
+  };
+  if (screen === 'fileE' || screen === 'fileC' || screen === 'file') {
+    if (screen === 'fileE') { if (focus && focus !== 'eldorado') prev = focus; focus = 'eldorado'; }
+    if (screen === 'fileC') { if (focus && focus !== 'cornerstone') prev = focus; focus = 'cornerstone'; }
+    const n = nameOf(focus);
+    const lifeLine = L === 'visit' ? 'Visit booked · Sat 14, 11:00'
+      : L === 'hold' ? '2 BHK on hold · until Fri 19'
+      : L === 'booked' ? 'Unit booked'
+      : (size ? `${size}${budget ? ' · ' + budget : ''}` : 'On the file');
+    const standing = L === 'visit'
+      ? [{ title: 'Your visit — Sat 14', d: 'change or add a stop', go: 'visitCard' }]
+      : L === 'hold'
+      ? [{ title: 'Your hold — Fri 19', d: 'extend or ask the team', go: 'holdCard' }]
+      : L === 'booked'
+      ? [{ title: 'Payment plan', go: 'money' }]
+      : [{ title: 'Book a visit', d: 'pick a day', go: 'visitAsk' }];
+    const rows = [
+      ...(!seenCost && L !== 'booked' ? [{ title: 'Total cost — 2 BHK', d: 'all charges counted in', go: 'cost' }] : []),
+      { title: 'Money', d: 'EMI · plan · loan', go: 'money' },
+      { title: 'Trust & legal', d: 'RERA · khata · EC', go: 'trust' },
+      { title: 'Place', d: 'metro · schools', go: 'file' },
+      { title: 'The unit', d: 'sizes · floor plan', go: 'file' },
+      ...standing,
+      { title: 'Compare', d: 'with Cornerstone', go: 'compare' },
+      { title: 'Other projects', go: 'switch', escape: true },
+    ];
+    return {
+      head: n,
+      thread: [
+        bubble('bot', `*${n}*\n${lifeLine}\nUnit · Money · Trust · Place on file.\nWhat do you want to check?`),
+        list('The file', rows),
+      ],
+      flag: 'ok',
+      note: 'Standing acts follow lifecycle. Label is Other projects — never Back. Compare names the other shortlist item. Receipt shows the brief so Switch does not feel like amnesia.',
+    };
+  }
+  if (screen === 'cost') {
+    seenCost = true;
+    return {
+      head: nameOf(focus),
+      thread: [
+        bubble('me', 'Total cost — 2 BHK'),
+        bubble('bot', `*${nameOf(focus)}* 2 BHK all-in is ₹72 L.`),
+        buttons([
+          { title: 'Monthly EMI', go: 'money' },
+          { title: 'Book a visit', go: 'visitAsk' },
+          { title: 'The file', go: 'file' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'After an answer, chrome is the next job — EMI, visit, or back to the file — not a reprint of Compare + Switch. ≤3 → buttons.',
+    };
+  }
+  if (screen === 'money') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('me', 'Money'),
+      bubble('bot', 'Which part of money?'),
+      list('Money', [
+        { title: 'Total cost — 2 BHK', go: 'cost' },
+        { title: 'Monthly EMI', go: 'file' },
+        { title: 'Payment plan', go: 'file' },
+        { title: '← The file', go: 'file', escape: true },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Section back is ← The file (wa.back.file) — stays on the project. Visit is not glued to every section; it lives on the file root unless lifecycle says otherwise.',
+  };
+  if (screen === 'trust') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('me', 'Trust & legal'),
+      bubble('bot', `*${nameOf(focus)} — trust*\nRERA on file · A-Khata · EC on request`),
+      buttons([
+        { title: 'RERA number', go: 'file' },
+        { title: 'Documents', go: 'file' },
+        { title: 'The file', go: 'file' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'After a section answer, three next steps — not a list that still includes Switch.',
+  };
+  if (screen === 'switch') return {
+    head: 'Brigade Group',
+    thread: [
+      bubble('me', 'Other projects'),
+      bubble('bot', size
+        ? `Still *${size}${budget ? ' · ' + budget : ''}*. Pick another file, go back to ${nameOf(focus)}, or clear the brief.`
+        : 'Pick another file.'),
+      list('Other projects', [
+        ...(prev || focus ? [{ title: `← ${nameOf(focus)}`, d: 'the file you were in', go: 'file', escape: true }] : []),
+        { title: 'Brigade Cornerstone', d: '2 BHK · ₹45 L', go: 'fileC' },
+        { title: 'Brigade Orchards', d: '2 BHK · ₹68 L', go: 'fileE' },
+        { title: 'Clear size & budget', d: 'show the whole book', go: 'see', escape: true },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Switch uses popFocus: last project is a row. Constraints are spoken, not hidden. Clear is explicit. Distinct from See everything (filters off) and from ← The file (stay).',
+  };
+  if (screen === 'compare') return {
+    head: 'Compare',
+    thread: [
+      bubble('me', 'Compare'),
+      bubble('bot', 'Eldorado vs Cornerstone · 2 BHK\nMoney from ₹58 L vs ₹45 L\nPlace: Devanahalli corridor vs Aerospace Park\nPossession on both files.'),
+      buttons([
+        { title: 'Open Eldorado', go: 'fileE' },
+        { title: 'Open Cornerstone', go: 'fileC' },
+        { title: 'Book a visit', go: 'visitAsk' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Compare is a destination, not a dead row. Next steps are the two files or a visit — not eject to the book.',
+  };
+  if (screen === 'visitAsk') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('me', 'Book a visit'),
+      bubble('bot', `Visit *${nameOf(focus)}*. Which day?`),
+      list('Pick a day', [
+        { title: 'Sat 14 Sep', d: 'weekend', go: 'visitCard' },
+        { title: 'Sun 15 Sep', go: 'visitCard' },
+        { title: '← The file', go: 'file', escape: true },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Visit way-back is ← The file. Never wa.menu.projects.',
+  };
+  if (screen === 'visitCard') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('bot', `*Visit booked*\n${nameOf(focus)} · Sat 14 Sep, 11:00\nPickup can be arranged from your side of town.`),
+      buttons([
+        { title: 'Change time', go: 'visitAsk' },
+        { title: 'Add a stop', go: 'switch' },
+        { title: 'The file', go: 'file' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Lifecycle is now visit_planning. Next greet (Better) will open here instead of Help me choose.',
+  };
+  if (screen === 'holdCard') return {
+    head: nameOf(focus),
+    thread: [
+      bubble('bot', `*Hold*\n2 BHK · ${nameOf(focus)}\nUntil Fri 19 Sep · 3 days left`),
+      buttons([
+        { title: 'Extend hold', go: 'file' },
+        { title: 'Send papers', go: 'trust' },
+        { title: 'Other projects', go: 'switch' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Hold is readable later. Papers and explore are on the card. Drop-the-hold is a row on Other projects, never inferred from browsing.',
+  };
+  return viewBetter();
+}
+
+function asideFor(v) {
+  const law = mode === 'better'
+    ? 'Chrome answers three questions: where you are, what you can do next, how to leave without losing the thread.'
+    : 'Today chrome answers a fourth question nobody asked: how do I accidentally eject?';
+  return `
+    <p class="dim">${law}</p>
+    <div class="flag ${v.flag}">${v.note}</div>
+    <h2>Design note — before any code</h2>
+    <h2>1. Files / layers</h2>
+    <table>
+      <tr><th>Layer</th><th>Job</th></tr>
+      <tr><td><code>wa-pack.ts</code></td><td>Chrome by lifecycle + nav labels. no_fit branch. Size-scoped budget. Way-back policy. See-everything = project list.</td></tr>
+      <tr><td><code>turn.ts</code> + <code>state.ts</code></td><td>Switch = release but keep stack peek (<code>popFocus</code>). Greet short-circuit when visit/hold/booked. Distinct ids: back-file / back-size / other-projects / see-book.</td></tr>
+      <tr><td>Desk <code>thread_context.ts</code></td><td>Ship <code>buyer_journey.stage</code>, <code>has_hold</code>, <code>has_booking</code>, next visit, active hold expiry. Stop sending shortlist as <code>[]</code>.</td></tr>
+      <tr><td>Spine CRM client</td><td>Load that snapshot at turn start. <code>getJourney</code> is already written and unused.</td></tr>
+      <tr><td><code>wa-console.ts</code></td><td>Standing acts: Your visit / Your hold / Payment plan instead of always Book a visit.</td></tr>
+    </table>
+    <h2>2. Why this layer</h2>
+    <p>Options are packer-owned. The mess is shared action ids, fall-through packing, and a greet that never reads Desk. Hold/booked already exist on the lead — the bot writes journey signals and never reads them back.</p>
+    <h2>3. Why not other layers</h2>
+    <p>Not compose regex (“if reply includes hold…”). Not playground chrome. Not RTI. Not a new intent kind for Back. Not Advisor-only — WhatsApp is the buyer door.</p>
+    <h2>4. Consumers</h2>
+    <p><code>packWhatsAppInteractive</code>, greet compose, visit packer, hold packer, disclosure <code>buyerReach</code> (already uses has_booking internally). Playground only has to keep showing whatever Spine packs.</p>
+    <h2>5. Quality check</h2>
+    <ul>
+      <li>Permutation battery: size × budget — no dump on no_fit; budget bands move with size.</li>
+      <li>Nav walk: file → Other projects → ← last file; size step has no Switch; visit day back stays on project.</li>
+      <li>See everything returns <code>wa.pick.*</code> rows.</li>
+      <li>Returning buyer: visit / hold / booked greet in Better; Today still says Help me choose.</li>
+      <li>Ablation: open acts still bind with regex off.</li>
+    </ul>
+    <h2>Nav law (Better)</h2>
+    <table>
+      <tr><th>Words</th><th>Id</th><th>State</th></tr>
+      <tr><td>← The file</td><td><code>wa.back.file</code></td><td>Stay focused, root console</td></tr>
+      <tr><td>← Size</td><td>new <code>wa.back.size</code></td><td>Stay in brief, previous step</td></tr>
+      <tr><td>Other projects</td><td>new <code>wa.menu.other</code></td><td>Release, keep constraints, peek stack</td></tr>
+      <tr><td>See the book</td><td><code>wa.menu.see</code></td><td>Release, clear brief, list projects</td></tr>
+    </table>
+    <p class="dim">Today <code>wa.menu.projects</code> is labelled Back, Switch, Projects, and See everything.</p>
+    <h2>Data the file can already deliver</h2>
+    <table>
+      <tr><th>Aspect</th><th>Today</th></tr>
+      <tr><td>Price, EMI, plan, RERA, place, possession, sizes, brochure, visit book</td><td><span class="tag ok">In the console when the record has it</span></td></tr>
+      <tr><td>Yield / appreciation / ROI / operator</td><td><span class="tag dead">CRM has it, bot often doesn’t</span></td></tr>
+      <tr><td>Visit already booked / unit hold / unit booked</td><td><span class="tag dead">Desk knows; turn start does not load</span></td></tr>
+      <tr><td>Pickup, food, parking on visit</td><td><span class="tag warn">Dropped by adapter</span></td></tr>
+    </table>
+  `;
+}
+
+function draw() {
+  renderToggles();
+  const v = mode === 'today' ? viewToday() : viewBetter();
+  document.getElementById('phone').innerHTML = `
+    <div class="ph-head"><b>${v.head}</b><span>${mode === 'today' ? 'Today' : 'Better'} · ${LIVES.find(x=>x.id===life).label}</span></div>
+    <div class="thread">${v.thread.join('')}</div>
+    <div class="composer">Tap an option — same as WhatsApp</div>
+  `;
+  document.getElementById('aside').innerHTML = asideFor(v);
+  document.querySelectorAll('[data-go]').forEach(el => {
+    el.onclick = () => { screen = el.dataset.go; draw(); };
+  });
+}
+
+resetFromLife();
+draw();
+</script>
+</body>
+</html>

@@ -33,7 +33,14 @@ import {
   WA_MENU_NODE,
   WA_MENU_PROJECTS,
   WA_MENU_SEE,
+  WA_MENU_OTHER,
   WA_MENU_KNOW,
+  WA_HOLD_DROP,
+  isWaSeeAction,
+  isWaOtherAction,
+  waLifeOf,
+  WA_MENU_CHOOSE,
+  WA_MENU_TYPES,
   WA_MONEY_TOTAL,
   WA_NODE_LATER,
   WA_NODE_LIFE,
@@ -150,9 +157,11 @@ import {
   recordDiscussed,
   recordOffered,
   releaseToDiscover,
+  leaveFocusKeepStack,
+  clearWaBriefConstraints,
   withNdThread,
 } from './state.js';
-import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply, waBookFirstGreet } from './compose.js';
+import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply, waBookFirstGreet, waBriefReceipt } from './compose.js';
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import {
@@ -465,6 +474,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     const reply = skipBrief
       ? `Starting fresh.\n\n${waBookFirstGreet({
           builderName: friendlyBuilder(state.builderId),
+          buyerName: state.buyerName,
           catalog,
         })}`
       : 'Starting fresh — tell me the area and budget you are working with.';
@@ -628,7 +638,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // "I know the project" — the welcome's third door. Nothing to compute: ask
   // for the name and get out of the way; the next typed message is the search.
   if (skipBrief && input.action_id === WA_MENU_KNOW) {
-    const reply = 'Which project? Type the name — even roughly — and I’ll pull up its file.';
+    const reply = 'Tell me the name.\n\nEven a rough spelling is fine.';
     state = {
       ...state,
       turnCount: state.turnCount + 1,
@@ -639,7 +649,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     await deps.store.save(state);
     const knowPacked: WaPacked = {
       kind: 'buttons',
-      buttons: [{ id: WA_MENU_PROJECTS, title: 'See everything' }],
+      buttons: [{ id: WA_MENU_PROJECTS, title: 'See the projects' }],
     };
     return {
       reply,
@@ -649,17 +659,46 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       whatsappInteractive: knowPacked,
     };
   }
-  if (skipBrief && (input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE)) {
-    // Projects is the always-there exit: back to the book from anywhere.
-    // releaseToDiscover, not popFocus — popFocus keeps a single-entry stack
-    // unchanged, so the tap silently stayed on the project. Drop the visit
-    // pending markers too so the window/day guards below don't pull the turn
-    // back into the visit ask; keep the draft for a typed resume later.
+  if (skipBrief && input.action_id === WA_HOLD_DROP) {
+    const was = state.hold?.projectName;
+    state = { ...state, hold: undefined, turnCount: state.turnCount + 1 };
+    const reply = was
+      ? `I've dropped the hold on *${was}*.\n\nI can help you find a home that fits, or open a project you already know.`
+      : `I've dropped the hold.\n\nI can help you find a home that fits, or open a project you already know.`;
+    state = {
+      ...state,
+      lastReply: reply,
+      recentReplies: rememberReply(state, reply),
+    };
+    state = appendTranscript(state, trimmedText, reply, deps.clock.nowMs());
+    await deps.store.save(state);
+    const packed: WaPacked = {
+      kind: 'buttons',
+      buttons: [
+        { id: WA_MENU_CHOOSE, title: 'Help me find a home' },
+        { id: WA_MENU_SEE, title: 'See the projects' },
+        { id: WA_MENU_KNOW, title: 'I know the name' },
+      ],
+    };
+    return {
+      reply,
+      state,
+      debug: withIngressDebug({ phase: state.phase, goal: { kind: 'greet' }, tools: [], grounding: 'pass' }, inputSource),
+      whatsappActions: packedToSuggestedActions(packed),
+      whatsappInteractive: packed,
+    };
+  }
+  if (skipBrief && isWaSeeAction(input.action_id, state)) {
+    // See the projects: back to the book, brief over.
     state = releaseToDiscover(state);
+    state = clearWaBriefConstraints(state);
     if (state.visit && (state.visit.lastAsk || state.visit.pendingDayIso)) {
       const { lastAsk: _ask, pendingDayIso: _day, ...rest } = state.visit;
       state = { ...state, visit: rest };
     }
+  } else if (skipBrief && isWaOtherAction(input.action_id, state)) {
+    // See other projects: leave the file, keep size/budget, peek the stack.
+    state = leaveFocusKeepStack(state);
   }
   const durableConstraintsBeforeTurn = { ...state.constraints };
   const ingressFilled = new Set<IngressSlotKey>(input.ingressFilledSlots ?? []);
@@ -2570,7 +2609,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         ex = { ...ex, namedProjects: undefined, pickName: undefined, implicitProjectPick: false };
       }
     }
-    state = advanceWaBriefState(state, input.action_id, ex);
+    state = advanceWaBriefState(state, input.action_id, ex, catalogForTurn?.microMarkets);
   }
   const coldNameEligible =
     state.phase === 'discover' &&
@@ -2710,6 +2749,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     goal = {
       ...goal,
       placed: res.ok,
+      ...(res.ok && 'holdId' in res && res.holdId ? { holdId: res.holdId } : {}),
       ...(res.ok && 'waiting' in res && res.waiting
         ? { queued: true, ...('position' in res && res.position ? { position: res.position } : {}) }
         : {}),
@@ -2807,17 +2847,38 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // reason: a miss should still hand the buyer something true about the book.
   // `no_fit` needs it too: on an allotted book, "nothing matched" is only half
   // an answer — the buyer has to see what the book does span to know which of
-  // their filters to give up.
+  // their filters to give up. Probe budget quotes the same spread.
   if (
     ((goal.kind === 'recommend' &&
       (goal.askedTopic ||
         (goal.bookQuestion && !HANDOFF_QUESTIONS.has(goal.bookQuestion)) ||
         goal.situation)) ||
       goal.kind === 'clarify_intent' ||
-      goal.kind === 'no_fit') &&
+      goal.kind === 'no_fit' ||
+      goal.kind === 'probe' ||
+      (skipBrief && (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend'))) &&
     !evidence.catalog &&
     catalogForTurn
   ) {
+    evidence = { ...evidence, catalog: catalogForTurn };
+  }
+
+  if (
+    skipBrief &&
+    catalogForTurn &&
+    (state.constraints?.bhk?.trim() || state.constraints?.propertyType?.trim()) &&
+    ((goal.kind === 'probe' && goal.slot === 'budget') ||
+      goal.kind === 'recommend' ||
+      goal.kind === 'ack_reject_recommend')
+  ) {
+    catalogForTurn = await sizeScopedCatalog(
+      deps,
+      state.builderId,
+      state.constraints,
+      catalogForTurn,
+      evidence.matches,
+      goal.kind === 'probe' && goal.slot === 'budget',
+    );
     evidence = { ...evidence, catalog: catalogForTurn };
   }
 
@@ -2858,6 +2919,34 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     buyerText: input.text,
     channel,
     ...(skipBrief ? { waProjectFirst: true } : {}),
+    ...(skipBrief && state.hold?.placed && state.hold.projectName
+      ? {
+          waHold: {
+            projectName: state.hold.projectName,
+            ...(state.hold.unitType ? { unitType: state.hold.unitType } : {}),
+          },
+        }
+      : {}),
+    ...(skipBrief
+      ? (() => {
+          const now = deps.clock.nowMs();
+          const kind = waLifeOf(state, now);
+          if (kind === 'exploring') return {};
+          const visit =
+            (state.visitBookedCache ?? []).find((v) => Date.parse(v.iso) > now) ??
+            state.buyerLifecycle?.visit;
+          const hold = state.hold?.placed && state.hold.projectId
+            ? {
+                projectId: state.hold.projectId,
+                ...(state.hold.projectName ? { projectName: state.hold.projectName } : {}),
+                ...(state.hold.unitType ? { unitType: state.hold.unitType } : {}),
+                until: state.buyerLifecycle?.hold?.until ?? now,
+              }
+            : state.buyerLifecycle?.hold;
+          return { waLife: { kind, ...(visit ? { visit } : {}), ...(hold ? { hold } : {}) } };
+        })()
+      : {}),
+    ...(skipBrief && input.action_id === WA_MENU_TYPES ? { waMoreTypes: true } : {}),
     ...(offersSizeRows ? { waSizeOptions: pickSizeUnits!.length } : {}),
     ...(state.focus ? { focusProjectName: state.focus.projectName } : {}),
     returningBuyer: state.returningBuyer,
@@ -3243,9 +3332,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     if (authoredNode) reply = authoredNode;
     // The book screen — "See everything" / "Back to projects" opens the list,
     // and the words describe the book, not whatever goal the engine landed on.
-    if (!state.focus && (input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE)) {
-      const mm = (catalogForTurn?.microMarkets ?? []).slice(0, 3).join(', ');
-      reply = `Here's the book${mm ? ` — ${mm}` : ''}. Pick a project, or tap *✨ Help me choose* and I'll cut it to fit in two taps.`;
+    if (!state.focus && isWaSeeAction(input.action_id, state)) {
+      reply = `These are the projects. Tap one to open it.`;
+    }
+    if (!state.focus && isWaOtherAction(input.action_id, state)) {
+      const receipt = waBriefReceipt(state.constraints);
+      const peekId = state.focusStack?.[0];
+      const peekName = peekId ? state.entities?.[peekId]?.name : undefined;
+      reply = receipt
+        ? `Still looking at *${receipt}*.${peekName ? ` You can go back to ${peekName}, open another, or start over.` : ' Open another, or start over.'}`
+        : `These are the other projects.${peekName ? ` ← ${peekName} is still here.` : ''}`;
     }
     // The project card. With a size already given, it states the buyer's fit —
     // the size is CONSUMED, spoken back as this project's answer. Without one,
@@ -3299,7 +3395,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
           const lines = fit
             .slice(0, 3)
             .map((u) => `• ${[u.unitType, u.sizeDisplay, u.priceDisplay].filter(Boolean).join(' · ')}`);
-          reply = `*${name}* — your fit:\n${lines.join('\n')}\n\nWhat do you want to check?`;
+          reply = `*${name}* — your fit:\n${lines.join('\n')}\n\nWhat would you like to know about ${name}?`;
           renderedCommitCard = true;
         }
       } else {
@@ -3766,17 +3862,35 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         (await deps.data.builder(state.builderId).catch(() => null))?.siteVisitHours ??
         DEFAULT_SITE_VISIT_HOURS;
     }
+    const briefCut = !!(
+      state.constraints?.bhk?.trim() ||
+      state.constraints?.propertyType?.trim() ||
+      state.constraints?.budgetMinInr !== undefined ||
+      state.constraints?.budgetMaxInr !== undefined
+    );
+    const seeOpen = isWaSeeAction(input.action_id, state);
+    const otherOpen = isWaOtherAction(input.action_id, state);
+    const bookOpen = seeOpen || otherOpen;
+    const matchNames = (evidence.matches ?? []).map((m) => ({
+      projectId: m.projectId,
+      name: m.name,
+      description: matchRowHint(m),
+    }));
+    const browseCatalog =
+      !briefCut &&
+      !bookOpen &&
+      matchNames.length === 0 &&
+      (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend');
     packed = packWhatsAppInteractive({
       goal,
       state,
-      catalogNames:
-        evidence.matches?.length
-          ? evidence.matches.map((m) => ({
-              projectId: m.projectId,
-              name: m.name,
-              description: matchRowHint(m),
-            }))
-          : catalogForTurn?.projectNames ?? [],
+      catalogNames: seeOpen
+        ? catalogForTurn?.projectNames ?? []
+        : briefCut
+          ? matchNames
+          : matchNames.length
+            ? matchNames
+            : catalogForTurn?.projectNames ?? [],
       briefAreas: catalogForTurn?.microMarkets ?? [],
       singleProject: (catalogForTurn?.projectNames?.length ?? 0) <= 1,
       catalog: catalogForTurn,
@@ -3804,7 +3918,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
                 : undefined;
         return facts ? { focusFacts: facts } : {};
       })(),
-      bookOpen: input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE,
+      bookOpen,
+      briefCut,
+      browseCatalog,
+      ...(otherOpen ? { otherOpen: true } : {}),
+      ...(() => {
+        if (!otherOpen) return {};
+        const peekId = state.focusStack?.[0];
+        const peekName = peekId ? state.entities?.[peekId]?.name : undefined;
+        return peekId && peekName ? { peekLast: { projectId: peekId, name: peekName } } : {};
+      })(),
       // Which level of the file this turn is on — the tapped id is the whole
       // navigation state, so nothing has to be remembered between turns.
       ...(input.action_id ? { actionId: input.action_id } : {}),
@@ -4110,7 +4233,7 @@ async function decideGoalAsync(
     }
     return { kind: 'clarify_intent' };
   }
-  // Minimal-brief trap: a pending size/budget step catches PURE turns (brief
+  // Minimal-brief trap: a pending size/area/budget step catches PURE turns.
   // answers, "ok", noise). A facet ask, name, visit or real question routes
   // normally — the step stays pending and re-offers on the next pure turn.
   const pendingWaBrief = skipBrief && s.phase !== 'focused' ? s.discover.waBriefStep : undefined;
@@ -4125,7 +4248,10 @@ async function decideGoalAsync(
     !ex.recall &&
     !(ex.isQuestion && !ex.smalltalk)
   ) {
-    return { kind: 'probe', slot: pendingWaBrief === 'size' ? 'bhk' : 'budget' };
+    return {
+      kind: 'probe',
+      slot: pendingWaBrief === 'size' ? 'bhk' : pendingWaBrief === 'area' ? 'location' : 'budget',
+    };
   }
   // Phase 2c — ask_next_step is state-conditioned; consume before phase decide
   // so cold/board/focused/visit don't fall through to search/overview.
@@ -4217,6 +4343,8 @@ async function fetchRecommend(
   if (skipSearchForBag) {
     return { goal: base, evidence: { tools: [], matches: [] } };
   }
+  const matchCap = deps.waProjectFirst === true && channel === 'whatsapp' ? 10 : 3;
+  filters = { ...filters, maxResults: matchCap };
   let strictSearch = await searchWithFilters(deps, s.builderId, filters);
 
   if (deps.failureSearch && strictSearch.matches.length === 0) {
@@ -4321,6 +4449,7 @@ async function fetchRecommend(
                 rawToMatches(result.matches ?? []),
                 constraintsSansArea,
                 s.discover.rejectedProjectIds,
+                { limit: matchCap },
               ),
             };
           },
@@ -4439,10 +4568,16 @@ async function fetchRecommend(
     rawMatches,
     s.constraints,
     s.discover.rejectedProjectIds,
-    { locationAliases: strictSearch.expandedLocations ?? [] },
+    { locationAliases: strictSearch.expandedLocations ?? [], limit: matchCap },
   );
 
-  if (matches.length === 0 && base.kind === 'recommend' && currentShortlist(s).length === 0) {
+  const skipWaBroaden = deps.waProjectFirst === true && channel === 'whatsapp';
+  if (
+    !skipWaBroaden &&
+    matches.length === 0 &&
+    base.kind === 'recommend' &&
+    currentShortlist(s).length === 0
+  ) {
     const broadened = await broadenInitialShortlist(
       deps,
       s.builderId,
@@ -4489,6 +4624,7 @@ async function fetchRecommend(
       withoutBhkRaw,
       relaxedConstraints,
       s.discover.rejectedProjectIds,
+      { limit: matchCap },
     );
     if (relaxedMatches.length > 0) {
       // The buyer's configuration found nothing, so this list came from a
@@ -4540,7 +4676,7 @@ async function fetchRecommend(
         const relist = relistShortlist();
         if (relist) return relist;
       }
-      if (currentShortlist(s).length === 0) {
+      if (!skipWaBroaden && currentShortlist(s).length === 0) {
         const broadened = await broadenInitialShortlist(
           deps,
           s.builderId,
@@ -4607,6 +4743,7 @@ async function fetchRecommend(
             rawToMatches(result.matches ?? []),
             sansArea,
             s.discover.rejectedProjectIds,
+            { limit: matchCap },
           ),
         };
       },
@@ -4669,7 +4806,12 @@ async function fetchRecommend(
     // Padding a short-but-real shortlist up to three (RTI-D+). Anything the
     // padding gave up rides along so compose never calls the padded entries a fit.
     let padRelaxed: RelaxedDimension[] = [];
-    if (base.kind === 'recommend' && currentShortlist(s).length === 0 && listed.length < 3) {
+    if (
+      !skipWaBroaden &&
+      base.kind === 'recommend' &&
+      currentShortlist(s).length === 0 &&
+      listed.length < 3
+    ) {
       const padded = await broadenInitialShortlist(deps, s.builderId, filters, s.constraints, s.discover.rejectedProjectIds, listed);
       listed = padded.matches;
       padRelaxed = padded.relaxed;
@@ -4756,6 +4898,7 @@ async function fetchRecommend(
     s.constraints,
     s.discover.rejectedProjectIds,
     reasoning,
+    matchCap,
   );
 
   if (resolved.goal.kind === 'no_fit') {
@@ -6249,6 +6392,8 @@ function applyGoalToState(s: ThreadState, goal: TurnGoal, ev: EvidenceSet): Thre
     case 'hold_propose':
       return { ...s, hold: goal.state };
     case 'hold_booked':
+      // Buyer yes opens a request; staff Place is what mints a unit_hold.
+      // Do not stamp session `hold.placed` here — that overlay is for Desk life.
       return { ...s, hold: undefined };
     case 'visit_ask':
     case 'visit_propose':
@@ -6707,6 +6852,87 @@ function friendlyBuilder(builderId: string): string {
 
 function emptyCatalog(): CatalogEnvelope {
   return { priceMinInr: 0, priceMaxInr: 0, projectTypes: [], microMarkets: [], total: 0, sample: [] };
+}
+
+function pricesFromMatches(matches: Match[] | undefined, location?: string): number[] {
+  const loc = location?.trim();
+  const kept = loc
+    ? discover.filterSearchMatches(matches ?? [], { location: loc }, [], { limit: 24 })
+    : (matches ?? []);
+  return kept
+    .map((m) => m.startingPriceInr)
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+function projectTypeHits(projectType: string | undefined, asked: string): boolean {
+  const slugs = discover
+    .mapProjectTypesForSearch(asked)
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const pt = (projectType ?? '').toLowerCase();
+  if (!pt || !slugs.length) return false;
+  return slugs.some((slug) => pt === slug || pt.includes(slug) || slug.includes(pt));
+}
+
+/** Budget copy/bands quote size ∩ corridor, not the whole book. */
+async function sizeScopedCatalog(
+  deps: EngineDeps,
+  builderId: string,
+  constraints: { bhk?: string; propertyType?: string; location?: string },
+  catalog: CatalogEnvelope,
+  matches: Match[] | undefined,
+  allowSearch: boolean,
+): Promise<CatalogEnvelope> {
+  const type = constraints.propertyType?.trim();
+  const loc = constraints.location?.trim();
+  const typedMatches = type
+    ? (matches ?? []).filter((m) => projectTypeHits(m.projectType, type))
+    : matches;
+  const fromMatches = pricesFromMatches(typedMatches, loc);
+  if (fromMatches.length) {
+    return {
+      ...catalog,
+      priceMinInr: Math.min(...fromMatches),
+      priceMaxInr: Math.max(...fromMatches),
+    };
+  }
+  if (!allowSearch) {
+    // A typed cut with no typed prices must not quote the apartment floor.
+    return type || loc ? { ...catalog, priceMinInr: 0, priceMaxInr: 0 } : catalog;
+  }
+  const bhkNum = /(\d+)/.exec(constraints.bhk ?? '')?.[1];
+  if (!bhkNum && !type) return catalog;
+  try {
+    const typeSlugs = type ? discover.mapProjectTypesForSearch(type) : '';
+    const found = await deps.data.search(builderId, {
+      ...(bhkNum ? { bhks: bhkNum } : {}),
+      ...(typeSlugs ? { projectTypes: typeSlugs } : {}),
+      ...(loc ? { locations: loc } : {}),
+      maxResults: 24,
+    });
+    const rows = found.matches ?? [];
+    const typedHits = type ? rows.filter((m) => projectTypeHits(m.project_type, type)) : rows;
+    const untyped = rows.filter((m) => !m.project_type);
+    const pricedRows = typedHits.length
+      ? typedHits
+      : type && untyped.length === rows.length
+        ? rows
+        : type
+          ? []
+          : rows;
+    const prices = discover.startingPricesForBudgetBands(pricedRows, loc);
+    if (!prices.length) {
+      return type || loc ? { ...catalog, priceMinInr: 0, priceMaxInr: 0 } : catalog;
+    }
+    return {
+      ...catalog,
+      priceMinInr: Math.min(...prices),
+      priceMaxInr: Math.max(...prices),
+    };
+  } catch {
+    return type || loc ? { ...catalog, priceMinInr: 0, priceMaxInr: 0 } : catalog;
+  }
 }
 
 export type { AdvisorUiMode } from './recovery-planner.js';

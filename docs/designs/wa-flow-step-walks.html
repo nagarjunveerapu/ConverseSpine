@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow walks — every step, in order</title>
+<style>
+  :root {
+    --bg: #0b141a; --ink: #e9edef; --dim: #8696a0; --line: #2a3942;
+    --bot: #202c33; --accent: #00a884; --dead: #f15c6d; --warn: #e9c46a;
+    --card: #111b21; --ok: #3dcc9a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { display: grid; grid-template-columns: 280px 1fr 320px; min-height: 100vh; }
+  aside, .rail { padding: 20px 16px 48px; border-right: 1px solid var(--line); }
+  .rail { border-right: 0; border-left: 1px solid var(--line); }
+  h1 { font-size: 17px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 12.5px; margin: 6px 0 14px; }
+  button.chip, select {
+    background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font: inherit; cursor: pointer; width: 100%;
+    text-align: left; margin: 0 0 6px;
+  }
+  button.chip.on { background: var(--accent); color: #04251c; font-weight: 600; border-color: var(--accent); }
+  .row2 { display: flex; gap: 6px; margin-bottom: 10px; }
+  .row2 button { flex: 1; width: auto; text-align: center; }
+  nav button { font-size: 12.5px; }
+  .main { padding: 20px 28px 64px; max-width: 760px; }
+  .step {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; margin: 0 0 12px;
+  }
+  .step h3 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .k { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  .v { margin-top: 2px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .opts span {
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; font-size: 12.5px;
+  }
+  .opts span.pick { background: #1f3b34; color: var(--accent); border-color: var(--accent); }
+  .issue { margin-top: 10px; padding: 8px 10px; background: #1a1214; border-left: 3px solid var(--dead); font-size: 13px; }
+  .issue.warn { background: #1c1910; border-color: var(--warn); }
+  .st { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 18px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  .flow { display: flex; flex-direction: column; gap: 6px; }
+  .node {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px;
+  }
+  .node b { display: block; font-size: 13px; }
+  .node.on { border-color: var(--accent); background: #0f1c19; }
+  .node .d { color: var(--dim); font-size: 11.5px; margin-top: 3px; }
+  .arrow { color: var(--dim); font-size: 11px; text-align: center; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  .voice td:first-child { color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="page">
+  <aside>
+    <h1>Every path, step by step</h1>
+    <p class="sub">Today = live Brigade after P0+P1 deploy (11 Sep, converse-spine-dev). Better = the remaining spec. Tap a path.</p>
+    <div class="row2">
+      <button class="chip on" id="mToday">Today</button>
+      <button class="chip" id="mBetter">Better</button>
+    </div>
+    <nav id="nav"></nav>
+  </aside>
+  <div class="main">
+    <div id="voice"></div>
+    <div id="walk"></div>
+  </div>
+  <div class="rail">
+    <h1>State the bot should hold</h1>
+    <p class="sub">Aligned to data it can actually serve. Highlight follows the open path.</p>
+    <div class="flow" id="flow"></div>
+  </div>
+</div>
+<script src="wa-flow-walks-data.js"></script>
+<script>
+const D = window.FLOW_WALKS;
+let mode = 'today';
+let currentId = D.today[0].id;
+
+const FLOW = [
+  { id: 'exploring / greet', title: 'Exploring', data: 'Greet only. No project facts yet.' },
+  { id: 'briefing / bedrooms', title: 'Bedrooms', data: 'Ask 1 / 2 / 3 BHK that exist. Not villa/plot.' },
+  { id: 'briefing / budget', title: 'Budget', data: 'Bands from THAT size’s prices, not the whole book.' },
+  { id: 'shortlist', title: 'Shortlist', data: 'Projects whose config matches size + budget. Names are the options.' },
+  { id: 'no_fit / honest', title: 'No match', data: 'Say what is missing. Offer change size, change budget, or closest real thing. Never dump the book.' },
+  { id: 'browse_book', title: 'All projects', data: 'Public catalog only. Identity + min price. No test projects.' },
+  { id: 'understanding / root', title: 'This project', data: 'Only rows the record has: cost, legal, location, home, visit.' },
+  { id: 'understanding / money', title: 'Price', data: 'Configs + cost sheet → all-in, EMI, plan, loan.' },
+  { id: 'understanding / trust', title: 'Legal', data: 'RERA, khata, EC, docs — if present.' },
+  { id: 'visit_planned / greet', title: 'Visit booked', data: 'Load itinerary at turn start. Do not offer Help me choose first.' },
+  { id: 'on_hold / greet', title: 'On hold', data: 'Load has_hold + expiry. Desk already stores this.' },
+  { id: 'unit_booked / greet', title: 'Unit booked', data: 'Load has_booking. Payment plan + possession, not explore.' },
+];
+
+function stateKey(s) {
+  if (!s) return '';
+  if (s.startsWith('exploring')) return 'exploring / greet';
+  if (s.includes('brief_size') || s.includes('bedrooms')) return 'briefing / bedrooms';
+  if (s.includes('brief_budget') || s.includes('budget')) return 'briefing / budget';
+  if (s.includes('no_fit')) return 'no_fit / honest';
+  if (s.includes('shortlist')) return 'shortlist';
+  if (s.includes('browse') || s.includes('clarify') || s === 'discover / greet') return s.includes('greet') ? 'exploring / greet' : 'browse_book';
+  if (s.includes('money')) return 'understanding / money';
+  if (s.includes('trust')) return 'understanding / trust';
+  if (s.includes('understanding')) return 'understanding / root';
+  if (s.includes('visit')) return 'visit_planned / greet';
+  if (s.includes('on_hold') || s.includes('hold')) return 'on_hold / greet';
+  if (s.includes('booked')) return 'unit_booked / greet';
+  if (s.includes('orient') || s.includes('named')) return 'exploring / greet';
+  if (s.includes('discover')) return 'exploring / greet';
+  return s;
+}
+
+function list() {
+  const walks = mode === 'today' ? D.today : D.better;
+  document.getElementById('nav').innerHTML = walks.map(w =>
+    `<button class="chip ${w.id===currentId?'on':''}" data-id="${w.id}">${w.title}</button>`
+  ).join('');
+  document.querySelectorAll('#nav [data-id]').forEach(b => b.onclick = () => { currentId = b.dataset.id; draw(); });
+}
+
+function renderVoice() {
+  const rows = D.voice.map(v => `<tr><td>${v.today}</td><td><b>${v.better}</b><div class="sub" style="margin:4px 0 0">${v.why}</div></td></tr>`).join('');
+  document.getElementById('voice').innerHTML = mode === 'better' ? `
+    <h2>English — same job, said so a buyer can follow</h2>
+    <p class="sub">Today’s lines are short but they use our words (book, ceiling, nail, file, check). Better uses theirs (bedrooms, budget, this project, tap one).</p>
+    <table class="voice"><tr><th>Today (live)</th><th>Better</th></tr>${rows}</table>
+  ` : `<h2>Today — live after P0+P1, converse-spine-dev</h2>
+    <p class="sub">30 walks, unique phone each, redeployed 11 Sep 2026. Options and outcomes are what WhatsApp actually packed. Project rows were not tapped in the battery — first row is the default next tap.</p>`;
+}
+
+function renderWalk() {
+  const walks = mode === 'today' ? D.today : D.better;
+  const w = walks.find(x => x.id === currentId) || walks[0];
+  currentId = w.id;
+  const lastState = w.steps[w.steps.length - 1].state;
+  const html = w.steps.map(s => {
+    const opts = (s.options || []).map(o => {
+      const pick = s.chosen && String(s.chosen).indexOf(o.replace(/ ·.*/, '')) >= 0 || String(s.chosen).indexOf(o) >= 0;
+      return `<span class="${pick ? 'pick' : ''}">${o}</span>`;
+    }).join('');
+    const issue = s.issue ? `<div class="issue ${s.issue.indexOf('Do not')===0?'warn':''}">${s.issue}</div>` : '';
+    const outcome = s.n === 1
+      ? `<div class="k">Opening line</div><div class="v">${s.outcome}</div>`
+      : `<div class="k">Outcome of step ${s.n - 1}</div><div class="v">${s.outcome}</div>`;
+    return `<div class="step">
+      <h3>Step ${s.n}</h3>
+      ${outcome}
+      <div class="k">Options list</div>
+      <div class="opts">${opts}</div>
+      <div class="k">Chosen</div>
+      <div class="v"><b>${s.chosen}</b></div>
+      <div class="st">State · ${s.state}</div>
+      ${issue}
+    </div>`;
+  }).join('');
+  document.getElementById('walk').innerHTML = `<p class="sub">${w.title} · ${w.steps.length} steps</p>${html}`;
+  document.querySelectorAll('.node').forEach(n => n.classList.toggle('on', stateKey(lastState) === n.dataset.id || lastState === n.dataset.id));
+}
+
+function renderFlow() {
+  document.getElementById('flow').innerHTML = FLOW.map((n, i) =>
+    `${i ? '<div class="arrow">↓</div>' : ''}<div class="node" data-id="${n.id}"><b>${n.title}</b><div class="d">${n.data}</div></div>`
+  ).join('');
+}
+
+function draw() {
+  document.getElementById('mToday').classList.toggle('on', mode === 'today');
+  document.getElementById('mBetter').classList.toggle('on', mode === 'better');
+  list();
+  renderVoice();
+  renderWalk();
+}
+
+document.getElementById('mToday').onclick = () => { mode = 'today'; currentId = D.today[0].id; draw(); };
+document.getElementById('mBetter').onclick = () => { mode = 'better'; currentId = D.better[0].id; draw(); };
+renderFlow();
+draw();
+</script>
+</body>
+</html>

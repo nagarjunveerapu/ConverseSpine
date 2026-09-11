@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   splitProjectStamp,
+  WA_BACK_FILE,
   WA_MENU_CHOOSE,
-  WA_MENU_PROJECTS,
+  WA_MENU_OTHER,
+  WA_AREA_ANY,
+  WA_MONEY_EMI,
   WA_MONEY_TOTAL,
   WA_NODE_TIME,
   WA_NODE_TRUST,
@@ -57,6 +60,12 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
 
     const size = await turn('2 BHK', 'wa.bhk.2_bhk');
     expect(size.whatsappInteractive?.kind).toBe('list');
+    expect(size.whatsappInteractive && size.whatsappInteractive.kind === 'list' && size.whatsappInteractive.button).toBe(
+      'Choose area',
+    );
+
+    const area = await turn('Any area', WA_AREA_ANY);
+    expect(area.whatsappInteractive?.kind).toBe('list');
 
     const budget = await turn('Under ₹80L', 'wa.budget.u_8000000');
     expect(budget.whatsappInteractive?.kind).toBe('list');
@@ -66,7 +75,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     const pick = await turn('Brigade Cornerstone', 'wa.pick.cornerstone');
     expect(pick.reply).toContain('*Brigade Cornerstone* — your fit:');
     expect(pick.reply).toContain('2 BHK');
-    expect(pick.reply.trim().endsWith('What do you want to check?')).toBe(true);
+    expect(pick.reply.trim().endsWith('What would you like to know about Brigade Cornerstone?')).toBe(true);
 
     const rows = listRows(pick);
     expect(rows).toBeDefined();
@@ -82,13 +91,14 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     // The founder's flagged rows are dead: no bare Price, no size re-ask.
     expect(rows!.some((r) => r.title === 'Price')).toBe(false);
     expect(aids.some((a) => a.startsWith('wa.money.bhk.'))).toBe(false);
-    expect(rows![rows!.length - 1]!.id).toBe(WA_MENU_PROJECTS);
+    expect(rows![rows!.length - 1]!.id).toBe(WA_MENU_OTHER);
   });
 
   it('the Total-cost tap reaches the landed cost, and the row drops from that same menu', async () => {
     const { turn } = harness('wa-founder-walk-total');
     await turn('Help me choose', WA_MENU_CHOOSE);
     await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Any area', WA_AREA_ANY);
     await turn('Under ₹80L', 'wa.budget.u_8000000');
     await turn('Brigade Cornerstone', 'wa.pick.cornerstone');
 
@@ -97,13 +107,15 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     expect(total.reply).toContain('Stamp duty');
     expect(projectSeenFacets(total.state, 'cornerstone')).toContain('total');
 
-    // The tap was a money row, so the buyer stays inside Money — the answered
-    // row is gone from it, and the way back is on the same screen.
-    const rows = listRows(total)!;
-    const aids = rows.map((r) => splitProjectStamp(r.id).aid);
-    expect(aids).not.toContain(WA_MONEY_TOTAL);
-    expect(aids).toContain('wa.money.emi');
-    expect(aids).toContain('wa.back.file');
+    // After the landed cost: EMI, visit, back to the file — not Compare + the whole console.
+    expect(total.whatsappInteractive?.kind).toBe('buttons');
+    if (total.whatsappInteractive?.kind === 'buttons') {
+      expect(total.whatsappInteractive.buttons.map((b) => b.id)).toEqual([
+        WA_MONEY_EMI,
+        'visit_book',
+        WA_BACK_FILE,
+      ]);
+    }
   });
 
   it('a single-config project offers All-in cost and prices its only unit', async () => {
@@ -123,7 +135,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     const { turn } = harness('wa-sizes-open');
     // A plain board pick, no size given — the ladder leads the console.
     const opened = await turn('Brigade Eldorado', 'wa.pick.eldorado');
-    expect(opened.reply.trim().endsWith('What do you want to check?')).toBe(true);
+    expect(opened.reply.trim().endsWith('What would you like to know about Brigade Eldorado?')).toBe(true);
     const rows = listRows(opened)!;
     const aids = rows.map((r) => splitProjectStamp(r.id).aid);
     expect(aids).toContain('wa.money.bhk.2');
@@ -237,6 +249,7 @@ describe('an identity-only shell never becomes the project file', () => {
     data.fail.projectDetail = 'absent';
     await turn('Help me choose', WA_MENU_CHOOSE);
     await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Any area', WA_AREA_ANY);
     const board = await turn('Under ₹80L', 'wa.budget.u_8000000');
     expect(board.state.projectCache?.['krishnaja']?.identityOnly).toBe(true);
     expect(board.state.projectCache?.['krishnaja']?.reraNumber).toBeUndefined();
@@ -258,6 +271,7 @@ describe('an identity-only shell never becomes the project file', () => {
     data.fail.projectDetail = 'absent';
     await turn('Help me choose', WA_MENU_CHOOSE);
     await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Any area', WA_AREA_ANY);
     await turn('Under ₹80L', 'wa.budget.u_8000000');
     const pick = await turn('Krishnaja', 'wa.pick.krishnaja');
     const cached = pick.state.projectCache?.['krishnaja'];

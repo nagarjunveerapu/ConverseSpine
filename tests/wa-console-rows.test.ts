@@ -11,7 +11,7 @@ import {
   WA_BACK_FILE,
   WA_COMPARE,
   WA_CONSOLE_SIZES,
-  WA_MENU_PROJECTS,
+  WA_MENU_OTHER,
   WA_MONEY_EMI,
   WA_MONEY_MENU,
   WA_MONEY_PLAN,
@@ -87,7 +87,7 @@ describe('the file — the root menu is the project’s sections', () => {
       WA_NODE_MEDIA,
       'visit_book',
       WA_COMPARE,
-      WA_MENU_PROJECTS,
+      WA_MENU_OTHER,
     ]);
     expect(rows.find((r) => r.id === WA_MONEY_TOTAL)!.title).toBe('Total cost — 2 BHK');
     expect(rows.find((r) => r.id === WA_NODE_MEDIA)!.title).toBe('Brochure & photos');
@@ -154,7 +154,7 @@ describe('the file — the root menu is the project’s sections', () => {
 
   it('no record: the standing acts stand, nothing is invented', () => {
     const { rows, infoCount } = waConsoleRows({ units: [] });
-    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_PROJECTS]);
+    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_OTHER]);
     expect(infoCount).toBe(0);
   });
 
@@ -356,7 +356,7 @@ describe('packWhatsAppInteractive — the console through the packer', () => {
     expect(rows.map((r) => splitProjectStamp(r.id).aid)).toContain(WA_NODE_TRUST);
     for (const r of rows) {
       const { aid, projectId } = splitProjectStamp(r.id);
-      if (aid === 'visit_book' || aid === WA_COMPARE || aid === WA_MENU_PROJECTS) {
+      if (aid === 'visit_book' || aid === WA_COMPARE || aid === WA_MENU_OTHER) {
         expect(projectId).toBeUndefined();
       } else {
         expect(projectId).toBe('cornerstone');

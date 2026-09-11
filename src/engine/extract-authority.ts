@@ -137,6 +137,7 @@ export async function extractTurnAuthority(
       options.actionId,
       stampSpeechAct(seeded, chipResolution),
       deps.catalogNames ?? [],
+      deps.microMarkets,
     );
     return {
       extracted,
@@ -229,7 +230,7 @@ export async function extractTurnAuthority(
   if (isConstraintRefinementTurn(text) && !merged.namedProjects?.length && !merged.pickName) {
     merged = { ...merged, speechAct: 'search' };
   }
-  merged = applyWaInteractiveExtract(options.actionId, merged, deps.catalogNames ?? []);
+  merged = applyWaInteractiveExtract(options.actionId, merged, deps.catalogNames ?? [], deps.microMarkets);
   // Area pivot: "What about Sarjapur?" / "Sarjapur area?" must not stay answer/overview.
   // SA-4 overview chip + permissions wipe location → stuck clarify_project_pick on the board.
   {

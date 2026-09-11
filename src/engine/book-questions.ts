@@ -208,19 +208,19 @@ export function answerSituation(s: Situation, f: BookFacts): string {
   const where = f.markets.length ? f.markets.slice(0, 3).join(', ') : '';
   switch (s) {
     case 'first_home':
-      return `Your first one — then let me lay out how this goes, so nothing arrives as a surprise. Pick any project on the book and I'll give you its price, its configurations and its legal papers. If it holds up, we book a site visit. Paperwork and the home loan come after that, and I can walk you through both. Start wherever you like below, or tell me a size and I'll cut the book to it.`;
+      return `Your first one — then let me lay out how this goes, so nothing arrives as a surprise. Pick any project and I'll give you its price, its sizes and its legal papers. If it holds up, we book a site visit. Paperwork and the home loan come after that, and I can walk you through both. Start wherever you like below, or tell me a size and I'll show what fits.`;
     case 'relocating':
       return where
-        ? `Coming in from outside, the quickest way to get your bearings is by corridor rather than by address. *${brand}* builds in ${where}. Tap whichever of those you want to look at first, or tell me a size or a budget and I'll cut the book to fit.`
-        : `Coming in from outside, the quickest way to get your bearings is by corridor rather than by address. Here's the whole book — open anything that looks close, or tell me a size or a budget and I'll cut it to fit.`;
+        ? `Coming in from outside, the quickest way to get your bearings is by corridor rather than by address. *${brand}* builds in ${where}. Tap whichever of those you want to look at first, or tell me a size or a budget and I'll narrow it down.`
+        : `Coming in from outside, the quickest way to get your bearings is by corridor rather than by address. Here are the projects — open anything that looks close, or tell me a size or a budget and I'll narrow it down.`;
     case 'family':
-      return `Noted — and with children in the house the room count usually decides it before anything else does. Tell me 2 BHK or 3 BHK and I'll cut the book to it; sizes and layouts are per project, so open any one and I'll give you both.`;
+      return `Noted — and with children in the house the room count usually decides it before anything else does. Tell me 2 BHK or 3 BHK and I'll show what fits; sizes and layouts are per project, so open any one and I'll give you both.`;
     case 'work_space':
-      return `A room to work in is really a room-count question, so let's start there — 2 BHK or 3 BHK, and I'll cut the book to it. Layouts and sizes are per project, and I'll give you those once you open one.`;
+      return `A room to work in is really a room-count question, so let's start there — 2 BHK or 3 BHK, and I'll show what fits. Layouts and sizes are per project, and I'll give you those once you open one.`;
     case 'second_home':
       return where
-        ? `A place to go to rather than live in — understood. The book runs across ${where}. Tell me which of those interests you, or a budget, and I'll cut it down from there.`
-        : `A place to go to rather than live in — understood. Here's the whole book; tell me a budget and I'll cut it down from there.`;
+        ? `A place to go to rather than live in — understood. The projects are across ${where}. Tell me which of those interests you, or a budget, and I'll narrow it down from there.`
+        : `A place to go to rather than live in — understood. Here are the projects; tell me a budget and I'll narrow it down from there.`;
   }
 }
 
@@ -276,16 +276,16 @@ export function answerBookQuestion(q: BookQuestion, f: BookFacts): string {
           : f.minDisplay
             ? `, from ${f.minDisplay}`
             : '';
-      return `*${brand}* has ${f.total} ${f.total === 1 ? 'project' : 'projects'} on the book${where}${band}. Here they all are.`;
+      return `*${brand}* has ${f.total} ${f.total === 1 ? 'project' : 'projects'}${where}${band}. Here they all are.`;
     }
     case 'cheapest':
       return f.cheapestName && f.minDisplay
-        ? `The entry point on the book is *${f.cheapestName}* at ${f.minDisplay}. Here's the full list, cheapest first.`
-        : `Here's the book with prices, cheapest first.`;
+        ? `The most affordable is *${f.cheapestName}* at ${f.minDisplay}. Here's the full list, cheapest first.`
+        : `Here they are with prices, cheapest first.`;
     case 'premium':
       return f.premiumName && f.maxDisplay
-        ? `The top of the book is *${f.premiumName}* at ${f.maxDisplay}. Here's everything, so you can see where it sits.`
-        : `Here's the book with prices so you can see the range.`;
+        ? `The most premium is *${f.premiumName}* at ${f.maxDisplay}. Here's everything, so you can see where it sits.`
+        : `Here they are with prices so you can see the range.`;
     case 'not_on_book':
     case 'not_in_area': {
       // The buyer already suspects the answer and is testing whether we will
@@ -300,7 +300,7 @@ export function answerBookQuestion(q: BookQuestion, f: BookFacts): string {
       const tail = `What I do have is ${f.total} ${f.total === 1 ? 'project' : 'projects'}${where}${band}. Here they are, in case something lands close.`;
       return q === 'not_in_area'
         ? `Nothing there, I'm afraid — *${brand}* doesn't build in that pocket, so I'd only be wasting your time pretending otherwise. ${tail}`
-        : `That one isn't on this book — I only carry *${brand}*'s own projects, so if it isn't theirs I won't have it. ${tail}`;
+        : `That one isn't one of ours — I only carry *${brand}*'s own projects, so if it isn't theirs I won't have it. ${tail}`;
     }
     case 'recommend_pick': {
       // Naming a favourite before knowing the size or the budget would be a

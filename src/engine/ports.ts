@@ -61,6 +61,11 @@ export interface DeskBrief {
    * the form was a waste of their time.
    */
   selfRegistered: boolean;
+  /**
+   * What Desk already knows about this number's life. Absent on an older Desk
+   * — treat as unknown, never as exploring-with-certainty.
+   */
+  lifecycle?: import('./types.js').BuyerLifecycle;
 }
 
 export type SignalKind = 'location' | 'property_type' | 'purpose' | 'transition';
@@ -249,6 +254,7 @@ export interface EngineData {
     ok: boolean;
     expiresAt?: number;
     unitNumber?: string;
+    holdId?: string;
     /** W7 — queue:true joined the waitlist instead of holding (202). */
     waiting?: boolean;
     position?: number;

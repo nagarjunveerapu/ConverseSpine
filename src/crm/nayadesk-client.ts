@@ -103,6 +103,16 @@ export interface NdLead {
   source_detail?: string;
   /** 0 until the number is proven. Never treat 0 as "verified long ago". */
   contact_verified_at?: number;
+  /** Optional — older Desk omits these; absent means unknown, not false. */
+  has_hold?: boolean | number;
+  has_booking?: boolean | number;
+  visit_scheduled_at?: number | null;
+}
+
+export interface NdBuyerLifecycle {
+  kind: 'exploring' | 'visit_planned' | 'on_hold' | 'unit_booked';
+  hold?: { projectId: string; projectName?: string; unitType?: string; until: number };
+  visit?: { projectId: string; projectName?: string; iso: string; label: string };
 }
 
 /**
@@ -213,6 +223,8 @@ export interface NdContextBundle {
    * in engine/adapters/nayadesk.ts.
    */
   lead: NdLead;
+  /** Additive — older Desk omits this. Unknown, never crash. */
+  lifecycle?: NdBuyerLifecycle;
   project: NdProjectSummary | null;
   units?: Array<{
     unit_type?: string;

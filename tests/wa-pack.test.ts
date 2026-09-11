@@ -7,7 +7,8 @@ import {
   parseWaPickId,
   resolveWaProjectFirst,
   waListPickKeepsCommit,
-  WA_MENU_PROJECTS,
+  WA_BACK_FILE,
+  WA_MENU_OTHER,
   WA_MONEY_MENU,
 } from '../src/channel/wa-pack.js';
 import { fallbackReply } from '../src/engine/compose.js';
@@ -71,7 +72,7 @@ describe('packWhatsAppInteractive', () => {
     if (packed.kind === 'list') {
       expect(packed.button).toBe('More');
       const ids = packed.sections[0]!.rows.map((r) => r.id);
-      expect(ids).toEqual(['visit_book', 'compare_projects', WA_MENU_PROJECTS]);
+      expect(ids).toEqual(['visit_book', 'compare_projects', WA_MENU_OTHER]);
       expect(ids).not.toContain(WA_MONEY_MENU);
     }
   });
@@ -99,7 +100,7 @@ describe('packWhatsAppInteractive', () => {
       // EMI moved inside Money — the root keeps only the hottest money row.
       expect(ids.some((id) => id.startsWith('wa.node.money'))).toBe(true);
       expect(ids).toContain('visit_book');
-      expect(ids[ids.length - 1]).toBe(WA_MENU_PROJECTS);
+      expect(ids[ids.length - 1]).toBe(WA_MENU_OTHER);
     }
   });
 
@@ -120,7 +121,7 @@ describe('packWhatsAppInteractive', () => {
       const rows = packed.sections[0]!.rows;
       expect(rows.some((r) => r.id === 'wa.day.sunday')).toBe(false);
       expect(rows.filter((r) => r.id.startsWith('wa.day.')).length).toBeGreaterThan(2);
-      expect(rows[rows.length - 1]!.id).toBe(WA_MENU_PROJECTS);
+      expect(rows[rows.length - 1]!.id).toBe(WA_BACK_FILE);
     }
   });
 });
@@ -161,8 +162,8 @@ describe('packedToInteractive + greet copy', () => {
         channel: 'whatsapp',
       },
     });
-    expect(reply).toMatch(/Welcome to \*Brigade Group\*/);
-    expect(reply).toMatch(/What are you looking for\?/);
+    expect(reply).toMatch(/Thank you for reaching out to \*Brigade Group\*/);
+    expect(reply).toMatch(/find a home that fits/);
     expect(reply.toLowerCase()).not.toMatch(/what brings you here/);
     expect(reply.toLowerCase()).not.toMatch(/area and budget/);
     expect(reply.toLowerCase()).not.toMatch(/drown you in filters/);
