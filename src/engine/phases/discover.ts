@@ -571,7 +571,7 @@ export function hasNarrowingConstraint(c: Constraints): boolean {
 export function propertyTypeNeedsBhk(propertyType?: string): boolean {
   if (!propertyType?.trim()) return true;
   const s = propertyType.toLowerCase();
-  if (s.includes('apartment') || s.includes('flat')) return true;
+  // Typed end-use first. A mixed string must not flip back to apartment BHK.
   if (
     s.includes('plantation') ||
     s.includes('planted') ||
@@ -583,6 +583,7 @@ export function propertyTypeNeedsBhk(propertyType?: string): boolean {
   ) {
     return false;
   }
+  if (s.includes('apartment') || s.includes('flat')) return true;
   return true;
 }
 

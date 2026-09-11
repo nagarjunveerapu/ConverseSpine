@@ -214,6 +214,65 @@ export function waBriefHuman(c: Constraints | undefined): string {
   return band;
 }
 
+function askedProductNoun(asked: string): string {
+  const s = asked.toLowerCase();
+  if (/plantation|planted|farm/.test(s)) return 'plantation or farmland';
+  if (/villa/.test(s)) return 'villas';
+  if (/plot/.test(s)) return 'plots';
+  if (/apartment|flat/.test(s)) return 'apartments';
+  return asked;
+}
+
+/** Catalog-wide type miss — product handoff, never an apartment brief or a geo miss. */
+function waUnsupportedProductCopy(
+  requestedType: string,
+  u: NonNullable<EvidenceSet['unsupportedProduct']> | undefined,
+  buyerText?: string,
+): string {
+  const product = askedProductNoun(requestedType);
+  const t = (buyerText ?? '').toLowerCase();
+  if (u?.visit || /\bsite\s*visit|\bvisit\b/.test(t)) {
+    return waParas(
+      `I can't book a ${product} visit — we don't list that here.`,
+      `The team can take it from here.`,
+    );
+  }
+  if (u?.askedTopic === 'legal' || /\b(?:legal|title|khata|rera|papers?)\b/.test(t)) {
+    return waParas(
+      `I can't speak to title or papers on ${product} — we don't list that here.`,
+      `The team can.`,
+    );
+  }
+  if (/\b(?:yield|returns?|roi|appreciation|cagr|irr)\b/.test(t)) {
+    return waParas(
+      `I don't quote returns on ${product} we don't sell.`,
+      `The team can talk you through that.`,
+    );
+  }
+  if (/\b(?:maintenance|upkeep|cam)\b/.test(t)) {
+    return waParas(
+      `I don't have maintenance or upkeep for ${product} — we don't list that here.`,
+      `The team can.`,
+    );
+  }
+  if (u?.followUp) {
+    return waParas(
+      `Got it. The team can take a ${product} ask from here.`,
+    );
+  }
+  return waParas(
+    `We don't sell ${product} here.`,
+    `I can connect you with the team for that. If you meant a Brigade home, say so.`,
+  );
+}
+
+function waTypeMissCopy(human: string): string {
+  return waParas(
+    `I don't have ${human}.`,
+    `You can see all the projects, or ask the team.`,
+  );
+}
+
 /** Honest miss — say we don't have it. Never "the book". */
 function waNoFitCopy(human: string): string {
   return waParas(
@@ -260,6 +319,7 @@ import {
   isCostComponentAsk,
   isInventoryAsk,
 } from './facts.js';
+import { catalogSellsPropertyType, emptyCutUsesApartmentLevers } from './catalog-type.js';
 import { INCOME_SERVICING_RATIO } from './emi.js';
 import { humanizeMediaKind, normalizeMediaAssetKind } from './media-asset.js';
 import { looksLikeAQuestion, resolveFaqQuestionKeys } from './faq-keys.js';
@@ -1325,8 +1385,23 @@ function fallbackReplyBody(req: ComposeRequest): string {
       return `Those are the ones that fit${lead ? ` — want full details on *${lead}*, or a site visit?` : '.'}`;
     }
     case 'no_fit': {
+      const askedType =
+        ev.unsupportedProduct?.requestedType?.trim() ||
+        context.constraints.propertyType?.trim() ||
+        ev.propertyTypeGap?.requestedType?.trim();
+      const sellsAsked = catalogSellsPropertyType(ev.catalog?.projectTypes, askedType);
+      if (ev.unsupportedProduct || (askedType && sellsAsked === false)) {
+        return waUnsupportedProductCopy(
+          askedType || ev.unsupportedProduct?.requestedType || 'that type',
+          ev.unsupportedProduct,
+          context.buyerText,
+        );
+      }
       if (context.waProjectFirst) {
         const human = waBriefHuman(context.constraints);
+        if (human && askedType && !emptyCutUsesApartmentLevers(askedType)) {
+          return waTypeMissCopy(human);
+        }
         if (human) {
           return waNoFitCopy(human);
         }

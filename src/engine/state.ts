@@ -169,10 +169,8 @@ export function applyExtracted(
     }
     // Lateral move (e.g. Whitefield while focused on Devanahalli) — allow replace.
   }
-  if (incoming.propertyType && s.constraints.propertyType) {
-    const prevLen = s.constraints.propertyType.length;
-    if (incoming.propertyType.length < prevLen) delete incoming.propertyType;
-  }
+  // A new declared type replaces the old one. Preferring the *longer* string
+  // locked "apartment,plantation" in place and re-enabled apartment BHK.
   const constraints: Constraints = { ...s.constraints, ...incoming };
   if (skipKeys?.has('bhk')) delete constraints.bhk;
   if (skipKeys?.has('location')) delete constraints.location;
@@ -425,6 +423,7 @@ export function clearWaBriefConstraints(s: ThreadState): ThreadState {
   } = s.constraints;
   const discover = { ...s.discover };
   delete discover.waBriefStep;
+  delete discover.unsupportedProduct;
   return { ...s, constraints: rest, discover };
 }
 

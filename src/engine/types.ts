@@ -106,7 +106,13 @@ export interface DiscoverState {
    * the Projects menu, or once the asked facts are known.
    */
   waBriefStep?: 'size' | 'area' | 'budget';
-  /** Recent turns for anaphora ("both", "these") — newest last. */
+  /**
+   * Once this book has no inventory of the asked type, stay on that miss.
+   * Later turns must not re-run apartment search (bedrooms/budget) or bake
+   * leftover text into location. Cleared when they pick a type we sell, or
+   * See the projects.
+   */
+  unsupportedProduct?: { requestedType: string };
   recentMessages?: TranscriptMessage[];
   /**
    * Phase 1c — revive-only legacy discussed list. Authority is `discussedList`.
@@ -983,6 +989,17 @@ export interface EvidenceSet {
     closestName: string;
     closestDisplay: string;
     closestProjectId?: string;
+  };
+  /**
+   * This builder's catalog has zero of the asked type — not a location/budget
+   * miss. Compose/pack must hand off, not offer apartment brief levers.
+   */
+  unsupportedProduct?: {
+    requestedType: string;
+    /** Later turns on the same miss — don't replay the first sentence. */
+    followUp?: boolean;
+    askedTopic?: AnswerTopic;
+    visit?: boolean;
   };
   typeFloor?: {
     propertyType: string;

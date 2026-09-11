@@ -51,4 +51,9 @@ describe('AB-2 — type-respect search', () => {
     expect(detectPropertyTypes('agricultural land in Coorg')).toBe('plantation');
     expect(detectPropertyTypes('farm plots near Mysore')).toBe('plantation');
   });
+
+  it('one product mode — apartment nahi does not concatenate onto plantation', () => {
+    expect(detectPropertyTypes('plantation chahiye, apartment nahi')).toBe('plantation');
+    expect(detectPropertyTypes('apartment nahi')).toBeUndefined();
+  });
 });
