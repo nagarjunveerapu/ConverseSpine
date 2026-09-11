@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   splitProjectStamp,
+  WA_BACK_FILE,
   WA_MENU_CHOOSE,
-  WA_MENU_PROJECTS,
+  WA_MENU_OTHER,
   WA_AREA_ANY,
+  WA_MONEY_EMI,
   WA_MONEY_TOTAL,
   WA_NODE_TIME,
   WA_NODE_TRUST,
@@ -89,7 +91,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     // The founder's flagged rows are dead: no bare Price, no size re-ask.
     expect(rows!.some((r) => r.title === 'Price')).toBe(false);
     expect(aids.some((a) => a.startsWith('wa.money.bhk.'))).toBe(false);
-    expect(rows![rows!.length - 1]!.id).toBe(WA_MENU_PROJECTS);
+    expect(rows![rows!.length - 1]!.id).toBe(WA_MENU_OTHER);
   });
 
   it('the Total-cost tap reaches the landed cost, and the row drops from that same menu', async () => {
@@ -105,13 +107,15 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     expect(total.reply).toContain('Stamp duty');
     expect(projectSeenFacets(total.state, 'cornerstone')).toContain('total');
 
-    // The tap was a money row, so the buyer stays inside Money — the answered
-    // row is gone from it, and the way back is on the same screen.
-    const rows = listRows(total)!;
-    const aids = rows.map((r) => splitProjectStamp(r.id).aid);
-    expect(aids).not.toContain(WA_MONEY_TOTAL);
-    expect(aids).toContain('wa.money.emi');
-    expect(aids).toContain('wa.back.file');
+    // After the landed cost: EMI, visit, back to the file — not Compare + the whole console.
+    expect(total.whatsappInteractive?.kind).toBe('buttons');
+    if (total.whatsappInteractive?.kind === 'buttons') {
+      expect(total.whatsappInteractive.buttons.map((b) => b.id)).toEqual([
+        WA_MONEY_EMI,
+        'visit_book',
+        WA_BACK_FILE,
+      ]);
+    }
   });
 
   it('a single-config project offers All-in cost and prices its only unit', async () => {

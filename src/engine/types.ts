@@ -191,6 +191,24 @@ export interface VisitState {
  * unit of the type — unit numbers never surface in chat). Any other reply
  * clears the window (one-shot, like the visit confirm gate).
  */
+export type BuyerLifecycleKind = 'exploring' | 'visit_planned' | 'on_hold' | 'unit_booked';
+
+export interface BuyerLifecycle {
+  kind: BuyerLifecycleKind;
+  hold?: {
+    projectId: string;
+    projectName?: string;
+    unitType?: string;
+    until: number;
+  };
+  visit?: {
+    projectId: string;
+    projectName?: string;
+    iso: string;
+    label: string;
+  };
+}
+
 export interface HoldState {
   awaitingConfirm?: boolean;
   unitType?: string;
@@ -228,6 +246,12 @@ export interface ThreadState {
   focus?: FocusState;
   visit?: VisitState;
   hold?: HoldState;
+  /**
+   * Desk's durable life for this number — visit planned, unit on hold, or
+   * booked. Overlay on `phase` (the visit FSM is not "a visit is already on
+   * the calendar"). Gap-fill only; a live visit draft or hold-confirm wins.
+   */
+  buyerLifecycle?: BuyerLifecycle;
   turnCount: number;
   /** W5 — turns spent in the focused phase (drives the 'engaged' rung). */
   focusedTurns?: number;
@@ -1139,6 +1163,8 @@ export interface ComposeContext {
   waMoreTypes?: boolean;
   /** Placed unit hold — greet names it; looking around must not drop it. */
   waHold?: { projectName: string; unitType?: string };
+  /** Desk/session life for a returning greet — visit / hold / booked. */
+  waLife?: BuyerLifecycle;
   /** Stage 7 — named latch when Desk provides sales contact. */
   handoffPhone?: string;
   handoffTeamName?: string;

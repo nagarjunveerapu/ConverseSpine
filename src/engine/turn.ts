@@ -33,8 +33,12 @@ import {
   WA_MENU_NODE,
   WA_MENU_PROJECTS,
   WA_MENU_SEE,
+  WA_MENU_OTHER,
   WA_MENU_KNOW,
   WA_HOLD_DROP,
+  isWaSeeAction,
+  isWaOtherAction,
+  waLifeOf,
   WA_MENU_CHOOSE,
   WA_MENU_TYPES,
   WA_MONEY_TOTAL,
@@ -153,9 +157,11 @@ import {
   recordDiscussed,
   recordOffered,
   releaseToDiscover,
+  leaveFocusKeepStack,
+  clearWaBriefConstraints,
   withNdThread,
 } from './state.js';
-import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply, waBookFirstGreet } from './compose.js';
+import { buildComposeRequest, componentsForAsk, fallbackReply, formatInr, minimumBudgetReply, typeComparisonReply, waBookFirstGreet, waBriefReceipt } from './compose.js';
 import { checkGrounding, stripBanned, stripComposerDirectives } from './grounding.js';
 import { computeEmi, DEFAULT_RATE_PERCENT, DEFAULT_TENURE_YEARS } from './emi.js';
 import {
@@ -682,17 +688,17 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       whatsappInteractive: packed,
     };
   }
-  if (skipBrief && (input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE)) {
-    // Projects is the always-there exit: back to the book from anywhere.
-    // releaseToDiscover, not popFocus — popFocus keeps a single-entry stack
-    // unchanged, so the tap silently stayed on the project. Drop the visit
-    // pending markers too so the window/day guards below don't pull the turn
-    // back into the visit ask; keep the draft for a typed resume later.
+  if (skipBrief && isWaSeeAction(input.action_id, state)) {
+    // See the projects: back to the book, brief over.
     state = releaseToDiscover(state);
+    state = clearWaBriefConstraints(state);
     if (state.visit && (state.visit.lastAsk || state.visit.pendingDayIso)) {
       const { lastAsk: _ask, pendingDayIso: _day, ...rest } = state.visit;
       state = { ...state, visit: rest };
     }
+  } else if (skipBrief && isWaOtherAction(input.action_id, state)) {
+    // See other projects: leave the file, keep size/budget, peek the stack.
+    state = leaveFocusKeepStack(state);
   }
   const durableConstraintsBeforeTurn = { ...state.constraints };
   const ingressFilled = new Set<IngressSlotKey>(input.ingressFilledSlots ?? []);
@@ -2882,6 +2888,25 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
           },
         }
       : {}),
+    ...(skipBrief
+      ? (() => {
+          const now = deps.clock.nowMs();
+          const kind = waLifeOf(state, now);
+          if (kind === 'exploring') return {};
+          const visit =
+            (state.visitBookedCache ?? []).find((v) => Date.parse(v.iso) > now) ??
+            state.buyerLifecycle?.visit;
+          const hold = state.hold?.placed && state.hold.projectId
+            ? {
+                projectId: state.hold.projectId,
+                ...(state.hold.projectName ? { projectName: state.hold.projectName } : {}),
+                ...(state.hold.unitType ? { unitType: state.hold.unitType } : {}),
+                until: state.buyerLifecycle?.hold?.until ?? now,
+              }
+            : state.buyerLifecycle?.hold;
+          return { waLife: { kind, ...(visit ? { visit } : {}), ...(hold ? { hold } : {}) } };
+        })()
+      : {}),
     ...(skipBrief && input.action_id === WA_MENU_TYPES ? { waMoreTypes: true } : {}),
     ...(offersSizeRows ? { waSizeOptions: pickSizeUnits!.length } : {}),
     ...(state.focus ? { focusProjectName: state.focus.projectName } : {}),
@@ -3268,8 +3293,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     if (authoredNode) reply = authoredNode;
     // The book screen — "See everything" / "Back to projects" opens the list,
     // and the words describe the book, not whatever goal the engine landed on.
-    if (!state.focus && (input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE)) {
+    if (!state.focus && isWaSeeAction(input.action_id, state)) {
       reply = `These are the projects. Tap one to open it.`;
+    }
+    if (!state.focus && isWaOtherAction(input.action_id, state)) {
+      const receipt = waBriefReceipt(state.constraints);
+      const peekId = state.focusStack?.[0];
+      const peekName = peekId ? state.entities?.[peekId]?.name : undefined;
+      reply = receipt
+        ? `Still looking at *${receipt}*.${peekName ? ` You can go back to ${peekName}, open another, or start over.` : ' Open another, or start over.'}`
+        : `These are the other projects.${peekName ? ` ← ${peekName} is still here.` : ''}`;
     }
     // The project card. With a size already given, it states the buyer's fit —
     // the size is CONSUMED, spoken back as this project's answer. Without one,
@@ -3796,7 +3829,9 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       state.constraints?.budgetMinInr !== undefined ||
       state.constraints?.budgetMaxInr !== undefined
     );
-    const bookOpen = input.action_id === WA_MENU_PROJECTS || input.action_id === WA_MENU_SEE;
+    const seeOpen = isWaSeeAction(input.action_id, state);
+    const otherOpen = isWaOtherAction(input.action_id, state);
+    const bookOpen = seeOpen || otherOpen;
     const matchNames = (evidence.matches ?? []).map((m) => ({
       projectId: m.projectId,
       name: m.name,
@@ -3810,7 +3845,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     packed = packWhatsAppInteractive({
       goal,
       state,
-      catalogNames: bookOpen
+      catalogNames: seeOpen
         ? catalogForTurn?.projectNames ?? []
         : briefCut
           ? matchNames
@@ -3847,6 +3882,13 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       bookOpen,
       briefCut,
       browseCatalog,
+      ...(otherOpen ? { otherOpen: true } : {}),
+      ...(() => {
+        if (!otherOpen) return {};
+        const peekId = state.focusStack?.[0];
+        const peekName = peekId ? state.entities?.[peekId]?.name : undefined;
+        return peekId && peekName ? { peekLast: { projectId: peekId, name: peekName } } : {};
+      })(),
       // Which level of the file this turn is on — the tapped id is the whole
       // navigation state, so nothing has to be remembered between turns.
       ...(input.action_id ? { actionId: input.action_id } : {}),

@@ -118,7 +118,18 @@ export function seedFromDeskBrief(
   // path is for. `commitTo` also records the project as discussed, so the
   // shortlist and salience readers see it the same way they would if the bot
   // had offered it.
-  if (brief.projectId && brief.projectName && next.phase === 'discover' && !next.focus) {
+  // A returning visit / hold / booked greet must not auto-open the file —
+  // those doors are the first screen. Site-office focus still commits.
+  const lifeKind = brief.lifecycle?.kind;
+  const lifeBlocksCommit =
+    lifeKind === 'visit_planned' || lifeKind === 'on_hold' || lifeKind === 'unit_booked';
+  if (
+    brief.projectId &&
+    brief.projectName &&
+    next.phase === 'discover' &&
+    !next.focus &&
+    !lifeBlocksCommit
+  ) {
     next = commitTo(next, brief.projectId, brief.projectName);
     seeded.push('project');
   }
@@ -126,6 +137,52 @@ export function seedFromDeskBrief(
   if (brief.selfRegistered && !next.selfRegistered) {
     next = { ...next, selfRegistered: true };
     seeded.push('selfRegistered');
+  }
+
+  // Durable visit / hold / booking. Live visit FSM and hold-confirm stay
+  // in charge — Desk only gap-fills a cold thread.
+  if (brief.lifecycle && brief.lifecycle.kind !== 'exploring' && !next.buyerLifecycle) {
+    const liveVisitDraft = !!(next.visit?.lastAsk || next.visit?.pendingDayIso);
+    const liveHoldConfirm = next.hold?.awaitingConfirm === true;
+    if (!liveVisitDraft && !liveHoldConfirm) {
+      next = { ...next, buyerLifecycle: brief.lifecycle };
+      seeded.push('lifecycle');
+      if (
+        brief.lifecycle.kind === 'visit_planned' &&
+        brief.lifecycle.visit &&
+        (next.visitBookedCache?.length ?? 0) === 0
+      ) {
+        const v = brief.lifecycle.visit;
+        next = {
+          ...next,
+          visitBookedCache: [
+            {
+              projectId: v.projectId,
+              projectName: v.projectName ?? v.projectId,
+              iso: v.iso,
+              label: v.label,
+            },
+          ],
+        };
+      }
+      if (
+        brief.lifecycle.kind === 'on_hold' &&
+        brief.lifecycle.hold &&
+        !next.hold?.placed &&
+        !next.hold?.awaitingConfirm
+      ) {
+        const h = brief.lifecycle.hold;
+        next = {
+          ...next,
+          hold: {
+            placed: true,
+            projectId: h.projectId,
+            projectName: h.projectName ?? h.projectId,
+            ...(h.unitType ? { unitType: h.unitType } : {}),
+          },
+        };
+      }
+    }
   }
 
   return { state: next, seeded };

@@ -8,7 +8,7 @@ import {
   waConsoleRows,
   WA_MENU_NODE,
   WA_COMPARE,
-  WA_MENU_PROJECTS,
+  WA_MENU_OTHER,
   WA_MONEY_MENU,
   WA_NODE_LATER,
   WA_NODE_LIFE,
@@ -59,7 +59,7 @@ describe('waConsoleRows — the honest console menu (node layer)', () => {
       WA_NODE_LATER,
       'visit_book',
       WA_COMPARE,
-      WA_MENU_PROJECTS,
+      WA_MENU_OTHER,
     ]);
     // Unseen answers, not rows: brochure + trust/place/life/time + returns.
     expect(infoCount).toBe(6);
@@ -73,7 +73,7 @@ describe('waConsoleRows — the honest console menu (node layer)', () => {
         // no rera/khata/ec, no amenities, no location, no investment, no media
       },
     });
-    expect(rows.map((r) => r.id)).toEqual([WA_NODE_TIME, 'visit_book', WA_COMPARE, WA_MENU_PROJECTS]);
+    expect(rows.map((r) => r.id)).toEqual([WA_NODE_TIME, 'visit_book', WA_COMPARE, WA_MENU_OTHER]);
   });
 
   it('Returns rides only when REAL yield fields are on the record', () => {
@@ -89,7 +89,7 @@ describe('waConsoleRows — the honest console menu (node layer)', () => {
 
   it('no record: the standing acts stand, nothing is invented', () => {
     const { rows, infoCount } = waConsoleRows({});
-    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_PROJECTS]);
+    expect(rows.map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_OTHER]);
     expect(infoCount).toBe(0);
   });
 });
@@ -154,7 +154,7 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
       const trust = rows.find((r) => splitProjectStamp(r.id).aid === WA_NODE_TRUST)!;
       expect(splitProjectStamp(trust.id).projectId).toBe('brigade-eldorado');
       // The way back is always on the sheet.
-      expect(rows.map((r) => r.id)).toContain(WA_MENU_PROJECTS);
+      expect(rows.map((r) => r.id)).toContain(WA_MENU_OTHER);
     }
   });
 
@@ -188,7 +188,7 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
       expect(withoutFacts.sections[0]!.rows.map((r) => r.id)).toEqual([
         'visit_book',
         WA_COMPARE,
-        WA_MENU_PROJECTS,
+        WA_MENU_OTHER,
       ]);
     }
   });
@@ -219,7 +219,7 @@ describe('packWhatsAppInteractive — node menu chrome', () => {
       expect(aids).toContain('wa.money.bhk.2.comfort');
       // No console row ever prints a ₹ figure — the tapped answer does.
       for (const r of rows) expect(r.description ?? '').not.toContain('₹');
-      expect(rows.slice(-3).map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_PROJECTS]);
+      expect(rows.slice(-3).map((r) => r.id)).toEqual(['visit_book', WA_COMPARE, WA_MENU_OTHER]);
     }
   });
 });

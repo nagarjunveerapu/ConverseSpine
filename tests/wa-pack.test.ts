@@ -8,7 +8,7 @@ import {
   resolveWaProjectFirst,
   waListPickKeepsCommit,
   WA_BACK_FILE,
-  WA_MENU_PROJECTS,
+  WA_MENU_OTHER,
   WA_MONEY_MENU,
 } from '../src/channel/wa-pack.js';
 import { fallbackReply } from '../src/engine/compose.js';
@@ -72,7 +72,7 @@ describe('packWhatsAppInteractive', () => {
     if (packed.kind === 'list') {
       expect(packed.button).toBe('More');
       const ids = packed.sections[0]!.rows.map((r) => r.id);
-      expect(ids).toEqual(['visit_book', 'compare_projects', WA_MENU_PROJECTS]);
+      expect(ids).toEqual(['visit_book', 'compare_projects', WA_MENU_OTHER]);
       expect(ids).not.toContain(WA_MONEY_MENU);
     }
   });
@@ -100,7 +100,7 @@ describe('packWhatsAppInteractive', () => {
       // EMI moved inside Money — the root keeps only the hottest money row.
       expect(ids.some((id) => id.startsWith('wa.node.money'))).toBe(true);
       expect(ids).toContain('visit_book');
-      expect(ids[ids.length - 1]).toBe(WA_MENU_PROJECTS);
+      expect(ids[ids.length - 1]).toBe(WA_MENU_OTHER);
     }
   });
 

@@ -63,7 +63,7 @@ export const CHIP_CATALOG: readonly ChipCatalogEntry[] = [
     label: 'Project details',
     act: 'answer',
     topic: 'overview',
-    actionIds: ['answer_overview', 'overview', 'details'],
+    actionIds: ['answer_overview', 'overview', 'details', 'wa.hold.yours'],
   },
   {
     id: 'chip.visit_book',
@@ -75,7 +75,7 @@ export const CHIP_CATALOG: readonly ChipCatalogEntry[] = [
     id: 'chip.visit_recall',
     label: 'My visits',
     act: 'visit_recall',
-    actionIds: ['visit_recall', 'my_visits', 'visit_bookings'],
+    actionIds: ['visit_recall', 'my_visits', 'visit_bookings', 'wa.visit.yours'],
   },
   {
     id: 'chip.search',

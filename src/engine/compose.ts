@@ -36,10 +36,38 @@ export function waBookFirstGreet(opts: {
     total?: number;
   } | null;
   hold?: { projectName: string; unitType?: string };
+  lifecycle?: import('./types.js').BuyerLifecycle;
 }): string {
   const brand = (opts.builderName || '').trim() || 'this builder';
   const who = (opts.buyerName || '').trim();
   const hi = who ? `Hi ${who},` : 'Hi,';
+  const life = opts.lifecycle;
+  if (life?.kind === 'visit_planned' && life.visit) {
+    return waParas(
+      hi,
+      `Your visit to *${life.visit.projectName ?? 'the project'}* is *${life.visit.label}*. I still have the file if you want to go deeper — or we can look at something else.`,
+    );
+  }
+  if (life?.kind === 'on_hold' && life.hold) {
+    const unit = life.hold.unitType?.trim();
+    const until = life.hold.until
+      ? ` until ${new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(life.hold.until))}`
+      : '';
+    return waParas(
+      hi,
+      unit
+        ? `A ${unit} at *${life.hold.projectName ?? 'the project'}* is on hold${until}.`
+        : `A home at *${life.hold.projectName ?? 'the project'}* is on hold${until}.`,
+      `I can show the hold, keep going through the project, or speak to the team.`,
+    );
+  }
+  if (life?.kind === 'unit_booked') {
+    const name = life.hold?.projectName ?? life.visit?.projectName ?? 'this home';
+    return waParas(
+      hi,
+      `You're booked on a home at *${name}*. I can open the payment plan, possession, or put you through to your manager.`,
+    );
+  }
   if (opts.hold?.projectName) {
     const unit = opts.hold.unitType?.trim();
     return waParas(
@@ -966,6 +994,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
           buyerName: context.buyerName,
           catalog: ev.catalog,
           ...(context.waHold ? { hold: context.waHold } : {}),
+          ...(context.waLife ? { lifecycle: context.waLife } : {}),
         });
       }
       if (rb && rb.daysSinceLastSeen >= 1) {
@@ -2024,6 +2053,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
           buyerName: context.buyerName,
           catalog: ev.catalog,
           ...(context.waHold ? { hold: context.waHold } : {}),
+          ...(context.waLife ? { lifecycle: context.waLife } : {}),
         });
       }
       return `Doing well, thanks${name}! What kind of property are you exploring — area, budget, or configuration?`;

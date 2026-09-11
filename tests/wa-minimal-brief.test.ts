@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as discover from '../src/engine/phases/discover.js';
-import { initState } from '../src/engine/state.js';
+import { commitTo, initState, leaveFocusKeepStack, releaseToDiscover, clearWaBriefConstraints } from '../src/engine/state.js';
 import { fallbackReply, waBookFirstGreet, waBriefReceipt } from '../src/engine/compose.js';
 import { runEngineTurn } from '../src/engine/turn.js';
 import { fakeData, fakeDeps } from './fakes.js';
@@ -13,6 +13,7 @@ import {
   packWhatsAppInteractive,
   syncWaBriefFromGoal,
   waBudgetRows,
+  waConsoleRows,
   waSizeRows,
   waAreaRows,
   WA_AREA_ANY,
@@ -24,11 +25,20 @@ import {
   WA_MENU_CHOOSE,
   WA_MENU_PROJECTS,
   WA_MENU_SEE,
+  WA_MENU_OTHER,
   WA_MENU_TYPES,
   WA_SIZE_ANY,
   WA_TYPE_PLOT,
   WA_TYPE_VILLA,
   WA_HOLD_DROP,
+  WA_HOLD_YOURS,
+  WA_VISIT_YOURS,
+  WA_MONEY_EMI,
+  WA_MONEY_TOTAL,
+  WA_PROJECT_STAMP,
+  WA_COMPARE,
+  isWaSeeAction,
+  isWaOtherAction,
 } from '../src/channel/wa-pack.js';
 import type { ThreadState, Extracted } from '../src/engine/types.js';
 
@@ -146,6 +156,22 @@ describe('greet sheet — the second door', () => {
     });
     expect(holding).toMatch(/You're holding a 2 BHK at \*Brigade Eldorado\*/);
     expect(holding).not.toMatch(/\bbook\b/i);
+    const visiting = waBookFirstGreet({
+      builderName: 'Brigade',
+      buyerName: 'Nagarjun',
+      catalog: { ...CATALOG, total: 6 },
+      lifecycle: {
+        kind: 'visit_planned',
+        visit: {
+          projectId: 'brigade-eldorado',
+          projectName: 'Brigade Eldorado',
+          iso: new Date(Date.now() + 86400000).toISOString(),
+          label: 'Sat 12 Sep, 10:30',
+        },
+      },
+    });
+    expect(visiting).toMatch(/Your visit to \*Brigade Eldorado\* is \*Sat 12 Sep, 10:30\*/);
+    expect(visiting).not.toMatch(/Help me find a home/i);
     // No catalog dump on the welcome — corridors and price live behind See the projects.
     expect(many).not.toMatch(/from about/);
     const one = waBookFirstGreet({ builderName: 'Brigade', catalog: { ...CATALOG, total: 1 } });
@@ -767,7 +793,7 @@ describe('brief labels never become places', () => {
 
 describe('tap ids are authoritative — label-derived meaning is scrubbed', () => {
   it('menu and answer taps clear ask topics and isQuestion', () => {
-    for (const aid of [WA_MENU_CHOOSE, WA_MENU_BUDGET, WA_MENU_PROJECTS, WA_MENU_SEE, WA_MENU_TYPES, WA_SIZE_ANY, WA_BUDGET_ANY, WA_AREA_ANY, WA_BACK_SIZE]) {
+    for (const aid of [WA_MENU_CHOOSE, WA_MENU_BUDGET, WA_MENU_PROJECTS, WA_MENU_SEE, WA_MENU_OTHER, WA_MENU_TYPES, WA_SIZE_ANY, WA_BUDGET_ANY, WA_AREA_ANY, WA_BACK_SIZE]) {
       const out = applyWaInteractiveExtract(
         aid,
         ex({ askTopic: 'overview', askTopics: ['overview'], isQuestion: true }),
@@ -776,7 +802,7 @@ describe('tap ids are authoritative — label-derived meaning is scrubbed', () =
       expect(out.askTopic, aid).toBeUndefined();
       expect(out.askTopics, aid).toBeUndefined();
       expect(out.isQuestion, aid).toBe(false);
-      if (aid === WA_MENU_PROJECTS || aid === WA_MENU_SEE) {
+      if (aid === WA_MENU_PROJECTS || aid === WA_MENU_SEE || aid === WA_MENU_OTHER) {
         expect(out.speechAct, aid).toBe('search');
       }
     }
@@ -796,9 +822,9 @@ describe('tap ids are authoritative — label-derived meaning is scrubbed', () =
 
   it('isWaBriefActionId covers the brief family, not picks or job chips', () => {
     for (const aid of [
-      WA_MENU_CHOOSE, WA_MENU_BUDGET, WA_MENU_PROJECTS, WA_MENU_TYPES, WA_SIZE_ANY, WA_BUDGET_ANY,
+      WA_MENU_CHOOSE, WA_MENU_BUDGET, WA_MENU_PROJECTS, WA_MENU_SEE, WA_MENU_OTHER, WA_MENU_TYPES, WA_SIZE_ANY, WA_BUDGET_ANY,
       WA_AREA_ANY, WA_BACK_SIZE, WA_BACK_AREA, `${WA_AREA_PREFIX}devanahalli`,
-      WA_TYPE_VILLA, WA_TYPE_PLOT, WA_HOLD_DROP, 'wa.bhk.2_bhk', 'wa.budget.b_5000000_8000000',
+      WA_TYPE_VILLA, WA_TYPE_PLOT, WA_HOLD_DROP, WA_HOLD_YOURS, WA_VISIT_YOURS, 'wa.bhk.2_bhk', 'wa.budget.b_5000000_8000000',
     ]) {
       expect(isWaBriefActionId(aid), aid).toBe(true);
     }
@@ -874,5 +900,158 @@ describe('budget bands after area — corridor, not the book', () => {
       const titles = budget.whatsappInteractive.sections[0]!.rows.map((r) => r.title);
       expect(titles.some((t) => /₹1 Cr/.test(t) && /1\.5/.test(t))).toBe(false);
     }
+  });
+});
+
+describe('P2 See other projects keeps the brief and peeks the last file', () => {
+  it('peeks ← last project and does not dump the whole book', () => {
+    const s = commitTo(
+      {
+        ...state({
+          constraints: { bhk: '3 BHK', budgetMaxInr: 1_00_00_000 },
+          focusStack: ['brigade-eldorado'],
+          entities: {
+            'brigade-eldorado': {
+              projectId: 'brigade-eldorado',
+              name: 'Brigade Eldorado',
+              roles: ['focused'],
+              firstSeenTurn: 1,
+              lastTouchedTurn: 1,
+            },
+          },
+        }),
+      },
+      'brigade-eldorado',
+      'Brigade Eldorado',
+    );
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'recommend' },
+      state: { ...s, focus: undefined, phase: 'discover' },
+      catalogNames: [
+        { projectId: 'brigade-eldorado', name: 'Brigade Eldorado', description: 'from ₹89 L' },
+        { projectId: 'brigade-orchards', name: 'Brigade Orchards', description: 'from ₹82 L' },
+      ],
+      singleProject: false,
+      catalog: CATALOG,
+      bookOpen: true,
+      otherOpen: true,
+      briefCut: true,
+      peekLast: { projectId: 'brigade-eldorado', name: 'Brigade Eldorado' },
+    });
+    expect(packed.kind).toBe('list');
+    if (packed.kind !== 'list') return;
+    const ids = packed.sections[0]!.rows.map((r) => r.id);
+    expect(ids[0]).toBe('wa.pick.brigade-eldorado');
+    expect(packed.sections[0]!.rows[0]!.title).toMatch(/^← /);
+    expect(ids).toContain('wa.pick.brigade-orchards');
+  });
+});
+
+describe('P3 returning greet follows Desk life', () => {
+  it('visit planned is not the three explore doors', () => {
+    const iso = new Date(Date.now() + 3 * 86400000).toISOString();
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'greet' },
+      state: state({
+        buyerLifecycle: {
+          kind: 'visit_planned',
+          visit: {
+            projectId: 'brigade-eldorado',
+            projectName: 'Brigade Eldorado',
+            iso,
+            label: 'Fri 18 Sep, 10:30',
+          },
+        },
+        visitBookedCache: [
+          { projectId: 'brigade-eldorado', projectName: 'Brigade Eldorado', iso, label: 'Fri 18 Sep, 10:30' },
+        ],
+      }),
+      catalogNames: BAG,
+      singleProject: false,
+      catalog: CATALOG,
+      nowMs: Date.now(),
+    });
+    expect(packed.kind).toBe('buttons');
+    if (packed.kind !== 'buttons') return;
+    expect(packed.buttons.map((b) => b.id)).toContain('wa.visit.yours');
+    expect(packed.buttons.map((b) => b.title)).not.toContain('Help me find a home');
+  });
+});
+
+describe('P4 standing acts follow life', () => {
+  it('a planned visit replaces Book a visit', () => {
+    const { rows } = waConsoleRows({
+      facts: { projectId: 'p', possession: 'Dec 2027' },
+      units: [],
+      life: 'visit_planned',
+      visitDay: 'Fri 18',
+    });
+    const yours = rows.find((r) => r.id === 'wa.visit.yours');
+    expect(yours?.title).toMatch(/Your visit/);
+    expect(rows.slice(-3).map((r) => r.id)).toEqual(['wa.visit.yours', WA_COMPARE, WA_MENU_OTHER]);
+    expect(rows.map((r) => r.id)).not.toContain('visit_book');
+  });
+
+  it('after Total cost the next taps are EMI, visit, back — not Compare', () => {
+    const s = commitTo(
+      { ...state({ constraints: { bhk: '2 BHK' } }) },
+      'brigade-eldorado',
+      'Brigade Eldorado',
+    );
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'answer', topic: 'price', projectId: 'brigade-eldorado' },
+      state: s,
+      catalogNames: BAG,
+      singleProject: false,
+      catalog: CATALOG,
+      actionId: `${WA_MONEY_TOTAL}${WA_PROJECT_STAMP}brigade-eldorado`,
+      focusUnits: [{ unitType: '2 BHK', priceDisplay: '₹89 L' }],
+    });
+    expect(packed.kind).toBe('buttons');
+    if (packed.kind !== 'buttons') return;
+    expect(packed.buttons.map((b) => b.id)).toEqual([WA_MONEY_EMI, 'visit_book', 'wa.back.file']);
+    expect(packed.buttons.map((b) => b.id)).not.toContain(WA_MENU_OTHER);
+  });
+});
+
+describe('P2 See vs Other on the old Projects id', () => {
+  it('wa.menu.projects with a brief is Other; without is See', () => {
+    expect(isWaOtherAction(WA_MENU_PROJECTS, { constraints: { bhk: '3 BHK' } })).toBe(true);
+    expect(isWaSeeAction(WA_MENU_PROJECTS, { constraints: { bhk: '3 BHK' } })).toBe(false);
+    expect(isWaSeeAction(WA_MENU_PROJECTS, { constraints: {} })).toBe(true);
+    expect(isWaOtherAction(WA_MENU_PROJECTS, { constraints: {} })).toBe(false);
+  });
+
+  it('leaving the file keeps size/budget and the stack; See wipes both', () => {
+    const focused = commitTo(
+      { ...state({ constraints: { bhk: '3 BHK', budgetMaxInr: 1_00_00_000 } }) },
+      'brigade-eldorado',
+      'Brigade Eldorado',
+    );
+    const other = leaveFocusKeepStack(focused);
+    expect(other.focus).toBeUndefined();
+    expect(other.phase).toBe('discover');
+    expect(other.constraints.bhk).toBe('3 BHK');
+    expect(other.focusStack?.[0]).toBe('brigade-eldorado');
+    const see = clearWaBriefConstraints(releaseToDiscover(focused));
+    expect(see.focusStack ?? []).toEqual([]);
+    expect(see.constraints.bhk).toBeUndefined();
+    expect(see.constraints.budgetMaxInr).toBeUndefined();
+  });
+});
+
+describe('P4 standing taps mean recall / the hold, not a new book', () => {
+  it('Your visit is visit_recall; Your hold is the file', () => {
+    const visit = applyWaInteractiveExtract(WA_VISIT_YOURS, ex({ askTopic: 'overview' }), BAG);
+    expect(visit.speechAct).toBe('visit_recall');
+    expect(visit.recall).toBe(true);
+    const hold = applyWaInteractiveExtract(
+      `${WA_HOLD_YOURS}${WA_PROJECT_STAMP}brigade-eldorado`,
+      ex(),
+      BAG,
+    );
+    expect(hold.speechAct).toBe('answer');
+    expect(hold.askTopic).toBe('overview');
+    expect(hold.namedProjects?.[0]?.projectId).toBe('brigade-eldorado');
   });
 });

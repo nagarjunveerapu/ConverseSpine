@@ -160,6 +160,50 @@ describe('the project the buyer was already standing in', () => {
     expect(state.buyerName).toBe('Ravi Kumar');
     expect(seeded).toEqual(expect.arrayContaining(['project', 'bhk', 'budget', 'buyerName']));
   });
+
+  it('a booked visit seeds life and does not auto-open the file', () => {
+    const iso = new Date(Date.now() + 86400000).toISOString();
+    const { state, seeded } = seedFromDeskBrief(
+      cold(),
+      brief({
+        projectId: 'brigade-eldorado',
+        projectName: 'Brigade Eldorado',
+        lifecycle: {
+          kind: 'visit_planned',
+          visit: {
+            projectId: 'brigade-eldorado',
+            projectName: 'Brigade Eldorado',
+            iso,
+            label: 'Fri 18 Sep, 10:30',
+          },
+        },
+      }),
+    );
+    expect(state.buyerLifecycle?.kind).toBe('visit_planned');
+    expect(state.phase).toBe('discover');
+    expect(state.focus).toBeUndefined();
+    expect(state.visitBookedCache?.[0]?.projectId).toBe('brigade-eldorado');
+    expect(seeded).toContain('lifecycle');
+    expect(seeded).not.toContain('project');
+  });
+
+  it('does not overwrite a live hold-confirm with Desk’s hold', () => {
+    const live: ThreadState = {
+      ...cold(),
+      hold: { awaitingConfirm: true, projectId: 'x', projectName: 'X', unitType: '2 BHK' },
+    };
+    const { state, seeded } = seedFromDeskBrief(
+      live,
+      brief({
+        lifecycle: {
+          kind: 'on_hold',
+          hold: { projectId: 'brigade-eldorado', projectName: 'Brigade Eldorado', until: Date.now() + 86400000 },
+        },
+      }),
+    );
+    expect(state.hold?.awaitingConfirm).toBe(true);
+    expect(seeded).not.toContain('lifecycle');
+  });
 });
 
 describe('parseShortlistIds', () => {

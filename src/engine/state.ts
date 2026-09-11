@@ -399,6 +399,35 @@ export function releaseToDiscover(s: ThreadState): ThreadState {
   return { ...rest, phase: 'discover', focusStack: [] };
 }
 
+/**
+ * Leave the open file without wiping the stack — See other projects keeps
+ * size/budget and can peek ← last project. See the projects still uses
+ * releaseToDiscover.
+ */
+export function leaveFocusKeepStack(s: ThreadState): ThreadState {
+  const focus = s.focus;
+  const withDiscussed = focus
+    ? recordDiscussed(s, [{ projectId: focus.projectId, name: focus.projectName }])
+    : s;
+  const { focus: _f, ...rest } = withDiscussed;
+  return { ...rest, phase: 'discover' };
+}
+
+/** See the projects — the brief is over. Size, area, and budget come off. */
+export function clearWaBriefConstraints(s: ThreadState): ThreadState {
+  const {
+    bhk: _bhk,
+    budgetMinInr: _min,
+    budgetMaxInr: _max,
+    propertyType: _type,
+    location: _loc,
+    ...rest
+  } = s.constraints;
+  const discover = { ...s.discover };
+  delete discover.waBriefStep;
+  return { ...s, constraints: rest, discover };
+}
+
 export function isSameAsLast(s: ThreadState, matches: readonly Match[]): boolean {
   const prev = currentShortlist(s);
   if (prev.length === 0 || prev.length !== matches.length) return false;

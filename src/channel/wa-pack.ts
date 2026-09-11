@@ -18,6 +18,12 @@ export const WA_MENU_BUDGET = 'wa.menu.budget';
 /** Welcome doors (mock parity): open the book / type the project name. */
 export const WA_MENU_SEE = 'wa.menu.see';
 export const WA_MENU_KNOW = 'wa.menu.know';
+/** Leave the file, keep size/budget, peek ← last project. Distinct from SEE. */
+export const WA_MENU_OTHER = 'wa.menu.other';
+/** Returning greet — read the booked visit back, do not start a new one. */
+export const WA_VISIT_YOURS = 'wa.visit.yours';
+/** On-hold standing act — stay on the file, do not book a visit. */
+export const WA_HOLD_YOURS = 'wa.hold.yours';
 /** Overlay: drop a placed hold. Looking around must not use this. */
 export const WA_HOLD_DROP = 'wa.hold.drop';
 /** Second size sheet — villa / plot / any, off the bedroom list. */
@@ -88,6 +94,57 @@ export const WA_DOC_PREFIX = 'wa.doc.';
 export const WA_BACK_FILE = 'wa.back.file';
 /** Put another project beside this one — the id the speech-act catalog knows. */
 export const WA_COMPARE = 'compare_projects';
+
+export type WaLifeKind = 'exploring' | 'visit_planned' | 'on_hold' | 'unit_booked';
+
+export function hasWaBriefCut(state: { constraints?: { bhk?: string; propertyType?: string; budgetMinInr?: number; budgetMaxInr?: number } }): boolean {
+  const c = state.constraints;
+  return !!(
+    c?.bhk?.trim() ||
+    c?.propertyType?.trim() ||
+    c?.budgetMinInr !== undefined ||
+    c?.budgetMaxInr !== undefined
+  );
+}
+
+export function isWaSeeAction(aid: string | undefined, state: { constraints?: ThreadState['constraints'] }): boolean {
+  const id = aid?.trim() ?? '';
+  if (id === WA_MENU_SEE) return true;
+  if (id === WA_MENU_PROJECTS && !hasWaBriefCut(state)) return true;
+  return false;
+}
+
+export function isWaOtherAction(aid: string | undefined, state: { constraints?: ThreadState['constraints'] }): boolean {
+  const id = aid?.trim() ?? '';
+  if (id === WA_MENU_OTHER) return true;
+  if (id === WA_MENU_PROJECTS && hasWaBriefCut(state)) return true;
+  return false;
+}
+
+export function waLifeOf(state: ThreadState, nowMs = Date.now()): WaLifeKind {
+  if (state.hold?.awaitingConfirm) return 'exploring';
+  if (state.buyerLifecycle?.kind === 'unit_booked') return 'unit_booked';
+  if (state.hold?.placed || state.buyerLifecycle?.kind === 'on_hold') return 'on_hold';
+  const upcoming =
+    (state.visitBookedCache ?? []).some((v) => Date.parse(v.iso) > nowMs) ||
+    (state.buyerLifecycle?.kind === 'visit_planned' &&
+      !!state.buyerLifecycle.visit &&
+      Date.parse(state.buyerLifecycle.visit.iso) > nowMs);
+  if (upcoming) return 'visit_planned';
+  return 'exploring';
+}
+
+export function waVisitDayShort(isoOrLabel: string | undefined, nowMs = Date.now()): string | undefined {
+  if (!isoOrLabel?.trim()) return undefined;
+  const ms = Date.parse(isoOrLabel);
+  const t = Number.isFinite(ms) ? ms : nowMs;
+  if (!Number.isFinite(t)) return clip(isoOrLabel, 12);
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date(t));
+}
 
 /** Everything the project has on file, in one place — brochure and all. */
 export const WA_NODE_MEDIA = 'wa.node.media';
@@ -362,6 +419,12 @@ export interface WaPackInput {
    */
   bookOpen?: boolean;
   /**
+   * See other projects — keep the brief, show matches, peek the file just left.
+   */
+  otherOpen?: boolean;
+  /** Project the buyer just left, for the ← last row on Other projects. */
+  peekLast?: { projectId: string; name: string };
+  /**
    * Size or budget is already on the thread — an empty match list must stay
    * empty. The packer must not fall through to the whole book.
    */
@@ -530,6 +593,12 @@ export interface WaConsoleRowsInput {
   seen?: ReadonlyArray<SeenFacet>;
   /** Rows that outrank the file (commit-no-size leads with the config ladder). */
   leadRows?: ReadonlyArray<WaListRow>;
+  /** Desk/session life — standing acts follow visit / hold / booked. */
+  life?: WaLifeKind;
+  /** Short day for "Your visit — Fri 18". */
+  visitDay?: string;
+  /** Short expiry for "Your hold — Fri". */
+  holdUntil?: string;
 }
 
 const NUM = (n: number) => n.toLocaleString('en-IN');
@@ -705,6 +774,109 @@ function sectionHasData(
   }
 }
 
+function waShortProjectTitle(name: string): string {
+  return clip(name.replace(/^brigade\s+/i, '').trim() || name, 16);
+}
+
+function waReturningGreetButtons(
+  state: ThreadState,
+  nowMs: number,
+): Array<{ id: string; title: string }> | undefined {
+  // Desk-seeded life only. An in-session placed hold still uses the overlay
+  // below (Your hold / Other projects / Drop) — those ids must not collide
+  // with Hold details / Open / Ask the team.
+  const kind = state.buyerLifecycle?.kind;
+  if (!kind || kind === 'exploring') return undefined;
+  if (kind === 'visit_planned') {
+    const v =
+      (state.visitBookedCache ?? []).find((x) => Date.parse(x.iso) > nowMs) ??
+      state.buyerLifecycle?.visit;
+    if (!v || Date.parse(v.iso) <= nowMs) return undefined;
+    const pid = v.projectId;
+    const pname = v.projectName ?? 'the project';
+    return [
+      { id: WA_VISIT_YOURS, title: 'Visit details' },
+      {
+        id: pid ? `${WA_PICK_PREFIX}${pid}` : WA_MENU_KNOW,
+        title: clip(`Open ${waShortProjectTitle(pname)}`, 20),
+      },
+      { id: WA_MENU_OTHER, title: 'Other projects' },
+    ];
+  }
+  if (kind === 'on_hold') {
+    const h = state.buyerLifecycle?.hold;
+    const pid = h?.projectId;
+    const pname = h?.projectName ?? 'the project';
+    return [
+      { id: WA_HOLD_YOURS + (pid ? `${WA_PROJECT_STAMP}${pid}` : ''), title: 'Hold details' },
+      {
+        id: pid ? `${WA_PICK_PREFIX}${pid}` : WA_MENU_KNOW,
+        title: clip(`Open ${waShortProjectTitle(pname)}`, 20),
+      },
+      { id: 'talk_to_human', title: 'Ask the team' },
+    ];
+  }
+  const booked = state.buyerLifecycle;
+  const pid = booked?.hold?.projectId ?? booked?.visit?.projectId;
+  const pname = booked?.hold?.projectName ?? booked?.visit?.projectName ?? 'this home';
+  return [
+    { id: pid ? `${WA_MONEY_PLAN}${WA_PROJECT_STAMP}${pid}` : WA_MONEY_PLAN, title: 'Payment plan' },
+    { id: pid ? `${WA_PICK_PREFIX}${pid}` : WA_NODE_TIME, title: 'Possession date' },
+    { id: 'talk_to_human', title: 'Talk to manager' },
+  ];
+}
+
+function waMoneyFollowUpButtons(
+  state: ThreadState,
+  units: ReadonlyArray<{ unitType: string }>,
+  life: WaLifeKind,
+  visitDay: string | undefined,
+): Array<{ id: string; title: string }> {
+  const seen = new Set(projectSeenFacets(state, state.focus?.projectId));
+  const buttons: Array<{ id: string; title: string }> = [];
+  if (!seen.has('emi') && units.length) {
+    buttons.push({ id: WA_MONEY_EMI, title: 'Monthly EMI' });
+  }
+  if (life === 'visit_planned') {
+    buttons.push({ id: WA_VISIT_YOURS, title: clip(visitDay ? `Your visit — ${visitDay}` : 'Your visit', 20) });
+  } else if (life === 'on_hold') {
+    buttons.push({ id: WA_HOLD_YOURS, title: 'Your hold' });
+  } else if (life === 'unit_booked') {
+    if (!seen.has('plan')) buttons.push({ id: WA_MONEY_PLAN, title: 'Payment plan' });
+  } else {
+    buttons.push({ id: 'visit_book', title: 'Book a visit' });
+  }
+  if (buttons.length < 3) {
+    buttons.push({ id: WA_BACK_FILE, title: clip(state.focus?.projectName ?? 'The file', 20) });
+  }
+  return buttons.slice(0, 3);
+}
+
+function waStandingActs(input: WaConsoleRowsInput): WaListRow[] {
+  const life = input.life ?? 'exploring';
+  const first: WaListRow =
+    life === 'visit_planned'
+      ? {
+          id: WA_VISIT_YOURS,
+          title: clip(input.visitDay ? `Your visit — ${input.visitDay}` : 'Your visit', 24),
+          description: 'change or add a stop',
+        }
+      : life === 'on_hold'
+        ? {
+            id: WA_HOLD_YOURS,
+            title: clip(input.holdUntil ? `Your hold — ${input.holdUntil}` : 'Your hold', 24),
+            description: 'extend or ask the team',
+          }
+        : life === 'unit_booked'
+          ? { id: WA_MONEY_PLAN, title: 'Payment plan', description: 'stage by stage' }
+          : { id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' };
+  return [
+    first,
+    { id: WA_COMPARE, title: 'Compare with another' },
+    { id: WA_MENU_OTHER, title: 'See other projects' },
+  ];
+}
+
 /**
  * THE file — the root menu is the project's SECTIONS, not a flat pile of
  * answers. A section is a place you can stand: it stays on the list whether or
@@ -758,11 +930,7 @@ export function waConsoleRows(input: WaConsoleRowsInput): { rows: WaListRow[]; i
 
   // The three standing acts close every file screen. 10 rows is Meta's ceiling,
   // so sections give way from the tail (Returns first) — never the way out.
-  const acts: WaListRow[] = [
-    { id: 'visit_book', title: 'Book a visit', description: 'pick a day and a time' },
-    { id: WA_COMPARE, title: 'Compare with another' },
-    { id: WA_MENU_PROJECTS, title: 'See other projects' },
-  ];
+  const acts: WaListRow[] = waStandingActs(input);
   const body = [...lead, ...hybrid, ...sections].slice(0, 10 - acts.length);
   // infoCount is the "you're done" signal, and it counts ANSWERS the buyer has
   // not seen — not sections. Sections never empty (that is the point of them),
@@ -1133,7 +1301,9 @@ function stampProject(rows: readonly WaListRow[], projectId?: string): WaListRow
     // book. Same law as the money rows: the id carries its context.
     id.startsWith(WA_SUB_PREFIX) ||
     id.startsWith(WA_DOC_PREFIX) ||
-    id === WA_BACK_FILE;
+    id === WA_BACK_FILE ||
+    id === WA_HOLD_YOURS ||
+    id === WA_VISIT_YOURS;
   return rows.map((r) =>
     stampable(r.id) ? { ...r, id: `${r.id}${WA_PROJECT_STAMP}${projectId}` } : r,
   );
@@ -1342,13 +1512,17 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
           goal.kind === 'ack_reject_recommend')));
 
   // Brief cut with nothing in the bag — three honest doors, never the whole book.
+  // See other projects with a brief is the same honesty: do not dump the catalog.
   if (
     !focus &&
     !handoffAnswer &&
-    !input.bookOpen &&
+    (!input.bookOpen || input.otherOpen) &&
     input.briefCut &&
     bag.length === 0 &&
-    (goal.kind === 'recommend' || goal.kind === 'ack_reject_recommend' || goal.kind === 'no_fit')
+    (goal.kind === 'recommend' ||
+      goal.kind === 'ack_reject_recommend' ||
+      goal.kind === 'no_fit' ||
+      input.otherOpen)
   ) {
     return {
       kind: 'buttons',
@@ -1364,6 +1538,8 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
   // tap away behind "See the projects"; a reset/greet without that tap never
   // dumps the whole catalog on the first screen.
   if (showBag && goal.kind === 'greet' && !input.bookOpen && bag.length > 1) {
+    const lifeButtons = waReturningGreetButtons(state, input.nowMs ?? Date.now());
+    if (lifeButtons) return { kind: 'buttons', buttons: lifeButtons };
     const held = state.hold?.placed && state.hold.projectId && state.hold.projectName;
     if (held) {
       return {
@@ -1387,8 +1563,16 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
 
   if ((showMatches || showBag) && bag.length > 0) {
     const rows: WaListRow[] = [];
+    const peek = input.peekLast;
+    if (peek?.projectId && peek.name) {
+      rows.push({
+        id: `${WA_PICK_PREFIX}${peek.projectId}`,
+        title: clip(`← ${peek.name}`, 24),
+        description: 'back to the file',
+      });
+    }
     const heldId = state.hold?.placed ? state.hold.projectId : undefined;
-    if (heldId && state.hold?.projectName && (showBag || showMatches)) {
+    if (heldId && state.hold?.projectName && (showBag || showMatches) && heldId !== peek?.projectId) {
       rows.push({
         id: `${WA_PICK_PREFIX}${heldId}`,
         title: clip('Your hold', 24),
@@ -1399,7 +1583,8 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
     if (
       showBag &&
       bag.length > 1 &&
-      (goal.kind === 'greet' || goal.kind === 'smalltalk' || goal.kind === 'orient')
+      (goal.kind === 'greet' || goal.kind === 'smalltalk' || goal.kind === 'orient') &&
+      !input.otherOpen
     ) {
       rows.push({
         id: WA_MENU_CHOOSE,
@@ -1407,24 +1592,25 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
         description: '2 taps — size, then budget',
       });
     }
-    if (shortlist.length && showBag && goal.kind !== 'greet') {
+    if (shortlist.length && showBag && goal.kind !== 'greet' && !input.otherOpen) {
       rows.push({
         id: WA_MENU_PROJECTS,
         title: clip('Your board', 24),
         description: clip(shortlist.map((o) => o.name).join(', '), 72),
       });
     }
+    const skip = new Set([peek?.projectId, heldId].filter(Boolean) as string[]);
     rows.push(
       ...projectRows(
-        bag.filter((p) => p.projectId !== heldId),
+        bag.filter((p) => !skip.has(p.projectId)),
         shortlistIds,
-        showMatches ? 10 : 9,
+        showMatches || input.otherOpen ? 10 : 9,
       ),
     );
     return {
       kind: 'list',
-      button: showMatches ? 'See matches' : 'See projects',
-      sections: [{ title: showMatches ? 'Matches' : 'Projects', rows: rows.slice(0, 10) }],
+      button: showMatches || input.otherOpen ? 'See matches' : 'See projects',
+      sections: [{ title: showMatches || input.otherOpen ? 'Matches' : 'Projects', rows: rows.slice(0, 10) }],
     };
   }
 
@@ -1439,18 +1625,46 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
     // book design's step 2, price-free, never a toll gate on the way to money.
     const leadRows =
       goal.kind === 'commit' && !bhk && units.length >= 2 ? waConfigLadderRows(units) : [];
+    const nowMs = input.nowMs ?? Date.now();
+    const life = waLifeOf(state, nowMs);
+    const visitDay =
+      waVisitDayShort(
+        (state.visitBookedCache ?? []).find((v) => Date.parse(v.iso) > nowMs)?.iso ??
+          (state.visitBookedCache ?? []).find((v) => Date.parse(v.iso) > nowMs)?.label ??
+          state.buyerLifecycle?.visit?.iso ??
+          state.buyerLifecycle?.visit?.label,
+        nowMs,
+      ) ?? undefined;
+    const holdUntil = waVisitDayShort(
+      state.buyerLifecycle?.hold?.until != null
+        ? new Date(state.buyerLifecycle.hold.until).toISOString()
+        : undefined,
+      nowMs,
+    );
     const consoleInput: WaConsoleRowsInput = {
       facts: input.focusFacts,
       units,
       ...(bhk ? { bhk } : {}),
       seen: projectSeenFacets(state, focus.projectId),
       leadRows,
+      life,
+      ...(visitDay ? { visitDay } : {}),
+      ...(holdUntil ? { holdUntil } : {}),
     };
-    // Which level of the file is this turn on? The tapped id says so — a
-    // section opens its own screen, a sub-topic or a document stays inside the
-    // section it belongs to (so the next question is one tap, not three), and
-    // "← Back to the file" or anything else returns to the sections.
     const node = leadRows.length ? undefined : waNodeOf(input.actionId);
+    const { aid: packAid } = splitProjectStamp(input.actionId ?? '');
+    // After Total cost / EMI — three next taps, not Compare + the whole file.
+    // Free-text price still opens the console (the Total cost row lives there).
+    if (
+      !leadRows.length &&
+      goal.kind === 'answer' &&
+      (packAid === WA_MONEY_TOTAL || packAid === WA_MONEY_EMI)
+    ) {
+      const follow = waMoneyFollowUpButtons(state, units, life, visitDay);
+      if (follow.length > 0 && follow.length <= 3) {
+        return { kind: 'buttons', buttons: follow };
+      }
+    }
     const { rows } = node
       ? waNodeMenuRows(node, consoleInput)
       : waConsoleRows(consoleInput);
@@ -1542,7 +1756,7 @@ export function applyWaInteractiveExtract(
       isQuestion: false,
     };
   }
-  if (aid === WA_MENU_PROJECTS || aid === WA_MENU_SEE) {
+  if (aid === WA_MENU_PROJECTS || aid === WA_MENU_SEE || aid === WA_MENU_OTHER) {
     // Topics off the label ("Projects" ≈ overview ask) would rebind the last
     // discussed project — the tap means "back to the book", nothing else.
     return {
@@ -1704,6 +1918,25 @@ export function applyWaInteractiveExtract(
     // means book.
     return { ...extracted, speechAct: 'visit_book', transition: 'want_visit', recall: false };
   }
+  if (aid === WA_VISIT_YOURS) {
+    return {
+      ...extracted,
+      speechAct: 'visit_recall',
+      recall: true,
+      transition: 'none',
+      isQuestion: false,
+    };
+  }
+  if (aid === WA_HOLD_YOURS) {
+    return {
+      ...extracted,
+      speechAct: 'answer',
+      transition: 'want_details',
+      isQuestion: false,
+      askTopic: 'overview',
+      askTopics: ['overview'],
+    };
+  }
   // Legacy id from the screens that labelled this button "Price / EMI". Old
   // WhatsApp messages stay tappable forever, so the promise those words made is
   // still live — answer both, even though today's button says only "Price".
@@ -1849,8 +2082,11 @@ export function isWaBriefActionId(actionId: string | undefined): boolean {
     aid === WA_MENU_BUDGET ||
     aid === WA_MENU_PROJECTS ||
     aid === WA_MENU_SEE ||
+    aid === WA_MENU_OTHER ||
     aid === WA_MENU_KNOW ||
     aid === WA_HOLD_DROP ||
+    aid === WA_HOLD_YOURS ||
+    aid === WA_VISIT_YOURS ||
     aid === WA_MENU_TYPES ||
     aid === WA_SIZE_ANY ||
     aid === WA_BUDGET_ANY ||
@@ -1921,7 +2157,7 @@ export function advanceWaBriefState(
   const askArea = shouldAskWaArea(areas);
   const areaKnown = !!c.location?.trim() || aid === WA_AREA_ANY;
 
-  if (aid === WA_MENU_PROJECTS || aid === WA_MENU_SEE || parseWaPickId(aid)) return withWaBriefStep(state, undefined);
+  if (aid === WA_MENU_PROJECTS || aid === WA_MENU_SEE || aid === WA_MENU_OTHER || parseWaPickId(aid)) return withWaBriefStep(state, undefined);
   if (aid === WA_BACK_SIZE) return withWaBriefStep(state, 'size');
   if (aid === WA_BACK_AREA && askArea) return withWaBriefStep(state, 'area');
   if (aid === WA_MENU_CHOOSE) {
