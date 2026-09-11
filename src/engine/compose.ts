@@ -1048,7 +1048,16 @@ function fallbackReplyBody(req: ComposeRequest): string {
         const markets = (ev.catalog?.microMarkets ?? []).filter(Boolean).slice(0, 3);
         const min = ev.catalog?.priceMinInr ?? 0;
         const max = ev.catalog?.priceMaxInr ?? 0;
-        const have = total > 0 ? `${total} projects` : 'our projects';
+        // One project is not "1 projects", and it is not a book to cut either —
+        // name it and offer what it holds, the same answer the sticky-clarify
+        // discover branch now gives.
+        const onlyName = total === 1 ? ev.catalog?.projectNames?.[0]?.name?.trim() : undefined;
+        if (onlyName) {
+          const only = `*${onlyName}*`;
+          const place = markets.length ? ` in ${joinPlaceLabels(markets)}` : '';
+          return `I'm not sure I followed that one. ${only}${place} is the one project here — want the price, the legal papers, the sizes, or a site visit?`;
+        }
+        const have = total > 0 ? `${total} projects` : 'the full book';
         const where = markets.length ? ` across ${joinPlaceLabels(markets)}` : '';
         const band =
           min > 0 && max > min ? `, ${formatInr(min)} – ${formatInr(max)}` : min > 0 ? `, from ${formatInr(min)}` : '';
@@ -1969,13 +1978,13 @@ function fallbackReplyBody(req: ComposeRequest): string {
     case 'hold_propose':
       return goal.copy;
     case 'hold_booked':
-      // W7 — three honest outcomes: held, queued (waitlist confirmed), or gone.
+      // Request opened (or waitlist). Staff Place mints the real unit_hold.
       if (goal.queued) {
         return `Done — you're ${goal.position && goal.position > 1 ? `#${goal.position} in line` : 'first in line'} for the next *${goal.unitType}* at *${goal.projectName}*. The moment one frees up it's auto-held for you and our team will call.`;
       }
       return goal.placed
-        ? `Done — a *${goal.unitType}* at *${goal.projectName}* is held for you${goal.expiresLabel ? ` until ${goal.expiresLabel}` : ' for the next 24 hours'}. Our team will reach out to take it forward.`
-        : `I'm sorry — the last *${goal.unitType}* at *${goal.projectName}* was just taken. Want me to check another configuration, or have our team call you about the waitlist?`;
+        ? `Got it — I've asked our team to hold a *${goal.unitType}* at *${goal.projectName}* for you. They'll confirm once it's on the books.`
+        : `I'm sorry — I couldn't open that hold request just now. Want me to check another configuration, or have our team call you?`;
     case 'visit_recall': {
       const vs = ev.visits?.visits ?? [];
       if (!vs.length) {

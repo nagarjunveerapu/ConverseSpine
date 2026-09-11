@@ -490,6 +490,10 @@ export function fakeData(): EngineData & {
       // Fixed expiry keeps assertions deterministic (24h past the fake epoch).
       return { ok: true, expiresAt: 1_750_000_000_000 + 24 * 60 * 60 * 1000, unitNumber: 'A-101' };
     },
+    async requestHold(_ids, hold) {
+      holds.push({ projectId: hold.projectId, unitType: hold.unitType, buyerName: hold.buyerName ?? '' });
+      return { ok: true, requestId: 'hrq_test_1' };
+    },
     async bootstrapContext() {
       return { recentMessages: [], rejectedProjectIds: [], turnIndex: 1 };
     },

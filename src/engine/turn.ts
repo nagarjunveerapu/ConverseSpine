@@ -2013,6 +2013,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
               priorTopics: state.feedForward?.priorTopics,
               constraints: state.constraints,
               channel,
+              bookNames: (catalogForTurn?.projectNames ?? []).map((p) => p.name),
             })
           : null;
       reply = sticky ?? speakFailure(unsupportedFailure);
@@ -2044,6 +2045,31 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       ...(evidence.education ? { evidence } : {}),
       goal,
     });
+    // A turn we could not read is the ONE turn the buyer most needs a door on,
+    // and this return used to send text alone — every other return packs. On
+    // WhatsApp that meant "I couldn't make sense of that. …please share your
+    // locality, budget, BHK?" arriving with nothing to tap, so the only way
+    // out was to guess better words. A builder with ONE project felt it worst:
+    // there is nothing to narrow, and the single row that would have ended the
+    // turn was the row we withheld.
+    //
+    // The pack is cut from what the builder actually has, so it cannot invent
+    // an option: focused → that project's own file menu, otherwise the book.
+    // `clarify_intent` is not a bag goal, so it lands on the book fallback —
+    // which is the honest answer to "show me your projects" even on the turn we
+    // failed to parse those words.
+    const failurePacked =
+      channel === 'whatsapp'
+        ? packWhatsAppInteractive({
+            goal,
+            state,
+            catalogNames: catalogForTurn?.projectNames ?? [],
+            briefAreas: catalogForTurn?.microMarkets ?? [],
+            singleProject: (catalogForTurn?.projectNames?.length ?? 0) <= 1,
+            catalog: catalogForTurn,
+          })
+        : undefined;
+    const failureActions = failurePacked ? packedToSuggestedActions(failurePacked) : undefined;
     return {
       reply,
       state,
@@ -2056,6 +2082,10 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         },
         inputSource,
       ),
+      ...(failureActions ? { whatsappActions: failureActions } : {}),
+      ...(failurePacked && failurePacked.kind !== 'text'
+        ? { whatsappInteractive: failurePacked }
+        : {}),
     };
   }
 
@@ -2688,24 +2718,33 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     }
   }
   if (goal.kind === 'hold_booked') {
-    // Place the hold NOW (evidence stage — commitProject precedent) so the
-    // deterministic confirmation copy can reflect the real outcome: held
-    // until <time>, queued on the waitlist, or the type just sold out. Desk
-    // auto-picks the unit; the one-active-hold invariant lives in its DB.
+    // Buyer yes opens a hold *request* — staff Place mints via /api/v1/holds.
+    // Waitlist (queue:true) still joins Desk waitlist — different machine.
     const wantQueue = state.hold?.queue === true;
     const res = nd
-      ? await deps.data
-          .placeHold(
-            { ndThreadId: nd, builderId: state.builderId },
-            {
-              projectId: goal.projectId,
-              unitType: goal.unitType,
-              ...(state.buyerName ? { buyerName: state.buyerName } : {}),
-              ...(wantQueue ? { queue: true } : {}),
-              ttlMinutes: 24 * 60,
-            },
-          )
-          .catch(() => ({ ok: false as const }))
+      ? wantQueue
+        ? await deps.data
+            .placeHold(
+              { ndThreadId: nd, builderId: state.builderId },
+              {
+                projectId: goal.projectId,
+                unitType: goal.unitType,
+                ...(state.buyerName ? { buyerName: state.buyerName } : {}),
+                queue: true,
+                ttlMinutes: 24 * 60,
+              },
+            )
+            .catch(() => ({ ok: false as const }))
+        : await deps.data
+            .requestHold(
+              { ndThreadId: nd, builderId: state.builderId },
+              {
+                projectId: goal.projectId,
+                unitType: goal.unitType,
+                ...(state.buyerName ? { buyerName: state.buyerName } : {}),
+              },
+            )
+            .catch(() => ({ ok: false as const }))
       : { ok: false as const };
     goal = {
       ...goal,
@@ -4263,6 +4302,11 @@ async function fetchRecommend(
   };
 
   let filters = discover.searchFilters(s.constraints);
+  // Live WhatsApp = public only. Desk Chat / playground /api = silent OK.
+  filters = {
+    ...filters,
+    audience: channel === 'whatsapp' ? 'buyer' : 'desk_chat',
+  };
   // Trade-off Advisor: only the recommend path carries preference inputs.
   // Explicit in-state weights (chip answer this session) win Desk-side;
   // the resolved lead id lets the Desk fall back to stored BPE facts for a
@@ -6348,20 +6392,9 @@ function applyGoalToState(s: ThreadState, goal: TurnGoal, ev: EvidenceSet): Thre
     case 'hold_propose':
       return { ...s, hold: goal.state };
     case 'hold_booked':
-      if (goal.queued || !goal.placed) {
-        return { ...s, hold: undefined };
-      }
-      return {
-        ...s,
-        hold: {
-          placed: true,
-          projectId: goal.projectId,
-          projectName: goal.projectName,
-          unitType: goal.unitType,
-          awaitingConfirm: false,
-          ...(goal.holdId ? { holdId: goal.holdId } : {}),
-        },
-      };
+      // Buyer yes opens a request; staff Place is what mints a unit_hold.
+      // Do not stamp session `hold.placed` here — that overlay is for Desk life.
+      return { ...s, hold: undefined };
     case 'visit_ask':
     case 'visit_propose':
       return { ...s, phase: 'visit', visit: goal.state };
