@@ -3,6 +3,7 @@ import {
   splitProjectStamp,
   WA_MENU_CHOOSE,
   WA_MENU_PROJECTS,
+  WA_AREA_ANY,
   WA_MONEY_TOTAL,
   WA_NODE_TIME,
   WA_NODE_TRUST,
@@ -57,6 +58,12 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
 
     const size = await turn('2 BHK', 'wa.bhk.2_bhk');
     expect(size.whatsappInteractive?.kind).toBe('list');
+    expect(size.whatsappInteractive && size.whatsappInteractive.kind === 'list' && size.whatsappInteractive.button).toBe(
+      'Choose area',
+    );
+
+    const area = await turn('Any area', WA_AREA_ANY);
+    expect(area.whatsappInteractive?.kind).toBe('list');
 
     const budget = await turn('Under ₹80L', 'wa.budget.u_8000000');
     expect(budget.whatsappInteractive?.kind).toBe('list');
@@ -66,7 +73,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     const pick = await turn('Brigade Cornerstone', 'wa.pick.cornerstone');
     expect(pick.reply).toContain('*Brigade Cornerstone* — your fit:');
     expect(pick.reply).toContain('2 BHK');
-    expect(pick.reply.trim().endsWith('What do you want to check?')).toBe(true);
+    expect(pick.reply.trim().endsWith('What would you like to know about Brigade Cornerstone?')).toBe(true);
 
     const rows = listRows(pick);
     expect(rows).toBeDefined();
@@ -89,6 +96,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     const { turn } = harness('wa-founder-walk-total');
     await turn('Help me choose', WA_MENU_CHOOSE);
     await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Any area', WA_AREA_ANY);
     await turn('Under ₹80L', 'wa.budget.u_8000000');
     await turn('Brigade Cornerstone', 'wa.pick.cornerstone');
 
@@ -123,7 +131,7 @@ describe('founder walk 14 Aug — the console answers the pick', () => {
     const { turn } = harness('wa-sizes-open');
     // A plain board pick, no size given — the ladder leads the console.
     const opened = await turn('Brigade Eldorado', 'wa.pick.eldorado');
-    expect(opened.reply.trim().endsWith('What do you want to check?')).toBe(true);
+    expect(opened.reply.trim().endsWith('What would you like to know about Brigade Eldorado?')).toBe(true);
     const rows = listRows(opened)!;
     const aids = rows.map((r) => splitProjectStamp(r.id).aid);
     expect(aids).toContain('wa.money.bhk.2');
@@ -237,6 +245,7 @@ describe('an identity-only shell never becomes the project file', () => {
     data.fail.projectDetail = 'absent';
     await turn('Help me choose', WA_MENU_CHOOSE);
     await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Any area', WA_AREA_ANY);
     const board = await turn('Under ₹80L', 'wa.budget.u_8000000');
     expect(board.state.projectCache?.['krishnaja']?.identityOnly).toBe(true);
     expect(board.state.projectCache?.['krishnaja']?.reraNumber).toBeUndefined();
@@ -258,6 +267,7 @@ describe('an identity-only shell never becomes the project file', () => {
     data.fail.projectDetail = 'absent';
     await turn('Help me choose', WA_MENU_CHOOSE);
     await turn('2 BHK', 'wa.bhk.2_bhk');
+    await turn('Any area', WA_AREA_ANY);
     await turn('Under ₹80L', 'wa.budget.u_8000000');
     const pick = await turn('Krishnaja', 'wa.pick.krishnaja');
     const cached = pick.state.projectCache?.['krishnaja'];

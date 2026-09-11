@@ -11,6 +11,8 @@ describe('isBriefReady', () => {
   it('propertyType alone is not ready', () => {
     expect(isBriefReady({ propertyType: 'apartment' })).toBe(false);
     expect(hasNarrowingConstraint({ propertyType: 'apartment' })).toBe(true);
+    expect(hasNarrowingConstraint({ budgetMinInr: 4_500_000 })).toBe(true);
+    expect(hasNarrowingConstraint({})).toBe(false);
   });
 
   it('bhk alone is not ready', () => {

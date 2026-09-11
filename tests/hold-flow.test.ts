@@ -32,7 +32,8 @@ describe('unit hold flow (launch ops)', () => {
     const booked = await turn('yes');
     expect(booked.debug.goal).toMatchObject({ kind: 'hold_booked', placed: true });
     expect(booked.reply).toMatch(/held for you/i);
-    expect(booked.state.hold).toBeUndefined();
+    expect(booked.state.hold?.placed).toBe(true);
+    expect(booked.state.hold?.projectName).toMatch(/Ayana/i);
     expect(deps.data.holdsPlaced).toHaveLength(1);
     expect(deps.data.holdsPlaced[0]).toMatchObject({ projectId: 'ayana', unitType: '2 BHK' });
   });

@@ -248,6 +248,7 @@ export interface EngineData {
     ok: boolean;
     expiresAt?: number;
     unitNumber?: string;
+    holdId?: string;
     /** W7 — queue:true joined the waitlist instead of holding (202). */
     waiting?: boolean;
     position?: number;

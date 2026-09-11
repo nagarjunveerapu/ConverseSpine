@@ -1100,6 +1100,7 @@ export function nayadeskData(
         }
         return {
           ok: true,
+          ...(r.hold_id ? { holdId: r.hold_id } : {}),
           ...(r.expires_at ? { expiresAt: r.expires_at } : {}),
           ...(r.unit_number ? { unitNumber: r.unit_number } : {}),
         };

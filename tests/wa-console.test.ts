@@ -219,7 +219,7 @@ describe('the project card is the mock card', () => {
     expect(card).toContain('*Money* — from ₹31 L');
     expect(card).toContain('*Trust* — RERA registered · A-Khata (BBMP)');
     expect(card).toContain('*Time* — Phase-wise; Dioro & Beryl: June 2028');
-    expect(card.trim().endsWith('What do you want to check?')).toBe(true);
+    expect(card.trim().endsWith('What would you like to know about Brigade Eldorado?')).toBe(true);
   });
 
   it('lines the record cannot back are absent, never apologised for', async () => {

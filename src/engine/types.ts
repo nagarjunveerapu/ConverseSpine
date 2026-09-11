@@ -101,10 +101,11 @@ export interface DiscoverState {
   advancedOnce: boolean;
   /**
    * WA minimal brief (builder-allotted lines) — pending step after the buyer
-   * taps “Help me choose”. Two steps max: size, then budget. Cleared on a
-   * project pick, the Projects menu, or once both facts are known.
+   * taps “Help me find a home”. Size, then live catalog area (when the book
+   * has two or more micro-markets), then budget. Cleared on a project pick,
+   * the Projects menu, or once the asked facts are known.
    */
-  waBriefStep?: 'size' | 'budget';
+  waBriefStep?: 'size' | 'area' | 'budget';
   /** Recent turns for anaphora ("both", "these") — newest last. */
   recentMessages?: TranscriptMessage[];
   /**
@@ -199,6 +200,9 @@ export interface HoldState {
   offeredAtTurn?: number;
   /** W7 — the type is sold out of available units: a confirm JOINS THE WAITLIST instead of holding. */
   queue?: boolean;
+  /** Desk placed the unit — overlay, not a lock. Looking around must not clear this. */
+  placed?: boolean;
+  holdId?: string;
 }
 
 export interface ThreadState {
@@ -584,6 +588,7 @@ export type TurnGoal =
       unitType: string;
       placed?: boolean;
       expiresLabel?: string;
+      holdId?: string;
       /** W7 — the confirm joined the waitlist (type sold out): queued + position. */
       queued?: boolean;
       position?: number;
@@ -1130,6 +1135,10 @@ export interface ComposeContext {
   /** How many configs the just-picked project has, when the chrome will offer
    *  them as rows. The confirm copy has to name what is actually on screen. */
   waSizeOptions?: number;
+  /** Second size sheet — villa / plot / any, not bedrooms. */
+  waMoreTypes?: boolean;
+  /** Placed unit hold — greet names it; looking around must not drop it. */
+  waHold?: { projectName: string; unitType?: string };
   /** Stage 7 — named latch when Desk provides sales contact. */
   handoffPhone?: string;
   handoffTeamName?: string;

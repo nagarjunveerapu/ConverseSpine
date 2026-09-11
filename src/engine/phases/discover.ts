@@ -254,8 +254,9 @@ export function decide(
   }
 
   if (isFirstHomeHelpAsk(ex)) {
-    // Builder-allotted WA: "not sure where to start" opens the two-tap minimal
-    // brief (size → budget) instead of dumping the book.
+    // Builder-allotted WA: "not sure where to start" opens the minimal brief
+    // (size, then budget). The live-area sheet is owned by the WA step machine
+    // when the catalog has two or more micro-markets — decide() has no catalog.
     if (opts?.skipBrief) {
       if (!mergedC.bhk?.trim() && !mergedC.propertyType?.trim()) return { kind: 'probe', slot: 'bhk' };
       if (mergedC.budgetMaxInr === undefined) return { kind: 'probe', slot: 'budget' };
@@ -505,8 +506,9 @@ export function resolveRecommend(
   c: Constraints,
   rejectedIds: readonly string[],
   noMatchReasoning?: string,
+  listMax = 3,
 ): { goal: TurnGoal; evidence: EvidenceSet } {
-  const filtered = matches.filter((m) => !rejectedIds.includes(m.projectId)).slice(0, 3);
+  const filtered = matches.filter((m) => !rejectedIds.includes(m.projectId)).slice(0, listMax ?? 3);
   if (filtered.length > 0) {
     return { goal: base, evidence: { tools: ['search'], matches: filtered } };
   }
@@ -559,7 +561,7 @@ function nextSlot(s: ThreadState): ProbeKind {
 
 /** Any constraint signal (preview, routable turn-0, reject filters). Not enough to list. */
 export function hasNarrowingConstraint(c: Constraints): boolean {
-  return Boolean(c.budgetMaxInr || c.bhk || c.location || c.propertyType);
+  return Boolean(c.budgetMaxInr || c.budgetMinInr || c.bhk || c.location || c.propertyType);
 }
 
 /**
@@ -632,12 +634,16 @@ export function filterSearchMatches(
   raw: Match[],
   c: Constraints,
   rejectedIds: readonly string[],
-  opts?: { locationAliases?: readonly string[] },
+  opts?: { locationAliases?: readonly string[]; limit?: number },
 ): Match[] {
   let ms = raw.filter((m) => !rejectedIds.includes(m.projectId));
   if (c.budgetMaxInr) {
     const budgetMax = c.budgetMaxInr;
     ms = ms.filter((m) => m.startingPriceInr > 0 && m.startingPriceInr <= budgetMax);
+  }
+  if (c.budgetMinInr) {
+    const budgetMin = c.budgetMinInr;
+    ms = ms.filter((m) => m.startingPriceInr >= budgetMin);
   }
   if (c.location) {
     // Desk expand aliases (from NayaDesk, not Spine hardcodes) + buyer location.
@@ -648,7 +654,37 @@ export function filterSearchMatches(
         deskLocationIdentityHit(m, locs),
     );
   }
-  return ms.slice(0, 3);
+  return ms.slice(0, opts?.limit ?? 3);
+}
+
+/**
+ * Starting prices for WA budget copy/bands. Desk search ranks on location; it
+ * does not admit-filter, so a size-only envelope still quotes Whitefield when
+ * the buyer just named Aerospace Park. Same admit as `filterSearchMatches`.
+ */
+export function startingPricesForBudgetBands(
+  rows: ReadonlyArray<{
+    project_id?: string;
+    name?: string;
+    micro_market?: string;
+    starting_price_inr?: number;
+    match_reasons?: string[];
+  }>,
+  location?: string,
+): number[] {
+  const matches: Match[] = rows.map((r, i) => ({
+    projectId: r.project_id ?? `row-${i}`,
+    name: r.name ?? '',
+    microMarket: r.micro_market ?? '',
+    startingPriceInr: r.starting_price_inr ?? 0,
+    startingPriceDisplay: '',
+    matchReasons: r.match_reasons ?? [],
+  }));
+  const loc = location?.trim();
+  const kept = loc
+    ? filterSearchMatches(matches, { location: loc }, [], { limit: 24 })
+    : matches;
+  return kept.map((m) => m.startingPriceInr).filter((n) => Number.isFinite(n) && n > 0);
 }
 
 /**

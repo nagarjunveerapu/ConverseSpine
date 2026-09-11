@@ -7,6 +7,7 @@ import {
   parseWaPickId,
   resolveWaProjectFirst,
   waListPickKeepsCommit,
+  WA_BACK_FILE,
   WA_MENU_PROJECTS,
   WA_MONEY_MENU,
 } from '../src/channel/wa-pack.js';
@@ -120,7 +121,7 @@ describe('packWhatsAppInteractive', () => {
       const rows = packed.sections[0]!.rows;
       expect(rows.some((r) => r.id === 'wa.day.sunday')).toBe(false);
       expect(rows.filter((r) => r.id.startsWith('wa.day.')).length).toBeGreaterThan(2);
-      expect(rows[rows.length - 1]!.id).toBe(WA_MENU_PROJECTS);
+      expect(rows[rows.length - 1]!.id).toBe(WA_BACK_FILE);
     }
   });
 });
@@ -161,8 +162,8 @@ describe('packedToInteractive + greet copy', () => {
         channel: 'whatsapp',
       },
     });
-    expect(reply).toMatch(/Welcome to \*Brigade Group\*/);
-    expect(reply).toMatch(/What are you looking for\?/);
+    expect(reply).toMatch(/Thank you for reaching out to \*Brigade Group\*/);
+    expect(reply).toMatch(/find a home that fits/);
     expect(reply.toLowerCase()).not.toMatch(/what brings you here/);
     expect(reply.toLowerCase()).not.toMatch(/area and budget/);
     expect(reply.toLowerCase()).not.toMatch(/drown you in filters/);

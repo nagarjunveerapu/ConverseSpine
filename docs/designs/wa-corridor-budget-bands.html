@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp — budget bands from this corridor, not the whole book</title>
+<style>
+  :root {
+    --bg: #0b141a; --ink: #e9edef; --dim: #8696a0; --line: #2a3942;
+    --bot: #202c33; --buyer: #005c4b; --accent: #00a884; --sheet: #182229;
+    --card: #111b21; --dead: #f15c6d; --ok: #3dcc9a; --warn: #e9c46a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { display: grid; grid-template-columns: 1fr 340px; min-height: 100vh; }
+  .main { padding: 20px 24px 64px; }
+  .rail { padding: 20px 16px 48px; border-left: 1px solid var(--line); background: #0e171d; }
+  h1 { font-size: 18px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin: 8px 0 16px; max-width: 72ch; }
+  .steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+  .steps button {
+    background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 11px; font: inherit; cursor: pointer;
+  }
+  .steps button.on { background: var(--accent); color: #04251c; font-weight: 600; border-color: var(--accent); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .col h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+  .col.better h2 { color: var(--ok); }
+  .col.today h2 { color: var(--warn); }
+  .phone {
+    width: 100%; max-width: 360px; background: #0b141a; border: 1px solid var(--line);
+    border-radius: 18px; overflow: hidden; min-height: 560px; display: flex; flex-direction: column;
+  }
+  .ph-head { background: #1f2c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .ph-head b { font-size: 14px; }
+  .ph-head span { color: var(--dim); font-size: 11px; }
+  .thread { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 94%; padding: 8px 11px; border-radius: 8px; white-space: pre-wrap; font-size: 13.5px; }
+  .bot { background: var(--bot); align-self: flex-start; }
+  .me { background: var(--buyer); align-self: flex-end; }
+  .btns { display: flex; flex-direction: column; gap: 6px; align-self: stretch; }
+  .btns button, .list .row {
+    background: var(--sheet); color: var(--accent); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .list { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; align-self: stretch; }
+  .list .cta { padding: 8px 12px; text-align: center; color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--line); }
+  .list .row { width: 100%; border: 0; border-top: 1px solid var(--line); border-radius: 0; color: var(--ink); font-weight: 500; }
+  .list .row .d { font-size: 12px; color: var(--dim); margin-top: 2px; font-weight: 400; }
+  .list .row.back { color: var(--accent); }
+  .list .row.dead { color: var(--dead); }
+  .note { margin-top: 16px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+  .note b { color: var(--ok); }
+  .rail h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 16px 0 8px; }
+  .rail h3:first-child { margin-top: 0; }
+  .rail p, .rail li { color: var(--dim); font-size: 13px; margin: 0 0 8px; }
+  .rail ul { padding-left: 18px; }
+  .rail code { font-size: 11.5px; background: #1c262d; padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+  .law { padding: 10px 12px; background: #0f1c19; border-left: 3px solid var(--ok); font-size: 13px; margin: 0 0 12px; }
+  .dead { border-left-color: var(--dead); background: #1a1214; }
+  @media (max-width: 980px) {
+    .page { grid-template-columns: 1fr; }
+    .rail { border-left: 0; border-top: 1px solid var(--line); }
+    .pair { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="main">
+    <h1>Quote this corridor’s 3 BHK prices. Not the whole book.</h1>
+    <p class="sub">Live tap: 3 BHK → Aerospace Park → ₹1 Cr – ₹1.5 Cr → “I don’t have a 3 BHK here.” Two homes do exist there — Cornerstone ₹85 L and Eldorado ₹89 L. The mid band was cut from every Brigade 3 BHK (₹82 L to ₹1.67 Cr), then search kept only this corridor. Better cuts the bands from the homes that actually sit in that area.</p>
+    <div class="steps" id="steps"></div>
+    <div class="pair">
+      <div class="col today">
+        <h2>Today — book-wide ladder</h2>
+        <div class="phone" id="today"></div>
+      </div>
+      <div class="col better">
+        <h2>Better — this corridor</h2>
+        <div class="phone" id="better"></div>
+      </div>
+    </div>
+    <div class="note">
+      <b>Tap a step</b> or tap the budget row. Today’s middle band is empty in Aerospace Park. Better’s middle band holds the two homes that exist. Under ₹85 L and Above ₹1.25 Cr stay honest misses.
+    </div>
+  </div>
+  <aside class="rail">
+    <div class="law">Live proof: Any budget in this cut returns Cornerstone and Eldorado. Under ₹1 Cr does too. ₹1–1.5 Cr is empty here.</div>
+    <div class="law dead">Do not relax the location filter or dump the citywide book on this miss. The cut was a lie; the empty list was not.</div>
+    <h3>Files / layers</h3>
+    <ul>
+      <li><code>turn.ts</code> <code>sizeScopedCatalog</code> — Desk search for budget copy/bands currently sends size only</li>
+      <li><code>discover.ts</code> — same location admit as <code>filterSearchMatches</code> (Desk ranks; it does not hard-filter)</li>
+      <li><code>wa-pack.ts</code> <code>waBudgetRows</code> — already cuts bands from the catalog envelope; no new chrome</li>
+      <li><code>compose.ts</code> — already says “prices here”; the numbers must match the corridor</li>
+    </ul>
+    <h3>Why this layer</h3>
+    <p>The packer reads <code>catalog.priceMinInr / priceMaxInr</code>. Those numbers are filled by <code>sizeScopedCatalog</code> after size is known. Area is now known too, and is ignored, so “here” quotes Whitefield and Sarjapur as if they sat in Aerospace Park.</p>
+    <h3>Why not other layers</h3>
+    <p>Not compose-only — bands would still be the book-wide thirds. Not regex / RTI. Not Desk <code>scoreProject</code> (location is a rank boost by design). Not miss-door copy first — if the sheet is honest, this tap never happens. Not broadening an empty cut.</p>
+    <h3>Consumers</h3>
+    <p>Budget probe copy, <code>waBudgetRows</code> ids, then <code>searchFilters</code> + Spine location filter. Any area stays citywide. Advisor brief unchanged.</p>
+    <h3>Quality</h3>
+    <p>Same taps as the playground: 3 BHK → Aerospace Park → middle band must name Cornerstone and Eldorado. Copy range ≈ ₹85 L–₹89 L, not ₹82 L–₹1.67 Cr. Ablation unchanged.</p>
+  </aside>
+</div>
+<script>
+const STEPS = [
+  {
+    id: 'area',
+    label: '1 · Area (already right)',
+    buyer: '3 BHK',
+    today: {
+      text: "Got it — *3 BHK*.\n\nWhich area are you looking at?",
+      list: { cta: 'Choose area', rows: ['Aerospace Park / Devanahalli Corridor', 'Devanahalli', 'Whitefield', 'Any area', '← Bedrooms'] },
+    },
+    better: {
+      text: "Got it — *3 BHK*.\n\nWhich area are you looking at?",
+      list: { cta: 'Choose area', rows: ['Aerospace Park / Devanahalli Corridor', 'Devanahalli', 'Whitefield', 'Any area', '← Bedrooms'] },
+    },
+  },
+  {
+    id: 'budget',
+    label: '2 · Budget sheet',
+    buyer: 'Aerospace Park / Devanahalli Corridor',
+    today: {
+      text: "*Aerospace Park / Devanahalli Corridor*, then.\n\nFor a 3 BHK, prices here go from ₹82 L to about ₹1.67 Cr.\n\nWhat budget feels comfortable?",
+      list: { cta: 'Set budget', rows: ['Under ₹1 Cr', '₹1 Cr – ₹1.5 Cr', 'Above ₹1.5 Cr', 'Any budget', '← Area'] },
+      deadRow: '₹1 Cr – ₹1.5 Cr',
+    },
+    better: {
+      text: "*Aerospace Park / Devanahalli Corridor*, then.\n\nFor a 3 BHK, prices here go from ₹85 L to about ₹89 L.\n\nWhat budget feels comfortable?",
+      list: { cta: 'Set budget', rows: ['Under ₹85 L', '₹85 L – ₹1.25 Cr', 'Above ₹1.25 Cr', 'Any budget', '← Area'] },
+    },
+  },
+  {
+    id: 'result',
+    label: '3 · After the middle band',
+    buyerToday: '₹1 Cr – ₹1.5 Cr',
+    buyerBetter: '₹85 L – ₹1.25 Cr',
+    today: {
+      text: "I don't have a 3 BHK in Aerospace Park / Devanahalli Corridor, ₹1 Cr – ₹1.5 Cr.\n\nYou can change bedrooms, change budget, or see all the projects.",
+      doors: ['Change bedrooms', 'Change budget', 'See the projects'],
+    },
+    better: {
+      text: "For a 3 BHK in Aerospace Park / Devanahalli Corridor, ₹85 L – ₹1.25 Cr, 2 homes fit.\n\nTap one and I'll open it.",
+      list: {
+        cta: 'Open a home',
+        rows: [
+          ['Brigade Cornerstone', 'Aerospace Park · from ₹85 L'],
+          ['Brigade Eldorado', 'Aerospace Park · from ₹89 L'],
+        ],
+      },
+    },
+  },
+];
+
+function fmt(s) {
+  return s.replace(/\*([^*]+)\*/g, '<b>$1</b>');
+}
+
+function buyerOf(step, side) {
+  if (side === 'today' && step.buyerToday) return step.buyerToday;
+  if (side === 'better' && step.buyerBetter) return step.buyerBetter;
+  return step.buyer;
+}
+
+function renderPhone(el, step, side) {
+  const spec = step[side];
+  let html = `<div class="ph-head"><b>Brigade</b><span>${side === 'today' ? 'Today' : 'Better'}</span></div><div class="thread">`;
+  html += `<div class="bubble me">${buyerOf(step, side)}</div>`;
+  html += `<div class="bubble bot">${fmt(spec.text)}</div>`;
+  if (spec.doors) {
+    html += `<div class="btns">` + spec.doors.map((d) =>
+      `<button type="button">${d}</button>`
+    ).join('') + `</div>`;
+  }
+  if (spec.list) {
+    html += `<div class="list"><div class="cta">${spec.list.cta}</div>`;
+    html += spec.list.rows.map((r) => {
+      const title = Array.isArray(r) ? r[0] : r;
+      const desc = Array.isArray(r) ? `<div class="d">${r[1]}</div>` : '';
+      const back = title.startsWith('←') ? ' back' : '';
+      const dead = spec.deadRow === title ? ' dead' : '';
+      const go = nextFromList(step.id, side, title);
+      return `<button type="button" class="row${back}${dead}" data-go="${go}">${title}${desc}</button>`;
+    }).join('');
+    html += `</div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function nextFromList(id, side, title) {
+  if (id === 'area') return 'budget';
+  if (id === 'budget' && title.startsWith('←')) return 'area';
+  if (id === 'budget') return 'result';
+  return id;
+}
+
+let current = 'budget';
+function show(id) {
+  current = id;
+  const step = STEPS.find((s) => s.id === id);
+  document.querySelectorAll('.steps button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+  renderPhone(document.getElementById('today'), step, 'today');
+  renderPhone(document.getElementById('better'), step, 'better');
+}
+
+document.getElementById('steps').innerHTML = STEPS.map((s) =>
+  `<button type="button" data-id="${s.id}">${s.label}</button>`
+).join('');
+document.getElementById('steps').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) show(b.dataset.id);
+});
+document.querySelector('.pair').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-go]');
+  if (b && b.dataset.go) show(b.dataset.go);
+});
+show('budget');
+</script>
+</body>
+</html>

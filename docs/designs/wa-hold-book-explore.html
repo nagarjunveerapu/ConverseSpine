@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hold · book · documents · still explore</title>
+<style>
+  :root {
+    --bg: #0b141a; --ink: #e9edef; --dim: #8696a0; --line: #2a3942;
+    --bot: #202c33; --buyer: #005c4b; --accent: #00a884; --sheet: #182229;
+    --card: #111b21; --dead: #f15c6d; --ok: #3dcc9a; --warn: #e9c46a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { display: grid; grid-template-columns: 360px 1fr 320px; min-height: 100vh; }
+  .stage, .rail { padding: 20px 16px 48px; }
+  .stage { border-right: 1px solid var(--line); }
+  .rail { border-left: 1px solid var(--line); }
+  h1 { font-size: 17px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 12.5px; margin: 6px 0 14px; }
+  .row2 { display: flex; gap: 6px; margin-bottom: 10px; }
+  button.chip {
+    background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font: inherit; cursor: pointer;
+    flex: 1; text-align: center;
+  }
+  button.chip.on { background: var(--accent); color: #04251c; font-weight: 600; border-color: var(--accent); }
+  nav button {
+    display: block; width: 100%; text-align: left; background: var(--card); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit;
+    cursor: pointer; margin: 0 0 6px; font-size: 12.5px;
+  }
+  nav button.on { border-color: var(--accent); background: #0f1c19; }
+  .phone {
+    width: 100%; max-width: 340px; background: #0b141a; border: 1px solid var(--line);
+    border-radius: 18px; overflow: hidden; min-height: 520px; display: flex; flex-direction: column;
+  }
+  .ph-head { background: #1f2c33; padding: 10px 14px; display: flex; justify-content: space-between; }
+  .ph-head b { font-size: 14px; }
+  .ph-head span { color: var(--dim); font-size: 11px; }
+  .thread { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 90%; padding: 8px 11px; border-radius: 8px; white-space: pre-wrap; font-size: 13.5px; }
+  .bot { background: var(--bot); align-self: flex-start; }
+  .me { background: var(--buyer); align-self: flex-end; }
+  .btns { display: flex; flex-direction: column; gap: 6px; align-self: stretch; }
+  .btns button, .list .row {
+    background: var(--sheet); color: var(--accent); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .list { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; align-self: stretch; }
+  .list .cta { padding: 8px 12px; text-align: center; color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--line); }
+  .list .row {
+    width: 100%; border: 0; border-top: 1px solid var(--line); border-radius: 0;
+    color: var(--ink); font-weight: 500;
+  }
+  .list .row .d { font-size: 12px; color: var(--dim); margin-top: 2px; font-weight: 400; }
+  .list .row.escape { color: var(--dim); }
+  .law {
+    margin: 12px 0; padding: 10px 12px; background: #0f1c19; border-left: 3px solid var(--ok);
+    font-size: 13px;
+  }
+  .flag { margin-top: 10px; padding: 8px 10px; font-size: 13px; border-left: 3px solid var(--ok); background: #0f1c19; }
+  .flag.dead { border-color: var(--dead); background: #1a1214; }
+  .flag.warn { border-color: var(--warn); background: #1c1910; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0 0 10px; }
+  .step h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  .k { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .opts span { border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 12px; }
+  .opts span.pick { background: #1f3b34; color: var(--accent); border-color: var(--accent); }
+  .main { padding: 20px 24px 64px; }
+  .main h2 { font-size: 16px; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0 0; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  code { font-size: 12px; background: #1c262d; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="stage">
+    <h1>After they pick a home</h1>
+    <p class="sub">Hold, book, send papers — and still look around. Tap the phone. Today is what ships. Better is the law.</p>
+    <div class="row2">
+      <button class="chip on" id="mToday">Today</button>
+      <button class="chip" id="mBetter">Better</button>
+    </div>
+    <nav id="nav"></nav>
+    <div class="phone" id="phone"></div>
+  </div>
+  <div class="main">
+    <h2 id="title"></h2>
+    <div class="law" id="law"></div>
+    <div id="walk"></div>
+    <div class="flag" id="note"></div>
+    <table>
+      <tr><th></th><th>Hold</th><th>Unit booked</th><th>Documents</th><th>Explore again</th></tr>
+      <tr>
+        <td>Today</td>
+        <td>One-shot in this chat: “hold a 2 BHK?” → yes → Desk <code>POST /holds</code>. Next Hi forgets it.</td>
+        <td>Desk <code>has_booking</code> only unlocks private files. Chat still says Help me find a home.</td>
+        <td>Brochure / payment plan / legal rows on the file, if the record has them. No “required pack” after hold.</td>
+        <td><code>See other projects</code> ejects focus. Hold is not mentioned. Greet is a stranger.</td>
+      </tr>
+      <tr>
+        <td>Better</td>
+        <td>Durable. Greet names the hold. Extend / file / papers are first. Explore is a third door, not the first.</td>
+        <td>Greet is payment plan, possession, RM. Explore is still a door — quieter.</td>
+        <td>After hold or book, a send list of what this unit actually needs. Sending does not lock the chat.</td>
+        <td>Always allowed. Does <b>not</b> drop the hold unless they tap Drop the hold. The book still shows “your hold” as a way back.</td>
+      </tr>
+    </table>
+  </div>
+  <div class="rail">
+    <h1>The law</h1>
+    <p class="sub">Commitment is an overlay. Exploration is never cancelled by it.</p>
+    <div class="step">
+      <h3>1. Overlay, not a lock</h3>
+      <div>A hold or a booking sits on the lead. Phase can still be discover or focused. The bot must not pretend they are a new buyer.</div>
+    </div>
+    <div class="step">
+      <h3>2. Primary chrome = the job</h3>
+      <div>On hold → hold details, papers, file. Booked → payment plan, possession, RM. Never Help me find a home as door 1.</div>
+    </div>
+    <div class="step">
+      <h3>3. Explore is always a door</h3>
+      <div>Third button / last list row: Other projects. Looking around does not cancel the hold. Dropping the hold is its own tap.</div>
+    </div>
+    <div class="step">
+      <h3>4. Papers follow the unit</h3>
+      <div>Send what Desk has for <i>this</i> hold/booking. Brochure is public. Allotment / agreement / payment plan ride <code>has_hold</code> / <code>has_booking</code>.</div>
+    </div>
+  </div>
+</div>
+<script>
+const PATHS = [
+  { id: 'hold', label: 'Hold a unit' },
+  { id: 'docs', label: 'Send the papers' },
+  { id: 'book', label: 'Book the unit' },
+  { id: 'exploreKeep', label: 'Look around — keep the hold' },
+  { id: 'exploreDrop', label: 'Look around — drop the hold' },
+];
+
+let mode = 'better';
+let path = 'hold';
+let screen = 'start';
+const history = [];
+
+function reset() {
+  history.length = 0;
+  screen = 'start';
+}
+
+function go(next, chosen) {
+  const v = view();
+  history.push({
+    n: history.length + 1,
+    outcome: v.outcome,
+    options: v.options,
+    chosen,
+    state: v.state,
+  });
+  screen = next;
+  draw();
+}
+
+function bubble(who, text) {
+  return `<div class="bubble ${who}">${text}</div>`;
+}
+function buttons(rows) {
+  return `<div class="btns">${rows.map(r =>
+    `<button data-go="${r.go}" data-chosen="${r.title}">${r.title}</button>`
+  ).join('')}</div>`;
+}
+function list(cta, rows) {
+  return `<div class="list"><div class="cta">${cta}</div>${rows.map(r =>
+    `<button class="row ${r.escape ? 'escape' : ''}" data-go="${r.go}" data-chosen="${r.title}">
+      <div>${r.title}</div>${r.d ? `<div class="d">${r.d}</div>` : ''}
+    </button>`
+  ).join('')}</div>`;
+}
+
+function view() {
+  const today = mode === 'today';
+  const P = path;
+
+  if (today) {
+    if (P === 'hold' && screen === 'start') return {
+      head: 'Brigade Eldorado',
+      state: 'focused / file',
+      outcome: 'What would you like to know about Eldorado?',
+      options: ['Book a visit', 'See other projects'],
+      chrome: [
+        bubble('bot', 'What would you like to know about *Brigade Eldorado*?'),
+        list('More', [
+          { title: 'Book a visit', go: 'dead' },
+          { title: 'See other projects', go: 'eject', escape: true },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Today there is no Hold row on the WhatsApp file. Hold is typed (“hold a 2 BHK”) or an Advisor CTA. The standing act is still Book a visit.',
+    };
+    if (P === 'hold' && screen === 'dead') return {
+      head: 'Brigade Eldorado',
+      state: 'visit / ask',
+      outcome: 'Which day works? Site visits usually Mon–Sun.',
+      options: ['Sat 14 Sep', 'Sun 15 Sep', '← Back'],
+      chrome: [
+        bubble('me', 'Book a visit'),
+        bubble('bot', 'Which day works? Site visits usually Mon–Sun.'),
+        list('Pick a day', [
+          { title: 'Sat 14 Sep', go: 'start' },
+          { title: 'Sun 15 Sep', go: 'start' },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Visit and hold are different jobs. Tapping the only standing act starts a visit, not a hold.',
+    };
+    if (screen === 'eject') return {
+      head: 'Brigade Group',
+      state: 'discover / book',
+      outcome: 'These are the projects. Tap one to open it.',
+      options: ['1. Brigade Eldorado', '2. Brigade Cornerstone', '3. Brigade Orchards'],
+      chrome: [
+        bubble('me', 'See other projects'),
+        bubble('bot', 'These are the projects. Tap one to open it.'),
+        list('Projects', [
+          { title: '1. Brigade Eldorado', go: 'start' },
+          { title: '2. Brigade Cornerstone', go: 'start' },
+          { title: '3. Brigade Orchards', go: 'start' },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Focus is gone. If a hold existed on Desk, this Hi-shaped list never says so. The buyer looks like a new lead.',
+    };
+    if (P === 'docs' && screen === 'start') return {
+      head: 'Brigade Eldorado',
+      state: 'focused / trust',
+      outcome: 'RERA on file. I can send the brochure.',
+      options: ['Brochure', '← Back to the file'],
+      chrome: [
+        bubble('bot', '*Brigade Eldorado — trust*\nRERA on file. Tap to send the brochure.'),
+        list('Trust & legal', [
+          { title: 'Brochure', go: 'sent' },
+          { title: '← Back to the file', go: 'start', escape: true },
+        ]),
+      ],
+      flag: 'warn',
+      note: 'Public brochure works. Allotment / agreement / payment plan stay locked until Desk marks has_booking. A hold does not unlock the pack.',
+    };
+    if (screen === 'sent') return {
+      head: 'Brigade Eldorado',
+      state: 'focused / media',
+      outcome: 'Sent the brochure for Brigade Eldorado.',
+      options: ['Book a visit', 'See other projects'],
+      chrome: [
+        bubble('me', 'Brochure'),
+        bubble('bot', 'Sent the brochure for *Brigade Eldorado*.'),
+        buttons([
+          { title: 'Book a visit', go: 'dead' },
+          { title: 'See other projects', go: 'eject' },
+        ]),
+      ],
+      flag: 'warn',
+      note: 'Send works. Next chrome is still visit / eject — not “your hold” and not “look around without dropping it”.',
+    };
+    if (P === 'book' && screen === 'start') return {
+      head: 'Brigade Group',
+      state: 'discover / greet',
+      outcome: 'Hi — I can help you find a home that fits, or open a project you already know.',
+      options: ['Help me find a home', 'See the projects', 'I know the name'],
+      chrome: [
+        bubble('bot', 'Hi — I\'m here for *Brigade Group*.\n\nI can help you find a home that fits, or open a project you already know.'),
+        buttons([
+          { title: 'Help me find a home', go: 'eject' },
+          { title: 'See the projects', go: 'eject' },
+          { title: 'I know the name', go: 'eject' },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Unit is booked on Desk. Greet is a stranger. has_booking only opens private media if they somehow re-enter the file.',
+    };
+    if (P === 'exploreKeep' || P === 'exploreDrop') return {
+      head: 'Brigade Group',
+      state: 'discover / book',
+      outcome: 'These are the projects. Tap one to open it.',
+      options: ['1. Brigade Eldorado', '2. Brigade Cornerstone', 'Help me find a home'],
+      chrome: [
+        bubble('me', 'See other projects'),
+        bubble('bot', 'These are the projects. Tap one to open it.'),
+        list('Projects', [
+          { title: '1. Brigade Eldorado', go: 'start' },
+          { title: '2. Brigade Cornerstone', go: 'start' },
+          { title: 'Help me find a home', go: 'start', escape: true },
+        ]),
+      ],
+      flag: 'dead',
+      note: 'Today cannot tell “look around” from “drop the hold”. Both are the same eject. Desk still has the hold; chat never says so.',
+    };
+  }
+
+  // Better
+  if (P === 'hold') {
+    if (screen === 'start') return {
+      head: 'Brigade Eldorado',
+      state: 'focused / file',
+      outcome: 'This is Eldorado — 2 BHK from ₹58 L. What would you like to know?',
+      options: ['What it costs', 'Hold this 2 BHK', 'Send papers', 'Book a visit', 'Other projects'],
+      chrome: [
+        bubble('bot', '*Brigade Eldorado*\n2 BHK · from ₹58 L\nWhat would you like to know?'),
+        list('The file', [
+          { title: 'What it costs', go: 'start' },
+          { title: 'Hold this 2 BHK', d: '24 hours while you decide', go: 'confirm' },
+          { title: 'Send papers', go: 'docs' },
+          { title: 'Book a visit', go: 'start' },
+          { title: 'Other projects', go: 'explore', escape: true },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Hold is a standing act next to visit — not a typed secret. Other projects is already here, before any hold.',
+    };
+    if (screen === 'confirm') return {
+      head: 'Brigade Eldorado',
+      state: 'hold / propose',
+      outcome: 'Hold a 2 BHK at Eldorado for 24 hours? Reply yes.',
+      options: ['Yes, hold it', 'Not now', 'Other projects'],
+      chrome: [
+        bubble('me', 'Hold this 2 BHK'),
+        bubble('bot', 'Hold a *2 BHK* at *Brigade Eldorado* until *Sat 12 Sep, 2:45pm*? I will pick an available unit — no unit number in chat.'),
+        buttons([
+          { title: 'Yes, hold it', go: 'held' },
+          { title: 'Not now', go: 'start' },
+          { title: 'Other projects', go: 'explore' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Same one-shot confirm Spine already has (hold_propose). Chrome names the job. Exploring from here does not place the hold.',
+    };
+    if (screen === 'held') return {
+      head: 'Brigade Eldorado',
+      state: 'on_hold',
+      outcome: '2 BHK at Eldorado is on hold until Sat 12 Sep, 2:45pm.',
+      options: ['Send the papers', 'Continue the file', 'Other projects'],
+      chrome: [
+        bubble('me', 'Yes, hold it'),
+        bubble('bot', '*Hold placed*\n2 BHK · *Brigade Eldorado*\nUntil Sat 12 Sep, 2:45pm\n\nI can send the papers for this unit, stay on the file, or you can still look at other projects — the hold stays unless you drop it.'),
+        buttons([
+          { title: 'Send the papers', go: 'docs' },
+          { title: 'Continue the file', go: 'start' },
+          { title: 'Other projects', go: 'explore' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Lifecycle overlay is now on_hold. Next cold Hi opens this, not Help me find a home.',
+    };
+  }
+
+  if (P === 'docs' || screen === 'docs') {
+    if (screen === 'start' || screen === 'docs') return {
+      head: 'Brigade Eldorado',
+      state: 'on_hold / documents',
+      outcome: 'These are the papers on file for your held 2 BHK.',
+      options: ['Payment plan', 'Cost sheet', 'RERA / title pack', 'Other projects'],
+      chrome: [
+        bubble('bot', 'For the *2 BHK on hold* at *Eldorado*, I can send what is on file. Allotment and agreement wait until the unit is booked.'),
+        list('Send', [
+          { title: 'Payment plan', d: 'stage-wise', go: 'sentDoc' },
+          { title: 'Cost sheet', go: 'sentDoc' },
+          { title: 'RERA / title pack', go: 'sentDoc' },
+          { title: 'Other projects', go: 'explore', escape: true },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Pack is gated by lifecycle: hold → plan + cost + public legal. Booked → add allotment / agreement. Explore remains a row.',
+    };
+    if (screen === 'sentDoc') return {
+      head: 'Brigade Eldorado',
+      state: 'on_hold / documents',
+      outcome: 'Sent the payment plan for your held 2 BHK.',
+      options: ['Cost sheet', 'Continue the file', 'Other projects'],
+      chrome: [
+        bubble('me', 'Payment plan'),
+        bubble('bot', 'Sent the payment plan for the *2 BHK* on hold at *Eldorado*.'),
+        buttons([
+          { title: 'Cost sheet', go: 'docs' },
+          { title: 'Continue the file', go: 'start' },
+          { title: 'Other projects', go: 'explore' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'A send is an answer, not a funnel lock. They can still walk the file or the book.',
+    };
+  }
+
+  if (P === 'book') {
+    if (screen === 'start') return {
+      head: 'Brigade Eldorado',
+      state: 'on_hold / file',
+      outcome: '2 BHK on hold until Sat 12 Sep. What would you like to do?',
+      options: ['Book this unit', 'Send the papers', 'Other projects'],
+      chrome: [
+        bubble('bot', '*2 BHK* at *Eldorado* is on hold until *Sat 12 Sep*. I can ask the team to book it, send papers, or you can still look around.'),
+        buttons([
+          { title: 'Book this unit', go: 'bookAsk' },
+          { title: 'Send the papers', go: 'docs' },
+          { title: 'Other projects', go: 'explore' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Booking is a team/Desk write (not a chat unit number). Explore is still door 3.',
+    };
+    if (screen === 'bookAsk') return {
+      head: 'Brigade Eldorado',
+      state: 'unit_book / confirm',
+      outcome: 'Ask the team to book the held 2 BHK at Eldorado?',
+      options: ['Yes, book it', 'Keep the hold', 'Other projects'],
+      chrome: [
+        bubble('me', 'Book this unit'),
+        bubble('bot', 'I\'ll ask the team to book the held *2 BHK* at *Eldorado*. You\'ll get payment plan and next steps from your RM. Confirm?'),
+        buttons([
+          { title: 'Yes, book it', go: 'booked' },
+          { title: 'Keep the hold', go: 'start' },
+          { title: 'Other projects', go: 'explore' },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Not RTI. Not regex on “book it”. A confirm tap / yes after this prompt. Desk has_booking becomes the overlay.',
+    };
+    if (screen === 'booked') return {
+      head: 'Brigade Eldorado',
+      state: 'unit_booked',
+      outcome: 'You\'re booked on a 2 BHK at Eldorado. Payment plan, possession, or your RM.',
+      options: ['Payment plan', 'Possession', 'Talk to RM', 'Other projects'],
+      chrome: [
+        bubble('me', 'Yes, book it'),
+        bubble('bot', 'You\'re booked on a *2 BHK* at *Brigade Eldorado*. I can send the payment plan, possession, or put you through to your RM.\n\nYou can still look at other projects — this booking stays.'),
+        list('Next', [
+          { title: 'Payment plan', go: 'docs' },
+          { title: 'Possession', go: 'start' },
+          { title: 'Talk to RM', go: 'start' },
+          { title: 'Other projects', go: 'explore', escape: true },
+        ]),
+      ],
+      flag: 'ok',
+      note: 'Four rows → list. Other projects is last, dim. Never Help me find a home as the first door.',
+    };
+  }
+
+  if (screen === 'explore' || P === 'exploreKeep' || (P === 'exploreDrop' && screen !== 'drop')) {
+    const keep = P !== 'exploreDrop';
+    if (screen === 'start' && P === 'exploreKeep') {
+      return {
+        head: 'Brigade Eldorado',
+        state: 'on_hold / file',
+        outcome: '2 BHK on hold until Sat 12 Sep. What would you like to do?',
+        options: ['Hold details', 'Continue the file', 'Other projects'],
+        chrome: [
+          bubble('bot', '*2 BHK* at *Eldorado* is on hold until *Sat 12 Sep*. I can walk the file — or you can look at other projects without dropping the hold.'),
+          buttons([
+            { title: 'Hold details', go: 'held' },
+            { title: 'Continue the file', go: 'held' },
+            { title: 'Other projects', go: 'explore' },
+          ]),
+        ],
+        flag: 'ok',
+        note: 'Cold greet after a hold. Explore is door 3. Hold is still first.',
+      };
+    }
+    if (screen === 'start' && P === 'exploreDrop') {
+      return {
+        head: 'Brigade Eldorado',
+        state: 'on_hold / file',
+        outcome: '2 BHK on hold until Sat 12 Sep. What would you like to do?',
+        options: ['Hold details', 'Continue the file', 'Other projects'],
+        chrome: [
+          bubble('bot', '*2 BHK* at *Eldorado* is on hold until *Sat 12 Sep*.'),
+          buttons([
+            { title: 'Hold details', go: 'drop' },
+            { title: 'Continue the file', go: 'drop' },
+            { title: 'Other projects', go: 'explore' },
+          ]),
+        ],
+        flag: 'ok',
+        note: 'Same greet. Dropping the hold is not this tap — it is a row on the book screen.',
+      };
+    }
+    return {
+      head: 'Brigade Group',
+      state: 'on_hold / browse',
+      outcome: keep
+        ? 'Your 2 BHK at Eldorado stays on hold. Pick another file, or go back.'
+        : 'Your 2 BHK at Eldorado is still on hold. Pick another file — or drop the hold to start over.',
+      options: keep
+        ? ['← Your hold — Eldorado 2 BHK', 'Cornerstone · ₹45 L', 'Orchards · ₹68 L']
+        : ['← Your hold — Eldorado 2 BHK', 'Cornerstone · ₹45 L', 'Drop the hold'],
+      chrome: [
+        bubble('me', 'Other projects'),
+        bubble('bot', keep
+          ? 'Your *2 BHK* at *Eldorado* stays on hold until *Sat 12 Sep*. Look around — or go back to it.'
+          : 'Your *2 BHK* at *Eldorado* is still on hold. Looking around does not cancel it. Drop the hold only if you mean to.'),
+        list('Other projects', [
+          { title: '← Your hold — Eldorado 2 BHK', d: 'until Sat 12 Sep', go: 'held', escape: true },
+          { title: 'Cornerstone · ₹45 L', go: 'other' },
+          { title: 'Orchards · ₹68 L', go: 'other' },
+          ...(keep ? [] : [{ title: 'Drop the hold', d: 'then start over', go: 'drop', escape: true }]),
+        ]),
+      ],
+      flag: 'ok',
+      note: keep
+        ? 'popFocus + lifecycle overlay. Constraints can stay. The hold is a way-back row, not a silent cancel.'
+        : 'Drop is explicit. Never infer drop from See other projects.',
+    };
+  }
+
+  if (screen === 'other') return {
+    head: 'Brigade Cornerstone',
+    state: 'focused + on_hold overlay',
+    outcome: 'This is Cornerstone. Your Eldorado 2 BHK is still on hold.',
+    options: ['What it costs', 'Back to your hold', 'Other projects'],
+    chrome: [
+      bubble('me', 'Cornerstone · ₹45 L'),
+      bubble('bot', '*Brigade Cornerstone*\n2 BHK · from ₹45 L\nYour *Eldorado 2 BHK* is still on hold until Sat 12 Sep.'),
+      buttons([
+        { title: 'What it costs', go: 'other' },
+        { title: 'Back to your hold', go: 'held' },
+        { title: 'Other projects', go: 'explore' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Two projects in play: the one they opened, and the overlay. Opening Cornerstone does not POST a release.',
+  };
+
+  if (screen === 'drop') return {
+    head: 'Brigade Group',
+    state: 'exploring / greet',
+    outcome: 'Hold released. I can help you find a home that fits, or open a project you already know.',
+    options: ['Help me find a home', 'See the projects', 'I know the name'],
+    chrome: [
+      bubble('me', 'Drop the hold'),
+      bubble('bot', 'Hold on the *2 BHK* at *Eldorado* is released.\n\nI can help you find a home that fits, or open a project you already know.'),
+      buttons([
+        { title: 'Help me find a home', go: 'start' },
+        { title: 'See the projects', go: 'explore' },
+        { title: 'I know the name', go: 'start' },
+      ]),
+    ],
+    flag: 'ok',
+    note: 'Only this tap writes a release to Desk. Explore doors return because overlay is gone.',
+  };
+
+  if (screen === 'held') {
+    path = 'hold';
+    screen = 'held';
+    return view();
+  }
+
+  return view();
+}
+
+function draw() {
+  document.getElementById('mToday').classList.toggle('on', mode === 'today');
+  document.getElementById('mBetter').classList.toggle('on', mode === 'better');
+  document.getElementById('nav').innerHTML = PATHS.map(p =>
+    `<button class="${path===p.id?'on':''}" data-path="${p.id}">${p.label}</button>`
+  ).join('');
+  document.querySelectorAll('[data-path]').forEach(b => b.onclick = () => {
+    path = b.dataset.path; reset(); draw();
+  });
+
+  const v = view();
+  document.getElementById('title').textContent = PATHS.find(p => p.id === path).label + ' · ' + (mode === 'today' ? 'Today' : 'Better');
+  document.getElementById('law').textContent = mode === 'better'
+    ? 'Yes — they can always switch to a new exploration. The hold or booking stays until they tap Drop the hold / the RM releases it.'
+    : 'Today: they can tap See other projects, but the bot forgets the hold and greets like a stranger.';
+  document.getElementById('phone').innerHTML =
+    `<div class="ph-head"><b>${v.head}</b><span>${v.state}</span></div>
+     <div class="thread">${v.chrome.join('')}</div>`;
+  document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go, b.dataset.chosen));
+
+  const steps = history.map(s => `
+    <div class="step">
+      <h3>Step ${s.n}</h3>
+      <div class="k">Outcome of the last tap</div>
+      <div>${s.outcome}</div>
+      <div class="k">Options</div>
+      <div class="opts">${s.options.map(o => `<span ${o===s.chosen?'class="pick"':''}>${o}</span>`).join('')}</div>
+      <div class="k">Chosen</div>
+      <div>${s.chosen}</div>
+    </div>`).join('');
+  const now = `
+    <div class="step">
+      <h3>Now</h3>
+      <div class="k">Outcome</div>
+      <div>${v.outcome}</div>
+      <div class="k">Options</div>
+      <div class="opts">${v.options.map(o => `<span>${o}</span>`).join('')}</div>
+      <div class="k">State</div>
+      <div>${v.state}</div>
+    </div>`;
+  document.getElementById('walk').innerHTML = steps + now;
+  const note = document.getElementById('note');
+  note.className = 'flag ' + (v.flag || 'ok');
+  note.textContent = v.note;
+}
+
+document.getElementById('mToday').onclick = () => { mode = 'today'; reset(); draw(); };
+document.getElementById('mBetter').onclick = () => { mode = 'better'; reset(); draw(); };
+draw();
+</script>
+</body>
+</html>

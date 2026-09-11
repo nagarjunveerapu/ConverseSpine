@@ -316,7 +316,7 @@ export function waConsoleCardReply(
   ].filter(Boolean);
   // A card with fewer than two backed lines is not a card.
   if (lines.length < 2) return undefined;
-  return `*${detail.name}*\n\n${lines.join('\n')}\n\nWhat do you want to check?`;
+  return `*${detail.name}*\n\n${lines.join('\n')}\n\nWhat would you like to know about ${detail.name}?`;
 }
 
 /**

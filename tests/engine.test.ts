@@ -188,7 +188,18 @@ describe('ConverseEngine facts', () => {
         startingPriceDisplay: '₹31 L',
         matchReasons: ['North Bangalore ✓'],
       },
+      {
+        projectId: 'cornerstone',
+        name: 'Cornerstone Utopia',
+        microMarket: 'Whitefield',
+        startingPriceInr: 5_200_000,
+        startingPriceDisplay: '₹52 L',
+        matchReasons: [],
+      },
     ];
+    expect(
+      discover.filterSearchMatches(raw, { budgetMaxInr: 6_500_000, budgetMinInr: 4_500_000 }, []).map((m) => m.projectId),
+    ).toEqual(['cornerstone']);
     // Exact micro_market / budget only — no Spine corridor invent.
     expect(
       discover.filterSearchMatches(raw, { budgetMaxInr: 2_000_000, location: 'Yelahanka' }, []),
@@ -236,6 +247,33 @@ describe('ConverseEngine facts', () => {
     );
     expect(gap?.budgetGap?.closestName).toBe('Brigade Eldorado');
     expect(gap?.noMatch?.reasoning).toMatch(/Nothing in Devanahalli starts within/i);
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      projectId: `p${i}`,
+      name: `Project ${i}`,
+      microMarket: 'Devanahalli',
+      startingPriceInr: 3_000_000,
+      startingPriceDisplay: '₹30 L',
+      matchReasons: [],
+    }));
+    expect(discover.filterSearchMatches(many, { budgetMaxInr: 10_000_000 }, [])).toHaveLength(3);
+    expect(
+      discover.filterSearchMatches(many, { budgetMaxInr: 10_000_000 }, [], { limit: 10 }),
+    ).toHaveLength(10);
+  });
+
+  it('budget-band prices admit the named corridor even when Desk returned the book', () => {
+    const rows = [
+      { project_id: 'cs', name: 'Cornerstone', micro_market: 'Aerospace Park / Devanahalli Corridor', starting_price_inr: 85_00_000 },
+      { project_id: 'el', name: 'Eldorado', micro_market: 'Aerospace Park / Devanahalli Corridor', starting_price_inr: 89_00_000 },
+      { project_id: 'wf', name: 'Utopia', micro_market: 'Whitefield', starting_price_inr: 1_67_00_000 },
+    ];
+    const prices = discover.startingPricesForBudgetBands(
+      rows,
+      'Aerospace Park / Devanahalli Corridor',
+    );
+    expect(Math.min(...prices)).toBe(85_00_000);
+    expect(Math.max(...prices)).toBe(89_00_000);
+    expect(discover.startingPricesForBudgetBands(rows)).toContain(1_67_00_000);
   });
 
   it('builds constraint gap evidence for missing BHK at budget', () => {

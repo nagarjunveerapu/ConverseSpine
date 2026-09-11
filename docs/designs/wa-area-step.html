@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp — ask the live area so the list ranks</title>
+<style>
+  :root {
+    --bg: #0b141a; --ink: #e9edef; --dim: #8696a0; --line: #2a3942;
+    --bot: #202c33; --buyer: #005c4b; --accent: #00a884; --sheet: #182229;
+    --card: #111b21; --dead: #f15c6d; --ok: #3dcc9a; --warn: #e9c46a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { display: grid; grid-template-columns: 1fr 340px; min-height: 100vh; }
+  .main { padding: 20px 24px 64px; }
+  .rail { padding: 20px 16px 48px; border-left: 1px solid var(--line); background: #0e171d; }
+  h1 { font-size: 18px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin: 8px 0 16px; max-width: 72ch; }
+  .steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+  .steps button {
+    background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 11px; font: inherit; cursor: pointer;
+  }
+  .steps button.on { background: var(--accent); color: #04251c; font-weight: 600; border-color: var(--accent); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .col h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+  .col.better h2 { color: var(--ok); }
+  .col.today h2 { color: var(--warn); }
+  .phone {
+    width: 100%; max-width: 360px; background: #0b141a; border: 1px solid var(--line);
+    border-radius: 18px; overflow: hidden; min-height: 620px; display: flex; flex-direction: column;
+  }
+  .ph-head { background: #1f2c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .ph-head b { font-size: 14px; }
+  .ph-head span { color: var(--dim); font-size: 11px; }
+  .thread { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 94%; padding: 8px 11px; border-radius: 8px; white-space: pre-wrap; font-size: 13.5px; }
+  .bot { background: var(--bot); align-self: flex-start; }
+  .me { background: var(--buyer); align-self: flex-end; }
+  .btns { display: flex; flex-direction: column; gap: 6px; align-self: stretch; }
+  .btns button, .list .row {
+    background: var(--sheet); color: var(--accent); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .list { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; align-self: stretch; }
+  .list .cta { padding: 8px 12px; text-align: center; color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--line); }
+  .list .row { width: 100%; border: 0; border-top: 1px solid var(--line); border-radius: 0; color: var(--ink); font-weight: 500; }
+  .list .row .d { font-size: 12px; color: var(--dim); margin-top: 2px; font-weight: 400; }
+  .list .row.back { color: var(--accent); }
+  .note { margin-top: 16px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+  .note b { color: var(--ok); }
+  .rail h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 16px 0 8px; }
+  .rail h3:first-child { margin-top: 0; }
+  .rail p, .rail li { color: var(--dim); font-size: 13px; margin: 0 0 8px; }
+  .rail ul { padding-left: 18px; }
+  .rail code { font-size: 11.5px; background: #1c262d; padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+  .law { padding: 10px 12px; background: #0f1c19; border-left: 3px solid var(--ok); font-size: 13px; margin: 0 0 12px; }
+  .dead { border-left-color: var(--dead); background: #1a1214; }
+  @media (max-width: 980px) {
+    .page { grid-template-columns: 1fr; }
+    .rail { border-left: 0; border-top: 1px solid var(--line); }
+    .pair { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="main">
+    <h1>Ask the area we actually have. Then the list can rank.</h1>
+    <p class="sub">Today the brief is size → budget, then the cheapest homes in the whole book. Brigade’s live micro-markets never get a tap, so Desk search has nothing to rank on. Better inserts one sheet of those markets, then budget, then a list cut to that corridor.</p>
+    <div class="steps" id="steps"></div>
+    <div class="pair">
+      <div class="col today">
+        <h2>Today — citywide cheapest</h2>
+        <div class="phone" id="today"></div>
+      </div>
+      <div class="col better">
+        <h2>Better — live micro-markets</h2>
+        <div class="phone" id="better"></div>
+      </div>
+    </div>
+    <div class="note">
+      <b>Tap a step</b> or tap the Better list. Rows are the live Brigade corridors, not a Bangalore gazetteer. <code>Any area</code> keeps today’s citywide search. One-market books skip this sheet.
+    </div>
+  </div>
+  <aside class="rail">
+    <div class="law">Options come from <code>catalog.microMarkets</code> only. Never invent Whitefield if this builder is not there.</div>
+    <div class="law">Size stays first. Area is the missing rank key. Budget still last so the cut is honest.</div>
+    <div class="law dead">Do not import the Advisor interview (<code>wa.brief.loc.*</code>, purpose, worries, hub). New ids: <code>wa.area.*</code>.</div>
+    <h3>Files / layers</h3>
+    <ul>
+      <li><code>wa-pack.ts</code> — area sheet from live markets; tap → <code>constraints.location</code></li>
+      <li><code>types.ts</code> — <code>waBriefStep: 'area'</code></li>
+      <li><code>compose.ts</code> — “Which area are you looking at?”; miss/matches name the corridor</li>
+      <li><code>turn.ts</code> — pending brief trap maps area → probe <code>location</code>; WA <code>maxResults: 10</code></li>
+      <li><code>discover.ts</code> — already sends <code>locations</code> into Desk search</li>
+    </ul>
+    <h3>Why this layer</h3>
+    <p>Search already ranks when <code>locations</code> is set. The miss is upstream: the project-first brief never writes that slot, so Desk ranks cheapest-across-Bangalore.</p>
+    <h3>Why not other layers</h3>
+    <p>Not regex / RTI — this is a closed catalog list, same as BHK. Not Advisor brief — that ladder is purpose → worries → hub. Not compose-only — without the tap, rank has no key. Not a hardcoded Bangalore list — live book only.</p>
+    <h3>Consumers</h3>
+    <p><code>searchFilters.locations</code> → Desk search/rank → <code>filterSearchMatches</code> keeps the corridor. Soft-rank on WA stays off except investment/value.</p>
+    <h3>Quality</h3>
+    <p>Area rows = live catalog. Any area must not invent a place. Ablation unchanged. Replies read: “a 1 BHK in Devanahalli under ₹45 L”, not “the book”.</p>
+  </aside>
+</div>
+<script>
+const MARKETS = [
+  'Aerospace Park / Devanahalli Corridor',
+  'Devanahalli',
+  'Whitefield',
+  'Kanakapura Road',
+  'Mysore Road',
+  'Old Madras Road',
+];
+
+const STEPS = [
+  {
+    id: 'greet',
+    label: '1 · Greet',
+    buyer: 'Hi',
+    today: {
+      text: "Hi Nagarjun,\n\nThank you for reaching out to *Brigade*.\n\nI can help you find a home that fits, or open a project you already know.",
+      doors: ['Help me find a home', 'See the projects', 'I know the name'],
+    },
+    better: {
+      text: "Hi Nagarjun,\n\nThank you for reaching out to *Brigade*.\n\nI can help you find a home that fits, or open a project you already know.",
+      doors: ['Help me find a home', 'See the projects', 'I know the name'],
+    },
+  },
+  {
+    id: 'size',
+    label: '2 · Size',
+    buyer: 'Help me find a home',
+    today: {
+      text: 'How many bedrooms are you looking at?',
+      list: { cta: 'Choose size', rows: ['1 BHK', '2 BHK', '3 BHK', '4+ BHK', 'More types'] },
+    },
+    better: {
+      text: 'How many bedrooms are you looking at?',
+      list: { cta: 'Choose size', rows: ['1 BHK', '2 BHK', '3 BHK', '4+ BHK', 'More types'] },
+    },
+  },
+  {
+    id: 'area',
+    label: '3 · Area',
+    buyer: '2 BHK',
+    today: {
+      skip: true,
+      text: 'Today jumps to budget. No area tap, so Desk never gets a corridor to rank.',
+    },
+    better: {
+      text: "Got it — *2 BHK*.\n\nWhich area are you looking at?",
+      list: {
+        cta: 'Choose area',
+        rows: [
+          ...MARKETS.map((m) => m),
+          'Any area',
+          '← Bedrooms',
+        ],
+      },
+    },
+  },
+  {
+    id: 'budget',
+    label: '4 · Budget',
+    buyerToday: '2 BHK',
+    buyerBetter: 'Devanahalli',
+    today: {
+      text: "Got it — *2 BHK*.\n\nPrices for this size go from ₹48 L to about ₹1.8 Cr.\n\nWhat budget feels comfortable?",
+      list: { cta: 'Set budget', rows: ['Under ₹85 L', '₹85 L – ₹1.25 Cr', 'Above ₹1.25 Cr', 'Any budget', '← Bedrooms'] },
+    },
+    better: {
+      text: "*Devanahalli*, then.\n\nPrices for this size go from ₹48 L to about ₹1.8 Cr.\n\nWhat budget feels comfortable?",
+      list: { cta: 'Set budget', rows: ['Under ₹85 L', '₹85 L – ₹1.25 Cr', 'Above ₹1.25 Cr', 'Any budget', '← Area'] },
+    },
+  },
+  {
+    id: 'matches',
+    label: '5 · Matches',
+    buyerToday: 'Under ₹85 L',
+    buyerBetter: 'Under ₹85 L',
+    today: {
+      text: "For a 2 BHK under ₹85 L, 10 homes fit.\n\nTap one and I'll open it.",
+      list: {
+        cta: 'Open a home',
+        rows: [
+          ['Brigade Eldorado', 'Aerospace Park · from ₹52 L'],
+          ['Brigade Meadows', 'Kanakapura Road · from ₹58 L'],
+          ['Brigade Sanctuary', 'Mysore Road · from ₹61 L'],
+          ['Cornerstone Utopia', 'Whitefield · from ₹64 L'],
+          ['Brigade Orchards', 'Devanahalli · from ₹68 L'],
+        ],
+      },
+    },
+    better: {
+      text: "For a 2 BHK in Devanahalli under ₹85 L, 4 homes fit.\n\nTap one and I'll open it.",
+      list: {
+        cta: 'Open a home',
+        rows: [
+          ['Brigade Orchards', 'Devanahalli · from ₹68 L'],
+          ['Northridge Neo', 'Devanahalli · from ₹71 L'],
+          ['Brigade Oasis', 'Devanahalli · from ₹74 L'],
+          ['Brigade Eldorado', 'Aerospace Park / Devanahalli · from ₹52 L'],
+        ],
+      },
+    },
+  },
+];
+
+function fmt(s) {
+  return s.replace(/\*([^*]+)\*/g, '<b>$1</b>');
+}
+
+function buyerOf(step, side) {
+  if (side === 'today' && step.buyerToday) return step.buyerToday;
+  if (side === 'better' && step.buyerBetter) return step.buyerBetter;
+  return step.buyer;
+}
+
+function renderPhone(el, step, side) {
+  const spec = step[side];
+  let html = `<div class="ph-head"><b>Brigade</b><span>${side === 'today' ? 'Today' : 'Better'}</span></div><div class="thread">`;
+  if (spec.skip) {
+    html += `<div class="bubble bot">${fmt(spec.text)}</div>`;
+    html += `</div>`;
+    el.innerHTML = html;
+    return;
+  }
+  html += `<div class="bubble me">${buyerOf(step, side)}</div>`;
+  html += `<div class="bubble bot">${fmt(spec.text)}</div>`;
+  if (spec.doors) {
+    html += `<div class="btns">` + spec.doors.map((d, i) =>
+      `<button type="button" data-go="${nextFrom(step.id, i)}">${d}</button>`
+    ).join('') + `</div>`;
+  }
+  if (spec.list) {
+    html += `<div class="list"><div class="cta">${spec.list.cta}</div>`;
+    html += spec.list.rows.map((r) => {
+      const title = Array.isArray(r) ? r[0] : r;
+      const desc = Array.isArray(r) ? `<div class="d">${r[1]}</div>` : '';
+      const back = title.startsWith('←') ? ' back' : '';
+      return `<button type="button" class="row${back}" data-go="${nextFromList(step.id, side, title)}">${title}${desc}</button>`;
+    }).join('');
+    html += `</div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function nextFrom(id, i) {
+  if (id === 'greet') return i === 0 ? 'size' : id;
+  return id;
+}
+function nextFromList(id, side, title) {
+  if (id === 'size' && /BHK/.test(title)) return side === 'better' ? 'area' : 'budget';
+  if (id === 'area') {
+    if (title.startsWith('←')) return 'size';
+    return 'budget';
+  }
+  if (id === 'budget') {
+    if (title.startsWith('←')) return side === 'better' ? 'area' : 'size';
+    return 'matches';
+  }
+  if (id === 'matches') return 'matches';
+  return id;
+}
+
+let current = 'greet';
+function show(id) {
+  current = id;
+  const step = STEPS.find((s) => s.id === id);
+  document.querySelectorAll('.steps button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+  renderPhone(document.getElementById('today'), step, 'today');
+  renderPhone(document.getElementById('better'), step, 'better');
+}
+
+document.getElementById('steps').innerHTML = STEPS.map((s) =>
+  `<button type="button" data-id="${s.id}">${s.label}</button>`
+).join('');
+document.getElementById('steps').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) show(b.dataset.id);
+});
+document.querySelector('.pair').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-go]');
+  if (b && b.dataset.go) show(b.dataset.go);
+});
+show('greet');
+</script>
+</body>
+</html>

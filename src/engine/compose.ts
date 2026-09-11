@@ -17,17 +17,39 @@ import type {
   TurnGoal,
 } from './types.js';
 
+/** Blank line between beats — WhatsApp renders this; glued clauses do not. */
+function waParas(...parts: Array<string | undefined | false | null>): string {
+  return parts
+    .map((p) => (typeof p === 'string' ? p.trim() : ''))
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /** Builder-allotted WhatsApp greet — show the book, never the Advisor brief. */
 export function waBookFirstGreet(opts: {
   builderName?: string;
+  buyerName?: string;
   catalog?: {
     priceMinInr?: number;
     projectTypes?: readonly string[];
     microMarkets?: readonly string[];
     total?: number;
   } | null;
+  hold?: { projectName: string; unitType?: string };
 }): string {
   const brand = (opts.builderName || '').trim() || 'this builder';
+  const who = (opts.buyerName || '').trim();
+  const hi = who ? `Hi ${who},` : 'Hi,';
+  if (opts.hold?.projectName) {
+    const unit = opts.hold.unitType?.trim();
+    return waParas(
+      hi,
+      unit
+        ? `You're holding a ${unit} at *${opts.hold.projectName}*.`
+        : `You're holding a home at *${opts.hold.projectName}*.`,
+      `I can open that file, show other projects, or drop the hold.`,
+    );
+  }
   const types = (opts.catalog?.projectTypes ?? []).filter(Boolean).slice(0, 3);
   const markets = (opts.catalog?.microMarkets ?? []).filter(Boolean).slice(0, 3);
   const min = opts.catalog?.priceMinInr ?? 0;
@@ -37,11 +59,19 @@ export function waBookFirstGreet(opts: {
     ...(min > 0 ? [`from about ${formatInr(min)}`] : []),
   ];
   // The console welcome (mock parity): three quiet doors, no catalog dump.
-  // The corridors/price line moved behind "See everything" — the book screen.
+  // The corridors/price line moved behind "See the projects" — the book screen.
   if ((opts.catalog?.total ?? 0) > 1) {
-    return `Welcome to *${brand}*.\n\nI can help you shortlist, compare, or book a visit.\n\nWhat are you looking for?`;
+    return waParas(
+      hi,
+      `Thank you for reaching out to *${brand}*.`,
+      `I can help you find a home that fits, or open a project you already know.`,
+    );
   }
-  return `Welcome to *${brand}*. ${bits.join(' — ')}.\n\nHere's the book. Pick a project, or tell me a size if you want me to filter.`;
+  return waParas(
+    hi,
+    `Thank you for reaching out to *${brand}*. ${bits.join(' — ')}.`,
+    `Tap the project to open it, or tell me a size if you want me to filter.`,
+  );
 }
 
 /**
@@ -63,7 +93,7 @@ function bookLevelAnswer(topic: AnswerTopic, ev: EvidenceSet): string {
     case 'emi':
       if (min <= 0) return '';
       return max > min
-        ? `Across the book, homes run ${formatInr(min)} – ${formatInr(max)}. `
+        ? `Homes here run ${formatInr(min)} – ${formatInr(max)}. `
         : `Homes here start at ${formatInr(min)}. `;
     // Registration is per project, and NOT every project has one — a managed
     // plantation on agricultural land sits outside RERA entirely. "Each project
@@ -109,7 +139,7 @@ function repeatsPrior(line: string, prior: string | undefined): boolean {
   return p === l || p.startsWith(l.slice(0, 60));
 }
 
-/** Requirement receipt — the buyer sees exactly what the line understood. */
+/** Compact size · band bits — tests and logs; not the buyer-facing sentence. */
 export function waBriefReceipt(c: Constraints | undefined): string {
   if (!c) return '';
   const bits: string[] = [];
@@ -124,7 +154,44 @@ export function waBriefReceipt(c: Constraints | undefined): string {
     bits.push(`above ${formatInr(c.budgetMinInr)}`);
   }
   if (!bits.length) return '';
-  return `Noted: *${bits.join(' · ')}*. `;
+  return bits.join(' · ');
+}
+
+/**
+ * Requirement as a noun phrase in a sentence — "a 1 BHK under ₹45 L".
+ * Never the machine stamp "Noted: *bits*".
+ */
+export function waBriefHuman(c: Constraints | undefined): string {
+  if (!c) return '';
+  const size = c.bhk?.trim()
+    ? c.bhk.trim().replace(/^(\d+)$/, '$1 BHK')
+    : c.propertyType?.trim() || '';
+  const loc = c.location?.trim() || '';
+  let band = '';
+  if (c.budgetMaxInr !== undefined && c.budgetMinInr !== undefined) {
+    band = `${formatInr(c.budgetMinInr)} – ${formatInr(c.budgetMaxInr)}`;
+  } else if (c.budgetMaxInr !== undefined) {
+    band = `under ${formatInr(c.budgetMaxInr)}`;
+  } else if (c.budgetMinInr !== undefined) {
+    band = `above ${formatInr(c.budgetMinInr)}`;
+  }
+  const ranged = c.budgetMinInr !== undefined && c.budgetMaxInr !== undefined;
+  if (size && loc && band) return ranged ? `a ${size} in ${loc}, ${band}` : `a ${size} in ${loc} ${band}`;
+  if (size && loc) return `a ${size} in ${loc}`;
+  if (loc && band) return ranged ? `homes in ${loc}, ${band}` : `homes in ${loc} ${band}`;
+  if (size && band && ranged) return `a ${size} in ${band}`;
+  if (size && band) return `a ${size} ${band}`;
+  if (size) return `a ${size}`;
+  if (loc) return `homes in ${loc}`;
+  return band;
+}
+
+/** Honest miss — say we don't have it. Never "the book". */
+function waNoFitCopy(human: string): string {
+  return waParas(
+    `I don't have ${human}.`,
+    `You can change bedrooms, change budget, or see all the projects.`,
+  );
 }
 
 /** Buyer-facing noun for a relaxed dimension — never their raw value. */
@@ -157,7 +224,7 @@ function relaxedLead(
       : `${nouns.slice(0, -1).join(', ')} or ${nouns[nouns.length - 1]!}`;
   return channel === 'advisor_web'
     ? `I couldn't match ${phrase} tightly — here's the closest I can stand behind`
-    : `Couldn't nail ${phrase} exactly — here's what we do have`;
+    : `I couldn't match ${phrase} exactly — here's the closest I have`;
 }
 import {
   affordabilityFromMonthlyText,
@@ -894,7 +961,12 @@ function fallbackReplyBody(req: ComposeRequest): string {
     case 'greet': {
       const rb = context.returningBuyer;
       if (context.waProjectFirst) {
-        return waBookFirstGreet({ builderName: context.builderName, catalog: ev.catalog });
+        return waBookFirstGreet({
+          builderName: context.builderName,
+          buyerName: context.buyerName,
+          catalog: ev.catalog,
+          ...(context.waHold ? { hold: context.waHold } : {}),
+        });
       }
       if (rb && rb.daysSinceLastSeen >= 1) {
         const welcome = rb.buyerName ? `Welcome back, ${rb.buyerName}.` : 'Welcome back.';
@@ -947,11 +1019,15 @@ function fallbackReplyBody(req: ComposeRequest): string {
         const markets = (ev.catalog?.microMarkets ?? []).filter(Boolean).slice(0, 3);
         const min = ev.catalog?.priceMinInr ?? 0;
         const max = ev.catalog?.priceMaxInr ?? 0;
-        const have = total > 0 ? `${total} projects` : 'the full book';
+        const have = total > 0 ? `${total} projects` : 'our projects';
         const where = markets.length ? ` across ${joinPlaceLabels(markets)}` : '';
         const band =
           min > 0 && max > min ? `, ${formatInr(min)} – ${formatInr(max)}` : min > 0 ? `, from ${formatInr(min)}` : '';
-        return `I'm not sure I followed that one. What I have is ${have}${where}${band} — pick any project below for its details, or tell me a size or budget and I'll cut the book to fit.`;
+        return waParas(
+          `I'm not sure I followed that.`,
+          `We have ${have}${where}${band}.`,
+          `Pick a project below, or tell me a size or budget and I'll narrow it down.`,
+        );
       }
       // Sticky clarify when we can re-anchor to outstanding job; else generic.
       const sticky = speakStickyClarify({
@@ -972,18 +1048,34 @@ function fallbackReplyBody(req: ComposeRequest): string {
       );
     }
     case 'probe': {
-      // Minimal brief on allotted lines — two questions, anchored to the book.
+      // Minimal brief on allotted lines — size, live area, budget.
       if (context.waProjectFirst) {
         if (goal.slot === 'bhk' || goal.slot === 'propertyType') {
-          return `Two quick taps and I'll cut the book to fit. First — how much space do you need?`;
+          return context.waMoreTypes
+            ? `Villa, plot, or any size — which of those fits?`
+            : `How many bedrooms are you looking at?`;
+        }
+        if (goal.slot === 'location') {
+          const size = context.constraints.bhk?.trim() || context.constraints.propertyType?.trim();
+          return waParas(size ? `Got it — *${size}*.` : '', `Which area are you looking at?`);
         }
         if (goal.slot === 'budget') {
           const min = ev.catalog?.priceMinInr ?? 0;
           const max = ev.catalog?.priceMaxInr ?? 0;
-          const spread = min > 0 && max > min ? ` Homes here run ${formatInr(min)} – ${formatInr(max)}.` : '';
-          const ackBits = context.constraints.bhk?.trim() || context.constraints.propertyType?.trim();
-          const ack = ackBits ? `Got it — ${ackBits}. ` : '';
-          return `${ack}And the ceiling you'd rather stay under?${spread} Tap a band, or type a number.`;
+          const size = context.constraints.bhk?.trim() || context.constraints.propertyType?.trim();
+          const loc = context.constraints.location?.trim();
+          const spread =
+            min > 0 && max > min
+              ? size
+                ? `For a ${size}, prices here go from ${formatInr(min)} to about ${formatInr(max)}.`
+                : `Prices here go from ${formatInr(min)} to about ${formatInr(max)}.`
+              : min > 0
+                ? size
+                  ? `For a ${size}, prices here start around ${formatInr(min)}.`
+                  : `Prices here start around ${formatInr(min)}.`
+                : '';
+          const got = loc ? `*${loc}*, then.` : size ? `Got it — *${size}*.` : '';
+          return waParas(got, spread, `What budget feels comfortable?`);
         }
       }
       const ack = briefAckPrefix(context.constraints);
@@ -995,7 +1087,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
     }
     case 'recommend':
     case 'ack_reject_recommend': {
-      const ms = (ev.matches ?? []).slice(0, 3);
+      const ms = (ev.matches ?? []).slice(0, context.waProjectFirst ? 10 : 3);
       // The buyer asked the BOOK something before picking a project. The list is
       // still the right screen; the lead sentence is what makes it an answer.
       const bookLead =
@@ -1038,12 +1130,12 @@ function fallbackReplyBody(req: ComposeRequest): string {
       }
       if (!ms.length) {
         if (context.waProjectFirst) {
-          const receipt = waBriefReceipt(context.constraints);
-          if (receipt) {
+          const human = waBriefHuman(context.constraints);
+          if (human) {
             // Honest no-fit for the brief cut — never a silently relaxed list.
-            return `${receipt}Nothing in the book fits that exactly. Here's everything — or change the size or budget and I'll re-cut.`;
+            return waNoFitCopy(human);
           }
-          return `${bookLead}Here's the book. Pick a project — or tap *Help me choose* and I'll narrow it in two taps.`;
+          return waParas(`These are the projects.`, `Tap one to open it.`);
         }
         return `I couldn't find a fresh match with those filters — tell me if you'd like to adjust area or budget?`;
       }
@@ -1097,11 +1189,23 @@ function fallbackReplyBody(req: ComposeRequest): string {
         const n = ms.length;
         const countCue = n === 1 ? '1 match is on your board' : `${n} matches are on your board`;
         body = `${pre}${lead} — ${countCue}.${tail} ${nextAsk}`;
+      } else if (context.waProjectFirst) {
+        // Names live in the list chrome — the bubble is a sentence, not a reprint.
+        const human = waBriefHuman(context.constraints);
+        const n = ms.length;
+        const fit = n === 1 ? 'one home fits' : `${n} homes fit`;
+        body = ev.relaxed?.length
+          ? waParas(
+              human ? `I don't have an exact match for ${human}.` : lead,
+              `Tap a name below, or change bedrooms or budget.`,
+            )
+          : waParas(
+              human ? `For ${human}, ${fit}.` : `${n === 1 ? 'One home fits.' : `${n} homes fit.`}`,
+              `Tap one and I'll open it.`,
+            );
       } else {
-        // Receipt first on allotted WA lines — the cut is played back before the list.
-        const receipt = context.waProjectFirst ? waBriefReceipt(context.constraints) : '';
         const afford = affordabilityLead(context.buyerText);
-        body = `${afford}${bookLead}${afford ? '' : receipt}${pre}${lead}: ${list}.${tail}${carriedAsks(context.buyerText)} ${nextAsk}`;
+        body = `${afford}${bookLead}${pre}${lead}: ${list}.${tail}${carriedAsks(context.buyerText)} ${nextAsk}`;
       }
       // Singleton exact fit — soft nearby CTA (board stays exact until they opt in).
       if (ev.nearbyOffer?.asked && ev.nearbyOffer.nearbyAreas.length && ms.length === 1) {
@@ -1183,6 +1287,13 @@ function fallbackReplyBody(req: ComposeRequest): string {
       return `Those are the ones that fit${lead ? ` — want full details on *${lead}*, or a site visit?` : '.'}`;
     }
     case 'no_fit': {
+      if (context.waProjectFirst) {
+        const human = waBriefHuman(context.constraints);
+        if (human) {
+          return waNoFitCopy(human);
+        }
+        return waParas(`These are the projects.`, `Tap one to open it.`);
+      }
       const b = context.constraints.budgetMaxInr ? formatInr(context.constraints.budgetMaxInr) : 'that budget';
       if (ev.constraintGap) {
         const g = ev.constraintGap;
@@ -1770,7 +1881,9 @@ function fallbackReplyBody(req: ComposeRequest): string {
             );
           if (!goal.requires?.length && !namesAMeasurement && !looksLikeAQuestion(context.buyerText)) {
             const said = `Understood — I've noted that and it goes to the *${pname}* team with your own words.`;
-            const lever = ` If it changes what you're after, tell me a size or a budget and I'll re-cut the book — or say "projects" to see everything, "call me" and someone will reach you.`;
+            const lever = context.waProjectFirst
+              ? ` If that changes what you want, tell me a size or a budget — or say "projects" to see everything, or "call me" and someone will reach you.`
+              : ` If it changes what you're after, tell me a size or a budget and I'll re-cut the book — or say "projects" to see everything, "call me" and someone will reach you.`;
             if (!repeatsPrior(said, context.priorReplyExcerpt)) return `${said}${lever}`;
           }
           const miss = `I don't have that on file for *${pname}* — I'd rather have our team confirm it than guess, so I'm passing it on. Meanwhile I can give you pricing, the configurations, the legal picture, or set up a site visit.`;
@@ -1802,13 +1915,17 @@ function fallbackReplyBody(req: ComposeRequest): string {
         if (sizes >= 2) {
           // Only claim a count when every one of them is on screen — the list
           // caps at 7 rows, and "7 sizes" over 6 rows is a promise we broke.
-          const head = sizes <= 7 ? `${sizes} sizes on file` : 'these are the sizes on file';
-          return (
-            `*${goal.projectName}* — ${head}. ` +
-            `Pick the one you're after and I'll price it, or go straight to the full price list or a visit.`
+          const head = sizes <= 7 ? `${sizes} sizes to pick from` : 'These are the sizes';
+          return waParas(
+            `You're looking at *${goal.projectName}*.`,
+            `✓ ${head}`,
+            `Pick the one you're after, or go straight to the price list or a visit.`,
           );
         }
-        return `*${goal.projectName}* — Price, a visit, or ask me anything.`;
+        return waParas(
+          `You're looking at *${goal.projectName}*.`,
+          `Price, a visit, or ask me anything.`,
+        );
       }
       return `Great choice${name} — let's look at *${goal.projectName}*. Want pricing, legal status, or to line up a visit?`;
     case 'propose_visit':
@@ -1902,7 +2019,12 @@ function fallbackReplyBody(req: ComposeRequest): string {
     }
     case 'smalltalk':
       if (context.waProjectFirst) {
-        return waBookFirstGreet({ builderName: context.builderName, catalog: ev.catalog });
+        return waBookFirstGreet({
+          builderName: context.builderName,
+          buyerName: context.buyerName,
+          catalog: ev.catalog,
+          ...(context.waHold ? { hold: context.waHold } : {}),
+        });
       }
       return `Doing well, thanks${name}! What kind of property are you exploring — area, budget, or configuration?`;
     default:
