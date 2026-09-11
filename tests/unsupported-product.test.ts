@@ -37,8 +37,10 @@ function apartmentBookDeps(): EngineDeps {
 describe('unsupported product — structure, not phrase lists', () => {
   it('one product mode: never concatenates apartment,plantation', () => {
     expect(detectPropertyTypes('plantation chahiye, apartment nahi')).toBe('plantation');
+    expect(detectPropertyTypes('plantation and apartment')).toBe('plantation');
     expect(detectPropertyTypes('apartment nahi')).toBeUndefined();
     expect(detectPropertyTypes('farmland near Kanakapura')).toBe('plantation');
+    expect(detectPropertyTypes('looking for Villa or Apartment')).toBe('villa,apartment');
   });
 
   it('a new declared type replaces the old one (no longer-string lock)', () => {

@@ -217,7 +217,7 @@ export async function extractFacts(
   const needLlm: Array<'location' | 'property_type' | 'purpose' | 'transition'> = [];
   if (
     !constraints.location &&
-    !s.constraints.location &&
+    (!s.constraints.location || hasTextOverride(text)) &&
     !softPrefs.priorityFocus &&
     askTopics.length === 0 &&
     s.phase !== 'focused' &&
@@ -463,10 +463,10 @@ export function detectPropertyTypes(text: string): string | undefined {
   const whole = detectPropertyType(text);
   if (whole && !negated.has(whole)) found.add(whole);
   if (found.size === 0) return undefined;
-  // One product mode — never "apartment,plantation". A typed ask (villa /
-  // plot / plantation) wins when it co-occurs with apartment.
-  const positive = [...found];
-  return positive.find((t) => t !== 'apartment') ?? positive[0];
+  // Farmland + apartment in one breath is a plantation ask, not a dual search.
+  // Villa-or-apartment briefs stay comma-joined so Advisor filters still OR.
+  if (found.has('plantation') && found.has('apartment')) found.delete('apartment');
+  return [...found].join(',');
 }
 
 function detectPropertyType(text: string): string | undefined {
