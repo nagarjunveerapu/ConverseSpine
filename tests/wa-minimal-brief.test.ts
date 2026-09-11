@@ -540,6 +540,35 @@ describe('clarify packs the three doors', () => {
     }
   });
 
+  it('one to three matches pack as named reply buttons, not See matches', () => {
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'recommend' },
+      state: state({ constraints: { propertyType: 'plot', budgetMaxInr: 1_00_00_000 } }),
+      catalogNames: [{ projectId: 'brigade-oasis', name: 'Brigade Oasis', description: 'from ₹71 L' }],
+      singleProject: false,
+      catalog: CATALOG,
+      briefCut: true,
+    });
+    expect(packed.kind).toBe('buttons');
+    if (packed.kind === 'buttons') {
+      expect(packed.buttons).toEqual([{ id: 'wa.pick.brigade-oasis', title: 'Brigade Oasis' }]);
+      expect(packed.buttons[0]!.title.length).toBeLessThanOrEqual(20);
+    }
+    const three = packWhatsAppInteractive({
+      goal: { kind: 'recommend' },
+      state: state({ constraints: { bhk: '2 BHK', budgetMaxInr: 1_00_00_000 } }),
+      catalogNames: BAG.slice(0, 3),
+      singleProject: false,
+      catalog: CATALOG,
+      briefCut: true,
+    });
+    expect(three.kind).toBe('buttons');
+    if (three.kind === 'buttons') {
+      expect(three.buttons).toHaveLength(3);
+      expect(three.buttons.every((b) => b.id.startsWith('wa.pick.'))).toBe(true);
+    }
+  });
+
   it('a brief cut lists every honest match up to ten', () => {
     const names = Array.from({ length: 12 }, (_, i) => ({ projectId: `p${i}`, name: `Home ${i}` }));
     const packed = packWhatsAppInteractive({

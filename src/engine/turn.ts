@@ -199,6 +199,7 @@ import {
 } from './turn-intent/classify.js';
 import { arbitrateFocusPivot, isImplausibleLocationCapture } from './turn-intent/pivot-arbiter.js';
 import { isAttentionNudge, isNonPlaceUtterance, isPlausiblePlaceLabel } from './placeability.js';
+import { catalogSellsPropertyType, unsupportedProductStamp } from './catalog-type.js';
 import { buildRtiStateUpdate, excerptReply } from './turn-intent/pending-prompt.js';
 import { extractRecoveryPatchFromText } from './turn-intent/extract-recovery-patch.js';
 import { mergeRoutingTopicsIntoExtract } from './turn-routing/answer-topics.js';
@@ -2611,13 +2612,36 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     }
     state = advanceWaBriefState(state, input.action_id, ex, catalogForTurn?.microMarkets);
   }
+  const typeSoldNow = catalogSellsPropertyType(
+    catalogForTurn?.projectTypes,
+    state.constraints.propertyType,
+  );
+  if (state.discover.unsupportedProduct && typeSoldNow === true) {
+    const { unsupportedProduct: _cleared, ...restDiscover } = state.discover;
+    state = { ...state, discover: restDiscover };
+  }
+  // Catalog-wide type miss on this turn OR a latched one: do not probe
+  // bedrooms/budget or search apartments. Escape is a type we sell, a named
+  // project, or Ask the team (talk_to_human → wantsHuman → handoff).
+  const catalogTypeMiss = typeSoldNow === false;
+  const stayOnUnsupported =
+    state.phase === 'discover' &&
+    !state.focus &&
+    (!!state.discover.unsupportedProduct || catalogTypeMiss) &&
+    typeSoldNow !== true &&
+    !(ex.namedProjects?.length) &&
+    !ex.wantsHuman &&
+    input.action_id !== 'talk_to_human' &&
+    !input.action_id?.startsWith('wa.pick.');
   const coldNameEligible =
     state.phase === 'discover' &&
     !state.focus &&
     currentShortlist(state).length === 0 &&
     (ex.namedProjects?.length ?? 0) < 2 &&
     (ex.isQuestion || isDetailAskTurn(ex) || /^(?:is|are|does|do|what|which|how|can|tell me)\b/i.test(trimmedText));
-  if (coldNameEligible) {
+  if (stayOnUnsupported) {
+    goal = { kind: 'no_fit' };
+  } else if (coldNameEligible) {
     const hit =
       prevalidatedCatalogHit ??
       resolveCatalogNameHit(
@@ -2861,6 +2885,26 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     catalogForTurn
   ) {
     evidence = { ...evidence, catalog: catalogForTurn };
+  }
+
+  if (goal.kind === 'no_fit') {
+    const requested =
+      state.discover.unsupportedProduct?.requestedType?.trim() ||
+      unsupportedProductStamp(catalogForTurn?.projectTypes, state.constraints.propertyType)
+        ?.unsupportedProduct.requestedType;
+    if (requested) {
+      const askedTopic = ex.askTopic ?? ex.askTopics?.[0];
+      const followUp = !!state.discover.unsupportedProduct;
+      evidence = {
+        ...evidence,
+        unsupportedProduct: {
+          requestedType: requested,
+          ...(followUp ? { followUp: true } : {}),
+          ...(askedTopic ? { askedTopic } : {}),
+          ...(ex.transition === 'want_visit' || ex.speechAct === 'visit_book' ? { visit: true } : {}),
+        },
+      };
+    }
   }
 
   if (
@@ -4343,6 +4387,24 @@ async function fetchRecommend(
   if (skipSearchForBag) {
     return { goal: base, evidence: { tools: [], matches: [] } };
   }
+  const catalogUpFront = await deps.data.catalog(s.builderId).catch(() => emptyCatalog());
+  const typeMiss = unsupportedProductStamp(
+    catalogUpFront.projectTypes,
+    s.constraints.propertyType,
+  );
+  if (typeMiss || s.discover.unsupportedProduct) {
+    const requested =
+      typeMiss?.unsupportedProduct.requestedType ?? s.discover.unsupportedProduct?.requestedType;
+    return {
+      goal: { kind: 'no_fit' },
+      evidence: {
+        tools: [],
+        matches: [],
+        catalog: catalogUpFront,
+        ...(requested ? { unsupportedProduct: { requestedType: requested } } : {}),
+      },
+    };
+  }
   const matchCap = deps.waProjectFirst === true && channel === 'whatsapp' ? 10 : 3;
   filters = { ...filters, maxResults: matchCap };
   let strictSearch = await searchWithFilters(deps, s.builderId, filters);
@@ -4796,7 +4858,12 @@ async function fetchRecommend(
       });
       return {
         goal: { kind: 'no_fit' },
-        evidence: { ...typeEv, searchRecovery },
+        evidence: {
+          ...typeEv,
+          searchRecovery,
+          catalog,
+          ...unsupportedProductStamp(catalog.projectTypes, s.constraints.propertyType),
+        },
       };
     }
   }
@@ -4918,7 +4985,12 @@ async function fetchRecommend(
     });
     return {
       goal: resolved.goal,
-      evidence: { ...resolved.evidence, searchRecovery },
+      evidence: {
+        ...resolved.evidence,
+        searchRecovery,
+        catalog,
+        ...unsupportedProductStamp(catalog.projectTypes, s.constraints.propertyType),
+      },
     };
   }
 
@@ -6343,8 +6415,11 @@ function applyGoalToState(s: ThreadState, goal: TurnGoal, ev: EvidenceSet): Thre
       const r = ev.matches?.length ? recordOffered(s, ev.matches) : s;
       return { ...r, discover: { ...r.discover, advancedOnce: true } };
     }
-    case 'no_fit':
-      return s;
+    case 'no_fit': {
+      const stamp = ev.unsupportedProduct;
+      if (!stamp) return s;
+      return { ...s, discover: { ...s.discover, unsupportedProduct: stamp } };
+    }
     case 'objection':
       return incObjection(s);
     case 'orient':

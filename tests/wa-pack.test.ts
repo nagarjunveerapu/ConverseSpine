@@ -57,6 +57,17 @@ describe('packWhatsAppInteractive', () => {
     }
   });
 
+  it('handoff does not dump the project bag', () => {
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'handoff' },
+      state: initState('c', 'brigade-group'),
+      catalogNames: CATALOG,
+      singleProject: false,
+      briefCut: true,
+    });
+    expect(packed.kind).toBe('text');
+  });
+
   it('a focused pick with a cold record keeps the standing doors — never a Price button', () => {
     const s = commitTo(initState('c', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado');
     const packed = packWhatsAppInteractive({

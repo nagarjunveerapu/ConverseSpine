@@ -217,6 +217,7 @@ export async function extractFacts(
   const needLlm: Array<'location' | 'property_type' | 'purpose' | 'transition'> = [];
   if (
     !constraints.location &&
+    (!s.constraints.location || hasTextOverride(text)) &&
     !softPrefs.priorityFocus &&
     askTopics.length === 0 &&
     s.phase !== 'focused' &&
@@ -434,15 +435,37 @@ function normalizePropertyType(raw: string): string {
   return raw;
 }
 
+/**
+ * Types the buyer is rejecting this turn — "apartment nahi", "not apartments".
+ * Must not be added to constraints (that concatenated apartment,plantation
+ * and re-enabled BHK on a farmland ask).
+ */
+function negatedPropertyTypes(text: string): Set<string> {
+  const found = new Set<string>();
+  const re =
+    /\b(?:no|not|don'?t\s+want|do\s+not\s+want)\s+(?:a\s+|an\s+|any\s+)?(apartments?|flats?|villas?|plots?|plantation)\b|\b(apartments?|flats?|villas?|plots?|plantation)\s+nahi(?:n)?(?:\s+chahiye)?\b/gi;
+  for (const m of text.matchAll(re)) {
+    const raw = m[1] || m[2];
+    if (!raw) continue;
+    const n = detectPropertyType(raw);
+    if (n) found.add(n);
+  }
+  return found;
+}
+
 export function detectPropertyTypes(text: string): string | undefined {
+  const negated = negatedPropertyTypes(text);
   const found = new Set<string>();
   for (const segment of text.split(/\bor\b|,/i)) {
     const t = detectPropertyType(segment);
-    if (t) found.add(t);
+    if (t && !negated.has(t)) found.add(t);
   }
   const whole = detectPropertyType(text);
-  if (whole) found.add(whole);
+  if (whole && !negated.has(whole)) found.add(whole);
   if (found.size === 0) return undefined;
+  // Farmland + apartment in one breath is a plantation ask, not a dual search.
+  // Villa-or-apartment briefs stay comma-joined so Advisor filters still OR.
+  if (found.has('plantation') && found.has('apartment')) found.delete('apartment');
   return [...found].join(',');
 }
 
@@ -1257,6 +1280,11 @@ export type ExtractLocationContext = {
   askTopics?: AnswerTopic[];
   /** Shortlist + focus names — "in Eldorado" is a project ref, not a locality. */
   projectNameHints?: readonly string[];
+  /**
+   * Location is already on the thread. Bare leftover text must not replace it —
+   * only evidence-bearing phrases (`in` / `near`) or an explicit override.
+   */
+  locationFilled?: boolean;
 };
 
 function projectNameHints(s: ThreadState): string[] {
@@ -1285,6 +1313,7 @@ function locationExtractCtx(
     phase: s.phase,
     askTopics: topics,
     projectNameHints: projectNameHints(s),
+    locationFilled: Boolean(s.constraints.location?.trim()),
   };
 }
 
@@ -1739,6 +1768,9 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
   // yield, because a bare fragment cannot be both.
   if (detectPurpose(bare)) return undefined;
   if (ctx?.phase === 'focused' || ctx?.phase === 'visit') return undefined;
+  // Bare leftover text is not a place once an area is already on file.
+  // "Samajh gaya" after "plantation in Coorg" was becoming the locality.
+  if (ctx?.locationFilled && !hasTextOverride(text)) return undefined;
   if (
     /^[A-Za-z][A-Za-z\s/₹–\-+0-9]{2,32}$/.test(bare) &&
     bare.split(/\s+/).length <= 4 &&

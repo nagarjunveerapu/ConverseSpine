@@ -74,7 +74,7 @@ describe('WA Advisor brief ladder', () => {
     expect(rows.some((r) => /aerospace/i.test(r.id))).toBe(true);
   });
 
-  it('recommend with matches packs a match list, not the purpose tray', () => {
+  it('recommend with one match packs the name as a reply button, not See matches', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'recommend' },
       state: {
@@ -104,10 +104,12 @@ describe('WA Advisor brief ladder', () => {
       ],
       singleProject: false,
     });
-    expect(packed.kind).toBe('list');
-    if (packed.kind === 'list') {
-      expect(packed.button).toBe('See matches');
-      expect(packed.sections[0]!.rows[0]!.id).toBe('wa.pick.brigade-eldorado');
+    expect(packed.kind).toBe('buttons');
+    if (packed.kind === 'buttons') {
+      expect(packed.buttons).toEqual([
+        { id: 'wa.pick.brigade-eldorado', title: 'Brigade Eldorado' },
+      ]);
+      expect(packed.buttons[0]!.title.length).toBeLessThanOrEqual(20);
     }
   });
 });

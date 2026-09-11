@@ -9,6 +9,7 @@ import { currentShortlist, focusedRef, projectSeenFacets } from '../engine/entit
 import { humanizeMediaKind, normalizeMediaAssetKind } from '../engine/media-asset.js';
 import type { SeenFacet } from '../engine/entity-store.js';
 import type { SuggestedAction } from '../engine/recovery-planner.js';
+import { catalogSellsPropertyType, emptyCutUsesApartmentLevers } from '../engine/catalog-type.js';
 
 export const WA_MENU_PROJECTS = 'wa.menu.projects';
 /** Second door on the greet: start the minimal brief (size → area → budget). */
@@ -1210,6 +1211,29 @@ function waMoreTypeRows(catalog: WaPackInput['catalog'], bagSize: number): WaLis
   return rows.slice(0, 9);
 }
 
+/** Empty brief-cut doors. Apartment miss → size/budget. Type the book doesn't sell → handoff. */
+function waEmptyCutButtons(
+  state: ThreadState,
+  catalog: WaPackInput['catalog'],
+): Array<{ id: string; title: string }> {
+  const asked = state.constraints.propertyType?.trim();
+  const sells = catalogSellsPropertyType(catalog?.projectTypes, asked);
+  if (sells === false) {
+    return [{ id: 'talk_to_human', title: 'Ask the team' }];
+  }
+  if (asked && !emptyCutUsesApartmentLevers(asked)) {
+    return [
+      { id: WA_MENU_SEE, title: 'See the projects' },
+      { id: 'talk_to_human', title: 'Ask the team' },
+    ];
+  }
+  return [
+    { id: WA_MENU_CHOOSE, title: 'Change bedrooms' },
+    { id: WA_MENU_BUDGET, title: 'Change budget' },
+    { id: WA_MENU_SEE, title: 'See the projects' },
+  ];
+}
+
 /** Test / silent catalog rows must never reach a buyer list. */
 function isSilentWaProject(name: string): boolean {
   return /\bdesk\s*v2\b|\bv2 gold\b/i.test(name);
@@ -1497,6 +1521,11 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
     };
   }
 
+  // Ask the team already fired — do not dump the apartment book under the promise.
+  if (goal.kind === 'handoff') {
+    return { kind: 'text' };
+  }
+
   // "I'll have someone call you" rides the recommend goal so it can reach the
   // book-question composer, but it is an ANSWER, not a listing: putting nine
   // project rows under a callback promise reads as the brush-off the buyer was
@@ -1523,6 +1552,19 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
           goal.kind === 'recommend' ||
           goal.kind === 'ack_reject_recommend')));
 
+  // ≤3 matches are reply buttons — the name IS the tap. A WhatsApp list is one
+  // CTA ("See matches"); free-text buyers never open it, so "Tap one and I'll
+  // open it" had no one to tap. Peek/hold rows need the sheet; 4+ stay a list.
+  if (showMatches && bag.length > 0 && bag.length <= 3 && !input.peekLast) {
+    return {
+      kind: 'buttons',
+      buttons: bag.slice(0, 3).map((p) => ({
+        id: `${WA_PICK_PREFIX}${p.projectId}`,
+        title: clip(p.name, 20),
+      })),
+    };
+  }
+
   // Brief cut with nothing in the bag — three honest doors, never the whole book.
   // See other projects with a brief is the same honesty: do not dump the catalog.
   if (
@@ -1536,14 +1578,7 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
       goal.kind === 'no_fit' ||
       input.otherOpen)
   ) {
-    return {
-      kind: 'buttons',
-      buttons: [
-        { id: WA_MENU_CHOOSE, title: 'Change bedrooms' },
-        { id: WA_MENU_BUDGET, title: 'Change budget' },
-        { id: WA_MENU_SEE, title: 'See the projects' },
-      ],
-    };
+    return { kind: 'buttons', buttons: waEmptyCutButtons(state, input.catalog) };
   }
 
   // The mock's welcome: three quiet doors, not nine rows. The book list is one
@@ -1753,6 +1788,20 @@ export function applyWaInteractiveExtract(
       pickName: stamped.name,
       namedProjects: [{ projectId: stamped.projectId, name: stamped.name }],
       implicitProjectPick: false,
+    };
+  }
+  if (aid === 'talk_to_human') {
+    return {
+      ...extracted,
+      wantsHuman: true,
+      speechAct: 'handoff',
+      namedProjects: undefined,
+      pickName: undefined,
+      implicitProjectPick: false,
+      transition: undefined,
+      askTopic: undefined,
+      askTopics: undefined,
+      isQuestion: false,
     };
   }
   if (aid === WA_HOLD_DROP) {
