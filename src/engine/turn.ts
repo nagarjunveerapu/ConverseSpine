@@ -1502,7 +1502,20 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
                 location: keepDeclaredLabel ? 'declared' : served.authority,
               },
             };
-          } else if (!looksLikePlaceFramedAsk(input.text)) {
+          } else if (
+            !looksLikePlaceFramedAsk(input.text) ||
+            // Place-FRAMED is not the same as a place. "3 BHK in Samajh gaya"
+            // frames beautifully and names nothing, and this branch read the
+            // framing as proof, then answered "I don't have apartments in
+            // *Samajh gaya* — I have apartments in Bengaluru, Hassan, and
+            // Kodagu": a town invented out of the buyer's own sentence, and
+            // scored as a catalog miss. Ask the registry the prior question —
+            // the same authority the phantom drop and the widen path already
+            // consult — and let a phantom take the drop path beside this one.
+            !deskKnowsAsPlace(
+              await deps.data.resolveGeo(locationCandidate.trim()).catch(() => null),
+            )
+          ) {
             // Unresolved + not place-framed ("Buy, 70 lakh") — drop locality,
             // continue with the rest of the brief. Outside-served is for
             // explicit in/near asks, not a denylist of transaction verbs.
@@ -1716,6 +1729,61 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         }
       }
     }
+    }
+
+    // ── The one door: is there a place here at all? ──────────────────────────
+    // Everything above this line sits inside `if (deps.failureSearch)`, and
+    // prod runs with that flag unset — wrangler.toml says so in as many words:
+    // "FAILURE_TOOLS/ROUTING/SEARCH/ANSWER … stay unset (= off)". So on the one
+    // build with a paying tenant, none of the validation above runs at all, and
+    // an unchecked label went straight into constraints and out to the buyer.
+    //
+    // Both of these are verbatim from dev's ledger, on the same sentence:
+    //   "got it — 3 BHK, Samajh gaya."
+    //   "I don't have a 2 BHK in *Samajh gaya*, ₹50 L – ₹70 L."
+    // The second was scored as a catalog miss. It was not one: the search had
+    // been filtered by a locality that is not a place. A census of dev's
+    // turn_ledger found 30 distinct localities, 21 of them sentence residue,
+    // reaching buyers through THREE different composers — which is what tells
+    // you the guard does not belong on a composer.
+    //
+    // This is the single place a NEW locality becomes a durable constraint, it
+    // runs on every build, and `deskKnowsAsPlace` is the same authority the
+    // widen path and fetchRecommend's phantom drop already ask. It is a
+    // question, not a deny-list: no lexical rule separates "Sarjapur Road" from
+    // "brocure plz", which is why the deny-lists already here reject 0 of the 21.
+    //
+    // Serviceability is a different question and keeps its answer — Pune
+    // resolves at city scale, is a place, and "I don't have homes in *Pune*" is
+    // still said.
+    const introducedLocality =
+      ex.constraints.location ??
+      (state.constraints.location !== durableConstraintsBeforeTurn.location
+        ? state.constraints.location
+        : undefined);
+    if (introducedLocality?.trim()) {
+      const introducedGeo = await deps.data
+        .resolveGeo(introducedLocality.trim())
+        .catch(() => null);
+      if (!deskKnowsAsPlace(introducedGeo)) {
+        locationValidated = false;
+        if (ex.constraints.location) {
+          const { location: _notAPlace, ...constraintsSansPhantom } = ex.constraints;
+          ex = { ...ex, constraints: constraintsSansPhantom };
+        }
+        // Put back whatever area the buyer really did give on an earlier turn,
+        // and let the rest of the brief answer on its own.
+        state = {
+          ...state,
+          constraints: {
+            ...state.constraints,
+            ...(durableConstraintsBeforeTurn.location
+              ? { location: durableConstraintsBeforeTurn.location }
+              : {}),
+          },
+        };
+        if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
+      }
     }
     midLocationMs = deps.clock.nowMs() - locationT0;
   }
@@ -5001,6 +5069,22 @@ async function fetchRecommend(
   // AB-3 — never interpolate a polluted/noise locality into the honest miss ("No
   // exact match for the"). The constraint gate rejects most upstream; this is the
   // final guard before the raw string reaches the buyer.
+  //
+  // It used to ask `locationLooksPolluted` alone, and that is a DENY-LIST: it
+  // rejects what has been caught before and admits everything else. Measured
+  // against the 30 distinct localities NayaDesk dev actually stored between 30
+  // Aug and 15 Sep 2026, it admitted all 21 of the non-places — so the guard
+  // that exists to stop exactly this shipped "I don't have a 2 BHK in *Samajh
+  // gaya*, ₹50 L – ₹70 L" and "I don't have a 2 BHK in *range was 58*" to
+  // buyers, each reading as an honest catalog miss and each scored as one.
+  //
+  // `deskKnowsAsPlace` is the authority this file already consults twice before
+  // naming a place (the phantom drop in fetchRecommend, and the widen path). It
+  // asks the prior question — is there a place here at all — and the Desk area
+  // registry answers it. Serviceability is separate and unchanged: "I don't
+  // have homes in *Pune*" is honest and still said. When Desk cannot be reached
+  // the name is simply left out, and the line falls back to "those filters",
+  // which is honest in every case.
   const reasonLoc = locationLooksPolluted(s.constraints.location) ? undefined : s.constraints.location;
   const reasoning = `No exact match for ${[reasonLoc, s.constraints.propertyType].filter(Boolean).join(' ') || 'those filters'}`;
   const resolved = discover.resolveRecommend(

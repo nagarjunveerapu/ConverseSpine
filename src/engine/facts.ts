@@ -1509,6 +1509,15 @@ const LOCALITY_STOP = new Set([
   // Anaphora / budget glue — "apartments in same budget in Sarjapur" must not
   // become locality=*same* (outside-served: "I don't have apartments in *same*").
   'same', 'similar',
+  // Adverbial idioms that open with "in". The `in …` branch is evidence-bearing
+  // and stays that way — but "guarantee me in WRITING that possession will be on
+  // time" is not a buyer naming an area, and it reached dev's ledger as the
+  // locality `writing`. These are English function phrases, a closed set, not a
+  // list of places: a real multi-word locality always carries a word that is not
+  // on this list, so "Hand Post" and the like are untouched.
+  'writing', 'person', 'advance', 'principle', 'future', 'general', 'cash',
+  'full', 'short', 'return', 'touch', 'fact', 'addition', 'comparison',
+  'particular', 'total', 'exchange', 'charge',
   // Function words and fillers. An utterance made only of these named nowhere:
   // "actually can you change something" reduces to "can you something".
   'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
@@ -1634,6 +1643,13 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
 
   const acceptLocality = (raw: string | undefined): string | undefined => {
     if (!raw) return undefined;
+    // A clause about the BUYER is never a clause about a place. `trimLocalityStops`
+    // strips the pronoun and the copula, so "I am a broker" arrived as the locality
+    // `broker`, "im Priya" as `im Priya`, and "in your CRM" as `your CRM` — the
+    // stripping is what hid the grammar. Test the raw fragment, before it is
+    // stripped. Grammar of a label, like the `^(to|for|as)` rule below, not a list
+    // of non-places.
+    if (/^\s*(?:i|i'?m|im|we|we'?re|my|our|you|you'?re|your)\b/i.test(raw)) return undefined;
     const cleaned = trimLocalityStops(cleanLocalityFragment(raw));
     if (!cleaned || GENERIC.test(cleaned)) return undefined;
     // AB-3 — a dialogue capture that is nothing but stopwords/noise is NOT a place.

@@ -42,13 +42,25 @@ describe('a line sent three times inside the window', () => {
   it('stops asking and hands the buyer the wheel', async () => {
     const { turn } = harness('repeat-window-loop');
 
-    // No opening brief. This used to start with "coorg, 50 Lakhs" / "tell me
-    // about Ayana", and the loop it produced depended on a bug: "agreement"
-    // was captured as a LOCATION and stuck, so every send came back as the same
-    // probe. Once the fixture began returning Desk's real `recognized_locations`
-    // the phantom is purged, the replies diverge and no loop forms — the test's
-    // premise was the defect, not its subject. The guard itself is unchanged
-    // and still has to fire on the third identical send.
+    // This fixture has now been rebuilt twice, both times for the same reason:
+    // the loop it relied on was being manufactured by a phantom locality, not
+    // by the thing under test.
+    //
+    // Round one started "coorg, 50 Lakhs" / "tell me about Ayana", where
+    // "agreement" was captured as a LOCATION and stuck, so every send came back
+    // as the same probe. Round two dropped the opening brief entirely — and
+    // that version looped too, because with no brief at all the bare question
+    // was answered "I couldn't match that area exactly — here's the closest I
+    // have: *Ayana* in Sakleshpur…", three times. The area it could not match
+    // was "the agreement". Once a locality has to be a place Desk knows, that
+    // reply is gone, the asks advance instead of repeating, and no loop forms.
+    //
+    // So the brief is back, and it is a REAL area this time. The loop is now a
+    // real one: the buyer asks three times about a penalty clause, and three
+    // times gets the same line about her Whitefield search — which is L10's
+    // live case exactly ("every one of them answered with the identical menu"),
+    // and is still not an answer. The guard itself is unchanged.
+    await turn('3 BHK in Whitefield under 1 Cr, to live in');
     const one = await turn('is there a penalty clause in the agreement');
     await turn('what is the price');
     const two = await turn('is there a penalty clause in the agreement');

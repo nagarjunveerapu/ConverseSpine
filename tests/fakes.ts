@@ -551,6 +551,43 @@ export function fakeData(): EngineData & {
       if (key.includes('yelahanka')) return registry('yelahanka-bengaluru', 13.1007, 77.5963);
       if (key.includes('whitefield')) return registry('whitefield-bengaluru', 12.969, 77.749);
       if (key.includes('jayanagar')) return registry('jayanagar-bengaluru', 12.9308, 77.5838);
+      // The markets this same fake already declares in `projectCoords` and the
+      // catalog. Live Desk answers for every one of them — they are the builder's
+      // own served areas — and a fake that says `null` for "North Bangalore"
+      // while listing it as a micro-market is modelling a Desk that does not
+      // exist. It reads as "not a place" to any caller that asks the registry.
+      if (key.includes('north bangalore')) return registry('north-bangalore', 13.139, 77.658);
+      if (key.includes('aerospace')) return registry('aerospace-park', 13.18, 77.68);
+      if (key.includes('devanahalli')) return registry('devanahalli', 13.18, 77.68);
+      if (key.includes('sakleshpur')) return registry('sakleshpur', 12.944, 75.784);
+      if (key.includes('virajpet')) return registry('virajpet', 12.254, 75.923);
+      // Real cities this builder does not serve. Live Desk answers these on the
+      // GEOCODER path at city scale — the radii below are the ones measured
+      // against Desk dev on 16 Aug 2026 and recorded in coverage-areas.ts. They
+      // are places, so "I don't have homes in *Mumbai*" stays honest and stays
+      // said; serviceability is a different question from placeness, and the
+      // controls in failure-routing / failure-search are what prove it.
+      const city = (lat: number, lng: number, radiusKm: number) =>
+        ({ lat, lng, source: 'geocoder' as const, radiusKm });
+      if (key.includes('mumbai')) return city(19.076, 72.8777, 38);
+      if (key.includes('gurgaon') || key.includes('gurugram')) return city(28.4595, 77.0266, 26);
+      if (key.includes('pune')) return city(18.5204, 73.8567, 18.3);
+      if (key.includes('delhi')) return city(28.7041, 77.1025, 31.1);
+      if (key.includes('hyderabad')) return city(17.385, 78.4867, 37.5);
+      if (key.includes('chennai')) return city(13.0827, 80.2707, 30);
+      if (key.includes('mysore') || key.includes('mysuru')) return city(12.2958, 76.6394, 14);
+      // The builder's OWN regions, at district/city scale. The bot names these
+      // three in its own copy — "I have apartments in Bengaluru, Hassan, and
+      // Kodagu" — so a fake that answers `null` for them describes a Desk that
+      // cannot find the builder's own market. Checked after `north bangalore`
+      // above, which is a served micro-market and keeps its registry row.
+      if (key.includes('bangalore') || key.includes('bengaluru')) return city(12.9716, 77.5946, 35);
+      if (key.includes('coorg') || key.includes('kodagu')) return city(12.3375, 75.8069, 46);
+      if (key.includes('hassan')) return city(13.0072, 76.0962, 40);
+      // A real Bengaluru locality the builder has nothing in — the same class as
+      // Mumbai above, and the case that proves "not served" and "not a place"
+      // are different answers.
+      if (key.includes('sarjapur')) return city(12.8589, 77.7866, 6);
       return null;
     },
     async projectCoords(_builderId) {
