@@ -13,9 +13,16 @@ import { fakeDeps } from './fakes.js';
  */
 function harness(threadId: string) {
   const deps = fakeDeps();
-  const turn = (text: string) =>
+  const turn = (text: string, action_id?: string) =>
     runEngineTurn(
-      { threadId, builderId: 'lokations', text, buyerPhone: '+919999999994', channel: 'whatsapp' },
+      {
+        threadId,
+        builderId: 'lokations',
+        text,
+        buyerPhone: '+919999999994',
+        channel: 'whatsapp',
+        ...(action_id ? { action_id } : {}),
+      },
       deps,
     );
   return { turn };
@@ -41,6 +48,14 @@ describe('a booked visit is remembered', () => {
     const after = await turn('book a visit');
 
     expect(after.reply).not.toMatch(/which day|what day|day and time/i);
+  });
+
+  it('Add another visit tap starts a new stop, not empty recall', async () => {
+    const { turn } = harness('visit-booked-add-another');
+    await bookAVisit(turn);
+    const add = await turn('Add another visit', 'visit_book');
+    expect(add.reply).toMatch(/which day|what day/i);
+    expect(add.reply).not.toMatch(/your visits:\s*$/i);
   });
 
   it('still lets a real change through on the turn after', async () => {

@@ -1157,7 +1157,9 @@ function fallbackReplyBody(req: ComposeRequest): string {
         if (goal.slot === 'bhk' || goal.slot === 'propertyType') {
           return context.waMoreTypes
             ? `Villa, plot, or any size — which of those fits?`
-            : `How many bedrooms are you looking at?`;
+            : context.waBriefSheet
+              ? `Size, area and budget — I'll cut the book from that.`
+              : `How many bedrooms are you looking at?`;
         }
         if (goal.slot === 'location') {
           const size = context.constraints.bhk?.trim() || context.constraints.propertyType?.trim();

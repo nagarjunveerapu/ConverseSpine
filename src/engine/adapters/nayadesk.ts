@@ -9,6 +9,7 @@ import {
   type NdProjectSummary,
 } from '../../crm/nayadesk-client.js';
 import type { DataResult, DeskBrief, EngineCrm, EngineData, StoredVisit } from '../ports.js';
+import { mergeStoredVisits } from '../visit-file.js';
 import { dataAbsent, dataOk, dataTransport } from '../ports.js';
 import type { LocationPoi, LocationPoiCategories, ProjectDetail } from '../types.js';
 import { formatInr, formatCostValue, formatPossession, startingPriceDisplayFrom, phaseNoteFrom } from '../compose.js';
@@ -42,6 +43,14 @@ function isoToIstWallClock(iso: string): string | null {
   const ms = Date.parse(trimmed);
   if (!Number.isFinite(ms)) return null;
   return new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function istWallClockToIso(wc: string): string | undefined {
+  const trimmed = wc.trim().slice(0, 16);
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(trimmed)) return undefined;
+  const ms = Date.parse(`${trimmed.replace(' ', 'T')}:00.000Z`) - IST_OFFSET_MS;
+  if (!Number.isFinite(ms)) return undefined;
+  return new Date(ms).toISOString();
 }
 
 /** Conversation context is Desk-focus-scoped — never use it for another project's identity. */
@@ -1009,15 +1018,15 @@ export function nayadeskData(
     },
 
     async siteVisitsItinerary(nd) {
+      const fromPlans: StoredVisit[] = [];
       try {
         const r = await crm.siteVisitsItinerary(nd);
-        const out: StoredVisit[] = [];
         for (const plan of r.plans ?? []) {
           const c = (plan.collected ?? {}) as Record<string, unknown>;
           const iso = String(c.proposed_iso_datetime ?? c.visit_iso ?? '');
           const label = String(c.human_label ?? c.visit_label ?? '');
           if (!iso && !label) continue;
-          out.push({
+          fromPlans.push({
             projectId: String(c.project_id ?? ''),
             projectName: String(c.project_name ?? ''),
             iso,
@@ -1025,10 +1034,29 @@ export function nayadeskData(
             confirmed: c.confirmed === true || plan.status === 'completed',
           });
         }
-        return out;
       } catch {
-        return [];
+        // Plans leftover — store visits below are the live book.
       }
+      const fromStore: StoredVisit[] = [];
+      try {
+        const r = await crm.listLeadVisits(nd);
+        for (const row of r.visits ?? []) {
+          const wall = String(row.scheduled_at ?? '').trim();
+          const iso = istWallClockToIso(wall) ?? '';
+          if (!iso && !wall) continue;
+          const status = String(row.status ?? '');
+          fromStore.push({
+            projectId: String(row.project_id ?? ''),
+            projectName: String(row.project_name ?? row.project_id ?? ''),
+            iso,
+            label: wall || iso,
+            confirmed: status === 'confirmed' || status === 'completed',
+          });
+        }
+      } catch {
+        // Bot auth or missing lead — recall still has thread cache.
+      }
+      return mergeStoredVisits(fromStore, fromPlans);
     },
 
     async cancelSiteVisits(nd) {

@@ -948,6 +948,19 @@ export class NayaDeskClient {
     return this.call('POST', `/api/v1/leads/${encodeURIComponent(lead_id)}/visits`, body);
   }
 
+  /** Store visits for a lead / thread id — the itinerary plans table is a leftover. */
+  listLeadVisits(lead_id: string): Promise<{
+    visits: Array<{
+      visit_id?: string;
+      project_id?: string;
+      project_name?: string;
+      scheduled_at?: string;
+      status?: string;
+    }>;
+  }> {
+    return this.call('GET', `/api/v1/leads/${encodeURIComponent(lead_id)}/visits`);
+  }
+
   appendMessage(
     thread_id: string,
     msg: { direction: 'inbound' | 'outbound'; content: string },
