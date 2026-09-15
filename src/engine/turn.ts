@@ -125,7 +125,7 @@ import { resolveShortlistNames, seedFromDeskBrief } from './desk-brief.js';
 import { cacheToStored, mergeBookedVisitRows, mergeStoredVisits } from './visit-file.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
 import { excludeParkedFaqKeys, isFaqShapedAsk, resolveFaqQuestionKeys, taughtFaqKey } from './faq-keys.js';
-import { buyerCuedOtherProject } from './project_switch.js';
+import { buyerCuedOtherProject, partitionNamedByPolarity } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
   isCompareAmongOfferedTurn,
@@ -1164,6 +1164,48 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     (discover.hasNarrowingConstraint(state.constraints) ||
       discover.hasNarrowingConstraint(ex.constraints) ||
       Boolean(ex.speechAct === 'search'));
+  // Before anything counts how many projects were named: WHICH of them is she
+  // actually asking for? "No, forget Avalon completely. I only want Brigade
+  // Meadows." names two, so the rule below read it as a compare, the compare
+  // found the focused project among the two and held it, and the bot answered
+  // about the project she had just rejected. Verbatim from dev's ledger, and
+  // the same defect on "I am not interested in Brigade Avalon, show me Brigade
+  // Meadows."
+  //
+  // This is the one place the count is taken, so it is the one place the
+  // question belongs — every consumer downstream (the compare trigger below,
+  // detectFocusedSwitchIntent, the cold-name bind) reads `ex.namedProjects`
+  // and inherits the answer. A rejected project is also recorded, so the board
+  // stops re-offering what she just pushed away.
+  if ((ex.namedProjects?.length ?? 0) >= 2) {
+    const polarity = partitionNamedByPolarity(
+      trimmedText,
+      ex.namedProjects!,
+      [...(ex.namedProjects ?? []), ...currentShortlist(state)],
+    );
+    if (polarity.rejected.length) {
+      ex = {
+        ...ex,
+        namedProjects: polarity.wanted,
+        // She rejected a project, not the conversation: there is a standing ask
+        // in the same sentence, and `rejected` routes to "something else?".
+        rejected: false,
+        rejectedName: undefined,
+      };
+      const rejectedIds = polarity.rejected.map((p) => p.projectId).filter(Boolean);
+      if (rejectedIds.length) {
+        state = {
+          ...state,
+          discover: {
+            ...state.discover,
+            rejectedProjectIds: [
+              ...new Set([...state.discover.rejectedProjectIds, ...rejectedIds]),
+            ],
+          },
+        };
+      }
+    }
+  }
   if (
     !freshSearchBoard &&
     !(ex.compareProjectIds && ex.compareProjectIds.length >= 2) &&
