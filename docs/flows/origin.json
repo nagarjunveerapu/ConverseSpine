@@ -1,0 +1,35 @@
+{
+  "version": "6.3",
+  "routing_model": { "ORIGIN": [] },
+  "screens": [
+    {
+      "id": "ORIGIN",
+      "title": "Coming from",
+      "terminal": true,
+      "data": {
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          {
+            "type": "TextInput",
+            "name": "origin",
+            "label": "Area or landmark",
+            "required": true,
+            "input-type": "text"
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "origin", "origin": "${form.origin}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

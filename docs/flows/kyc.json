@@ -1,0 +1,50 @@
+{
+  "version": "6.3",
+  "routing_model": { "KYC": [] },
+  "screens": [
+    {
+      "id": "KYC",
+      "title": "Documents",
+      "terminal": true,
+      "data": {
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          {
+            "type": "DocumentPicker",
+            "name": "pan",
+            "label": "PAN card",
+            "min-uploaded-documents": 1,
+            "max-uploaded-documents": 1,
+            "allowed-mime-types": ["application/pdf", "image/jpeg", "image/png"]
+          },
+          {
+            "type": "DocumentPicker",
+            "name": "aadhaar",
+            "label": "Aadhaar",
+            "min-uploaded-documents": 1,
+            "max-uploaded-documents": 1
+          },
+          {
+            "type": "DocumentPicker",
+            "name": "address",
+            "label": "Address proof",
+            "min-uploaded-documents": 1,
+            "max-uploaded-documents": 1
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "kyc", "pan": "${form.pan}", "aadhaar": "${form.aadhaar}", "address": "${form.address}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

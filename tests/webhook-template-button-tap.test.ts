@@ -191,4 +191,34 @@ describe('a visit Flow complete (nfm_reply)', () => {
     });
     expect(enqueues[0]!.action_id).toBeUndefined();
   });
+
+  it('turns a stops complete into names, not an action_id', async () => {
+    const { ctx: c, settle } = ctx();
+    const res = await handleWhatsAppWebhook(await payload([{
+      from: '15556287583',
+      id: 'wamid.flow.stops',
+      type: 'interactive',
+      interactive: {
+        type: 'nfm_reply',
+        nfm_reply: {
+          name: 'flow',
+          body: 'Sent',
+          response_json: JSON.stringify({
+            job: 'stops',
+            stops: ['Brigade Eternia', 'Brigade Cornerstone'],
+            flow_token: 'stops',
+          }),
+        },
+      },
+    }]), env, c);
+    await settle();
+
+    expect(res.status).toBe(200);
+    expect(enqueues).toHaveLength(1);
+    expect(enqueues[0]).toMatchObject({
+      text: 'Brigade Eternia and Brigade Cornerstone',
+      meta_message_id: 'wamid.flow.stops',
+    });
+    expect(enqueues[0]!.action_id).toBeUndefined();
+  });
 });

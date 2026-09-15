@@ -155,6 +155,9 @@ export interface Env {
    * the wire. Test yourself still gets the Flow payload on the list DTO.
    */
   WA_VISIT_FLOW_ID?: string;
+  WA_STOPS_FLOW_ID?: string;
+  WA_ORIGIN_FLOW_ID?: string;
+  WA_BRIEF_FLOW_ID?: string;
 
   DEFAULT_BUILDER_ID?: string;
   /** Builder tenant for NayaAdvisor channel (default naya-advisor). */

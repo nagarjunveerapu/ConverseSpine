@@ -620,6 +620,9 @@ export interface EngineDeps {
   waProjectFirst?: boolean;
   /** Published visit Flow id — Graph send only. Packer attaches calendar payload either way. */
   waVisitFlowId?: string;
+  waStopsFlowId?: string;
+  waOriginFlowId?: string;
+  waBriefFlowId?: string;
   /** Shared TURN_CACHE for L1–L4 read-model (optional). */
   turnCache?: KVNamespace;
   /** Desk project etag for L2 freshness. */

@@ -6,7 +6,6 @@ import {
   parseDayAnchor,
   parseVisitSlot,
   reparseVisitTime,
-  utteranceFromNfmReply,
 } from '../src/engine/visit-slot.js';
 
 describe('visit-slot', () => {
@@ -88,12 +87,3 @@ describe('visit-slot', () => {
   });
 });
 
-describe('visit Flow nfm_reply', () => {
-  it('turns date+time JSON into the canonical utterance', () => {
-    expect(utteranceFromNfmReply('{"date":"2026-09-22","time":"3:00 PM"}')).toBe(
-      '2026-09-22 at 3:00 PM',
-    );
-    expect(utteranceFromNfmReply('{"flow_token":"visit"}')).toBeUndefined();
-    expect(utteranceFromNfmReply('not-json')).toBeUndefined();
-  });
-});

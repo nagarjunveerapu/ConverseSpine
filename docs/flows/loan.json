@@ -1,0 +1,38 @@
+{
+  "version": "6.3",
+  "routing_model": { "LOAN": [] },
+  "screens": [
+    {
+      "id": "LOAN",
+      "title": "Loan papers",
+      "terminal": true,
+      "data": {
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          { "type": "TextInput", "name": "bank", "label": "Bank", "required": true, "input-type": "text" },
+          { "type": "TextInput", "name": "app_no", "label": "Application number", "required": false, "input-type": "text" },
+          {
+            "type": "DocumentPicker",
+            "name": "letter",
+            "label": "Sanction letter",
+            "min-uploaded-documents": 1,
+            "max-uploaded-documents": 1,
+            "allowed-mime-types": ["application/pdf", "image/jpeg", "image/png"]
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "loan", "bank": "${form.bank}", "app_no": "${form.app_no}", "letter": "${form.letter}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

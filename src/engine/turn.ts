@@ -3981,6 +3981,12 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         return { closest: { projectId: g.closestProjectId, name: g.closestName } };
       })(),
       ...(deps.waVisitFlowId ? { visitFlowId: deps.waVisitFlowId } : {}),
+      flowIds: {
+        ...(deps.waVisitFlowId ? { visit: deps.waVisitFlowId } : {}),
+        ...(deps.waStopsFlowId ? { stops: deps.waStopsFlowId } : {}),
+        ...(deps.waOriginFlowId ? { origin: deps.waOriginFlowId } : {}),
+        ...(deps.waBriefFlowId ? { brief: deps.waBriefFlowId } : {}),
+      },
     });
   }
   const packedActions = packed ? packedToSuggestedActions(packed) : undefined;

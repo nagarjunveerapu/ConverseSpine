@@ -7,7 +7,7 @@ import { sendTyping } from '../channel/whatsapp-client.js';
 import { seenWebhookMessage, overRateLimit } from '../channel/ingress-guard.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
 import { handleChat } from '../worker/routes.js';
-import { utteranceFromNfmReply } from '../engine/visit-slot.js';
+import { utteranceFromNfmReply } from '../engine/wa-flow.js';
 
 interface MetaPayload {
   object?: string;
@@ -121,7 +121,7 @@ export async function handleWhatsAppWebhook(
         } else if (msg.type === 'interactive' && msg.interactive) {
           const nfm = msg.interactive.nfm_reply?.response_json;
           if (msg.interactive.type === 'nfm_reply' || nfm) {
-            // Flow complete — same visit FSM as typed "2026-09-15 at 10:30 AM".
+            // Flow complete → canonical utterance the existing FSM already parses.
             // Not an action_id: there is no row in the interactive vocabulary.
             buyerText = utteranceFromNfmReply(nfm) ?? '';
           } else {

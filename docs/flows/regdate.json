@@ -1,0 +1,63 @@
+{
+  "version": "6.3",
+  "routing_model": { "REG_DAY": [] },
+  "screens": [
+    {
+      "id": "REG_DAY",
+      "title": "Registration date",
+      "terminal": true,
+      "data": {
+        "min_date": { "type": "string", "__example__": "2026-09-15" },
+        "max_date": { "type": "string", "__example__": "2026-10-13" },
+        "include_days": {
+          "type": "array",
+          "items": { "type": "string" },
+          "__example__": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        },
+        "unavailable_dates": {
+          "type": "array",
+          "items": { "type": "string" },
+          "__example__": []
+        },
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          {
+            "type": "CalendarPicker",
+            "name": "date",
+            "label": "Day",
+            "required": true,
+            "mode": "single",
+            "min-date": "${data.min_date}",
+            "max-date": "${data.max_date}",
+            "include-days": "${data.include_days}",
+            "unavailable-dates": "${data.unavailable_dates}"
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "time",
+            "label": "Time",
+            "required": true,
+            "data-source": [
+              { "id": "10:30 AM", "title": "10:30 AM" },
+              { "id": "12:00 PM", "title": "12:00 PM" },
+              { "id": "3:00 PM", "title": "3:00 PM" },
+              { "id": "5:30 PM", "title": "5:30 PM" }
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "regdate", "date": "${form.date}", "time": "${form.time}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

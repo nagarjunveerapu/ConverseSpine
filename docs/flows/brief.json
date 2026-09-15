@@ -1,0 +1,62 @@
+{
+  "version": "6.3",
+  "routing_model": { "BRIEF": [] },
+  "screens": [
+    {
+      "id": "BRIEF",
+      "title": "Your brief",
+      "terminal": true,
+      "data": {
+        "bhk": {
+          "type": "array",
+          "items": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } },
+          "__example__": [{ "id": "3 BHK", "title": "3 BHK" }]
+        },
+        "areas": {
+          "type": "array",
+          "items": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } },
+          "__example__": [{ "id": "Yelahanka", "title": "Yelahanka" }]
+        },
+        "budgets": {
+          "type": "array",
+          "items": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } },
+          "__example__": [{ "id": "Under ₹1 Cr", "title": "Under ₹1 Cr" }]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "RadioButtonsGroup",
+            "name": "bhk",
+            "label": "Bedrooms",
+            "required": true,
+            "data-source": "${data.bhk}"
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "area",
+            "label": "Area",
+            "required": true,
+            "data-source": "${data.areas}"
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "budget",
+            "label": "Budget",
+            "required": true,
+            "data-source": "${data.budgets}"
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "brief", "bhk": "${form.bhk}", "area": "${form.area}", "budget": "${form.budget}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -119,6 +119,9 @@ export class ConverseRuntime {
         (env.NAYADESK_URL ?? '').includes('nayadesk-prod'),
       ),
       ...(env.WA_VISIT_FLOW_ID?.trim() ? { waVisitFlowId: env.WA_VISIT_FLOW_ID.trim() } : {}),
+      ...(env.WA_STOPS_FLOW_ID?.trim() ? { waStopsFlowId: env.WA_STOPS_FLOW_ID.trim() } : {}),
+      ...(env.WA_ORIGIN_FLOW_ID?.trim() ? { waOriginFlowId: env.WA_ORIGIN_FLOW_ID.trim() } : {}),
+      ...(env.WA_BRIEF_FLOW_ID?.trim() ? { waBriefFlowId: env.WA_BRIEF_FLOW_ID.trim() } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),

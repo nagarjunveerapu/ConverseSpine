@@ -1,0 +1,36 @@
+{
+  "version": "6.3",
+  "routing_model": { "AGREEMENT": [] },
+  "screens": [
+    {
+      "id": "AGREEMENT",
+      "title": "Signed agreement",
+      "terminal": true,
+      "data": {
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          {
+            "type": "DocumentPicker",
+            "name": "signed",
+            "label": "Signed sale agreement",
+            "min-uploaded-documents": 1,
+            "max-uploaded-documents": 1,
+            "allowed-mime-types": ["application/pdf", "image/jpeg", "image/png"]
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "agreement", "signed": "${form.signed}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import { HANDOFF_QUESTIONS } from '../engine/book-questions.js';
 import type { Extracted } from '../engine/types.js';
 import { currentShortlist, focusedRef, projectSeenFacets } from '../engine/entity-store.js';
 import { visitCalendarWindow } from '../engine/visit-slot.js';
+import { WA_FLOW_SCREEN, type WaFlowKind } from '../engine/wa-flow.js';
 import { humanizeMediaKind, normalizeMediaAssetKind } from '../engine/media-asset.js';
 import type { SeenFacet } from '../engine/entity-store.js';
 import type { SuggestedAction } from '../engine/recovery-planner.js';
@@ -397,11 +398,16 @@ export type WaVisitFlowPayload = {
   project_name?: string;
 };
 
-export type WaVisitFlowChrome = {
+export type WaFlowChrome = {
+  kind: WaFlowKind;
   cta: string;
   flowId?: string;
-  payload: WaVisitFlowPayload;
+  screen: string;
+  payload: Record<string, unknown>;
 };
+
+/** @deprecated Use WaFlowChrome — visit is one kind. */
+export type WaVisitFlowChrome = WaFlowChrome;
 
 export type WaPacked =
   | { kind: 'text' }
@@ -474,6 +480,29 @@ export interface WaPackInput {
    * attaches `flow` payload so Test yourself can mock the calendar.
    */
   visitFlowId?: string;
+  /** Published Flow ids by job. `visit` also reads `visitFlowId`. */
+  flowIds?: Partial<Record<WaFlowKind, string>>;
+}
+
+function publishedFlowId(input: WaPackInput, kind: WaFlowKind): string | undefined {
+  const id = input.flowIds?.[kind]?.trim() || (kind === 'visit' ? input.visitFlowId?.trim() : '');
+  return id || undefined;
+}
+
+function attachFlow(
+  kind: WaFlowKind,
+  cta: string,
+  payload: Record<string, unknown>,
+  input: WaPackInput,
+): WaFlowChrome {
+  const flowId = publishedFlowId(input, kind);
+  return {
+    kind,
+    cta,
+    screen: WA_FLOW_SCREEN[kind],
+    payload,
+    ...(flowId ? { flowId } : {}),
+  };
 }
 
 /**
@@ -1389,22 +1418,22 @@ function packVisitDayChrome(input: WaPackInput): WaPacked | undefined {
   if (!days.length) return undefined;
   const window = visitCalendarWindow(new Date(nowMs), openDays);
   const focus = focusedRef(input.state);
-  const flowId = input.visitFlowId?.trim();
   return {
     kind: 'list',
     button: 'Pick a day',
     sections: [{ title: 'Choose a day', rows: withWayBackTo(days, WA_BACK_FILE, '← Back') }],
-    flow: {
-      cta: 'Pick a day',
-      ...(flowId ? { flowId } : {}),
-      payload: {
+    flow: attachFlow(
+      'visit',
+      'Pick a day',
+      {
         min_date: window.minDate,
         max_date: window.maxDate,
         include_days: window.includeDays,
         unavailable_dates: window.unavailableDates,
         ...(focus?.projectName ? { project_name: focus.projectName } : {}),
       },
-    },
+      input,
+    ),
   };
 }
 
@@ -1440,6 +1469,16 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
           rows: onlyAny ? [...waBedroomRows(), ...extra] : [...waBedroomRows(), { id: WA_MENU_TYPES, title: 'More types' }],
         },
       ],
+      flow: attachFlow(
+        'brief',
+        'Set brief',
+        {
+          bhk: waBedroomRows().map((r) => r.title),
+          areas: waAreaRows(input.briefAreas).map((r) => r.title),
+          budgets: waBudgetRows(input.catalog, bag.length).map((r) => r.title),
+        },
+        input,
+      ),
     };
   }
   if (goal.kind === 'probe' && goal.slot === 'location') {
@@ -1526,6 +1565,15 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
                 ]),
               },
             ],
+            flow: attachFlow(
+              'stops',
+              'Pick stops',
+              {
+                stops: stops.map((s) => ({ id: s.projectName, title: s.projectName })),
+                ...(focus?.projectName ? { project_name: focus.projectName } : {}),
+              },
+              input,
+            ),
           };
         }
         break;
@@ -1541,6 +1589,24 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
           ],
         };
       case 'origin':
+        return {
+          kind: 'list',
+          button: 'Where from',
+          sections: [
+            {
+              title: 'Coming from',
+              rows: withWayBack([{ id: WA_MENU_PROJECTS, title: 'Projects' }]),
+            },
+          ],
+          flow: attachFlow(
+            'origin',
+            'Where from',
+            {
+              ...(focus?.projectName ? { project_name: focus.projectName } : {}),
+            },
+            input,
+          ),
+        };
       case 'team_request':
         // Open answers — a free-text reply is the only honest option.
         return { kind: 'buttons', buttons: [{ id: WA_MENU_PROJECTS, title: 'Projects' }] };
@@ -1806,9 +1872,11 @@ export type WaInteractiveDto =
       button: string;
       sections: Array<{ title: string; rows: WaListRow[] }>;
       flow?: {
+        kind: WaFlowKind;
         cta: string;
         flow_id?: string;
-        payload: WaVisitFlowPayload;
+        screen: string;
+        payload: Record<string, unknown>;
       };
     };
 
@@ -1824,7 +1892,9 @@ export function packedToInteractive(packed: WaPacked): WaInteractiveDto | undefi
       ...(packed.flow
         ? {
             flow: {
+              kind: packed.flow.kind,
               cta: packed.flow.cta,
+              screen: packed.flow.screen,
               payload: packed.flow.payload,
               ...(packed.flow.flowId ? { flow_id: packed.flow.flowId } : {}),
             },
