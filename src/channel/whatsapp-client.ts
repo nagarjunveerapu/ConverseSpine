@@ -301,6 +301,63 @@ export async function sendInteractiveList(
   return settleInteractive(phoneNumberId, to, bodyText, token, carrier, out);
 }
 
+export interface WhatsAppFlowPayload {
+  min_date: string;
+  max_date: string;
+  include_days: string[];
+  unavailable_dates: string[];
+  project_name?: string;
+}
+
+/** In-chat Flow (calendar + time). Same body cap / carrier as list. */
+export async function sendInteractiveFlow(
+  phoneNumberId: string,
+  to: string,
+  bodyText: string,
+  opts: { flowId: string; cta: string; payload: WhatsAppFlowPayload; token: string },
+): Promise<SendOutcome> {
+  const carrier = await carrierBody(phoneNumberId, to, bodyText, opts.token);
+  if (carrier === null) {
+    return { ok: false, wamid: null, error: 'the answer text was refused before the flow' };
+  }
+  const out = await graphSend(
+    phoneNumberId,
+    opts.token,
+    {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: to.replace(/\D/g, ''),
+      type: 'interactive',
+      interactive: {
+        type: 'flow',
+        body: { text: carrier.body },
+        action: {
+          name: 'flow',
+          parameters: {
+            flow_message_version: '3',
+            flow_token: 'visit',
+            flow_id: opts.flowId,
+            flow_cta: opts.cta.slice(0, 20),
+            flow_action: 'navigate',
+            flow_action_payload: {
+              screen: 'VISIT_DAY',
+              data: {
+                min_date: opts.payload.min_date,
+                max_date: opts.payload.max_date,
+                include_days: opts.payload.include_days,
+                unavailable_dates: opts.payload.unavailable_dates,
+                project_name: opts.payload.project_name ?? '',
+              },
+            },
+          },
+        },
+      },
+    },
+    'interactive flow',
+  );
+  return settleInteractive(phoneNumberId, to, bodyText, opts.token, carrier, out);
+}
+
 /**
  * Chrome is the garnish; it must never take the reply with it.
  *

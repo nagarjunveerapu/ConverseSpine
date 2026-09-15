@@ -118,6 +118,7 @@ export class ConverseRuntime {
         env.WA_PROJECT_FIRST,
         (env.NAYADESK_URL ?? '').includes('nayadesk-prod'),
       ),
+      ...(env.WA_VISIT_FLOW_ID?.trim() ? { waVisitFlowId: env.WA_VISIT_FLOW_ID.trim() } : {}),
       ...(localTurnLogEnabled(env)
         ? { emitTurnLog: (entry) => emitLocalTurnLog(env, entry) }
         : {}),

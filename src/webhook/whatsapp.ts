@@ -7,6 +7,7 @@ import { sendTyping } from '../channel/whatsapp-client.js';
 import { seenWebhookMessage, overRateLimit } from '../channel/ingress-guard.js';
 import { createWorkerRuntime } from '../runtime/deps.js';
 import { handleChat } from '../worker/routes.js';
+import { utteranceFromNfmReply } from '../engine/visit-slot.js';
 
 interface MetaPayload {
   object?: string;
@@ -24,6 +25,7 @@ interface MetaPayload {
             type?: string;
             button_reply?: { id: string; title: string };
             list_reply?: { id: string; title: string };
+            nfm_reply?: { name?: string; body?: string; response_json?: string };
           };
           /** A quick-reply tap on a TEMPLATE message — not `interactive`. */
           button?: { text?: string; payload?: string };
@@ -117,10 +119,17 @@ export async function handleWhatsAppWebhook(
         if (msg.type === 'text' && msg.text?.body) {
           buyerText = msg.text.body;
         } else if (msg.type === 'interactive' && msg.interactive) {
-          const reply = msg.interactive.button_reply ?? msg.interactive.list_reply;
-          if (reply) {
-            buyerText = reply.title;
-            actionId = reply.id;
+          const nfm = msg.interactive.nfm_reply?.response_json;
+          if (msg.interactive.type === 'nfm_reply' || nfm) {
+            // Flow complete — same visit FSM as typed "2026-09-15 at 10:30 AM".
+            // Not an action_id: there is no row in the interactive vocabulary.
+            buyerText = utteranceFromNfmReply(nfm) ?? '';
+          } else {
+            const reply = msg.interactive.button_reply ?? msg.interactive.list_reply;
+            if (reply) {
+              buyerText = reply.title;
+              actionId = reply.id;
+            }
           }
         } else if (msg.type === 'button' && msg.button?.text) {
           // A tap on a TEMPLATE quick-reply (the opening message's buttons).

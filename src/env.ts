@@ -150,6 +150,11 @@ export interface Env {
    * discovery brief. on | off. Unset = on for non-prod, off for prod.
    */
   WA_PROJECT_FIRST?: string;
+  /**
+   * Published WhatsApp Flow id for visit date+time. Unset = list fallback on
+   * the wire. Test yourself still gets the Flow payload on the list DTO.
+   */
+  WA_VISIT_FLOW_ID?: string;
 
   DEFAULT_BUILDER_ID?: string;
   /** Builder tenant for NayaAdvisor channel (default naya-advisor). */

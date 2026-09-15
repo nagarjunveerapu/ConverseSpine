@@ -385,3 +385,67 @@ describe('money menu — WhatsApp delivery contract', () => {
     for (const s of packed.sections) expect(s.title.length).toBeLessThanOrEqual(24);
   });
 });
+
+describe('visit day chrome — Flow payload + list fallback', () => {
+  const nowMs = Date.parse('2026-09-15T08:00:00+05:30');
+  const visitAsk = {
+    kind: 'visit_ask' as const,
+    ask: 'day' as const,
+    copy: 'Which day works?',
+    state: {},
+  };
+
+  it('packs a list fallback and a calendar payload even without a published flow id', () => {
+    const packed = packWhatsAppInteractive({
+      goal: visitAsk,
+      state: commitTo(initState('c', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado'),
+      catalogNames: CATALOG,
+      singleProject: false,
+      nowMs,
+      openDays: new Set([0, 1, 2, 3, 4, 5, 6]),
+    });
+    expect(packed.kind).toBe('list');
+    if (packed.kind !== 'list') return;
+    expect(packed.button).toBe('Pick a day');
+    expect(packed.flow?.cta).toBe('Pick a day');
+    expect(packed.flow?.flowId).toBeUndefined();
+    expect(packed.flow?.payload.min_date).toBe('2026-09-15');
+    expect(packed.flow?.payload.max_date).toBe('2026-10-13');
+    expect(packed.flow?.payload.include_days).toContain('Tue');
+    expect(packed.flow?.payload.project_name).toBe('Brigade Eldorado');
+    const dto = packedToInteractive(packed);
+    expect(dto?.type).toBe('list');
+    if (dto?.type !== 'list') return;
+    expect(dto.flow?.payload.min_date).toBe('2026-09-15');
+    expect(dto.flow?.flow_id).toBeUndefined();
+  });
+
+  it('copies a published flow id onto the DTO so Graph can send a Flow', () => {
+    const packed = packWhatsAppInteractive({
+      goal: visitAsk,
+      state: initState('c', 'brigade-group'),
+      catalogNames: CATALOG,
+      singleProject: false,
+      nowMs,
+      openDays: new Set([1, 2, 3, 4, 5]),
+      visitFlowId: '1234567890',
+    });
+    if (packed.kind !== 'list') throw new Error('expected a list');
+    expect(packed.flow?.flowId).toBe('1234567890');
+    expect(packed.flow?.payload.include_days).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+    const dto = packedToInteractive(packed);
+    if (dto?.type !== 'list') throw new Error('expected list dto');
+    expect(dto.flow?.flow_id).toBe('1234567890');
+  });
+
+  it('does not put a calendar on window / confirm chrome', () => {
+    const windowAsk = packWhatsAppInteractive({
+      goal: { kind: 'visit_ask', ask: 'window', copy: 'Morning or afternoon?', state: {} },
+      state: initState('c', 'brigade-group'),
+      catalogNames: CATALOG,
+      singleProject: false,
+    });
+    expect(windowAsk.kind).toBe('buttons');
+    if (windowAsk.kind === 'buttons') expect(windowAsk).not.toHaveProperty('flow');
+  });
+});

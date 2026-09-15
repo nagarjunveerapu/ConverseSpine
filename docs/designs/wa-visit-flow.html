@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp visit Flow — calendar, then time</title>
+<style>
+  :root {
+    --bg:#0b141a; --ink:#e9edef; --dim:#8696a0; --line:#2a3942;
+    --bot:#202c33; --me:#005c4b; --accent:#00a884; --card:#111b21;
+    --ok:#3dcc9a; --warn:#e9c46a; --sheet:#182229;
+    --flow:#f6f5f4; --flow-ink:#111b21; --flow-dim:#667781; --flow-line:#e9edef;
+    --flow-green:#1daa61;
+  }
+  * { box-sizing:border-box; margin:0 }
+  body { background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif; }
+  .page { display:grid; grid-template-columns:380px 1fr; min-height:100vh }
+  .stage { padding:18px 16px 40px; border-right:1px solid var(--line) }
+  h1 { font-size:17px; font-weight:600 }
+  .sub { color:var(--dim); font-size:12.5px; margin:6px 0 14px }
+  .toggles { display:flex; gap:6px; margin:0 0 12px; flex-wrap:wrap }
+  .toggles button {
+    background:var(--card); color:var(--ink); border:1px solid var(--line);
+    border-radius:999px; padding:5px 10px; font:inherit; cursor:pointer;
+  }
+  .toggles button.on { border-color:var(--accent); color:var(--accent) }
+  .phone {
+    width:340px; background:#0b141a; border:1px solid var(--line); border-radius:18px;
+    overflow:hidden; display:flex; flex-direction:column; height:760px; position:relative;
+  }
+  .ph-head { background:#1f2c33; padding:10px 14px; display:flex; justify-content:space-between }
+  .ph-head b { font-size:14px }
+  .ph-head span { color:var(--dim); font-size:11px }
+  .thread { flex:1; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px }
+  .bubble { max-width:88%; padding:8px 11px; border-radius:8px; white-space:pre-wrap; font-size:13.5px }
+  .bot { background:var(--bot); align-self:flex-start }
+  .me { background:var(--me); align-self:flex-end }
+  .flow-msg { align-self:flex-start; width:88%; background:var(--bot); border-radius:8px; overflow:hidden }
+  .flow-msg .body { padding:8px 11px; font-size:13.5px }
+  .flow-msg .cta {
+    display:block; width:100%; border:0; border-top:1px solid var(--line);
+    background:transparent; color:var(--accent); font:inherit; font-weight:700;
+    padding:10px; cursor:pointer;
+  }
+  .list { background:var(--sheet); border:1px solid var(--line); border-radius:10px; overflow:hidden; align-self:stretch }
+  .list .cta { padding:8px; text-align:center; color:var(--accent); font-weight:600; border-bottom:1px solid var(--line) }
+  .list .row {
+    width:100%; background:transparent; color:var(--ink); border:0; border-top:1px solid var(--line);
+    padding:8px 10px; text-align:left; cursor:pointer; font:inherit;
+  }
+  .list .row .d { color:var(--dim); font-size:12px; margin-top:2px }
+  .composer { border-top:1px solid var(--line); padding:8px; display:flex; gap:6px }
+  .composer input {
+    flex:1; background:#1c262d; border:1px solid var(--line); color:var(--ink);
+    border-radius:18px; padding:8px 12px; font:inherit;
+  }
+  .composer button { background:var(--accent); color:#04251c; border:0; border-radius:16px; padding:8px 12px; font-weight:700; cursor:pointer }
+
+  /* Native-ish Flow overlay */
+  .overlay {
+    position:absolute; inset:0; background:rgba(0,0,0,.45);
+    display:none; align-items:flex-end;
+  }
+  .overlay.show { display:flex }
+  .flow {
+    background:var(--flow); color:var(--flow-ink); width:100%; height:92%;
+    border-radius:14px 14px 0 0; display:flex; flex-direction:column;
+  }
+  .flow-bar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-bottom:1px solid var(--flow-line);
+  }
+  .flow-bar button { background:transparent; border:0; font-size:18px; cursor:pointer; color:var(--flow-ink); width:32px }
+  .flow-bar b { font-size:14px }
+  .flow-body { flex:1; overflow:auto; padding:16px 16px 8px }
+  .flow-kicker { color:var(--flow-dim); font-size:12px; letter-spacing:.04em; text-transform:uppercase; margin-bottom:6px }
+  .flow-title { font-size:20px; font-weight:700; margin-bottom:4px }
+  .flow-help { color:var(--flow-dim); font-size:13px; margin-bottom:16px }
+  .month { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:700 }
+  .dows, .grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px }
+  .dows span { text-align:center; color:var(--flow-dim); font-size:11px; padding:4px 0 }
+  .cell {
+    aspect-ratio:1; border:0; background:transparent; border-radius:999px;
+    font:inherit; font-size:13px; cursor:pointer; color:var(--flow-ink);
+  }
+  .cell.off { color:#c5c9cc; cursor:default }
+  .cell.empty { cursor:default }
+  .cell.today { box-shadow:inset 0 0 0 1.5px var(--flow-green) }
+  .cell.on { background:var(--flow-green); color:#fff }
+  .times { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px }
+  .times button {
+    background:#fff; border:1px solid var(--flow-line); border-radius:999px;
+    padding:8px 12px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  .times button.on { border-color:var(--flow-green); background:#eaf7ef; color:#0b5c32 }
+  .foot { padding:12px 16px 18px }
+  .foot button {
+    width:100%; background:var(--flow-green); color:#fff; border:0; border-radius:24px;
+    padding:12px; font:inherit; font-weight:700; cursor:pointer;
+  }
+  .foot button:disabled { background:#cfd4d6; cursor:default }
+
+  .aside { padding:20px 28px 64px; max-width:760px }
+  .aside h2 { font-size:15px; margin:18px 0 8px }
+  .aside h2:first-child { margin-top:0 }
+  .why { padding:10px 12px; border-left:3px solid var(--ok); background:#0f1c19; margin:0 0 14px; font-size:13.5px }
+  .why.warn { border-color:var(--warn); background:#1c1910 }
+  table { width:100%; border-collapse:collapse; font-size:13px }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--dim); font-weight:600 }
+  code { font-size:12px; background:#1c262d; padding:1px 5px; border-radius:4px }
+  pre { background:#1c262d; padding:12px; border-radius:8px; overflow:auto; font-size:11.5px; line-height:1.45 }
+  .muted { color:var(--dim) }
+  @media (max-width: 900px) { .page { grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="stage">
+    <h1>Visit Flow</h1>
+    <p class="sub">Tap <b>Pick a day</b>. That is a WhatsApp Flow — month, then time — not a 10-row list. Toggle fallback to see today’s chrome.</p>
+    <div class="toggles">
+      <button class="on" id="btn-flow" type="button">Flow published</button>
+      <button id="btn-list" type="button">No flow_id → list</button>
+    </div>
+    <div class="phone">
+      <div class="ph-head"><b>Brigade Group</b><span>WhatsApp</span></div>
+      <div class="thread" id="thread"></div>
+      <form class="composer" id="form">
+        <input id="inp" autocomplete="off" placeholder="Or type Saturday 10:30…">
+        <button type="submit">Send</button>
+      </form>
+      <div class="overlay" id="overlay">
+        <div class="flow" role="dialog" aria-label="Book a visit">
+          <div class="flow-bar">
+            <button type="button" id="flow-close" aria-label="Close">✕</button>
+            <b>Book a visit</b>
+            <span style="width:32px"></span>
+          </div>
+          <div class="flow-body">
+            <div class="flow-kicker">Brigade Eternia</div>
+            <div class="flow-title" id="flow-title">Pick a day</div>
+            <p class="flow-help" id="flow-help">Site is open every day. Today is still open.</p>
+            <div class="month"><span>September 2026</span><span class="muted" style="font-weight:500">India</span></div>
+            <div class="dows" id="dows"></div>
+            <div class="grid" id="grid"></div>
+            <div class="times" id="times" hidden></div>
+          </div>
+          <div class="foot">
+            <button type="button" id="flow-go" disabled>Continue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="aside">
+    <div class="why">WhatsApp has no calendar in a list. A <b>Flow</b> is a published form on the WABA. The chat only shows a CTA. The month lives inside the Flow.</div>
+    <div class="why warn">No combined date-time widget. Date first, then a time radio. List remains the fallback when <code>WA_VISIT_FLOW_ID</code> is unset — Test yourself and any number without a published Flow keep today’s list.</div>
+
+    <h2>Layers</h2>
+    <table>
+      <tr><th>Touch</th><th>Why</th></tr>
+      <tr><td><code>wa-pack.ts</code></td><td>Visit-ask packs <code>kind: 'flow'</code> when a flow id is configured; else the existing day list.</td></tr>
+      <tr><td><code>whatsapp-client.ts</code> + <code>wa-deliver.ts</code></td><td>Send <code>interactive.type = flow</code> with <code>flow_id</code>, <code>flow_cta: Pick a day</code>, payload min/max dates.</td></tr>
+      <tr><td><code>webhook/whatsapp.ts</code></td><td>Read <code>nfm_reply</code>. Canonical utterance becomes <code>Tuesday 15 Sep at 10:30 AM</code> — same visit FSM as a typed day.</td></tr>
+      <tr><td>Desk Test yourself</td><td>Mock the Flow overlay (this page). The playground is not Cloud API; without the mock you still see a list.</td></tr>
+      <tr><td>Meta WABA</td><td>Create + publish one Flow JSON per number (or named Flow cloned across WABAs). Not a Spine regex.</td></tr>
+    </table>
+
+    <h2>Why this layer</h2>
+    <p class="muted" style="margin-bottom:12px">The visit FSM already understands a spoken day and time. The miss is chrome: a list of weekday names. A Flow is the only WhatsApp surface that can draw a month. We do not teach a new intent, and we do not replace the FSM. The Flow completes into the same words the list already produces.</p>
+
+    <h2>Why not</h2>
+    <table>
+      <tr><td>Compose copy</td><td>The calendar is not a sentence.</td></tr>
+      <tr><td>Embeddings</td><td>A tap is an id + ISO date, not open speech.</td></tr>
+      <tr><td>Advisor SPA only</td><td>Already has the month. WhatsApp buyers never see that board.</td></tr>
+      <tr><td>Flows for BHK / budget</td><td>Out of this slice. Visit-only keeps one published Flow and one webhook path.</td></tr>
+    </table>
+
+    <h2>Send (Cloud API)</h2>
+<pre>{
+  "type": "interactive",
+  "interactive": {
+    "type": "flow",
+    "body": { "text": "Which day works for Brigade Eternia?" },
+    "action": {
+      "name": "flow",
+      "parameters": {
+        "flow_message_version": "3",
+        "flow_id": "WA_VISIT_FLOW_ID",
+        "flow_cta": "Pick a day",
+        "flow_action": "navigate",
+        "flow_action_payload": {
+          "screen": "DATE",
+          "data": {
+            "min_date": "2026-09-15",
+            "max_date": "2026-09-28",
+            "project_name": "Brigade Eternia"
+          }
+        }
+      }
+    }
+  }
+}</pre>
+
+    <h2>Return (webhook)</h2>
+<pre>interactive.nfm_reply.response_json
+  { "date": "2026-09-15", "time": "10:30 AM" }
+
+→ canonical text the visit FSM already parses:
+  "2026-09-15 at 10:30 AM"</pre>
+
+    <h2>Quality check</h2>
+    <table>
+      <tr><td>This mock</td><td>Tap Pick a day → today → 10:30 → Continue. Bot proposes the slot.</td></tr>
+      <tr><td>Fallback</td><td>Toggle “No flow_id”. Same turn packs the list you already saw in Test yourself.</td></tr>
+      <tr><td>Live WA</td><td>Needs a published Flow on the Brigade WABA, then a dig send. Until then list only.</td></tr>
+      <tr><td>Ablation</td><td>Free text “Saturday morning” still books. Flow is chrome, not a new kind.</td></tr>
+    </table>
+  </div>
+</div>
+<script>
+const TIMES = ['10:30 AM', '12:00 PM', '3:00 PM', '5:30 PM'];
+const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const WEEK = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TODAY = new Date(2026, 8, 15);
+const MAX = new Date(2026, 8, 28);
+
+let useFlow = true;
+let pickedDate = null;
+let pickedTime = null;
+
+const thread = document.getElementById('thread');
+const overlay = document.getElementById('overlay');
+const grid = document.getElementById('grid');
+const dows = document.getElementById('dows');
+const timesEl = document.getElementById('times');
+const go = document.getElementById('flow-go');
+
+function iso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function label(d) {
+  return `${WEEK[d.getDay()]} ${d.getDate()} ${MONTH[d.getMonth()]}`;
+}
+function inHorizon(d) {
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return t >= TODAY.getTime() && t <= MAX.getTime();
+}
+
+function bubble(who, text) {
+  const el = document.createElement('div');
+  el.className = `bubble ${who}`;
+  el.textContent = text;
+  thread.appendChild(el);
+}
+
+function paintChrome() {
+  thread.innerHTML = '';
+  bubble('bot', '*Brigade Eternia* — your fit.\n• 3 BHK Premium : 2000 - 2400 sqft\nWhat would you like to know about Brigade Eternia?');
+  bubble('me', 'book a visit');
+  bubble('bot', 'Which day works for *Brigade Eternia*? The site is open every day — say a day and a time, or pick below.');
+  if (useFlow) {
+    const wrap = document.createElement('div');
+    wrap.className = 'flow-msg';
+    wrap.innerHTML = `<div class="body">Open the calendar to pick a day and a time.</div>`;
+    const cta = document.createElement('button');
+    cta.className = 'cta';
+    cta.type = 'button';
+    cta.textContent = 'Pick a day';
+    cta.onclick = openFlow;
+    wrap.appendChild(cta);
+    thread.appendChild(wrap);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'list';
+    list.innerHTML = `<div class="cta">Pick a day</div>`;
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(TODAY); d.setDate(TODAY.getDate() + i);
+      days.push(d);
+    }
+    days.forEach((d, i) => {
+      const row = document.createElement('button');
+      row.className = 'row';
+      row.type = 'button';
+      const desc = i === 0 ? 'today' : i === 1 ? 'tomorrow' : (d.getDay() === 0 || d.getDay() === 6 ? 'weekend' : '');
+      row.innerHTML = `${WEEK[d.getDay()].slice(0,3)} ${d.getDate()} ${MONTH[d.getMonth()]}${desc ? `<div class="d">${desc}</div>` : ''}`;
+      row.onclick = () => finish(`${label(d)} morning`);
+      list.appendChild(row);
+    });
+    thread.appendChild(list);
+  }
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function openFlow() {
+  pickedDate = null;
+  pickedTime = null;
+  timesEl.hidden = true;
+  document.getElementById('flow-title').textContent = 'Pick a day';
+  document.getElementById('flow-help').textContent = 'Site is open every day. Today is still open.';
+  go.disabled = true;
+  go.textContent = 'Continue';
+  paintMonth();
+  overlay.classList.add('show');
+}
+
+function paintMonth() {
+  dows.innerHTML = DOW.map((d) => `<span>${d}</span>`).join('');
+  grid.innerHTML = '';
+  const first = new Date(2026, 8, 1);
+  const start = first.getDay();
+  const dim = new Date(2026, 9, 0).getDate();
+  for (let i = 0; i < start; i++) {
+    const b = document.createElement('button');
+    b.className = 'cell empty';
+    b.type = 'button';
+    grid.appendChild(b);
+  }
+  for (let day = 1; day <= dim; day++) {
+    const d = new Date(2026, 8, day);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = String(day);
+    const ok = inHorizon(d);
+    b.className = 'cell' + (ok ? '' : ' off') + (iso(d) === iso(TODAY) ? ' today' : '');
+    if (ok) {
+      b.onclick = () => {
+        pickedDate = d;
+        pickedTime = null;
+        [...grid.querySelectorAll('.cell')].forEach((c) => c.classList.remove('on'));
+        b.classList.add('on');
+        document.getElementById('flow-title').textContent = label(d);
+        document.getElementById('flow-help').textContent = 'Now pick a time.';
+        paintTimes();
+        go.disabled = true;
+        go.textContent = 'Send';
+      };
+    }
+    grid.appendChild(b);
+  }
+}
+
+function paintTimes() {
+  timesEl.hidden = false;
+  timesEl.innerHTML = '';
+  TIMES.forEach((t) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = t;
+    b.onclick = () => {
+      pickedTime = t;
+      [...timesEl.children].forEach((c) => c.classList.remove('on'));
+      b.classList.add('on');
+      go.disabled = false;
+    };
+    timesEl.appendChild(b);
+  });
+}
+
+function finish(text) {
+  overlay.classList.remove('show');
+  bubble('me', text);
+  bubble('bot', `Shall I lock *${text}* at *Brigade Eternia*? Reply *yes* to confirm.`);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+document.getElementById('flow-close').onclick = () => overlay.classList.remove('show');
+go.onclick = () => {
+  if (!pickedDate || !pickedTime) return;
+  finish(`${label(pickedDate)} at ${pickedTime}`);
+};
+document.getElementById('btn-flow').onclick = () => {
+  useFlow = true;
+  document.getElementById('btn-flow').classList.add('on');
+  document.getElementById('btn-list').classList.remove('on');
+  paintChrome();
+};
+document.getElementById('btn-list').onclick = () => {
+  useFlow = false;
+  document.getElementById('btn-list').classList.add('on');
+  document.getElementById('btn-flow').classList.remove('on');
+  overlay.classList.remove('show');
+  paintChrome();
+};
+document.getElementById('form').onsubmit = (e) => {
+  e.preventDefault();
+  const v = document.getElementById('inp').value.trim();
+  if (!v) return;
+  document.getElementById('inp').value = '';
+  finish(v);
+};
+paintChrome();
+</script>
+</body>
+</html>

@@ -618,6 +618,8 @@ export interface EngineDeps {
   llmRateTarget?: number;
   /** WhatsApp project-first: pack chips + skip discovery brief. */
   waProjectFirst?: boolean;
+  /** Published visit Flow id — Graph send only. Packer attaches calendar payload either way. */
+  waVisitFlowId?: string;
   /** Shared TURN_CACHE for L1–L4 read-model (optional). */
   turnCache?: KVNamespace;
   /** Desk project etag for L2 freshness. */

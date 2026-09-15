@@ -6,6 +6,7 @@ import {
   parseDayAnchor,
   parseVisitSlot,
   reparseVisitTime,
+  utteranceFromNfmReply,
 } from '../src/engine/visit-slot.js';
 
 describe('visit-slot', () => {
@@ -75,5 +76,24 @@ describe('visit-slot', () => {
     const retimed = reparseVisitTime(nextSaturdayIst(11), '12 AM');
     expect(retimed?.humanLabel).toMatch(/Saturday at 12:00 AM/);
     expect(retimed?.proposedIso).toContain('T00:00:00+05:30');
+  });
+
+  it('ISO date from a Flow is that calendar day, not next weekday', () => {
+    const tuesday = new Date('2026-09-15T08:00:00+05:30');
+    const far = parseVisitSlot('2026-09-24 at 10:30 AM', tuesday);
+    expect(far?.proposedIso).toBe('2026-09-24T10:30:00+05:30');
+    expect(far?.humanLabel).toMatch(/Thursday at 10:30 AM/);
+    const today = parseVisitSlot('2026-09-15 at 10:30 AM', tuesday);
+    expect(today?.proposedIso).toBe('2026-09-15T10:30:00+05:30');
+  });
+});
+
+describe('visit Flow nfm_reply', () => {
+  it('turns date+time JSON into the canonical utterance', () => {
+    expect(utteranceFromNfmReply('{"date":"2026-09-22","time":"3:00 PM"}')).toBe(
+      '2026-09-22 at 3:00 PM',
+    );
+    expect(utteranceFromNfmReply('{"flow_token":"visit"}')).toBeUndefined();
+    expect(utteranceFromNfmReply('not-json')).toBeUndefined();
   });
 });

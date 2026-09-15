@@ -140,3 +140,55 @@ describe('a template quick-reply tap', () => {
     expect(enqueues.map((e) => e.text)).toEqual(['Show my details', 'and the price?']);
   });
 });
+
+describe('a visit Flow complete (nfm_reply)', () => {
+  let enqueues: Array<Record<string, unknown>>;
+  let env: Env;
+
+  beforeEach(() => {
+    const fake = fakeDebouncer();
+    enqueues = fake.enqueues;
+    env = {
+      NAYADESK_URL: 'https://desk.test',
+      BOT_SHARED_SECRET: 'shh',
+      META_APP_SECRET: APP_SECRET,
+      TURN_DEBOUNCER: fake.ns,
+    } as unknown as Env;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).includes('/api/v1/builders')) {
+        return new Response(JSON.stringify({
+          builders: [{ builder_id: BUILDER, meta_phone_number_id: PHONE_NUMBER_ID }],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+  });
+
+  it('becomes a typed day+time, not an action_id', async () => {
+    const { ctx: c, settle } = ctx();
+    const res = await handleWhatsAppWebhook(await payload([{
+      from: '15556287583',
+      id: 'wamid.flow.1',
+      type: 'interactive',
+      interactive: {
+        type: 'nfm_reply',
+        nfm_reply: {
+          name: 'flow',
+          body: 'Sent',
+          response_json: JSON.stringify({ date: '2026-09-22', time: '10:30 AM', flow_token: 'visit' }),
+        },
+      },
+    }]), env, c);
+    await settle();
+
+    expect(res.status).toBe(200);
+    expect(enqueues).toHaveLength(1);
+    expect(enqueues[0]).toMatchObject({
+      builder_id: BUILDER,
+      text: '2026-09-22 at 10:30 AM',
+      meta_message_id: 'wamid.flow.1',
+    });
+    expect(enqueues[0]!.action_id).toBeUndefined();
+  });
+});

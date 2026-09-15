@@ -6,6 +6,7 @@ import type { ThreadState, TurnGoal } from '../engine/types.js';
 import { HANDOFF_QUESTIONS } from '../engine/book-questions.js';
 import type { Extracted } from '../engine/types.js';
 import { currentShortlist, focusedRef, projectSeenFacets } from '../engine/entity-store.js';
+import { visitCalendarWindow } from '../engine/visit-slot.js';
 import { humanizeMediaKind, normalizeMediaAssetKind } from '../engine/media-asset.js';
 import type { SeenFacet } from '../engine/entity-store.js';
 import type { SuggestedAction } from '../engine/recovery-planner.js';
@@ -387,10 +388,30 @@ export function waListPickKeepsCommit(
 
 export type WaListRow = { id: string; title: string; description?: string };
 
+/** Date+time Flow chrome. Graph only sends a Flow when `flowId` is set; /chat always carries the payload so Test yourself can draw a calendar. */
+export type WaVisitFlowPayload = {
+  min_date: string;
+  max_date: string;
+  include_days: string[];
+  unavailable_dates: string[];
+  project_name?: string;
+};
+
+export type WaVisitFlowChrome = {
+  cta: string;
+  flowId?: string;
+  payload: WaVisitFlowPayload;
+};
+
 export type WaPacked =
   | { kind: 'text' }
   | { kind: 'buttons'; buttons: Array<{ id: string; title: string }> }
-  | { kind: 'list'; button: string; sections: Array<{ title: string; rows: WaListRow[] }> };
+  | {
+      kind: 'list';
+      button: string;
+      sections: Array<{ title: string; rows: WaListRow[] }>;
+      flow?: WaVisitFlowChrome;
+    };
 
 export interface WaPackInput {
   goal: TurnGoal;
@@ -447,6 +468,12 @@ export interface WaPackInput {
    * "Closest is Brigade Eternia" are the wrong doors.
    */
   closest?: { projectId: string; name: string };
+  /**
+   * Published WhatsApp Flow id for the visit date+time sheet. Graph uses it
+   * to send a Flow; unset keeps the list on the wire. The packer still
+   * attaches `flow` payload so Test yourself can mock the calendar.
+   */
+  visitFlowId?: string;
 }
 
 /**
@@ -1354,6 +1381,33 @@ export function splitProjectStamp(actionId: string): { aid: string; projectId?: 
   return { aid: actionId.slice(0, at), projectId: actionId.slice(at + 1) || undefined };
 }
 
+/** List fallback plus Flow payload — date/time chrome only; trip logistics stay in visit.ts. */
+function packVisitDayChrome(input: WaPackInput): WaPacked | undefined {
+  const openDays = input.openDays ?? new Set([0, 1, 2, 3, 4, 5, 6]);
+  const nowMs = input.nowMs || Date.now();
+  const days = waVisitDayRows(input.siteVisitHours, nowMs, openDays);
+  if (!days.length) return undefined;
+  const window = visitCalendarWindow(new Date(nowMs), openDays);
+  const focus = focusedRef(input.state);
+  const flowId = input.visitFlowId?.trim();
+  return {
+    kind: 'list',
+    button: 'Pick a day',
+    sections: [{ title: 'Choose a day', rows: withWayBackTo(days, WA_BACK_FILE, '← Back') }],
+    flow: {
+      cta: 'Pick a day',
+      ...(flowId ? { flowId } : {}),
+      payload: {
+        min_date: window.minDate,
+        max_date: window.maxDate,
+        include_days: window.includeDays,
+        unavailable_dates: window.unavailableDates,
+        ...(focus?.projectName ? { project_name: focus.projectName } : {}),
+      },
+    },
+  };
+}
+
 export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
   const { goal, state, catalogNames, singleProject } = input;
   const focus = focusedRef(state);
@@ -1493,14 +1547,8 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
       default:
         break;
     }
-    const days = waVisitDayRows(input.siteVisitHours, input.nowMs ?? 0, input.openDays ?? new Set([0, 1, 2, 3, 4, 5, 6]));
-    if (days.length) {
-      return {
-        kind: 'list',
-        button: 'Pick a day',
-        sections: [{ title: 'Choose a day', rows: withWayBackTo(days, WA_BACK_FILE, '← Back') }],
-      };
-    }
+    const days = packVisitDayChrome(input);
+    if (days) return days;
   }
 
   if (goal.kind === 'visit_propose') {
@@ -1515,14 +1563,8 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
   }
 
   if (goal.kind === 'propose_visit') {
-    const days = waVisitDayRows(input.siteVisitHours, input.nowMs ?? 0, input.openDays ?? new Set([0, 1, 2, 3, 4, 5, 6]));
-    if (days.length) {
-      return {
-        kind: 'list',
-        button: 'Pick a day',
-        sections: [{ title: 'Choose a day', rows: withWayBackTo(days, WA_BACK_FILE, '← Back') }],
-      };
-    }
+    const days = packVisitDayChrome(input);
+    if (days) return days;
   }
 
   if (goal.kind === 'visit_booked') {
@@ -1759,14 +1801,36 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
 /** Graph-shaped interactive payload for /chat and Saarathi send. */
 export type WaInteractiveDto =
   | { type: 'button'; buttons: Array<{ id: string; title: string }> }
-  | { type: 'list'; button: string; sections: Array<{ title: string; rows: WaListRow[] }> };
+  | {
+      type: 'list';
+      button: string;
+      sections: Array<{ title: string; rows: WaListRow[] }>;
+      flow?: {
+        cta: string;
+        flow_id?: string;
+        payload: WaVisitFlowPayload;
+      };
+    };
 
 export function packedToInteractive(packed: WaPacked): WaInteractiveDto | undefined {
   if (packed.kind === 'buttons' && packed.buttons.length > 0) {
     return { type: 'button', buttons: packed.buttons };
   }
   if (packed.kind === 'list' && packed.sections.some((s) => s.rows.length > 0)) {
-    return { type: 'list', button: packed.button, sections: packed.sections };
+    return {
+      type: 'list',
+      button: packed.button,
+      sections: packed.sections,
+      ...(packed.flow
+        ? {
+            flow: {
+              cta: packed.flow.cta,
+              payload: packed.flow.payload,
+              ...(packed.flow.flowId ? { flow_id: packed.flow.flowId } : {}),
+            },
+          }
+        : {}),
+    };
   }
   return undefined;
 }
