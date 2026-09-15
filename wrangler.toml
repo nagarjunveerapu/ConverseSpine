@@ -87,6 +87,9 @@ WA_PROJECT_FIRST = "on"
 # Visit date+time Flow. Unset here on purpose: Graph keeps the day list until
 # the Flow is published on the WABA and this id is set (see docs/flows/).
 # WA_VISIT_FLOW_ID = ""
+# WA_STOPS_FLOW_ID = ""
+# WA_ORIGIN_FLOW_ID = ""
+# WA_BRIEF_FLOW_ID = ""
 # THE WIRE: a >=tau_high answer-intent bind vetoes the isFocusedSearchPivot
 # regex. OFF -- measured too broad. On merged main, focused on Brigade
 # Eldorado, 4 of 6 genuine pivots were PINNED to the old project:

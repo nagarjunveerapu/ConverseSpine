@@ -97,7 +97,9 @@ export async function deliverWhatsAppTurn(
     replyOut = await sendInteractiveFlow(phoneNumberId, to, body, {
       flowId: packed.flow.flow_id,
       cta: packed.flow.cta || packed.button,
-      payload: packed.flow.payload,
+      payload: packed.flow.payload ?? {},
+      screen: packed.flow.screen,
+      flowToken: packed.flow.kind,
       token,
     });
   } else if (packed?.type === 'list') {

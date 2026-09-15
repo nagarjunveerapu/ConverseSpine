@@ -1,0 +1,43 @@
+{
+  "version": "6.3",
+  "routing_model": { "STOPS": [] },
+  "screens": [
+    {
+      "id": "STOPS",
+      "title": "This trip",
+      "terminal": true,
+      "data": {
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" },
+        "stops": {
+          "type": "array",
+          "items": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } },
+          "__example__": [
+            { "id": "Brigade Eternia", "title": "Brigade Eternia" },
+            { "id": "Brigade Cornerstone", "title": "Brigade Cornerstone" }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          {
+            "type": "CheckboxGroup",
+            "name": "stops",
+            "label": "Which projects",
+            "required": true,
+            "data-source": "${data.stops}"
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "stops", "stops": "${form.stops}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

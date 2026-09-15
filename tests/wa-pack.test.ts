@@ -449,3 +449,63 @@ describe('visit day chrome — Flow payload + list fallback', () => {
     if (windowAsk.kind === 'buttons') expect(windowAsk).not.toHaveProperty('flow');
   });
 });
+
+describe('visit Flow jobs — stops / origin / brief', () => {
+  it('packs checkboxes on which_projects, list still single-pick', () => {
+    const packed = packWhatsAppInteractive({
+      goal: {
+        kind: 'visit_ask',
+        ask: 'which_projects',
+        copy: 'Which should I put on this trip?',
+        state: {
+          candidateIds: [
+            { projectId: 'brigade-eldorado', projectName: 'Brigade Eldorado' },
+            { projectId: 'cornerstone', projectName: 'Cornerstone Utopia' },
+          ],
+        },
+      },
+      state: initState('c', 'brigade-group'),
+      catalogNames: CATALOG,
+      singleProject: false,
+    });
+    expect(packed.kind).toBe('list');
+    if (packed.kind !== 'list') return;
+    expect(packed.button).toBe('Pick stops');
+    expect(packed.flow?.kind).toBe('stops');
+    expect(packed.flow?.screen).toBe('STOPS');
+    expect(packed.flow?.payload.stops).toEqual([
+      { id: 'Brigade Eldorado', title: 'Brigade Eldorado' },
+      { id: 'Cornerstone Utopia', title: 'Cornerstone Utopia' },
+    ]);
+  });
+
+  it('packs origin as a short field, not a calendar', () => {
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'visit_ask', ask: 'origin', copy: 'Where from?', state: {} },
+      state: commitTo(initState('c', 'brigade-group'), 'brigade-eldorado', 'Brigade Eldorado'),
+      catalogNames: CATALOG,
+      singleProject: false,
+    });
+    expect(packed.kind).toBe('list');
+    if (packed.kind !== 'list') return;
+    expect(packed.button).toBe('Where from');
+    expect(packed.flow?.kind).toBe('origin');
+    expect(packed.flow?.payload.project_name).toBe('Brigade Eldorado');
+  });
+
+  it('packs size+area+budget on the first brief probe', () => {
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'probe', slot: 'bhk', copy: 'Size?' },
+      state: initState('c', 'brigade-group'),
+      catalogNames: CATALOG,
+      singleProject: false,
+      briefAreas: ['Yelahanka', 'Whitefield'],
+    });
+    expect(packed.kind).toBe('list');
+    if (packed.kind !== 'list') return;
+    expect(packed.button).toBe('Choose bedrooms');
+    expect(packed.flow?.kind).toBe('brief');
+    expect(packed.flow?.payload.bhk).toEqual(expect.arrayContaining(['2 BHK', '3 BHK']));
+    expect(packed.flow?.payload.areas).toEqual(expect.arrayContaining(['Yelahanka', 'Whitefield']));
+  });
+});

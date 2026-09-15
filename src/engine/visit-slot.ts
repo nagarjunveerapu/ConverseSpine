@@ -304,20 +304,3 @@ export function visitCalendarWindow(
 export function utteranceFromVisitFlow(dateIso: string, timeText: string): string {
   return `${dateIso} at ${timeText.trim()}`;
 }
-
-/** nfm_reply.response_json → buyer text. Missing/junk date+time returns undefined (drop the webhook). */
-export function utteranceFromNfmReply(responseJson: string | undefined): string | undefined {
-  if (!responseJson?.trim()) return undefined;
-  try {
-    const o = JSON.parse(responseJson) as Record<string, unknown>;
-    const date =
-      (typeof o.date === 'string' && o.date) ||
-      (typeof o.appointment_date === 'string' && o.appointment_date) ||
-      '';
-    const time = typeof o.time === 'string' ? o.time.trim() : '';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !time) return undefined;
-    return utteranceFromVisitFlow(date, time);
-  } catch {
-    return undefined;
-  }
-}

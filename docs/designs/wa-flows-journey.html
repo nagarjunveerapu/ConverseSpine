@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Flows — enquiry to registration</title>
+<style>
+  :root {
+    --bg:#0b141a; --ink:#e9edef; --dim:#8696a0; --line:#2a3942;
+    --bot:#202c33; --me:#005c4b; --accent:#00a884; --card:#111b21;
+    --ok:#3dcc9a; --sheet:#182229;
+    --flow:#f6f5f4; --flow-ink:#111b21; --flow-dim:#667781; --flow-line:#e9edef;
+    --flow-green:#1daa61;
+  }
+  * { box-sizing:border-box; margin:0 }
+  body { background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif; }
+  .page { display:grid; grid-template-columns:220px 380px 1fr; min-height:100vh }
+  .rail { padding:16px 12px 40px; border-right:1px solid var(--line); }
+  .rail h1 { font-size:15px; font-weight:600; padding:0 6px }
+  .rail .sub { color:var(--dim); font-size:12px; margin:6px 6px 14px; }
+  .g { color:var(--dim); font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:12px 6px 4px }
+  .job {
+    display:block; width:100%; text-align:left; background:transparent; color:var(--ink);
+    border:0; border-radius:8px; padding:8px 8px; font:inherit; cursor:pointer;
+  }
+  .job small { display:block; color:var(--dim); font-size:11.5px; margin-top:2px }
+  .job.on { background:var(--card); color:var(--accent) }
+  .stage { padding:18px 16px 40px; border-right:1px solid var(--line) }
+  .phone {
+    width:340px; background:#0b141a; border:1px solid var(--line); border-radius:18px;
+    overflow:hidden; display:flex; flex-direction:column; height:760px; position:relative;
+  }
+  .ph-head { background:#1f2c33; padding:10px 14px; display:flex; justify-content:space-between }
+  .ph-head b { font-size:14px }
+  .ph-head span { color:var(--dim); font-size:11px }
+  .thread { flex:1; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px }
+  .bubble { max-width:88%; padding:8px 11px; border-radius:8px; white-space:pre-wrap; font-size:13.5px }
+  .bot { background:var(--bot); align-self:flex-start }
+  .me { background:var(--me); align-self:flex-end }
+  .flow-msg { align-self:flex-start; width:88%; background:var(--bot); border-radius:8px; overflow:hidden }
+  .flow-msg .body { padding:8px 11px; font-size:13.5px }
+  .flow-msg .cta {
+    display:block; width:100%; border:0; border-top:1px solid var(--line);
+    background:transparent; color:var(--accent); font:inherit; font-weight:700;
+    padding:10px; cursor:pointer;
+  }
+  .btns { align-self:stretch; background:var(--bot); border-radius:8px; overflow:hidden; max-width:88% }
+  .btns button {
+    display:block; width:100%; border:0; border-top:1px solid var(--line);
+    background:transparent; color:var(--accent); padding:10px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  .composer { border-top:1px solid var(--line); padding:8px; color:var(--dim); font-size:12px }
+  .note {
+    align-self:center; font-size:11px; color:var(--dim); background:#1c262d;
+    padding:4px 10px; border-radius:999px; max-width:90%; text-align:center;
+  }
+
+  .overlay { position:absolute; inset:0; background:rgba(0,0,0,.45); display:none; align-items:flex-end }
+  .overlay.show { display:flex }
+  .flow {
+    background:var(--flow); color:var(--flow-ink); width:100%; height:92%;
+    border-radius:14px 14px 0 0; display:flex; flex-direction:column;
+  }
+  .flow-bar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-bottom:1px solid var(--flow-line);
+  }
+  .flow-bar button { background:transparent; border:0; font-size:18px; cursor:pointer; color:var(--flow-ink); width:32px }
+  .flow-bar b { font-size:14px }
+  .flow-body { flex:1; overflow:auto; padding:16px 16px 8px }
+  .flow-kicker { color:var(--flow-dim); font-size:12px; letter-spacing:.04em; text-transform:uppercase; margin-bottom:6px }
+  .flow-title { font-size:20px; font-weight:700; margin-bottom:4px }
+  .flow-help { color:var(--flow-dim); font-size:13px; margin-bottom:14px }
+  .lab { font-size:12px; font-weight:700; color:var(--flow-dim); margin:12px 0 6px }
+  .chips { display:flex; flex-wrap:wrap; gap:8px }
+  .chips button, .times button {
+    background:#fff; border:1px solid var(--flow-line); border-radius:999px;
+    padding:8px 12px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  .chips button.on, .times button.on { border-color:var(--flow-green); background:#eaf7ef; color:#0b5c32 }
+  .check { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--flow-line); cursor:pointer }
+  .box { width:18px; height:18px; border:2px solid #bbb; border-radius:4px; flex:0 0 auto }
+  .check.on .box { border-color:var(--flow-green); background:var(--flow-green) }
+  .inp {
+    width:100%; border:1px solid var(--flow-line); border-radius:10px; padding:10px 12px;
+    font:inherit; background:#fff;
+  }
+  .upload {
+    border:1.5px dashed #c5c9cc; border-radius:12px; padding:16px; background:#fff;
+    text-align:center; cursor:pointer; margin-bottom:8px;
+  }
+  .upload.on { border-color:var(--flow-green); background:#eaf7ef }
+  .upload b { display:block; font-size:13px }
+  .upload span { color:var(--flow-dim); font-size:12px }
+  .dows, .grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px }
+  .dows span { text-align:center; color:var(--flow-dim); font-size:11px; padding:4px 0 }
+  .cell {
+    aspect-ratio:1; border:0; background:transparent; border-radius:999px;
+    font:inherit; font-size:13px; cursor:pointer; color:var(--flow-ink);
+  }
+  .cell.off { color:#c5c9cc; cursor:default }
+  .cell.empty { cursor:default }
+  .cell.today { box-shadow:inset 0 0 0 1.5px var(--flow-green) }
+  .cell.on { background:var(--flow-green); color:#fff }
+  .times { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px }
+  .foot { padding:12px 16px 18px }
+  .foot button {
+    width:100%; background:var(--flow-green); color:#fff; border:0; border-radius:24px;
+    padding:12px; font:inherit; font-weight:700; cursor:pointer;
+  }
+  .foot button:disabled { background:#cfd4d6; cursor:default }
+
+  .aside { padding:20px 28px 64px; max-width:640px }
+  .aside h2 { font-size:15px; margin:0 0 8px }
+  .why { padding:10px 12px; border-left:3px solid var(--ok); background:#0f1c19; margin:0 0 14px; font-size:13.5px }
+  table { width:100%; border-collapse:collapse; font-size:13px }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--dim); font-weight:600 }
+  code { font-size:12px; background:#1c262d; padding:1px 5px; border-radius:4px }
+  .muted { color:var(--dim) }
+  @media (max-width: 1100px) { .page { grid-template-columns:1fr } .rail { border-right:0; border-bottom:1px solid var(--line) } }
+</style>
+</head>
+<body>
+<div class="page">
+  <nav class="rail">
+    <h1>Flows on WhatsApp</h1>
+    <p class="sub">The question is the door: what they said, or what Desk just wrote. Then the CTA.</p>
+    <div class="g">Live bot</div>
+    <button class="job on" data-id="visit" type="button">Visit day + time<small>They said book a visit</small></button>
+    <button class="job" data-id="stops" type="button">Which projects<small>They named two on a trip</small></button>
+    <button class="job" data-id="origin" type="button">Coming from<small>Stops known, next ask</small></button>
+    <button class="job" data-id="brief" type="button">Size, area, budget<small>They tapped find a home</small></button>
+    <div class="g">After booking</div>
+    <button class="job" data-id="kyc" type="button">KYC / legal pack<small>Desk: unit blocked</small></button>
+    <button class="job" data-id="applicant" type="button">Applicant details<small>Same booking event</small></button>
+    <button class="job" data-id="loan" type="button">Loan papers<small>Funding = loan, or they said HDFC</small></button>
+    <button class="job" data-id="agreement" type="button">Signed agreement<small>Desk: draft sent</small></button>
+    <button class="job" data-id="regdate" type="button">Registration date<small>Desk: agreement complete</small></button>
+    <button class="job" data-id="receipt" type="button">Registration receipt<small>They said registered — or the day passed</small></button>
+  </nav>
+
+  <div class="stage">
+    <div class="phone">
+      <div class="ph-head"><b>Brigade Group</b><span>WhatsApp</span></div>
+      <div class="thread" id="thread"></div>
+      <div class="composer">Buyer types as usual. The CTA opens the Flow.</div>
+      <div class="overlay" id="overlay">
+        <div class="flow" role="dialog">
+          <div class="flow-bar">
+            <button type="button" id="flow-close" aria-label="Close">✕</button>
+            <b id="flow-bar-title">Flow</b>
+            <span style="width:32px"></span>
+          </div>
+          <div class="flow-body" id="flow-body"></div>
+          <div class="foot"><button type="button" id="flow-go" disabled>Send</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="aside">
+    <div class="why">Nobody “enters a Flow.” They answer a job that is already open: they asked, or Desk just wrote a fact (blocked, draft sent, loan stalled). The CTA is the door. A fresh “hi” never sees KYC.</div>
+    <h2 id="aside-title">Visit day + time</h2>
+    <p class="muted" id="aside-help" style="margin-bottom:14px"></p>
+    <table>
+      <tr><th>Door</th><td id="aside-door">—</td></tr>
+      <tr><th>Who sends the CTA</th><td id="aside-who">—</td></tr>
+      <tr><th>If 24h is closed</th><td id="aside-closed">—</td></tr>
+      <tr><th>Completes as</th><td id="aside-out">—</td></tr>
+      <tr><th>Lands in</th><td id="aside-land">—</td></tr>
+    </table>
+  </div>
+</div>
+<script>
+const JOBS = {
+  visit: {
+    bar: 'Book a visit',
+    cta: 'Pick a day',
+    title: 'Visit day + time',
+    help: 'They asked to visit. The bot’s next ask is the day — that message carries the CTA.',
+    door: 'Buyer: “book a visit” / Book a visit on the file.',
+    who: 'Spine, on the visit_ask turn. Already inside 24h.',
+    closed: 'Doesn’t arise — they just wrote.',
+    land: 'Visit FSM.',
+    body: 'Open the calendar to pick a day and a time.',
+    kind: 'visit',
+    beats: [
+      { who: 'me', text: 'book a visit' },
+      { who: 'bot', text: 'Which day works for Brigade Eternia? Site is open every day — pick below, or type a day and a time.' },
+    ],
+    out: (s) => s.iso ? `${s.iso} at ${s.time}` : 'YYYY-MM-DD at 10:30 AM',
+  },
+  stops: {
+    bar: 'This trip',
+    cta: 'Pick stops',
+    title: 'Which projects',
+    help: 'Visit FSM is already asking which_projects. The Flow replaces that list.',
+    door: 'Buyer named two projects, or “see both”, while a visit is open.',
+    who: 'Spine, on visit_ask which_projects.',
+    closed: 'Doesn’t arise — same thread as the visit.',
+    land: 'visit.ts stops.',
+    body: 'Tick every project you want on the same day.',
+    kind: 'stops',
+    items: ['Brigade Eternia', 'Brigade Cornerstone', 'Brigade Orchards'],
+    beats: [
+      { who: 'me', text: 'Eternia and Cornerstone, same day' },
+      { who: 'bot', text: 'Which of these should I put on this trip?' },
+    ],
+    out: (s) => (s.stops || []).join(', ') || 'Eternia, Cornerstone',
+  },
+  origin: {
+    bar: 'Pickup',
+    cta: 'Where from',
+    title: 'Coming from',
+    help: 'Next ask after stops. Origin is already a visit slot.',
+    door: 'Visit FSM ask origin, after stops are known.',
+    who: 'Spine, on that ask.',
+    closed: 'Doesn’t arise.',
+    land: 'visit origin.',
+    body: 'Area or landmark is enough.',
+    kind: 'origin',
+    beats: [
+      { who: 'me', text: 'all of them' },
+      { who: 'bot', text: 'Where will you start from? I’ll order the drive from there.' },
+    ],
+    out: (s) => s.origin || 'Koramangala',
+  },
+  brief: {
+    bar: 'Your brief',
+    cta: 'Set brief',
+    title: 'Size, area, budget',
+    help: 'They chose find-a-home, or the bot is probing. Still that probe, not a campaign.',
+    door: 'Tap “Help me find a home”, or bot probe when size/area/budget is missing.',
+    who: 'Spine, on greet/probe.',
+    closed: 'Doesn’t arise — they just tapped.',
+    land: 'constraints.',
+    body: 'Same three questions. One Send.',
+    kind: 'brief',
+    beats: [
+      { who: 'bot', text: 'I can help you find a home, or you can see the projects.' },
+      { who: 'me', text: 'Help me find a home' },
+      { who: 'bot', text: 'Size, area and budget — I’ll cut the book from that.' },
+    ],
+    out: (s) => [s.bhk || '3 BHK', s.area || 'Yelahanka', s.budget || 'Under ₹1 Cr'].join(' · '),
+  },
+  kyc: {
+    bar: 'Documents',
+    cta: 'Upload documents',
+    title: 'KYC / legal pack',
+    help: 'Desk wrote a booking. That event sends the CTA. A “hi” or a price ask never opens this.',
+    door: 'Unit blocked / booking created in Desk.',
+    who: 'Desk lifecycle, same WhatsApp thread. Not Spine guessing “you booked”.',
+    closed: 'Utility template: “Complete documents for Eternia 3 BHK” + this Flow.',
+    land: 'booking document milestones.',
+    body: 'Each file ticks its row. Legal clearance is a team verdict after these land.',
+    kind: 'kyc',
+    files: [
+      { id: 'pan', label: 'PAN card', hint: 'PDF or photo' },
+      { id: 'aadhaar', label: 'Aadhaar', hint: 'Front + back ok as one PDF' },
+      { id: 'address', label: 'Address proof', hint: 'Utility bill or passport' },
+    ],
+    beats: [
+      { who: 'note', text: 'Desk · booking created' },
+      { who: 'bot', text: 'Eternia 3 BHK is blocked in your name. Upload PAN, Aadhaar and address proof so legal can start.' },
+    ],
+    out: (s) => `PAN ${s.pan ? '✓' : '—'} · Aadhaar ${s.aadhaar ? '✓' : '—'} · Address ${s.address ? '✓' : '—'}`,
+  },
+  applicant: {
+    bar: 'Applicant',
+    cta: 'Your details',
+    title: 'Applicant details',
+    help: 'Same booking event, or next ask if KYC landed without names.',
+    door: 'Booking created, or KYC complete with empty applicant.',
+    who: 'Desk lifecycle (or agent “send applicant form”).',
+    closed: 'Same utility template, or a later nudge.',
+    land: 'Applicant on the booking.',
+    body: 'As on PAN.',
+    kind: 'applicant',
+    beats: [
+      { who: 'note', text: 'Desk · booking created' },
+      { who: 'bot', text: 'Name these exactly as on PAN. The agreement will copy them.' },
+    ],
+    out: (s) => `${s.name || 'Nagarjun V'} · ${s.panNo || 'XXXXX1234X'}`,
+  },
+  loan: {
+    bar: 'Home loan',
+    cta: 'Add loan papers',
+    title: 'Loan papers',
+    help: 'Only if the booking is loan-funded, or they said they are taking a loan. Stalled 14 days → nudge.',
+    door: 'Funding = loan on the booking, or buyer: “HDFC is processing”.',
+    who: 'Desk when funding is loan; or Spine if they stated loan while a booking exists.',
+    closed: 'Utility nudge: “Your HDFC file has had no paper in 14 days.”',
+    land: 'loan milestone.',
+    body: 'This files the paper. A stall is still a Desk fact.',
+    kind: 'loan',
+    beats: [
+      { who: 'me', text: 'loan through HDFC' },
+      { who: 'note', text: 'Desk · funding = loan' },
+      { who: 'bot', text: 'Add the bank and the sanction letter when you have it.' },
+    ],
+    out: (s) => `${s.bank || 'HDFC'} · ${s.appNo || 'HL-10221'} · letter ${s.letter ? '✓' : '—'}`,
+  },
+  agreement: {
+    bar: 'Agreement',
+    cta: 'Upload signed copy',
+    title: 'Signed agreement',
+    help: 'Team marked draft sent. The bot does not invent that an agreement exists.',
+    door: 'Desk: agreement draft sent to buyer.',
+    who: 'Desk lifecycle (or agent).',
+    closed: 'Utility: “Upload the signed agreement for Eternia 3 BHK.”',
+    land: 'agreement milestone.',
+    body: 'PDF of the signed set.',
+    kind: 'file',
+    fileId: 'signed',
+    fileLabel: 'Signed sale agreement',
+    beats: [
+      { who: 'note', text: 'Desk · agreement draft sent' },
+      { who: 'bot', text: 'When you have signed, upload the scan here.' },
+    ],
+    out: (s) => s.signed ? 'signed_agreement.pdf' : 'signed_agreement.pdf',
+  },
+  regdate: {
+    bar: 'Registration',
+    cta: 'Pick a date',
+    title: 'Registration date',
+    help: 'Agreement is done. Same calendar as visit — opened by that fact, not by “book a visit”.',
+    door: 'Desk: agreement complete / team asked for a sub-registrar slot.',
+    who: 'Desk lifecycle.',
+    closed: 'Utility: “Pick a registration date.”',
+    land: 'registration appointment.',
+    body: 'Not a site visit. This date is for registration.',
+    kind: 'visit',
+    beats: [
+      { who: 'note', text: 'Desk · agreement complete' },
+      { who: 'bot', text: 'Sub-registrar slot for Eternia 3 BHK — pick a day. The team will confirm the window.' },
+    ],
+    out: (s) => s.iso ? `Registration ${s.iso} at ${s.time}` : 'Registration 2026-10-08 at 12:00 PM',
+  },
+  receipt: {
+    bar: 'Registered',
+    cta: 'Upload receipt',
+    title: 'Registration receipt',
+    help: 'They said it’s done, or the booked registration day has passed.',
+    door: 'Buyer: “it’s registered” — or Desk: registration day passed and no receipt.',
+    who: 'Spine if they said it; else Desk nudge.',
+    closed: 'Utility: “Upload the registration receipt to close Eternia 3 BHK.”',
+    land: 'registration milestone.',
+    body: 'Receipt or registered document scan.',
+    kind: 'file',
+    fileId: 'receipt',
+    fileLabel: 'Registration receipt',
+    beats: [
+      { who: 'me', text: 'registered yesterday' },
+      { who: 'bot', text: 'Upload the receipt and I’ll close this file.' },
+    ],
+    out: (s) => s.receipt ? 'registration_receipt.pdf' : 'registration_receipt.pdf',
+  },
+};
+
+const TIMES = ['10:30 AM', '12:00 PM', '3:00 PM', '5:30 PM'];
+const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const TODAY = new Date(2026, 8, 15);
+let jobId = 'visit';
+let state = {};
+
+const thread = document.getElementById('thread');
+const overlay = document.getElementById('overlay');
+const bodyEl = document.getElementById('flow-body');
+const go = document.getElementById('flow-go');
+
+function iso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function ready() {
+  const j = JOBS[jobId];
+  if (j.kind === 'visit') return !!(state.iso && state.time);
+  if (j.kind === 'stops') return (state.stops || []).length >= 1;
+  if (j.kind === 'origin') return !!(state.origin && state.origin.trim());
+  if (j.kind === 'brief') return !!(state.bhk && state.area && state.budget);
+  if (j.kind === 'kyc') return !!(state.pan && state.aadhaar && state.address);
+  if (j.kind === 'applicant') return !!(state.name && state.panNo);
+  if (j.kind === 'loan') return !!(state.bank && state.letter);
+  if (j.kind === 'file') return !!state[j.fileId];
+  return false;
+}
+function paintAside() {
+  const j = JOBS[jobId];
+  document.getElementById('aside-title').textContent = j.title;
+  document.getElementById('aside-help').textContent = j.help;
+  document.getElementById('aside-door').textContent = j.door;
+  document.getElementById('aside-who').textContent = j.who;
+  document.getElementById('aside-closed').textContent = j.closed;
+  document.getElementById('aside-out').textContent = j.out(state);
+  document.getElementById('aside-land').textContent = j.land;
+}
+function paintThread() {
+  const j = JOBS[jobId];
+  thread.innerHTML = '';
+  (j.beats || []).forEach((beat) => {
+    const el = document.createElement('div');
+    if (beat.who === 'note') {
+      el.className = 'note';
+    } else {
+      el.className = 'bubble ' + beat.who;
+    }
+    el.textContent = beat.text;
+    thread.appendChild(el);
+  });
+  const wrap = document.createElement('div');
+  wrap.className = 'flow-msg';
+  wrap.innerHTML = `<div class="body">${j.body}</div>`;
+  const cta = document.createElement('button');
+  cta.className = 'cta';
+  cta.type = 'button';
+  cta.textContent = j.cta;
+  cta.onclick = openFlow;
+  wrap.appendChild(cta);
+  thread.appendChild(wrap);
+}
+function chipRow(label, key, opts) {
+  const lab = document.createElement('div');
+  lab.className = 'lab';
+  lab.textContent = label;
+  bodyEl.appendChild(lab);
+  const row = document.createElement('div');
+  row.className = 'chips';
+  opts.forEach((o) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = o;
+    if (state[key] === o) b.classList.add('on');
+    b.onclick = () => { state[key] = o; openFlow(); };
+    row.appendChild(b);
+  });
+  bodyEl.appendChild(row);
+}
+function upload(id, label, hint) {
+  const el = document.createElement('div');
+  el.className = 'upload' + (state[id] ? ' on' : '');
+  el.innerHTML = `<b>${state[id] ? 'Attached' : label}</b><span>${state[id] ? state[id] : hint}</span>`;
+  el.onclick = () => {
+    state[id] = (id === 'pan' ? 'PAN_Nagarjun.pdf' : id === 'aadhaar' ? 'Aadhaar.pdf' : id === 'address' ? 'EB_bill.pdf' : id === 'letter' ? 'HDFC_sanction.pdf' : id === 'signed' ? 'sale_agreement_signed.pdf' : 'registration_receipt.pdf');
+    openFlow();
+  };
+  bodyEl.appendChild(el);
+}
+function paintMonth() {
+  const dows = document.createElement('div');
+  dows.className = 'dows';
+  dows.innerHTML = DOW.map((d) => `<span>${d}</span>`).join('');
+  bodyEl.appendChild(dows);
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  const start = new Date(2026, 8, 1).getDay();
+  const dim = new Date(2026, 9, 0).getDate();
+  for (let i = 0; i < start; i++) {
+    const b = document.createElement('button');
+    b.className = 'cell empty';
+    b.type = 'button';
+    grid.appendChild(b);
+  }
+  for (let day = 1; day <= dim; day++) {
+    const d = new Date(2026, 8, day);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = String(day);
+    const ok = d >= TODAY && d.getDate() <= 28;
+    b.className = 'cell' + (ok ? '' : ' off') + (iso(d) === iso(TODAY) ? ' today' : '') + (state.iso === iso(d) ? ' on' : '');
+    if (ok) b.onclick = () => { state.iso = iso(d); state.time = null; openFlow(); };
+    grid.appendChild(b);
+  }
+  bodyEl.appendChild(grid);
+  if (state.iso) {
+    const lab = document.createElement('div');
+    lab.className = 'lab';
+    lab.textContent = 'Time';
+    bodyEl.appendChild(lab);
+    const times = document.createElement('div');
+    times.className = 'times';
+    TIMES.forEach((t) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = t;
+      if (state.time === t) b.classList.add('on');
+      b.onclick = () => { state.time = t; openFlow(); };
+      times.appendChild(b);
+    });
+    bodyEl.appendChild(times);
+  }
+}
+function openFlow() {
+  const j = JOBS[jobId];
+  document.getElementById('flow-bar-title').textContent = j.bar;
+  bodyEl.innerHTML = '';
+  const kicker = document.createElement('div');
+  kicker.className = 'flow-kicker';
+  kicker.textContent = 'Brigade Eternia · 3 BHK';
+  const title = document.createElement('div');
+  title.className = 'flow-title';
+  title.textContent = j.title;
+  const help = document.createElement('p');
+  help.className = 'flow-help';
+  help.textContent = j.body;
+  bodyEl.appendChild(kicker);
+  bodyEl.appendChild(title);
+  bodyEl.appendChild(help);
+
+  if (j.kind === 'visit') paintMonth();
+  if (j.kind === 'stops') {
+    j.items.forEach((name) => {
+      const row = document.createElement('div');
+      const on = (state.stops || []).includes(name);
+      row.className = 'check' + (on ? ' on' : '');
+      row.innerHTML = `<span class="box"></span><span>${name}</span>`;
+      row.onclick = () => {
+        const set = new Set(state.stops || []);
+        if (set.has(name)) set.delete(name); else set.add(name);
+        state.stops = [...set];
+        openFlow();
+      };
+      bodyEl.appendChild(row);
+    });
+  }
+  if (j.kind === 'origin') {
+    const inp = document.createElement('input');
+    inp.className = 'inp';
+    inp.placeholder = 'Koramangala, or Whitefield metro';
+    inp.value = state.origin || '';
+    inp.oninput = () => { state.origin = inp.value; go.disabled = !ready(); };
+    bodyEl.appendChild(inp);
+  }
+  if (j.kind === 'brief') {
+    chipRow('Bedrooms', 'bhk', ['2 BHK', '3 BHK', '4 BHK']);
+    chipRow('Area', 'area', ['Yelahanka', 'Whitefield', 'Sarjapur']);
+    chipRow('Budget', 'budget', ['Under ₹80 L', 'Under ₹1 Cr', '₹1–1.5 Cr']);
+  }
+  if (j.kind === 'kyc') j.files.forEach((f) => upload(f.id, f.label, f.hint));
+  if (j.kind === 'applicant') {
+    [['name','Full name'],['panNo','PAN'],['addr','Address']].forEach(([k, lab]) => {
+      const l = document.createElement('div');
+      l.className = 'lab';
+      l.textContent = lab;
+      const inp = document.createElement('input');
+      inp.className = 'inp';
+      inp.value = state[k] || '';
+      inp.oninput = () => { state[k] = inp.value; go.disabled = !ready(); };
+      bodyEl.appendChild(l);
+      bodyEl.appendChild(inp);
+    });
+  }
+  if (j.kind === 'loan') {
+    chipRow('Bank', 'bank', ['HDFC', 'SBI', 'ICICI', 'Other']);
+    const l = document.createElement('div');
+    l.className = 'lab';
+    l.textContent = 'Application number';
+    const inp = document.createElement('input');
+    inp.className = 'inp';
+    inp.value = state.appNo || '';
+    inp.oninput = () => { state.appNo = inp.value; };
+    bodyEl.appendChild(l);
+    bodyEl.appendChild(inp);
+    upload('letter', 'Sanction letter', 'PDF from the bank');
+  }
+  if (j.kind === 'file') upload(j.fileId, j.fileLabel, 'PDF or photo');
+
+  go.disabled = !ready();
+  go.textContent = 'Send';
+  overlay.classList.add('show');
+  paintAside();
+}
+function finish() {
+  const j = JOBS[jobId];
+  overlay.classList.remove('show');
+  const me = document.createElement('div');
+  me.className = 'bubble me';
+  me.textContent = j.out(state);
+  thread.appendChild(me);
+  const bot = document.createElement('div');
+  bot.className = 'bubble bot';
+  bot.textContent = jobId === 'visit' || jobId === 'regdate'
+    ? `Shall I lock ${j.out(state)}? Reply yes to confirm.`
+    : `Got it — ${j.out(state)}. Filed on this booking.`;
+  thread.appendChild(bot);
+  thread.scrollTop = thread.scrollHeight;
+  paintAside();
+}
+function selectJob(id) {
+  jobId = id;
+  state = {};
+  document.querySelectorAll('.job').forEach((el) => el.classList.toggle('on', el.dataset.id === id));
+  overlay.classList.remove('show');
+  paintThread();
+  paintAside();
+}
+document.querySelectorAll('.job').forEach((el) => el.onclick = () => selectJob(el.dataset.id));
+document.getElementById('flow-close').onclick = () => overlay.classList.remove('show');
+go.onclick = () => { if (!go.disabled) finish(); };
+selectJob('visit');
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "version": "6.3",
+  "routing_model": { "APPLICANT": [] },
+  "screens": [
+    {
+      "id": "APPLICANT",
+      "title": "Applicant",
+      "terminal": true,
+      "data": {
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          { "type": "TextInput", "name": "name", "label": "Full name as on PAN", "required": true, "input-type": "text" },
+          { "type": "TextInput", "name": "pan", "label": "PAN", "required": true, "input-type": "text" },
+          { "type": "TextArea", "name": "addr", "label": "Address", "required": false },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "applicant", "name": "${form.name}", "pan": "${form.pan}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

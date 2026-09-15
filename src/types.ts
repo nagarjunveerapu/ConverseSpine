@@ -171,17 +171,13 @@ export interface TurnResult {
         type: 'list';
         button: string;
         sections: Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }>;
-        /** Visit date+time Flow. Absent flow_id → Graph still sends the list. */
+        /** Flow chrome. Absent flow_id → Graph still sends the list. */
         flow?: {
+          kind: string;
           cta: string;
           flow_id?: string;
-          payload: {
-            min_date: string;
-            max_date: string;
-            include_days: string[];
-            unavailable_dates: string[];
-            project_name?: string;
-          };
+          screen?: string;
+          payload: Record<string, unknown>;
         };
       };
   /** Named media for client cards / WhatsApp native send (URL not in reply_text). */

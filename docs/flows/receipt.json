@@ -1,0 +1,36 @@
+{
+  "version": "6.3",
+  "routing_model": { "RECEIPT": [] },
+  "screens": [
+    {
+      "id": "RECEIPT",
+      "title": "Registration receipt",
+      "terminal": true,
+      "data": {
+        "project_name": { "type": "string", "__example__": "Brigade Eternia" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          { "type": "TextBody", "text": "${data.project_name}" },
+          {
+            "type": "DocumentPicker",
+            "name": "receipt",
+            "label": "Registration receipt",
+            "min-uploaded-documents": 1,
+            "max-uploaded-documents": 1,
+            "allowed-mime-types": ["application/pdf", "image/jpeg", "image/png"]
+          },
+          {
+            "type": "Footer",
+            "label": "Send",
+            "on-click-action": {
+              "name": "complete",
+              "payload": { "job": "receipt", "receipt": "${form.receipt}" }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
