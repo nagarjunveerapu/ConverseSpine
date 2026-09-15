@@ -14,6 +14,7 @@ import { affordabilityFromEmi, INCOME_SERVICING_RATIO } from './emi.js';
 import { looksLikeAQuestion, resolveFaqQuestionKeys } from './faq-keys.js';
 import { discourseOffered, currentShortlist, discussedList } from './entity-store.js';
 import { isPlausiblePlaceLabel } from './placeability.js';
+import { isOptOutAsk } from './optout-confirm.js';
 import {
   hasCostStanceAct,
   hasPriceObjectionCue,
@@ -49,8 +50,10 @@ const COMPARE_ADVICE_RE =
 // search: the buyer typed the most serious word they had and got a shortlist.
 // Standalone only, for the same reason `stop` is — "delete the 2bhk from my
 // shortlist" is an ordinary sentence about a list, not about a life.
-const STOP_RE =
-  /^(?:stop|unsubscribe|delete|erase)[.!]?\s*$|\b(?:unsubscribe|opt\s*out|delete my (?:data|details|number|info(?:rmation)?)|forget me|remove (?:me|my (?:number|details|data))|(?:stop|don'?t|do not)\s+(?:messag\w*|text\w*|calls?|calling|contact\w*|whatsapp\w*|sms)(?:\s+me)?)\b/i;
+// One vocabulary, in ./optout-confirm.ts. This regex, `chip.stop` in
+// speech-act/resolve.ts and the two standalone helpers were four spellings of
+// the same question, and they had already drifted apart from each other.
+const STOP_RE = { test: (text: string) => isOptOutAsk(text) };
 const SMALLTALK_RE = /\b(?:how are you|how'?s it going|how do you do|what'?s up)\b/i;
 const POST_VISIT_ACK_RE =
   /^(?:ok(?:ay)?|thanks?(?: you)?|thank you|cool|great|got it|noted|perfect|sounds good|cheers)\.?!?\s*$/i;

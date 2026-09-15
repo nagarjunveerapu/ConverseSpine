@@ -376,6 +376,32 @@ export interface ErasureReceipt {
   erased_at: number;
 }
 
+/**
+ * What the layer decided about a turn, travelling beside the words.
+ *
+ * Desk's `messages` table has carried columns for every field below since the
+ * store was built, and readers are waiting on them: `privacy.dpdpPosture`
+ * counts opt-outs by `classifier_intent` on inbound rows, the handoff brief
+ * reconstructs what the bot ran from `tools_invoked_json`, and thread context
+ * serves both to the SPA. Each value is already computed on the main path and
+ * already written to the turn ledger — it was simply never handed to the
+ * transcript door, which until now did not even accept it.
+ *
+ * Optional throughout. An agent typing in the desk classifies nothing, and a
+ * row with no annotations is telling the truth about that.
+ */
+export interface TranscriptMeta {
+  replyKey?: string;
+  /**
+   * INBOUND: what the buyer did — her speech act, or `opt_out` when she asked
+   * us to stop, which is the value Desk's DPDP posture counts.
+   * OUTBOUND: what the bot did — the goal it acted on.
+   */
+  intent?: string;
+  topic?: string;
+  toolsInvoked?: readonly unknown[];
+}
+
 export interface EngineCrm {
   /**
    * Desk's `PUT /api/v1/leads` with no project named answers a THREAD id and
@@ -384,7 +410,12 @@ export interface EngineCrm {
    * doors instead of the engine guessing (see adapters/nayadesk.ts).
    */
   ensureLead(builderId: string, buyerPhone: string, channel?: string): Promise<{ threadId: string } | null>;
-  appendMessage(threadId: string, direction: 'inbound' | 'outbound', content: string, meta?: { replyKey?: string }): Promise<void>;
+  appendMessage(
+    threadId: string,
+    direction: 'inbound' | 'outbound',
+    content: string,
+    meta?: TranscriptMeta,
+  ): Promise<void>;
   updateFacts(threadId: string, facts: Record<string, string | undefined>): Promise<void>;
   /** Mirror Spine visit awaiting-window (or clear) into Desk pending_action. */
   setPendingAction(

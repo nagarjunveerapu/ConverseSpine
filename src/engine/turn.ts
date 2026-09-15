@@ -53,7 +53,7 @@ import {
 import { waConsoleCardReply, waConsoleNodeReply } from '../channel/wa-console.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
-import { buildLedgerWritePayload, type ComposeTelemetry } from './ledger-write.js';
+import { buildLedgerWritePayload, toolRunRecords, type ComposeTelemetry } from './ledger-write.js';
 import { costTermsFromCostSheet } from './cost-terms.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
@@ -90,6 +90,7 @@ import type { Failure } from './outcome.js';
 import {
   contactScopeFailure,
   isExplicitDeleteIntent,
+  isOptOutAsk,
   isStandaloneStop,
   isStandaloneDelete,
   keepsOneChannel,
@@ -334,10 +335,52 @@ function erasedState(prev: ThreadState): ThreadState {
  * line on its next turn. That is correct, not a migration gap: those buyers
  * were never told how to leave.
  */
+/**
+ * ONE door for the turn's own account of itself.
+ *
+ * Sixteen branches in this file append to the transcript, and every one of them
+ * already names its own reply key — `welcome`, `type_floor`, `stop_confirm`,
+ * `stop_contact_only`, and on down. That key IS what the bot decided to do,
+ * which is exactly the question Desk's `classifier_intent` column asks, so the
+ * mapping is made once, here, rather than at sixteen call sites that would
+ * drift apart the way the opt-out vocabulary already had.
+ *
+ * The inbound half comes from `signal.inboundIntent`, which is empty until the
+ * extractor has run. The handful of branches that fire before that have
+ * genuinely classified nothing, and NULL is the honest record for them —
+ * "not classified" and "classified as nothing" are different facts, and a
+ * COUNT can tell them apart.
+ */
+function withTurnSignal(
+  deps: EngineDeps,
+  signal: { inboundIntent?: string },
+): EngineDeps {
+  const inner = deps.crm;
+  return {
+    ...deps,
+    crm: {
+      ...inner,
+      appendMessage(threadId, direction, content, meta) {
+        const intent =
+          meta?.intent ??
+          (direction === 'outbound' ? meta?.replyKey : signal.inboundIntent);
+        return inner.appendMessage(threadId, direction, content, {
+          ...meta,
+          ...(intent ? { intent } : {}),
+        });
+      },
+    },
+  };
+}
+
 export async function runEngineTurn(
   input: EngineTurnInput,
   deps: EngineDeps,
 ): Promise<EngineTurnOutput> {
+  // The welcome and the consent notice are outbound-only, so an empty signal
+  // is all they need: their reply keys become their intent. The core wraps
+  // again with its own signal for the inbound half.
+  deps = withTurnSignal(deps, {});
   let out = await runEngineTurnCore(input, deps);
   const channel = input.channel ?? 'whatsapp';
 
@@ -400,6 +443,10 @@ export async function runEngineTurn(
 }
 
 async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
+  // Every `deps.crm.appendMessage` in this function — all sixteen of them —
+  // goes through the one door.
+  const turnSignal: { inboundIntent?: string } = {};
+  deps = withTurnSignal(deps, turnSignal);
   const turnStartedMs = deps.clock.nowMs();
   if (input.waitUntil && !deps.waitUntil) {
     deps = { ...deps, waitUntil: input.waitUntil };
@@ -1465,6 +1512,13 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       ex = { ...ex, constraints };
     }
   }
+
+  // What the buyer just did, for the inbound row. `isOptOutAsk` is asked
+  // directly rather than read off `ex.speechAct`, because it is the same
+  // question Desk's DPDP posture counts and it must be the same answer: a
+  // buyer who asks to be removed in her own words is an opt-out whether or not
+  // the speech-act layer had a chip for her sentence.
+  turnSignal.inboundIntent = isOptOutAsk(input.text) ? 'opt_out' : ex.speechAct;
 
   let locationValidated = false;
   {
@@ -3857,8 +3911,26 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // the buyer saw a reply. Telemetry / catalog watching stay deferred (~1s).
   const threadIdForCrm = nd || input.threadId;
   await (async () => {
-    await deps.crm.appendMessage(threadIdForCrm, 'inbound', input.text).catch(() => {});
-    await deps.crm.appendMessage(threadIdForCrm, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
+    // Both rows carry what the layer decided, not just what was said. The
+    // columns have always been there; the write never was, so Desk's opt-out
+    // count, the handoff brief's tool history and the SPA's thread context
+    // have all been reading NULL. `stop` is spelled `opt_out` on the way out
+    // because that is the word Desk's DPDP posture counts — erasure is the
+    // other value it counts, and it is deliberately not produced here: an
+    // erasure writes no message rows at all.
+    await deps.crm
+      .appendMessage(threadIdForCrm, 'inbound', input.text, {
+        ...(ex.askTopic ? { topic: ex.askTopic } : {}),
+      })
+      .catch(() => {});
+    await deps.crm
+      .appendMessage(threadIdForCrm, 'outbound', reply, {
+        replyKey: goal.kind,
+        // TurnGoal is a union; only the answering variants carry a topic.
+        ...('topic' in goal && goal.topic ? { topic: goal.topic } : {}),
+        toolsInvoked: toolRunRecords(evidence),
+      })
+      .catch(() => {});
     await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
     await syncProfileObservations(deps, threadIdForCrm, input, goal, state).catch(() => {});
   })();

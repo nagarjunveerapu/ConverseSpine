@@ -10,6 +10,13 @@ import type {
   ResolvedChipPath,
   SpeechActKind,
 } from './types.js';
+import { OPT_OUT_CONTACT_RE, OPT_OUT_ERASURE_RE } from '../optout-confirm.js';
+
+/** Both doors, as one pattern, for the chip catalog's `re` contract. */
+const OPT_OUT_RE = new RegExp(
+  `${OPT_OUT_CONTACT_RE.source}|${OPT_OUT_ERASURE_RE.source}`,
+  'i',
+);
 
 /** Whole-utterance / high-precedence free-text → chip path. */
 const FREE_TEXT_RULES: ReadonlyArray<{
@@ -21,9 +28,12 @@ const FREE_TEXT_RULES: ReadonlyArray<{
   // stop / handoff / greet (whole-ish)
   {
     id: 'chip.stop',
-    // Keep in lockstep with STOP_RE in facts.ts: opt-out targets CONTACT/DATA,
-    // never the bot's behavior ("stop asking questions" must not resolve here).
-    re: /^(?:stop|unsubscribe)[.!]?\s*$|\b(?:unsubscribe|opt[\s-]?out|delete my (?:data|details|number|info(?:rmation)?)|forget me|remove (?:me|my (?:number|details|data))|(?:stop|don'?t|do not)\s+(?:messag\w*|text\w*|calls?|calling|contact\w*|whatsapp\w*|sms)(?:\s+me)?)\b/i,
+    // Was a copy of STOP_RE in facts.ts, kept in step by this comment alone —
+    // and the two had already drifted (`opt\s*out` here against `opt[\s-]?out`
+    // there, and only one of them admitted a bare DELETE). One vocabulary now,
+    // in ../optout-confirm.ts. It still targets CONTACT/DATA and never the
+    // bot's behavior: "stop asking questions" must not resolve here.
+    re: OPT_OUT_RE,
     priority: 100,
   },
   {

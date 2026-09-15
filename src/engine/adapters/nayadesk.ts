@@ -1353,8 +1353,15 @@ export function nayadeskCrm(
       return resp.thread_id ? { threadId: resp.thread_id } : null;
     },
     async appendMessage(threadId, direction, content, meta) {
-      await crm.appendMessage(threadId, { direction, content });
-      void meta;
+      // `void meta;` stood here, so not even `replyKey` ever left Spine.
+      await crm.appendMessage(threadId, {
+        direction,
+        content,
+        ...(meta?.replyKey ? { reply_key: meta.replyKey } : {}),
+        ...(meta?.intent ? { classifier_intent: meta.intent } : {}),
+        ...(meta?.topic ? { classifier_topic: meta.topic } : {}),
+        ...(meta?.toolsInvoked?.length ? { tools_invoked: [...meta.toolsInvoked] } : {}),
+      });
     },
     async updateFacts(threadId, facts) {
       const patch: Record<string, string> = {};

@@ -963,7 +963,19 @@ export class NayaDeskClient {
 
   appendMessage(
     thread_id: string,
-    msg: { direction: 'inbound' | 'outbound'; content: string },
+    msg: {
+      direction: 'inbound' | 'outbound';
+      content: string;
+      /**
+       * The turn half of the body. Desk's transcript door accepts these and
+       * writes them onto the message row; omitted fields stay NULL, which is
+       * the honest record for a turn nothing classified.
+       */
+      reply_key?: string;
+      classifier_intent?: string;
+      classifier_topic?: string;
+      tools_invoked?: unknown[];
+    },
   ): Promise<{ ok: true; message_id: string }> {
     return this.call<{ message_id: string }>(
       'POST',

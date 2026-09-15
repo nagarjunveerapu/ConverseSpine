@@ -1,4 +1,11 @@
-import type { DataResult, EngineCrm, EngineData, EngineDeps, EngineStore } from '../src/engine/ports.js';
+import type {
+  DataResult,
+  EngineCrm,
+  EngineData,
+  EngineDeps,
+  EngineStore,
+  TranscriptMeta,
+} from '../src/engine/ports.js';
 import { dataAbsent, dataOk, dataTransport } from '../src/engine/ports.js';
 import { noopEngineLlm } from '../src/engine/adapters/llm.js';
 import type { SemanticNluPort, SemanticContext } from '../src/engine/adapters/semantic-nlu.js';
@@ -680,18 +687,34 @@ export function fakeData(): EngineData & {
   };
 }
 
-export function fakeCrm(): EngineCrm & { calls: string[] } {
+/** One appended row, as the transcript door would have received it. */
+export interface FakeTranscriptRow {
+  direction: 'inbound' | 'outbound';
+  content: string;
+  meta: TranscriptMeta | undefined;
+}
+
+export function fakeCrm(): EngineCrm & {
+  calls: string[];
+  transcript: FakeTranscriptRow[];
+} {
   const calls: string[] = [];
+  const transcript: FakeTranscriptRow[] = [];
   return {
     calls,
+    transcript,
     async ensureLead(_b, phone) {
       calls.push(`lead:${phone}`);
       return { threadId: `nd:${phone}` };
     },
-    async appendMessage(_nd, direction) {
+    async appendMessage(_nd, direction, content, meta) {
       // Recorded so a test can assert the ABSENCE of a write — erasure must
       // not append the buyer's words back into the table it just swept.
       calls.push(`msg:${direction}`);
+      // `meta` was dropped on the floor by the real adapter for as long as it
+      // existed, so the fake had no reason to keep it either. Kept now, whole,
+      // so a test can read what the engine actually decided to send.
+      transcript.push({ direction, content, meta });
     },
     async updateFacts() {},
     async setPendingAction(_nd, pending) {

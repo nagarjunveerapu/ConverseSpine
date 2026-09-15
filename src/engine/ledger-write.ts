@@ -89,6 +89,31 @@ function toolProducedEvidence(name: string, ev: EvidenceSet): boolean {
   }
 }
 
+/**
+ * The turn's tool history, in one vocabulary.
+ *
+ * Lifted out of `buildLedgerWritePayload` so the transcript row and the turn
+ * ledger say the same thing about the same turn. Two callers deriving this
+ * separately is how the two engine generations' tool names got into the store
+ * side by side in the first place.
+ */
+export function toolRunRecords(evidence: EvidenceSet): LedgerWritePayload['tool_runs'] {
+  return (evidence.tools ?? []).map((name) => {
+    const produced = toolProducedEvidence(name, evidence);
+    const latency_ms = evidence.toolLatencyMs?.[name] ?? 0;
+    const failure_reason = evidence.toolFailureReason?.[name];
+    return {
+      name,
+      args_summary: '',
+      // Phase 0b — produced_evidence only when the slot filled; failure_reason
+      // separates catalog absence from transport when the port reported !ok.
+      produced_evidence: produced,
+      latency_ms,
+      ...(failure_reason && !produced ? { failure_reason } : {}),
+    };
+  });
+}
+
 export function buildLedgerWritePayload(input: {
   state: ThreadState;
   ex: Extracted;
@@ -273,20 +298,7 @@ export function buildLedgerWritePayload(input: {
     action_plan,
     offered_project_ids,
     disclosed_facts: extractDisclosedFacts({ goal, evidence }),
-    tool_runs: (evidence.tools ?? []).map((name) => {
-      const produced = toolProducedEvidence(name, evidence);
-      const latency_ms = evidence.toolLatencyMs?.[name] ?? 0;
-      const failure_reason = evidence.toolFailureReason?.[name];
-      return {
-        name,
-        args_summary: '',
-        // Phase 0b — produced_evidence only when the slot filled; failure_reason
-        // separates catalog absence from transport when the port reported !ok.
-        produced_evidence: produced,
-        latency_ms,
-        ...(failure_reason && !produced ? { failure_reason } : {}),
-      };
-    }),
+    tool_runs: toolRunRecords(evidence),
     verify: {
       grounding: grounding ?? 'pass',
       // v1 instrument only — dump = delivered ≫ asked. Gate later.
