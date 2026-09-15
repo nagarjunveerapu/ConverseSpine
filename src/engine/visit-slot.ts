@@ -136,11 +136,21 @@ export function parseDayAnchor(raw: string, now: Date, anchorDateIso?: string): 
     parts = ist;
     dayLabel = 'Today';
   } else {
-    for (const [word, dow] of Object.entries(DAY_NAMES)) {
-      if (new RegExp(`\\b${word}\\b`).test(text)) {
-        parts = addDaysParts(ist, nextDowDelta(ist.dow, dow));
-        dayLabel = DAY_FULL[dow]!;
-        break;
+    const iso = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (iso) {
+      const [y, mo, d] = iso[1]!.split('-').map(Number);
+      const noon = istInstant(y!, mo! - 1, d!, 12, 0);
+      const got = toIstParts(noon);
+      if (got.year !== y || got.month !== mo! - 1 || got.day !== d) return null;
+      parts = got;
+      dayLabel = DAY_FULL[got.dow]!;
+    } else {
+      for (const [word, dow] of Object.entries(DAY_NAMES)) {
+        if (new RegExp(`\\b${word}\\b`).test(text)) {
+          parts = addDaysParts(ist, nextDowDelta(ist.dow, dow));
+          dayLabel = DAY_FULL[dow]!;
+          break;
+        }
       }
     }
   }
@@ -148,8 +158,13 @@ export function parseDayAnchor(raw: string, now: Date, anchorDateIso?: string): 
   if (!parts) return null;
   const pad = (n: number) => String(n).padStart(2, '0');
   const dayIso = `${parts.year}-${pad(parts.month + 1)}-${pad(parts.day)}`;
-  const probe = istInstant(parts.year, parts.month, parts.day, 18, 0);
-  if (probe.getTime() <= now.getTime()) return null;
+  // Weekday words ("Tuesday") have no clock yet, so a 6pm probe drops a day
+  // that is already evening. An ISO date from the visit Flow is the calendar
+  // day the buyer picked — parseVisitSlot checks the actual time.
+  if (!/\b\d{4}-\d{2}-\d{2}\b/.test(text)) {
+    const probe = istInstant(parts.year, parts.month, parts.day, 18, 0);
+    if (probe.getTime() <= now.getTime()) return null;
+  }
   return { dayIso, dayLabel };
 }
 
@@ -254,4 +269,55 @@ function nextDowDelta(currentDow: number, targetDow: number): number {
   let delta = targetDow - currentDow;
   if (delta <= 0) delta += 7;
   return delta;
+}
+
+const META_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** Times the visit Flow / playground sheet offers — same four Advisor uses. */
+export const VISIT_FLOW_TIMES = ['10:30 AM', '12:00 PM', '3:00 PM', '5:30 PM'] as const;
+
+export const VISIT_FLOW_SCREEN = 'VISIT_DAY';
+
+/** Calendar bounds for the WhatsApp Flow payload and Test yourself overlay. */
+export function visitCalendarWindow(
+  now: Date,
+  openDays: ReadonlySet<number>,
+  horizonDays = 28,
+): {
+  minDate: string;
+  maxDate: string;
+  includeDays: string[];
+  unavailableDates: string[];
+} {
+  const start = toIstParts(now);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const ymd = (p: IstParts) => `${p.year}-${pad(p.month + 1)}-${pad(p.day)}`;
+  return {
+    minDate: ymd(start),
+    maxDate: ymd(addDaysParts(start, horizonDays)),
+    includeDays: META_DOW.filter((_, i) => openDays.has(i)),
+    unavailableDates: [],
+  };
+}
+
+/** Canonical utterance the visit FSM already parses — ISO so a far Thursday is not "next Thursday". */
+export function utteranceFromVisitFlow(dateIso: string, timeText: string): string {
+  return `${dateIso} at ${timeText.trim()}`;
+}
+
+/** nfm_reply.response_json → buyer text. Missing/junk date+time returns undefined (drop the webhook). */
+export function utteranceFromNfmReply(responseJson: string | undefined): string | undefined {
+  if (!responseJson?.trim()) return undefined;
+  try {
+    const o = JSON.parse(responseJson) as Record<string, unknown>;
+    const date =
+      (typeof o.date === 'string' && o.date) ||
+      (typeof o.appointment_date === 'string' && o.appointment_date) ||
+      '';
+    const time = typeof o.time === 'string' ? o.time.trim() : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !time) return undefined;
+    return utteranceFromVisitFlow(date, time);
+  } catch {
+    return undefined;
+  }
 }

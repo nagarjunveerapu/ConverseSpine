@@ -1,6 +1,7 @@
 import type { TurnResult } from '../types.js';
 import {
   sendInteractiveButtons,
+  sendInteractiveFlow,
   sendInteractiveList,
   sendTextOutcome,
   type SendOutcome,
@@ -45,8 +46,10 @@ function part(content: string, out: SendOutcome): DeliveredPart {
 }
 
 /**
- * Send one Spine turn over Cloud API. Packed list XOR buttons; never both.
- * Numbered-menu fallback is only for recovery buttons (no native list).
+ * Send one Spine turn over Cloud API. Packed list XOR buttons XOR flow;
+ * never both a list and buttons. Numbered-menu fallback is only for recovery
+ * buttons (no native list). A visit Flow with no published id falls back to
+ * the list already packed on the DTO.
  *
  * Returns what actually happened, per bubble. It used to return void, and that
  * was the whole defect: `engine/turn.ts` had already told Desk the message was
@@ -90,7 +93,14 @@ export async function deliverWhatsAppTurn(
   const body = `${lead}${result.reply_text}`;
   const packed = result.whatsapp_interactive;
   let replyOut: SendOutcome;
-  if (packed?.type === 'list') {
+  if (packed?.type === 'list' && packed.flow?.flow_id) {
+    replyOut = await sendInteractiveFlow(phoneNumberId, to, body, {
+      flowId: packed.flow.flow_id,
+      cta: packed.flow.cta || packed.button,
+      payload: packed.flow.payload,
+      token,
+    });
+  } else if (packed?.type === 'list') {
     replyOut = await sendInteractiveList(phoneNumberId, to, body, packed.button, packed.sections, token);
   } else if (packed?.type === 'button') {
     replyOut = await sendInteractiveButtons(phoneNumberId, to, body, packed.buttons, token);

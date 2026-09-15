@@ -270,7 +270,7 @@ export interface EngineTurnOutput {
   searchRecovery?: SearchRecoveryEnvelope;
   uiMode?: AdvisorUiMode;
   whatsappActions?: SuggestedAction[];
-  /** Packed Cloud API interactive (list XOR buttons) when WA_PROJECT_FIRST. */
+  /** Packed Cloud API interactive (list XOR buttons XOR visit Flow) when WA_PROJECT_FIRST. */
   whatsappInteractive?: WaPacked;
   /** Structured media for Advisor cards / WhatsApp native send — never in prose. */
   mediaAttachments?: MediaAttachment[];
@@ -3980,6 +3980,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         if (!g?.closestProjectId || !g.closestName.trim()) return {};
         return { closest: { projectId: g.closestProjectId, name: g.closestName } };
       })(),
+      ...(deps.waVisitFlowId ? { visitFlowId: deps.waVisitFlowId } : {}),
     });
   }
   const packedActions = packed ? packedToSuggestedActions(packed) : undefined;

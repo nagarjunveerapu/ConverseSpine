@@ -157,6 +157,56 @@ describe('a turn reports every bubble it was asked to send', () => {
   });
 });
 
+describe('visit Flow vs list on the wire', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  const LIST = {
+    type: 'list' as const,
+    button: 'Pick a day',
+    sections: [{ title: 'Choose a day', rows: [{ id: 'wa.day.tuesday', title: 'Tue 15 Sep' }] }],
+    flow: {
+      cta: 'Pick a day',
+      payload: {
+        min_date: '2026-09-15',
+        max_date: '2026-10-13',
+        include_days: ['Tue'],
+        unavailable_dates: [] as string[],
+      },
+    },
+  };
+
+  it('sends the packed list when no flow_id is published', async () => {
+    fetchMock.mockResolvedValue(OK);
+    await deliverWhatsAppTurn('pid', '+919000000010', {
+      reply_text: 'Which day works?',
+      whatsapp_interactive: LIST,
+    }, 'tok');
+    const sent = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(sent.interactive.type).toBe('list');
+  });
+
+  it('sends a Flow when the DTO carries a published id', async () => {
+    fetchMock.mockResolvedValue(OK);
+    await deliverWhatsAppTurn('pid', '+919000000011', {
+      reply_text: 'Which day works?',
+      whatsapp_interactive: {
+        ...LIST,
+        flow: { ...LIST.flow, flow_id: 'flow-published-1' },
+      },
+    }, 'tok');
+    const sent = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(sent.interactive.type).toBe('flow');
+    expect(sent.interactive.action.parameters.flow_id).toBe('flow-published-1');
+    expect(sent.interactive.action.parameters.flow_cta).toBe('Pick a day');
+    expect(sent.interactive.action.parameters.flow_action_payload.screen).toBe('VISIT_DAY');
+  });
+});
+
 describe("Meta's own verdict, which arrives after the send", () => {
   it('reads the specific sentence, not just the category', () => {
     expect(statusDetail({
