@@ -12,7 +12,8 @@ import { nextProbeChipLabels } from '../engine/answer-homes.js';
 import { rankChips } from '../chips/rank.js';
 import { goalState } from '../chips/shadow.js';
 import { chipActionId, type ChipEvidence } from '../chips/catalogue.js';
-import { WA_PICK_PREFIX } from '../channel/wa-pack.js';
+import { WA_PICK_PREFIX, WA_VISIT_YOURS, WA_BRIEF_YOURS } from '../channel/wa-pack.js';
+import { hasBuyerBrief, upcomingBookedVisit } from '../engine/visit-file.js';
 
 export type AdvisorNbaBoard = 'none' | 'matches' | 'project' | 'compare' | 'visit';
 export type AdvisorNbaBoardTab = 'legal' | 'units' | 'price' | 'emi' | 'overview';
@@ -130,6 +131,10 @@ function dimensionAndJourney(
     case 'recommend':
     case 'ack_reject_recommend':
     case 'advance':
+      if (upcomingBookedVisit(state, Date.now()) || (state.visitBookedCache?.length ?? 0) > 0) {
+        chips.push('Your visits');
+      }
+      if (hasBuyerBrief(state.constraints)) chips.push('Your brief');
       if (offered.length >= 2) {
         chips.push(`Compare all ${Math.min(offered.length, 3)}`);
         chips.push(`Tell me about ${offered[0]!.name}`);
@@ -200,11 +205,15 @@ function dimensionAndJourney(
       break;
 
     case 'visit_booked':
-      chips.push('Add another stop');
+      chips.push('Your visits', 'Your brief', 'Add another stop');
       break;
 
     case 'visit_recall':
-      chips.push('Plan a visit day');
+      chips.push('Your brief', 'Add another stop');
+      break;
+
+    case 'recall_constraints':
+      chips.push('Your visits', 'Refine my brief');
       break;
 
     case 'probe':
@@ -339,6 +348,9 @@ function chipsForGoal(
     const closest = currentShortlist(state)[0];
     if (closest) actionByLabel.set(`Open ${closest.name}`, `${WA_PICK_PREFIX}${closest.projectId}`);
   }
+  actionByLabel.set('Your visits', WA_VISIT_YOURS);
+  actionByLabel.set('Your brief', WA_BRIEF_YOURS);
+  actionByLabel.set('Add another stop', 'visit_book');
   const chips = mergeChipsWithRails(primary, rails);
   const actions = chips.map((c) => actionByLabel.get(c) ?? '');
   return { chips, actions };

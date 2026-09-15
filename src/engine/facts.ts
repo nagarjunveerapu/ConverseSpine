@@ -36,7 +36,7 @@ const VISIT_RECALL_RE =
   /\b(?:my|all) (?:site )?(?:visits?|bookings?)\b|visits? (?:i have )?(?:planned|booked|scheduled)/i;
 /** Prefs/brief recall — not visit_recall, not a probe for missing slots. */
 const CONSTRAINT_RECALL_RE =
-  /\b(?:what was my budget|what'?s my budget again|remind me (?:of )?my (?:budget|area|brief|prefs?|preferences?)|which area did i (?:pick|choose|set|say)|what(?:'s| is) my (?:budget|area|brief)\b|mera budget (?:kya|kitna)|kaunsa area (?:tha|liya))/i;
+  /\b(?:what was my budget|what'?s my budget again|remind me (?:of )?my (?:budget|area|brief|prefs?|preferences?)|which area did i (?:pick|choose|set|say)|what(?:'s| is) my (?:budget|area|brief)\b|mera budget (?:kya|kitna)|kaunsa area (?:tha|liya))\b|^(?:your brief|my brief|show my (?:brief|requirements)|what do you know about me)[.!]?\s*$/i;
 const COMPARE_ADVICE_RE =
   /\b(which one is better|which is better|better for|recommend between|which fits my budget|best for my budget|fits my budget best)\b/i;
 // Opt-out is a destructive action (buyer memory delete) — the trigger must target

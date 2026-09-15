@@ -12,6 +12,7 @@ import { humanizeMediaKind, normalizeMediaAssetKind } from '../engine/media-asse
 import type { SeenFacet } from '../engine/entity-store.js';
 import type { SuggestedAction } from '../engine/recovery-planner.js';
 import { catalogSellsPropertyType, emptyCutUsesApartmentLevers } from '../engine/catalog-type.js';
+import { hasBuyerBrief, upcomingBookedVisit } from '../engine/visit-file.js';
 
 export const WA_MENU_PROJECTS = 'wa.menu.projects';
 /** Second door on the greet: start the minimal brief (size → area → budget). */
@@ -25,6 +26,8 @@ export const WA_MENU_KNOW = 'wa.menu.know';
 export const WA_MENU_OTHER = 'wa.menu.other';
 /** Returning greet — read the booked visit back, do not start a new one. */
 export const WA_VISIT_YOURS = 'wa.visit.yours';
+/** Read-back of size / area / budget on file — not a new brief interview. */
+export const WA_BRIEF_YOURS = 'wa.brief.yours';
 /** On-hold standing act — stay on the file, do not book a visit. */
 export const WA_HOLD_YOURS = 'wa.hold.yours';
 /** Overlay: drop a placed hold. Looking around must not use this. */
@@ -845,28 +848,28 @@ function waReturningGreetButtons(
   state: ThreadState,
   nowMs: number,
 ): Array<{ id: string; title: string }> | undefined {
-  // Desk-seeded life only. An in-session placed hold still uses the overlay
-  // below (Your hold / Other projects / Drop) — those ids must not collide
-  // with Hold details / Open / Ask the team.
-  const kind = state.buyerLifecycle?.kind;
-  if (!kind || kind === 'exploring') return undefined;
+  const kind = waLifeOf(state, nowMs);
   if (kind === 'visit_planned') {
-    const v =
-      (state.visitBookedCache ?? []).find((x) => Date.parse(x.iso) > nowMs) ??
-      state.buyerLifecycle?.visit;
-    if (!v || Date.parse(v.iso) <= nowMs) return undefined;
-    const pid = v.projectId;
-    const pname = v.projectName ?? 'the project';
-    return [
-      { id: WA_VISIT_YOURS, title: 'Visit details' },
-      {
-        id: pid ? `${WA_PICK_PREFIX}${pid}` : WA_MENU_KNOW,
-        title: clip(`Open ${waShortProjectTitle(pname)}`, 20),
-      },
-      { id: WA_MENU_OTHER, title: 'Other projects' },
+    const v = upcomingBookedVisit(state, nowMs);
+    if (!v) return undefined;
+    const buttons: Array<{ id: string; title: string }> = [
+      { id: WA_VISIT_YOURS, title: 'Your visits' },
     ];
+    if (hasBuyerBrief(state.constraints)) {
+      buttons.push({ id: WA_BRIEF_YOURS, title: 'Your brief' });
+    } else {
+      buttons.push({
+        id: v.projectId ? `${WA_PICK_PREFIX}${v.projectId}` : WA_MENU_KNOW,
+        title: clip(`Open ${waShortProjectTitle(v.projectName)}`, 20),
+      });
+    }
+    buttons.push({ id: WA_MENU_OTHER, title: 'Other projects' });
+    return buttons;
   }
-  if (kind === 'on_hold') {
+  // Desk-seeded hold / booked only. An in-session placed hold still uses the
+  // overlay below (Your hold / Other projects / Drop).
+  const deskKind = state.buyerLifecycle?.kind;
+  if (deskKind === 'on_hold') {
     const h = state.buyerLifecycle?.hold;
     const pid = h?.projectId;
     const pname = h?.projectName ?? 'the project';
@@ -879,6 +882,7 @@ function waReturningGreetButtons(
       { id: 'talk_to_human', title: 'Ask the team' },
     ];
   }
+  if (deskKind !== 'unit_booked') return undefined;
   const booked = state.buyerLifecycle;
   const pid = booked?.hold?.projectId ?? booked?.visit?.projectId;
   const pname = booked?.hold?.projectName ?? booked?.visit?.projectName ?? 'this home';
@@ -1437,6 +1441,52 @@ function packVisitDayChrome(input: WaPackInput): WaPacked | undefined {
   };
 }
 
+function packYourFileList(
+  state: ThreadState,
+  nowMs: number,
+  doors: {
+    visits?: boolean;
+    brief?: boolean;
+    changeBrief?: boolean;
+    addVisit?: boolean;
+    projects?: boolean;
+  },
+): WaPacked {
+  const visit = upcomingBookedVisit(state, nowMs);
+  const c = state.constraints;
+  const briefBits = [c.bhk, c.location].filter((x): x is string => !!x?.trim());
+  const rows: WaListRow[] = [];
+  if (doors.visits) {
+    rows.push({
+      id: WA_VISIT_YOURS,
+      title: 'Your visits',
+      description: visit ? clip(`${visit.projectName} · ${visit.label}`, 72) : 'None on file yet',
+    });
+  }
+  if (doors.brief || doors.changeBrief) {
+    rows.push({
+      id: doors.changeBrief ? WA_MENU_CHOOSE : WA_BRIEF_YOURS,
+      title: doors.changeBrief ? 'Change brief' : 'Your brief',
+      description: clip(briefBits.join(' · ') || 'Size, area, budget', 72),
+    });
+  }
+  if (doors.addVisit) {
+    rows.push({
+      id: 'visit_book',
+      title: 'Add another visit',
+      description: 'A different project, or another day',
+    });
+  }
+  if (doors.projects) {
+    rows.push({ id: WA_MENU_PROJECTS, title: 'See the projects' });
+  }
+  return {
+    kind: 'list',
+    button: 'Your file',
+    sections: [{ title: 'Your file', rows: rows.slice(0, 10) }],
+  };
+}
+
 export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
   const { goal, state, catalogNames, singleProject } = input;
   const focus = focusedRef(state);
@@ -1462,7 +1512,7 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
     const onlyAny = extra.length === 1 && extra[0]!.id === WA_SIZE_ANY;
     return {
       kind: 'list',
-      button: 'Choose bedrooms',
+      button: 'Set your brief',
       sections: [
         {
           title: 'Size',
@@ -1471,7 +1521,7 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
       ],
       flow: attachFlow(
         'brief',
-        'Set brief',
+        'Set your brief',
         {
           bhk: waBedroomRows().map((r) => r.title),
           areas: waAreaRows(input.briefAreas).map((r) => r.title),
@@ -1634,13 +1684,28 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
   }
 
   if (goal.kind === 'visit_booked') {
-    return {
-      kind: 'buttons',
-      buttons: [
-        { id: 'visit_book', title: 'Add a visit' },
-        { id: WA_MENU_PROJECTS, title: 'Projects' },
-      ],
-    };
+    return packYourFileList(state, input.nowMs ?? Date.now(), {
+      visits: true,
+      brief: true,
+      addVisit: true,
+      projects: true,
+    });
+  }
+
+  if (goal.kind === 'visit_recall') {
+    return packYourFileList(state, input.nowMs ?? Date.now(), {
+      addVisit: true,
+      brief: true,
+      projects: true,
+    });
+  }
+
+  if (goal.kind === 'recall_constraints') {
+    return packYourFileList(state, input.nowMs ?? Date.now(), {
+      visits: true,
+      changeBrief: true,
+      projects: true,
+    });
   }
 
   // Ask the team already fired — do not dump the apartment book under the promise.
@@ -2136,6 +2201,15 @@ export function applyWaInteractiveExtract(
       isQuestion: false,
     };
   }
+  if (aid === WA_BRIEF_YOURS) {
+    return {
+      ...extracted,
+      recallConstraints: true,
+      recall: false,
+      transition: 'none',
+      isQuestion: false,
+    };
+  }
   if (aid === WA_HOLD_YOURS) {
     return {
       ...extracted,
@@ -2296,6 +2370,7 @@ export function isWaBriefActionId(actionId: string | undefined): boolean {
     aid === WA_HOLD_DROP ||
     aid === WA_HOLD_YOURS ||
     aid === WA_VISIT_YOURS ||
+    aid === WA_BRIEF_YOURS ||
     aid === WA_MENU_TYPES ||
     aid === WA_SIZE_ANY ||
     aid === WA_BUDGET_ANY ||

@@ -11,6 +11,8 @@ describe('applyVisitBooked focus pin', () => {
         projectId: 'eldorado',
         projectName: 'Brigade Eldorado',
         slotText: 'Monday 10:00 AM',
+        proposedIso: '2026-09-21T04:30:00.000Z',
+        proposedLabel: 'Monday 10:00 AM',
         awaitingConfirm: true,
       },
     };
@@ -19,6 +21,14 @@ describe('applyVisitBooked focus pin', () => {
     expect(next.focus).toEqual({ projectId: 'eldorado', projectName: 'Brigade Eldorado' });
     expect(next.postVisitAckPending).toBe(true);
     expect(next.visit).toBeUndefined();
+    expect(next.visitBookedCache).toEqual([
+      {
+        projectId: 'eldorado',
+        projectName: 'Brigade Eldorado',
+        iso: '2026-09-21T04:30:00.000Z',
+        label: 'Monday 10:00 AM',
+      },
+    ]);
   });
 
   it('bare 2BHK in focused post-book answers availability', () => {

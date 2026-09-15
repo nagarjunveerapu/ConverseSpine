@@ -190,7 +190,7 @@ describe('size step', () => {
     });
     expect(packed.kind).toBe('list');
     if (packed.kind === 'list') {
-      expect(packed.button).toBe('Choose bedrooms');
+      expect(packed.button).toBe('Set your brief');
       const ids = packed.sections[0]!.rows.map((r) => r.id);
       expect(ids).toContain('wa.bhk.3_bhk');
       expect(ids).toContain(WA_MENU_TYPES);
@@ -636,14 +636,14 @@ describe('minimal-brief compose copy', () => {
     channel: 'whatsapp' as const,
   };
 
-  it('size question is the bedroom sheet, not the Advisor interview', () => {
+  it('size question is the three-slot brief sheet, not bedrooms alone', () => {
     const reply = fallbackReply({
       goal: { kind: 'probe', slot: 'bhk' },
       evidence: { tools: [] },
-      context: baseContext,
+      context: { ...baseContext, waBriefSheet: true },
     });
-    expect(reply).toMatch(/How many bedrooms are you looking at/);
-    expect(reply.toLowerCase()).not.toMatch(/what brings you here|worries|commute|cut the book/);
+    expect(reply).toMatch(/Size, area and budget/);
+    expect(reply).not.toMatch(/How many bedrooms/);
   });
 
   it('More types asks for villa / plot / any, not bedrooms again', () => {
@@ -1025,6 +1025,7 @@ describe('P3 returning greet follows Desk life', () => {
     expect(packed.kind).toBe('buttons');
     if (packed.kind !== 'buttons') return;
     expect(packed.buttons.map((b) => b.id)).toContain('wa.visit.yours');
+    expect(packed.buttons.map((b) => b.title)).toContain('Your visits');
     expect(packed.buttons.map((b) => b.title)).not.toContain('Help me find a home');
   });
 });

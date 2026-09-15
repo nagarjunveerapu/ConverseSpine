@@ -121,6 +121,7 @@ import {
   wantsCostBreakdown,
 } from './facts.js';
 import { resolveShortlistNames, seedFromDeskBrief } from './desk-brief.js';
+import { cacheToStored, mergeBookedVisitRows, mergeStoredVisits } from './visit-file.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
 import { excludeParkedFaqKeys, isFaqShapedAsk, resolveFaqQuestionKeys, taughtFaqKey } from './faq-keys.js';
 import { buyerCuedOtherProject } from './project_switch.js';
@@ -2558,14 +2559,17 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         visit: state.visit
           ? { ...state.visit, driveFromPriorMin, driveSource }
           : state.visit,
-        visitBookedCache: booked
-          .filter((v) => v.confirmed)
-          .map((v) => ({
-            projectId: v.projectId,
-            projectName: v.projectName,
-            iso: v.iso,
-            label: v.label,
-          })),
+        visitBookedCache: mergeBookedVisitRows(
+          state.visitBookedCache,
+          booked
+            .filter((v) => v.confirmed)
+            .map((v) => ({
+              projectId: v.projectId,
+              projectName: v.projectName,
+              iso: v.iso,
+              label: v.label,
+            })),
+        ),
       };
     }
     }
@@ -2705,12 +2709,16 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     goal.kind === 'visit_ask' &&
     Boolean(goal.state?.projectId) &&
     goal.state.projectId !== state.lastBookedProjectId;
+  // The Add-another-visit TAP is a next stop. Free-text "book a visit" one
+  // turn after Confirm is still the same booking — read it back once.
+  const addAnotherTap = input.action_id?.trim() === 'visit_book';
   if (
     goal.kind === 'visit_ask' &&
     (goal.ask === 'day' || goal.ask === 'time' || goal.ask === 'project') &&
     state.lastBookedProjectId &&
     !state.visitRebookOffered &&
-    !askingAboutAnotherProject
+    !askingAboutAnotherProject &&
+    !addAnotherTap
   ) {
     goal = { kind: 'visit_recall' };
     state = { ...state, visitRebookOffered: true };
@@ -2962,7 +2970,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     builderName: friendlyBuilder(state.builderId),
     buyerText: input.text,
     channel,
-    ...(skipBrief ? { waProjectFirst: true } : {}),
+    ...(skipBrief ? { waProjectFirst: true, waBriefSheet: true } : {}),
     ...(skipBrief && state.hold?.placed && state.hold.projectName
       ? {
           waHold: {
@@ -6294,11 +6302,12 @@ async function fetchVisitRecall(
   deps: EngineDeps,
   nd: string,
 ): Promise<EvidenceSet> {
-  if (!nd) return { tools: [] };
-  const visits = await deps.data.siteVisitsItinerary(nd).catch(() => []);
+  const fromCache = cacheToStored(s.visitBookedCache);
+  const fromDesk = nd ? await deps.data.siteVisitsItinerary(nd).catch(() => [] as const) : [];
+  const visits = mergeStoredVisits(fromDesk, fromCache);
   const builder = await deps.data.builder(s.builderId).catch(() => null);
   return {
-    tools: ['siteVisitsItinerary'],
+    tools: nd ? ['siteVisitsItinerary'] : [],
     visits: {
       visits: visits.map((v) => ({
         projectName: v.projectName,

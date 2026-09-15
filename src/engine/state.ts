@@ -15,6 +15,7 @@ import {
   recordEntities,
   stripLegacyMirrors,
 } from './entity-store.js';
+import { bookedRowFromDraft, mergeBookedVisitRows } from './visit-file.js';
 
 export function initState(threadId: string, builderId: string): ThreadState {
   return {
@@ -73,6 +74,10 @@ export function applyVisitBooked(
   const queued = s.visit?.queued ?? [];
   const next = queued[0] ?? explicitNext;
   const prev = s.visit ?? {};
+  const remembered = bookedRowFromDraft(prev);
+  const withCache: ThreadState = remembered
+    ? { ...s, visitBookedCache: mergeBookedVisitRows(s.visitBookedCache, [remembered]) }
+    : s;
   const carry = {
     ...(prev.originText ? { originText: prev.originText } : {}),
     ...(prev.originLat != null ? { originLat: prev.originLat } : {}),
@@ -91,7 +96,7 @@ export function applyVisitBooked(
         ? ('day' as const)
         : ('same_day_choice' as const);
     return {
-      ...s,
+      ...withCache,
       phase: 'visit',
       visit: {
         projectId: next.projectId,
@@ -106,7 +111,7 @@ export function applyVisitBooked(
   // Firm queue empty but team requests remain — stay in visit with pending note
   if (prev.pendingTeamRequests?.length) {
     return {
-      ...s,
+      ...withCache,
       phase: 'visit',
       visit: {
         lastAsk: 'team_request',
@@ -115,7 +120,7 @@ export function applyVisitBooked(
       },
     };
   }
-  const { visit: _v, ...rest } = s;
+  const { visit: _v, ...rest } = withCache;
   // Advisor / board visit often books with visit.projectId set but focus unset
   // (chooser / propose_visit). Without a pin, sticky handoff traps "2BHK" etc.
   const focus =

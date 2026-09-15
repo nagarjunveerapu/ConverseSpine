@@ -503,7 +503,7 @@ describe('visit Flow jobs — stops / origin / brief', () => {
     });
     expect(packed.kind).toBe('list');
     if (packed.kind !== 'list') return;
-    expect(packed.button).toBe('Choose bedrooms');
+    expect(packed.button).toBe('Set your brief');
     expect(packed.flow?.kind).toBe('brief');
     expect(packed.flow?.payload.bhk).toEqual(expect.arrayContaining(['2 BHK', '3 BHK']));
     expect(packed.flow?.payload.areas).toEqual(expect.arrayContaining(['Yelahanka', 'Whitefield']));

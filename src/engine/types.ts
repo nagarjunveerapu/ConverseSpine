@@ -1178,6 +1178,8 @@ export interface ComposeContext {
   channel?: 'whatsapp' | 'advisor_web';
   /** Skip area/budget interview — show the allotted book. */
   waProjectFirst?: boolean;
+  /** Size probe is the three-slot brief sheet, not bedrooms alone. */
+  waBriefSheet?: boolean;
   /** How many configs the just-picked project has, when the chrome will offer
    *  them as rows. The confirm copy has to name what is actually on screen. */
   waSizeOptions?: number;
