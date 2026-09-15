@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp brief sim — tap, type, go back</title>
+<style>
+  :root {
+    --bg:#0b141a; --ink:#e9edef; --dim:#8696a0; --line:#2a3942;
+    --bot:#202c33; --me:#005c4b; --accent:#00a884; --dead:#f15c6d;
+    --card:#111b21; --ok:#3dcc9a; --warn:#e9c46a; --sheet:#182229;
+  }
+  * { box-sizing:border-box; margin:0 }
+  body { background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif; }
+  .page { display:grid; grid-template-columns:380px 1fr; min-height:100vh }
+  .stage { padding:18px 16px 40px; border-right:1px solid var(--line) }
+  h1 { font-size:17px; font-weight:600 }
+  .sub { color:var(--dim); font-size:12.5px; margin:6px 0 12px }
+  .starts { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px }
+  .starts button {
+    background:var(--card); color:var(--ink); border:1px solid var(--line);
+    border-radius:999px; padding:5px 10px; font:inherit; cursor:pointer;
+  }
+  .starts button:hover { border-color:var(--accent) }
+  .phone {
+    width:340px; background:#0b141a; border:1px solid var(--line); border-radius:18px;
+    overflow:hidden; display:flex; flex-direction:column; height:760px;
+  }
+  .ph-head { background:#1f2c33; padding:10px 14px; display:flex; justify-content:space-between }
+  .ph-head b { font-size:14px }
+  .ph-head span { color:var(--dim); font-size:11px }
+  .thread { flex:1; padding:12px; overflow:auto; display:flex; flex-direction:column; gap:8px }
+  .bubble { max-width:88%; padding:8px 11px; border-radius:8px; white-space:pre-wrap; font-size:13.5px }
+  .bot { background:var(--bot); align-self:flex-start }
+  .me { background:var(--me); align-self:flex-end }
+  .chrome { align-self:stretch }
+  .btns { display:flex; flex-direction:column; gap:6px }
+  .btns button, .list .row {
+    background:var(--sheet); color:var(--accent); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; text-align:left; cursor:pointer; font:inherit; font-weight:600; width:100%;
+  }
+  .list { background:var(--sheet); border:1px solid var(--line); border-radius:10px; overflow:hidden }
+  .list .cta { padding:8px; text-align:center; color:var(--accent); font-weight:600; border-bottom:1px solid var(--line) }
+  .list .row { border:0; border-top:1px solid var(--line); border-radius:0; color:var(--ink); font-weight:500 }
+  .list .row .d { color:var(--dim); font-size:12px; margin-top:2px; font-weight:400 }
+  .list .row.back { color:var(--accent) }
+  .cal { background:var(--sheet); border:1px solid var(--line); border-radius:10px; overflow:hidden }
+  .cal .cta { padding:8px; text-align:center; color:var(--accent); font-weight:600; border-bottom:1px solid var(--line) }
+  .cal .note { color:var(--dim); font-size:10.5px; padding:4px 10px 0 }
+  .cal .dows, .cal .grid { display:grid; grid-template-columns:repeat(7,1fr); padding:2px 8px 6px; gap:1px }
+  .cal .dows span { color:var(--dim); font-size:10px; text-align:center; padding:2px 0 }
+  .cal .cell {
+    background:transparent; border:0; color:var(--ink); padding:5px 0; border-radius:6px;
+    cursor:pointer; font:inherit; font-size:12px;
+  }
+  .cal .cell:hover:not(.off):not(.empty) { background:#1f2c33 }
+  .cal .cell.off { color:#3b4a54; cursor:default }
+  .cal .cell.today { outline:1px solid var(--accent) }
+  .cal .cell.empty { cursor:default }
+  .cal > .row {
+    width:100%; background:transparent; color:var(--accent); border:0;
+    border-top:1px solid var(--line); padding:8px 10px; text-align:left;
+    cursor:pointer; font:inherit; font-weight:600;
+  }
+  .times { display:flex; flex-wrap:wrap; gap:6px; padding:8px 10px 10px }
+  .times button {
+    background:#1c262d; color:var(--accent); border:1px solid var(--line);
+    border-radius:999px; padding:6px 10px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  .plan { margin:0 0 16px; padding:12px 14px; background:var(--card); border:1px solid var(--line); border-radius:10px; font-size:13px }
+  .plan ol { margin:8px 0 0; padding-left:18px }
+  .plan li { margin:0 0 6px }
+  .composer { border-top:1px solid var(--line); padding:8px; display:flex; gap:6px }
+  .composer input {
+    flex:1; background:#1c262d; border:1px solid var(--line); color:var(--ink);
+    border-radius:18px; padding:8px 12px; font:inherit;
+  }
+  .composer button {
+    background:var(--accent); color:#04251c; border:0; border-radius:16px;
+    padding:8px 12px; font-weight:700; cursor:pointer;
+  }
+  .hints { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; width:340px }
+  .hints button {
+    background:transparent; color:var(--dim); border:1px dashed var(--line);
+    border-radius:999px; padding:3px 8px; font-size:11px; cursor:pointer;
+  }
+  .aside { padding:20px 28px 64px; max-width:720px }
+  .aside h2 { font-size:15px; margin:0 0 8px }
+  .slots { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:0 0 16px }
+  .slot { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 10px }
+  .slot .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em }
+  .slot .v { margin-top:3px; font-weight:600 }
+  .slot.empty .v { color:var(--dim); font-weight:400 }
+  .why { padding:10px 12px; border-left:3px solid var(--ok); background:#0f1c19; margin:0 0 14px; font-size:13.5px }
+  .why.ask { border-color:var(--warn); background:#1c1910 }
+  .why.dump { border-color:var(--dead); background:#1a1214 }
+  table { width:100%; border-collapse:collapse; font-size:13px }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--dim); font-weight:600 }
+  .pick { color:var(--accent) }
+  .muted { color:var(--dim) }
+  code { font-size:12px; background:#1c262d; padding:1px 5px; border-radius:4px }
+  @media (max-width: 900px) { .page { grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="stage">
+    <h1>Play the brief</h1>
+    <p class="sub">Contract, not live packing. Size → area → budget before names. Fit uses config price once BHK is set. A named closest is a tap. Acks are not slots. Visit is a calendar, then a time.</p>
+    <div class="starts" id="starts"></div>
+    <div class="phone">
+      <div class="ph-head"><b>Brigade Group</b><span>WhatsApp</span></div>
+      <div class="thread" id="thread"></div>
+      <form class="composer" id="form">
+        <input id="inp" autocomplete="off" placeholder="Type like a buyer…">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+    <div class="hints" id="hints"></div>
+  </div>
+  <div class="aside">
+    <div class="plan">
+      <b>Locked from the 15 Sep walk — not live yet</b>
+      <ol>
+        <li><b>Named closest is the first tap.</b> If the bubble says closest is Eternia, button 1 opens Eternia. Then change the dimension that missed (budget). Then other projects. Not Change bedrooms first.</li>
+        <li><b>“The project” binds that name.</b> “Tell me more about the project” opens the closest just offered — they should not have to retype Brigade Eternia.</li>
+        <li><b>Closer from facts, chrome matches the sentence.</b> No “how this compares nearby” unless a second project is actually in play. After opening a 3 BHK file, first tap is Total cost — 3 BHK, not a canned compare.</li>
+        <li><b>Visit date picker.</b> WhatsApp chat lists cannot draw a month. Meta Flows can (<code>CalendarPicker</code> / <code>DatePicker</code>, then slot chips). Advisor can use a real calendar today. This phone is the target: month → time. Live WhatsApp without Flows still lists the next open days.</li>
+        <li><b>Price is config-aware.</b> Catalog floor (<code>min</code>) is not the 2 BHK price. Fit and quotes use <code>byBhk</code> once bedrooms are set. All-in is labeled separately — never pretend starting = all-in.</li>
+        <li><b>Acks are not slots.</b> <code>theek hai</code> / <code>samajh gaya</code> / <code>ok</code> advance or confirm — they never become area or budget.</li>
+      </ol>
+    </div>
+    <h2>What the bot is holding</h2>
+    <div class="slots" id="slots"></div>
+    <div class="why" id="why"></div>
+    <h2>Walk so far</h2>
+    <p class="sub">Each row is one turn: what they could tap, what they did, what the bot did next.</p>
+    <table>
+      <thead><tr><th>#</th><th>They did</th><th>Options on screen</th><th>Bot next</th></tr></thead>
+      <tbody id="log"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+const PROJECTS = [
+  // min = catalog floor (any config). byBhk = base for that size. allInByBhk = indicative all-in when known.
+  { id:'eldorado', name:'Brigade Eldorado', type:'apartment', area:'Devanahalli / Airport', bhk:[1,2,3,4], min:31, byBhk:{1:31,2:57.5,3:105,4:140}, allInByBhk:{2:76.3}, poss:'2026', blurb:'1–4 BHK · from ₹31 L' },
+  { id:'cornerstone', name:'Brigade Cornerstone', type:'apartment', area:'Whitefield', bhk:[1,2,3], min:33, byBhk:{1:33,2:52,3:77}, allInByBhk:{2:58.5}, poss:'ready', blurb:'Studio–3 BHK · from ₹33 L' },
+  { id:'orchards', name:'Brigade Orchards', type:'apartment', area:'Devanahalli / Airport', bhk:[1,2,3,4], min:41, byBhk:{1:41,2:65,3:95,4:130}, poss:'2027', blurb:'1–4 BHK · from ₹41 L' },
+  { id:'calista', name:'Brigade Calista', type:'apartment', area:'Old Madras Road', bhk:[2,3], min:72, byBhk:{2:72,3:95}, poss:'2026', blurb:'2–3 BHK · from ₹72 L' },
+  { id:'meadows', name:'Brigade Meadows', type:'apartment', area:'Kanakapura Road', bhk:[2,3], min:87, byBhk:{2:87,3:110}, poss:'ready', blurb:'2–3 BHK · from ₹87 L' },
+  { id:'eternia', name:'Brigade Eternia', type:'apartment', area:'Yelahanka', bhk:[3], min:247, hi:479, byBhk:{3:247}, poss:'2030', blurb:'3 BHK Premium · ₹2.47 Cr – ₹4.79 Cr' },
+  { id:'atmosphere', name:'Brigade Atmosphere', type:'villa', area:'Devanahalli / Airport', bhk:[], min:241, poss:'2026', blurb:'Villa · from ₹2.41 Cr' },
+  { id:'oasis', name:'Brigade Oasis', type:'plot', area:'Devanahalli / Airport', bhk:[], min:71, poss:'ready', blurb:'Plots · from ₹71 L' },
+];
+const AREAS = [...new Set(PROJECTS.map(p => p.area))];
+const SOLD = new Set(['apartment','villa','plot']);
+const STARTS = [
+  { id:'fresh', label:'Start over' },
+  { id:'plot', label:'Type a plot' },
+  { id:'fat', label:'Type 2 BHK · ₹1 Cr' },
+  { id:'whitefield', label:'Then pick Whitefield' },
+  { id:'show', label:'They say just show me' },
+  { id:'file', label:'Inside a file' },
+  { id:'plant', label:'Plantation' },
+  { id:'yela', label:'3 BHK · Yelahanka · above ₹1 Cr' },
+  { id:'tight', label:'3 BHK · Yelahanka · under ₹1 Cr' },
+  { id:'visitcal', label:'Eternia → book a visit' },
+];
+const HINTS = [
+  'plots around 1 crore',
+  '2 bhk under 1 cr',
+  '3 bhk',
+  'yelahanka',
+  'above 1 cr',
+  'tell me more about the project',
+  'whitefield',
+  'devanahalli',
+  'just show me',
+  'any area',
+  'oasis',
+  'eldorado',
+  'brochure',
+  'plantation in coorg',
+  'I meant an apartment',
+  'see the projects',
+  'go back',
+  'theek hai',
+  'samajh gaya',
+  'abhi kya assume kar rahe ho?',
+];
+const NOW = new Date(Date.UTC(2026, 8, 15, 4, 17)); // 15 Sep 2026, 09:47 IST
+const SITE_OPEN = new Set([0,1,2,3,4,5,6]);
+const TIMES = ['10:30 am', '12:00 pm', '3:00 pm', '5:30 pm'];
+
+let brief, focus, lastFocus, lastOffered, openedFromMiss, probe, chrome, thread, log, why, whyKind, optionsAtChoice, visitDay;
+
+function emptyBrief() {
+  return { type:null, size:null, area:null, anyArea:false, budget:null, budgetMin:null, poss:null };
+}
+
+function reset() {
+  brief = emptyBrief();
+  focus = null;
+  lastFocus = null;
+  lastOffered = null;
+  openedFromMiss = false;
+  probe = null;
+  chrome = null;
+  thread = [];
+  log = [];
+  why = '';
+  whyKind = 'ok';
+  visitDay = null;
+}
+
+function clip(n) { return n.length <= 20 ? n : n.slice(0, 18) + '…'; }
+function inr(lakh) { return lakh >= 100 ? `₹${(lakh/100).toFixed(lakh%100?2:0)} Cr` : `₹${lakh} L`; }
+
+/** Base price for fit/quotes: config-aware once bedrooms are set; else catalog floor. */
+function baseFor(p, size) {
+  const s = size != null ? size : brief.size;
+  if (s && p.byBhk && p.byBhk[s] != null) return p.byBhk[s];
+  return p.min;
+}
+
+function allInFor(p, size) {
+  const s = size != null ? size : brief.size;
+  if (s && p.allInByBhk && p.allInByBhk[s] != null) return p.allInByBhk[s];
+  return null;
+}
+
+function stageOf() {
+  if (probe === 'visit') return 'visit';
+  if (probe === 'file') return 'file';
+  if (probe === 'unsup') return 'handoff';
+  if (probe === 'matches' || probe === 'list' || probe === 'book' || probe === 'empty') return 'shortlist';
+  if (brief.type || brief.size || brief.area || brief.anyArea || brief.budget != null || brief.budgetMin != null) return 'brief';
+  return 'greet';
+}
+
+function matches() {
+  return PROJECTS.filter(p => {
+    if (brief.type && p.type !== brief.type) return false;
+    if (brief.size && p.type === 'apartment' && !p.bhk.includes(brief.size)) return false;
+    if (brief.area && !brief.anyArea && p.area !== brief.area) return false;
+    if (brief.budget != null && baseFor(p) > brief.budget) return false;
+    if (brief.budgetMin != null && baseFor(p) < brief.budgetMin) return false;
+    if (brief.poss && p.poss !== brief.poss) return false;
+    return true;
+  });
+}
+
+function matchesExceptBudget() {
+  return PROJECTS.filter(p => {
+    if (brief.type && p.type !== brief.type) return false;
+    if (brief.size && p.type === 'apartment' && !p.bhk.includes(brief.size)) return false;
+    if (brief.area && !brief.anyArea && p.area !== brief.area) return false;
+    if (brief.poss && p.poss !== brief.poss) return false;
+    return true;
+  });
+}
+
+function closestMiss() {
+  const pool = matchesExceptBudget();
+  if (!pool.length) return null;
+  const ranked = [...pool].sort((a, b) => baseFor(a) - baseFor(b));
+  if (brief.budget != null) return ranked.find(p => baseFor(p) > brief.budget) || ranked[0];
+  return ranked[0];
+}
+
+function priceLine(p, size) {
+  const s = size != null ? size : brief.size;
+  if (p.hi && (!s || !p.byBhk || p.byBhk[s] == null)) return `${inr(p.min)} – ${inr(p.hi)}`;
+  const base = baseFor(p, s);
+  if (s && p.byBhk && p.byBhk[s] != null) return `${s} BHK from ${inr(base)}`;
+  return `from ${inr(base)} (any config)`;
+}
+
+function distinct(arr, key) { return [...new Set(arr.map(p => p[key]))]; }
+
+function nextQuestion(ms) {
+  const apt = ms.filter(p => p.type === 'apartment');
+  const corridors = distinct(ms.length ? ms : PROJECTS, 'area');
+  if (!brief.type && distinct(ms, 'type').length > 1 && !brief.size) {
+    return { slot:'size', reason:'Types are still mixed. Size first — villa/plot sit behind More types, not on this sheet.' };
+  }
+  if (!brief.size && apt.length >= 1 && (!brief.type || brief.type === 'apartment')) {
+    return { slot:'size', reason:'Bedrooms first. Do not jump to rupees or a shortlist.' };
+  }
+  if (!brief.area && !brief.anyArea && corridors.length > 1) {
+    return { slot:'area', reason:'Live corridors exist. Area after size — before budget. Names wait until the brief is complete.' };
+  }
+  if (brief.budget == null && brief.budgetMin == null) {
+    return { slot:'budget', reason:'Area is in. Ask spend next even if only one home remains — then name it. Do not quote the book’s min–max as the question.' };
+  }
+  if (!brief.poss && distinct(ms, 'poss').length > 1 && ms.length >= 4) {
+    return { slot:'poss', reason:'Still wide after area + budget. Possession splits ready vs 2026 vs 2027.' };
+  }
+  return null;
+}
+
+function optionsLabel(ch) {
+  if (!ch) return '— (type)';
+  if (ch.kind === 'buttons') return ch.rows.map(r => r.title).join(' · ');
+  if (ch.kind === 'list') return `${ch.cta}: ${ch.rows.map(r => r.title).join(', ')}`;
+  if (ch.kind === 'calendar') return 'Pick a day (calendar)';
+  if (ch.kind === 'times') return `Pick a time: ${ch.rows.map(r => r.title).join(', ')}`;
+  return '—';
+}
+
+function pushLog(did, next) {
+  log.push({
+    n: log.length + 1,
+    did,
+    options: optionsAtChoice || '— (type)',
+    next,
+  });
+}
+
+function say(who, text) { thread.push({ who, text }); }
+
+function setChrome(ch) { chrome = ch; }
+
+function bot(text, ch, note, kind) {
+  say('bot', text);
+  setChrome(ch || null);
+  why = note;
+  whyKind = kind || 'ok';
+}
+
+function greet(fromReset) {
+  probe = null;
+  focus = null;
+  bot(
+    'Hi — thank you for reaching out to *Brigade Group*. I can help you find a home that fits, or open a project you already know.',
+    { kind:'buttons', rows:[
+      { id:'choose', title:'Help me find a home' },
+      { id:'see', title:'See the projects' },
+      { id:'know', title:'I know the name' },
+    ]},
+    fromReset
+      ? 'Fresh buyer. Three doors, not the book. Names wait until a cut is 1–3 or they ask to see the list.'
+      : 'Back at greet. Brief is empty. Same three doors.'
+  );
+}
+
+function askSize() {
+  probe = 'size';
+  bot(
+    brief.size ? 'How many bedrooms are you looking at?' : 'How many bedrooms are you looking at?',
+    { kind:'list', cta:'Choose bedrooms', rows:[
+      { id:'size.1', title:'1 BHK' },
+      { id:'size.2', title:'2 BHK' },
+      { id:'size.3', title:'3 BHK' },
+      { id:'size.more', title:'More types' },
+    ]},
+    'Size sheet from live apartment stock. Villa/plot are types — behind More types. No ← Back on the first question.',
+    'ask'
+  );
+}
+
+function askMoreTypes() {
+  probe = 'size';
+  bot(
+    'Are you looking at a villa or a plot?',
+    { kind:'buttons', rows:[
+      { id:'type.villa', title:'Villa' },
+      { id:'type.plot', title:'Plot' },
+      { id:'back.size', title:'← Bedrooms' },
+    ]},
+    'Types are not bedroom counts. Three or fewer, so reply buttons. Back returns to 1/2/3 BHK.',
+    'ask'
+  );
+}
+
+function askArea(ms) {
+  probe = 'area';
+  const live = distinct(ms.length ? ms : PROJECTS, 'area');
+  const size = brief.size ? `Got it — *${brief.size} BHK*.\n\n` : brief.type && brief.type !== 'apartment' ? `Got it — *${brief.type}*.\n\n` : '';
+  bot(
+    `${size}Which area are you looking at?`,
+    { kind:'list', cta:'Choose area', rows:[
+      ...live.map(a => ({ id:'area.' + a, title: a.length>24 ? a.slice(0,23)+'…' : a })),
+      { id:'area.any', title:'Any area', d:'Show the list — do not pick 3' },
+      { id:'back.size', title:'← Bedrooms', back:true },
+    ]},
+    nextQuestion(ms)?.reason || 'Area is the missing split.',
+    'ask'
+  );
+}
+
+function askBudget(ms) {
+  probe = 'budget';
+  const pool = (ms.length ? ms : PROJECTS).filter(p => !brief.size || p.type !== 'apartment' || p.bhk.includes(brief.size));
+  const mins = pool.map(p => baseFor(p));
+  const lo = Math.min(...mins);
+  const hi = Math.max(...mins);
+  const back = brief.area || brief.anyArea ? { id:'back.area', title:'← Area' } : { id:'back.size', title:'← Bedrooms' };
+  bot(
+    `${brief.area && !brief.anyArea ? '*' + brief.area + '*, then.\n\n' : ''}What budget feels comfortable?`,
+    { kind:'list', cta:'Set budget', rows:[
+      { id:'bud.60', title:'Under ₹60 L' },
+      { id:'bud.100', title:'Under ₹1 Cr' },
+      { id:'bud.min100', title:'Above ₹1 Cr' },
+      { id:'bud.any', title:'Any budget' },
+      { ...back, back:true },
+    ]},
+    'Bands from the current cut, not Atmosphere’s villa floor. Back is the last question, never Switch.',
+    'ask'
+  );
+}
+
+function askPoss(ms) {
+  probe = 'poss';
+  const live = distinct(ms, 'poss');
+  const label = { ready:'Ready to move', '2026':'2026', '2027':'2027' };
+  bot(
+    `Still ${ms.length} in this cut.\n\nWhen do you want to move in?`,
+    { kind:'buttons', rows:[
+      ...live.slice(0,2).map(p => ({ id:'poss.'+p, title: label[p] || p })),
+      { id:'poss.any', title:'Any timeline' },
+    ]},
+    'Last discriminator. If they skip or it is still wide after this, the list is the escape — not three cheapest.',
+    'ask'
+  );
+}
+
+function showNamed(ms) {
+  probe = 'matches';
+  lastOffered = ms[0] ? ms[0].id : lastOffered;
+  const n = ms.length;
+  const what = brief.type === 'plot' ? 'plot' : brief.size ? `${brief.size} BHK` : 'home';
+  const where = brief.area && !brief.anyArea ? ` in ${brief.area}` : '';
+  const money = brief.budget != null ? ` under ${inr(brief.budget)}` : brief.budgetMin != null ? ` above ${inr(brief.budgetMin)}` : '';
+  bot(
+    n === 1
+      ? `For a ${what}${where}${money}, one home fits.\n\nTap it and I'll open it.`
+      : `${n} ${what}s${where}${money}.\n\nTap one and I'll open it.`,
+    { kind:'buttons', rows: ms.map(p => ({ id:'pick.'+p.id, title: clip(p.name) })) },
+    `Cut is ${n}. Names are the tap. This is not “only show 3” — the brief already got here.`,
+    'ok'
+  );
+}
+
+function showList(ms, asBook) {
+  probe = asBook ? 'book' : 'list';
+  const rows = ms.slice(0, 10).map(p => ({ id:'pick.'+p.id, title: p.name, d: p.blurb }));
+  if (lastFocus && !asBook) rows.push({ id:'pick.'+lastFocus, title:'← ' + PROJECTS.find(p=>p.id===lastFocus).name, back:true });
+  bot(
+    asBook
+      ? "These are Brigade's projects. Tap one to open it."
+      : `${ms.length} still fit after the questions I can ask. Tap one — nothing was dropped to mint a top 3.`,
+    { kind:'list', cta: asBook ? 'See the projects' : 'See matches', rows },
+    asBook
+      ? 'See the projects wipes the brief. Full public book. Not three clarify buttons.'
+      : 'Escape hatch / brief complete and still wide. List ≤10. Meadows is on the sheet. Advisor still owns compare + leftover cards.',
+    asBook ? 'ok' : 'ask'
+  );
+}
+
+function emptyCut() {
+  probe = 'empty';
+  const closest = closestMiss();
+  lastOffered = closest ? closest.id : null;
+  const spend = brief.budget != null ? inr(brief.budget) : brief.budgetMin != null ? 'above ' + inr(brief.budgetMin) : 'that budget';
+  const where = brief.area && !brief.anyArea ? ` in *${brief.area}*` : '';
+  if (closest) {
+    bot(
+      `Nothing matches ${spend}${where} exactly. Closest is *${closest.name}* — ${priceLine(closest)}.\n\nTap it to open the file, or change budget.`,
+      { kind:'buttons', rows:[
+        { id:'pick.'+closest.id, title: clip(closest.name) },
+        { id:'ask.budget', title:'Change budget' },
+        { id:'see', title:'See the projects' },
+      ]},
+      'The bubble named a home — that name is the first tap. Change budget is the miss. See the projects is the escape. Not Change bedrooms: bedrooms already bound.',
+      'ask'
+    );
+    return;
+  }
+  bot(
+    `I don't have that cut in this book.\n\nYou can change bedrooms or budget, or see all the projects.`,
+    { kind:'buttons', rows:[
+      { id:'choose', title:'Change bedrooms' },
+      { id:'ask.budget', title:'Change budget' },
+      { id:'see', title:'See the projects' },
+    ]},
+    'No closest to name, so the three change doors. Do not dump the book as if it matched.',
+    'ask'
+  );
+}
+
+function unsupported(type) {
+  probe = 'unsup';
+  brief.type = type;
+  bot(
+    `We don't sell ${type} — this book is homes and plots Brigade actually builds.\n\nI can put you through to the team.`,
+    { kind:'buttons', rows:[
+      { id:'team', title:'Ask the team' },
+      { id:'choose', title:'I meant a home' },
+    ]},
+    'Catalog-wide type miss. Not a geo miss. Not Change bedrooms. Latch stays until they say they meant a home, name a project, or tap Ask the team.',
+    'ask'
+  );
+}
+
+function handoff() {
+  chrome = null;
+  bot(
+    "I've asked the team to take this. They'll message you here.",
+    null,
+    'Ask the team is a real handoff. No apartment dump under the promise.',
+    'ok'
+  );
+}
+
+function know() {
+  probe = 'know';
+  bot(
+    'Tell me the name — even roughly is fine.',
+    { kind:'buttons', rows:[{ id:'see', title:'See the projects' }] },
+    'Know is type-the-name. Fallback actually opens the book.',
+    'ask'
+  );
+}
+
+function openFile(id, fromMiss) {
+  const p = PROJECTS.find(x => x.id === id);
+  if (!p) return;
+  if (focus && focus !== id) lastFocus = focus;
+  focus = p.id;
+  lastOffered = p.id;
+  openedFromMiss = !!fromMiss;
+  probe = 'file';
+  const sizeKnown = brief.size && p.bhk.includes(brief.size);
+  const others = PROJECTS.filter(x => x.id !== p.id && x.area === p.area && (!brief.size || x.type !== 'apartment' || x.bhk.includes(brief.size)));
+  const cfg = sizeKnown ? `${brief.size} BHK Premium` : p.blurb.split(' · ')[0];
+  const closer = sizeKnown
+    ? `Want the all-in for *${brief.size} BHK* next?`
+    : `Want the configurations, or the all-in cost?`;
+  const rows = [];
+  if (sizeKnown) rows.push({ id:'act.total', title: clip(`Total cost — ${brief.size} BHK`) });
+  else rows.push({ id:'act.total', title:'All-in cost' });
+  if (openedFromMiss) rows.push({ id:'ask.budget', title:'Change budget' });
+  else rows.push({ id:'act.visit', title:'Book a visit' });
+  if (others.length === 1) rows.push({ id:'pick.'+others[0].id, title: clip('Compare '+others[0].name.replace('Brigade ','')) });
+  else rows.push({ id:'other', title:'See other projects' });
+  bot(
+    `*${p.name}* — ${p.area}. ${cfg} · ${priceLine(p, sizeKnown ? brief.size : null)} · possession ${p.poss}.\n\n${closer}`,
+    { kind:'buttons', rows: rows.slice(0, 3) },
+    openedFromMiss
+      ? 'Opened from a named closest. First tap is the cost of the size they already gave. Change budget is still on the miss. No “compares nearby” — nothing else is in this cut.'
+      : others.length === 1
+        ? `Closer is cost, because ${brief.size ? brief.size+' BHK is on the brief' : 'the file has a price'}. Compare names the other home in ${p.area}, not a generic nearby.`
+        : 'Closer is the next fact on this file. Compare nearby is omitted — we do not have a second project in play.',
+    'ok'
+  );
+}
+
+function monthCells() {
+  const y = NOW.getUTCFullYear();
+  const m = NOW.getUTCMonth();
+  const first = new Date(Date.UTC(y, m, 1));
+  const startDow = first.getUTCDay();
+  const daysIn = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const today = NOW.getUTCDate();
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push({ empty:true });
+  for (let d = 1; d <= daysIn; d++) {
+    const dt = new Date(Date.UTC(y, m, d));
+    const past = d < today;
+    const closed = !SITE_OPEN.has(dt.getUTCDay());
+    const label = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()]} ${d} Sep`;
+    cells.push({
+      id: past || closed ? null : 'cal.' + label,
+      n: String(d),
+      off: past || closed,
+      today: d === today,
+    });
+  }
+  return cells;
+}
+
+function askVisitCalendar() {
+  probe = 'visit';
+  const p = PROJECTS.find(x => x.id === focus);
+  bot(
+    `Which day works for your visit to *${p.name}*? Site is open Mon–Sun, 9am–7pm.`,
+    { kind:'calendar', cta:'Pick a day', month:'September 2026' },
+    'Month first, then a time. Today is tappable (15 Sep is still morning). Closed days would grey out; this site is open all week.',
+    'ask'
+  );
+}
+
+function askVisitTimes(dayLabel) {
+  probe = 'visit';
+  const p = PROJECTS.find(x => x.id === focus);
+  bot(
+    `${dayLabel} at *${p.name}*. What time?`,
+    { kind:'times', cta:'Pick a time', day: dayLabel, rows: TIMES.map(t => ({ id:'time.'+t, title:t })).concat([{ id:'back.cal', title:'← Calendar', back:true }]) },
+    'Time is a slot after the date — Meta has no combined date-time widget. Same on Advisor: calendar, then chips.',
+    'ask'
+  );
+}
+
+function decide(did) {
+  if (['plantation','farmland','agri'].includes(brief.type)) {
+    unsupported(brief.type);
+    pushLog(did, 'Unsupported product → Ask the team');
+    return;
+  }
+  const pool = matchesExceptBudget();
+  const q = nextQuestion(pool.length ? pool : PROJECTS);
+  if (q && (q.slot === 'size' || q.slot === 'area' || q.slot === 'budget')) {
+    if (q.slot === 'size') askSize();
+    else if (q.slot === 'area') askArea(pool.length ? pool : PROJECTS);
+    else askBudget(pool.length ? pool : PROJECTS);
+    pushLog(did, `Ask ${q.slot} — finish the brief before names`);
+    return;
+  }
+  const ms = matches();
+  if (ms.length === 0) {
+    emptyCut();
+    pushLog(did, lastOffered ? `Named closest — first tap opens it` : 'Honest miss — no closest');
+    return;
+  }
+  if (ms.length <= 3) {
+    showNamed(ms);
+    pushLog(did, `Named taps (${ms.map(p=>p.name.replace('Brigade ','')).join(', ')})`);
+    return;
+  }
+  if (q && q.slot === 'poss') {
+    askPoss(ms);
+    pushLog(did, `Ask possession — ${ms.length} still fit`);
+    return;
+  }
+  showList(ms, false);
+  pushLog(did, `List of ${ms.length} — questions exhausted`);
+}
+
+function wipeBrief() {
+  brief = emptyBrief();
+  lastFocus = focus;
+}
+
+function onTap(id) {
+  const fromRows = (chrome?.rows || []).find(r => r.id === id)?.title;
+  let label = fromRows || id;
+  if (id.startsWith('cal.')) label = id.slice(4);
+  if (id.startsWith('time.')) label = id.slice(5);
+  optionsAtChoice = optionsLabel(chrome);
+  say('me', label);
+  runAction(id, `tapped “${label}”`);
+}
+
+function runAction(id, did) {
+  if (id === 'choose') {
+    focus = null;
+    if (brief.type && !SOLD.has(brief.type)) brief.type = null;
+    if (!brief.size && brief.type !== 'plot' && brief.type !== 'villa') askSize(), pushLog(did, 'Probe bedrooms');
+    else decide(did);
+    return draw();
+  }
+  if (id === 'see') {
+    focus = null;
+    wipeBrief();
+    showList(PROJECTS, true);
+    pushLog(did, 'Full book — brief cleared');
+    return draw();
+  }
+  if (id === 'know') { know(); pushLog(did, 'Ask for a name'); return draw(); }
+  if (id === 'team') { handoff(); pushLog(did, 'Handoff'); return draw(); }
+  if (id === 'size.more') { askMoreTypes(); pushLog(did, 'Villa / plot as types'); return draw(); }
+  if (id === 'back.size') {
+    brief.size = null;
+    if (brief.type === 'villa' || brief.type === 'plot') brief.type = null;
+    brief.area = null; brief.anyArea = false; brief.budget = null; brief.poss = null;
+    askSize(); pushLog(did, 'Back to bedrooms — later slots cleared');
+    return draw();
+  }
+  if (id === 'back.area') {
+    brief.area = null; brief.anyArea = false; brief.budget = null; brief.poss = null;
+    askArea(matches().length ? matches() : PROJECTS);
+    pushLog(did, 'Back to area — budget cleared');
+    return draw();
+  }
+  if (id.startsWith('size.')) {
+    brief.size = Number(id.split('.')[1]);
+    brief.type = 'apartment';
+    brief.poss = null;
+    decide(did);
+    return draw();
+  }
+  if (id.startsWith('type.')) {
+    brief.type = id.split('.')[1];
+    brief.size = null;
+    decide(did);
+    return draw();
+  }
+  if (id === 'area.any') {
+    brief.anyArea = true; brief.area = null; brief.poss = null;
+    decide(did);
+    return draw();
+  }
+  if (id.startsWith('area.')) {
+    brief.area = id.slice(5); brief.anyArea = false; brief.poss = null;
+    decide(did);
+    return draw();
+  }
+  if (id === 'ask.budget') {
+    brief.budget = null;
+    brief.budgetMin = null;
+    askBudget(matchesExceptBudget().length ? matchesExceptBudget() : PROJECTS);
+    pushLog(did, 'Re-open budget');
+    return draw();
+  }
+  if (id === 'bud.any') { brief.budget = 9999; brief.budgetMin = null; brief.poss = null; decide(did); return draw(); }
+  if (id === 'bud.min100') { brief.budget = null; brief.budgetMin = 100; brief.poss = null; decide(did); return draw(); }
+  if (id.startsWith('bud.')) {
+    brief.budget = Number(id.split('.')[1]);
+    brief.budgetMin = null;
+    brief.poss = null;
+    decide(did);
+    return draw();
+  }
+  if (id === 'poss.any') { brief.poss = null; const ms = matches(); if (ms.length <= 3) showNamed(ms), pushLog(did,'Named taps'); else showList(ms,false), pushLog(did,'List — they skipped timeline'); return draw(); }
+  if (id.startsWith('poss.')) { brief.poss = id.slice(5); decide(did); return draw(); }
+  if (id.startsWith('pick.')) {
+    const fromMiss = probe === 'empty';
+    openFile(id.slice(5), fromMiss);
+    pushLog(did, fromMiss ? 'Open closest from miss' : 'Open file');
+    return draw();
+  }
+  if (id === 'other') {
+    focus = null;
+    decide(did);
+    return draw();
+  }
+  if (id === 'act.brochure') {
+    bot(`I've sent the brochure for *${PROJECTS.find(p=>p.id===focus).name}*.`, chrome, 'Same file, same chrome. Brochure is media, not a new shortlist.', 'ok');
+    pushLog(did, 'Send brochure, stay on file');
+    return draw();
+  }
+  if (id === 'act.total') {
+    const p = PROJECTS.find(x => x.id === focus);
+    const sized = brief.size && p.bhk.includes(brief.size);
+    const sizeLabel = sized ? `${brief.size} BHK` : 'this size';
+    const base = baseFor(p);
+    const allIn = allInFor(p);
+    const body = allIn != null
+      ? `*${p.name}* — ${sizeLabel} base from ${inr(base)}. Indicative all-in (stamp + GST + corpus) about ${inr(allIn)}. Live quote on visit.`
+      : sized
+        ? `*${p.name}* — ${sizeLabel} base from ${inr(base)}. I don't have a locked all-in on file for this size yet (stamp + GST + corpus vary). I can book a visit for a live quote.`
+        : `*${p.name}* — catalog from ${inr(p.min)} (any config). Pick a BHK if you want a size-true base; all-in needs a live quote.`;
+    bot(
+      body,
+      { kind:'buttons', rows:[
+        { id:'act.visit', title:'Book a visit' },
+        { id:'act.brochure', title:'Brochure' },
+        { id:'other', title:'See other projects' },
+      ]},
+      'Base and all-in are separate. Never reuse catalog floor as “all-in”. Missing all-in → say not on file.',
+      'ok'
+    );
+    pushLog(did, 'Base vs all-in on the size they already gave');
+    return draw();
+  }
+  if (id === 'act.visit') {
+    visitDay = null;
+    askVisitCalendar();
+    pushLog(did, 'Visit calendar (Flows / Advisor target)');
+    return draw();
+  }
+  if (id === 'back.file') {
+    openFile(focus);
+    log.pop();
+    pushLog(did, 'Back on file');
+    return draw();
+  }
+  if (id.startsWith('cal.')) {
+    visitDay = id.slice(4);
+    askVisitTimes(visitDay);
+    pushLog(did, `Day ${visitDay} — now pick a time`);
+    return draw();
+  }
+  if (id.startsWith('time.')) {
+    const t = id.slice(5);
+    bot(
+      `I'll put *${PROJECTS.find(p=>p.id===focus).name}* down for ${visitDay} at ${t}. The site team will confirm.`,
+      { kind:'buttons', rows:[
+        { id:'back.file', title: clip(PROJECTS.find(p=>p.id===focus).name) },
+        { id:'other', title:'See other projects' },
+      ]},
+      'Date then time. Not a weekday list. Live WhatsApp without Flows still cannot draw this month — this is the Flows + Advisor plan.',
+      'ok'
+    );
+    pushLog(did, `Visit noted ${visitDay} ${t}`);
+    return draw();
+  }
+  if (id === 'back.cal') {
+    askVisitCalendar();
+    pushLog(did, 'Back to calendar');
+    return draw();
+  }
+  decide(did);
+  draw();
+}
+
+function parse(text) {
+  const t = text.trim();
+  const low = t.toLowerCase();
+  const out = {};
+  if (/plantation|farm ?land|farmland|agri|coffee estate/.test(low)) out.type = 'plantation';
+  else if (/\bplots?\b|plotted/.test(low)) out.type = 'plot';
+  else if (/\bvillas?\b/.test(low)) out.type = 'villa';
+  else if (/apartment|flat|bhk/.test(low)) out.type = 'apartment';
+  if (/\b1\s*bhk\b/.test(low)) out.size = 1;
+  if (/\b2\s*bhk\b/.test(low)) out.size = 2;
+  if (/\b3\s*bhk\b/.test(low)) out.size = 3;
+  if (/whitefield/.test(low)) out.area = 'Whitefield';
+  else if (/yelahanka/.test(low)) out.area = 'Yelahanka';
+  else if (/kanakapura/.test(low)) out.area = 'Kanakapura Road';
+  else if (/old madras|omr/.test(low)) out.area = 'Old Madras Road';
+  else if (/devanahalli|airport/.test(low)) out.area = 'Devanahalli / Airport';
+  else if (/coorg|sakleshpur/.test(low)) out.placeUnknown = true;
+  const cr = low.match(/(\d+(?:\.\d+)?)\s*cr/);
+  const lac = low.match(/(\d+(?:\.\d+)?)\s*(?:lakh|lac|l\b)/);
+  if (cr) out.budget = Math.round(Number(cr[1]) * 100);
+  else if (lac) out.budget = Math.round(Number(lac[1]));
+  if (/under|around|about|upto|up to/.test(low) && out.budget) out.budgetCap = true;
+  if (/\babove\b/.test(low) && out.budget) { out.budgetMin = out.budget; delete out.budget; }
+  if (/any area|anywhere|doesn't matter|doesnt matter/.test(low)) out.anyArea = true;
+  if (/just show|show me (all|whatever|everything)|see (the )?projects|see everything/.test(low)) out.showAll = true;
+  if (/go back|go back|←|back$/.test(low)) out.back = true;
+  if (/meant (an? )?(apartment|home|flat)/.test(low)) out.escapeHome = true;
+  if (/brochure/.test(low)) out.brochure = true;
+  if (/visit/.test(low)) out.visit = true;
+  if (/ask the team|talk to (a )?human|agent/.test(low)) out.team = true;
+  for (const p of PROJECTS) {
+    const nick = p.name.replace(/^Brigade /i,'').toLowerCase();
+    if (low.includes(nick) || low.includes(p.id)) out.named = p.id;
+  }
+  if (!out.named && /(?:tell me more|more about|open)(?: the)? project\b|\bthe project\b/.test(low)) out.theProject = true;
+  if (/^hi$|^hello$|^hey$/.test(low)) out.hi = true;
+  if (/help me (find|choose)|looking for (a )?home/.test(low)) out.choose = true;
+  if (/i know (the )?(name|project)/.test(low)) out.know = true;
+  if (/^(theek hai|thik hai|samajh gaya|samajh gayi|ok( ok)?|okay|haan|ha+|got it|cool|alright)\.?$/i.test(low.trim())) out.ack = true;
+  if (/abhi (kya |location |budget )?assume|meri location|what (location|budget|project) (are you|do you)|state (summary|check)/i.test(low)) out.stateAsk = true;
+  return out;
+}
+
+function applyParse(p) {
+  if (p.type) brief.type = p.type;
+  if (p.size) { brief.size = p.size; if (!brief.type) brief.type = 'apartment'; }
+  if (p.area) { brief.area = p.area; brief.anyArea = false; }
+  if (p.anyArea) { brief.anyArea = true; brief.area = null; }
+  if (p.budgetMin != null) { brief.budgetMin = p.budgetMin; brief.budget = null; }
+  else if (p.budget != null) { brief.budget = p.budget; brief.budgetMin = null; }
+}
+
+function onText(text) {
+  const raw = text.trim();
+  if (!raw) return;
+  say('me', raw);
+  optionsAtChoice = optionsLabel(chrome);
+  const p = parse(raw);
+  const did = `typed “${raw}”`;
+
+  if (p.hi && thread.filter(x => x.who==='me').length <= 1) { greet(false); pushLog(did,'Greet doors'); return draw(); }
+  if (p.stateAsk) {
+    const bits = [
+      brief.type || 'type?',
+      brief.size ? brief.size + ' BHK' : (brief.type === 'apartment' ? 'BHK?' : null),
+      brief.anyArea ? 'any area' : (brief.area || 'area?'),
+      brief.budget != null && brief.budget < 9000 ? 'up to ' + inr(brief.budget) : brief.budgetMin != null ? 'above ' + inr(brief.budgetMin) : 'budget?',
+      focus ? PROJECTS.find(x => x.id === focus).name : (lastOffered ? 'last offered ' + PROJECTS.find(x => x.id === lastOffered).name : 'no file open'),
+      'stage ' + stageOf(),
+    ].filter(Boolean);
+    bot('Here is what I am holding: ' + bits.join(' · ') + '.', chrome, 'State is inspectable. Acks never wrote these slots.', 'ok');
+    pushLog(did, 'Report buyer card');
+    return draw();
+  }
+  if (p.ack) {
+    if (chrome && chrome.kind === 'buttons' && chrome.rows && chrome.rows[0] && !chrome.rows[0].back) {
+      bot('Got it. Tap below when you want the next step — or type what you need.', chrome, 'Ack is not a slot. Do not re-run search or spam the same ask.', 'ok');
+      pushLog(did, 'Ack — keep chrome, no slot write');
+      return draw();
+    }
+    bot('Got it.', chrome, 'Ack absorbed. Brief unchanged.', 'ok');
+    pushLog(did, 'Ack — no decide()');
+    return draw();
+  }
+  if (p.escapeHome) {
+    brief.type = 'apartment';
+    decide(did);
+    return draw();
+  }
+  if (p.team) { handoff(); pushLog(did,'Handoff'); return draw(); }
+  if (p.brochure && focus) { runAction('act.brochure', did); return; }
+  if (p.visit && focus) { runAction('act.visit', did); return; }
+  if (p.named) { openFile(p.named, probe === 'empty'); pushLog(did, 'Open named project'); return draw(); }
+  if (p.theProject && lastOffered) {
+    openFile(lastOffered, probe === 'empty');
+    pushLog(did, 'Open last offered (“the project”)');
+    return draw();
+  }
+  if (p.back) {
+    if (probe === 'area' || probe === 'budget' || probe === 'poss') return runAction('back.size', did);
+    if (probe === 'visit') return runAction('back.file', did);
+    if (probe === 'file') return runAction('other', did);
+    greet(false); pushLog(did,'Back to greet'); return draw();
+  }
+  if (p.showAll) {
+    if (matches().length >= 1 && (brief.size || brief.type || brief.budget != null)) {
+      brief.anyArea = true;
+      const ms = matches();
+      if (ms.length <= 3) { showNamed(ms); pushLog(did, 'They insisted — still 1–3 so names'); }
+      else { showList(ms, false); pushLog(did, 'They insisted — list, not top 3'); }
+      return draw();
+    }
+    return runAction('see', did);
+  }
+  if (p.choose) return runAction('choose', did);
+  if (p.know) return runAction('know', did);
+
+  applyParse(p);
+
+  if (brief.type && !SOLD.has(brief.type)) {
+    unsupported(brief.type);
+    pushLog(did, 'Unsupported product');
+    return draw();
+  }
+
+  if (probe === 'know' && !p.named) {
+    bot("I didn't catch a project name. Type it, or see the list.", { kind:'buttons', rows:[{ id:'see', title:'See the projects' }]}, 'Know still waiting on a name.', 'ask');
+    pushLog(did, 'Still asking for a name');
+    return draw();
+  }
+
+  decide(did);
+  draw();
+}
+
+function draw() {
+  const th = document.getElementById('thread');
+  th.innerHTML = thread.map(t => `<div class="bubble ${t.who}">${esc(t.text)}</div>`).join('') + renderChrome();
+  th.querySelectorAll('[data-id]').forEach(b => b.onclick = () => onTap(b.dataset.id));
+  th.scrollTop = th.scrollHeight;
+  document.getElementById('slots').innerHTML = [
+    ['Stage', stageOf()],
+    ['Type', brief.type],
+    ['Bedrooms', brief.size ? brief.size + ' BHK' : null],
+    ['Area', brief.anyArea ? 'Any' : brief.area],
+    ['Budget', brief.budget != null && brief.budget < 9000 ? 'up to '+inr(brief.budget) : brief.budgetMin != null ? 'above '+inr(brief.budgetMin) : brief.budget >= 9000 ? 'Any' : null],
+    ['Possession', brief.poss],
+    ['Open file', focus ? PROJECTS.find(p=>p.id===focus).name.replace('Brigade ','') : null],
+    ['Last offered', lastOffered ? PROJECTS.find(p=>p.id===lastOffered).name.replace('Brigade ','') : null],
+  ].map(([k,v]) => `<div class="slot ${v?'':'empty'}"><div class="k">${k}</div><div class="v">${v || '—'}</div></div>`).join('');
+  const whyEl = document.getElementById('why');
+  whyEl.className = 'why ' + (whyKind === 'ask' ? 'ask' : whyKind === 'dump' ? 'dump' : '');
+  const constrained = !!(brief.type || brief.size || brief.area || brief.anyArea || brief.budget != null || brief.budgetMin != null || brief.poss);
+  const ms = (brief.type && !SOLD.has(brief.type)) ? [] : matches();
+  const cutLine = !constrained
+    ? 'No brief yet — names wait until size, area, and budget are in.'
+    : `${ms.length} in the current cut${ms.length?': '+ms.map(p=>p.name.replace('Brigade ','')).join(', '):'.'}`;
+  whyEl.innerHTML = `<b>${why}</b><div class="muted" style="margin-top:6px">${cutLine} Focus: ${focus ? PROJECTS.find(p=>p.id===focus).name : 'none'}${lastOffered && lastOffered !== focus ? ' · last offered: '+PROJECTS.find(p=>p.id===lastOffered).name : ''}.</div>`;
+  document.getElementById('log').innerHTML = log.map(r =>
+    `<tr><td>${r.n}</td><td>${esc(r.did)}</td><td class="muted">${esc(r.options)}</td><td class="pick">${esc(r.next)}</td></tr>`
+  ).join('') || `<tr><td colspan="4" class="muted">Nothing yet — tap a start, or type.</td></tr>`;
+}
+
+function renderChrome() {
+  if (!chrome) return '';
+  if (chrome.kind === 'buttons') {
+    return `<div class="chrome btns">${chrome.rows.map(r =>
+      `<button data-id="${esc(r.id)}">${esc(r.title)}</button>`
+    ).join('')}</div>`;
+  }
+  if (chrome.kind === 'calendar') {
+    const cells = monthCells().map(c => {
+      if (c.empty) return '<div class="cell empty"></div>';
+      if (c.off || !c.id) return `<div class="cell off">${esc(c.n)}</div>`;
+      return `<button class="cell ${c.today?'today':''}" data-id="${esc(c.id)}">${esc(c.n)}</button>`;
+    }).join('');
+    return `<div class="chrome cal"><div class="cta">${esc(chrome.cta)} · ${esc(chrome.month)}</div>
+      <div class="dows">${['S','M','T','W','T','F','S'].map(d => `<span>${d}</span>`).join('')}</div>
+      <div class="grid">${cells}</div>
+      <button class="row back" data-id="back.file">← ${esc(PROJECTS.find(p=>p.id===focus)?.name || 'File')}</button>
+    </div>`;
+  }
+  if (chrome.kind === 'times') {
+    return `<div class="chrome cal"><div class="cta">${esc(chrome.cta)}</div>
+      <div class="times">${chrome.rows.map(r =>
+        `<button ${r.back?'class="back"':''} data-id="${esc(r.id)}">${esc(r.title)}</button>`
+      ).join('')}</div>
+    </div>`;
+  }
+  return `<div class="chrome list"><div class="cta">${esc(chrome.cta)}</div>${chrome.rows.map(r =>
+    `<button class="row ${r.back?'back':''}" data-id="${esc(r.id)}"><div>${esc(r.title)}</div>${r.d?`<div class="d">${esc(r.d)}</div>`:''}</button>`
+  ).join('')}</div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function start(id) {
+  reset();
+  greet(true);
+  if (id === 'fresh') return draw();
+  if (id === 'plot') { onText('I am looking for plots with a budget of around 1 crore'); return; }
+  if (id === 'fat') { onText('2 bhk under 1 cr'); return; }
+  if (id === 'whitefield') { onText('2 bhk under 1 cr'); onText('whitefield'); return; }
+  if (id === 'show') { onText('2 bhk under 1 cr'); onText('just show me'); return; }
+  if (id === 'file') { onText('oasis'); return; }
+  if (id === 'plant') { onText('plantation in coorg'); return; }
+  if (id === 'yela') { onText('3 bhk'); onText('yelahanka'); onText('above 1 cr'); return; }
+  if (id === 'tight') { onText('3 bhk'); onText('yelahanka'); onText('under 1 cr'); return; }
+  if (id === 'visitcal') {
+    onText('eternia');
+    optionsAtChoice = optionsLabel(chrome);
+    say('me', 'Book a visit');
+    runAction('act.visit', 'tapped “Book a visit”');
+    return;
+  }
+  draw();
+}
+
+document.getElementById('starts').innerHTML = STARTS.map(s =>
+  `<button data-s="${s.id}">${s.label}</button>`
+).join('');
+document.querySelectorAll('#starts [data-s]').forEach(b => b.onclick = () => start(b.dataset.s));
+document.getElementById('hints').innerHTML = HINTS.map(h => `<button data-h="${esc(h)}">${esc(h)}</button>`).join('');
+document.querySelectorAll('#hints [data-h]').forEach(b => b.onclick = () => {
+  document.getElementById('inp').value = b.dataset.h;
+  document.getElementById('form').requestSubmit();
+});
+document.getElementById('form').onsubmit = (e) => {
+  e.preventDefault();
+  const v = document.getElementById('inp').value;
+  document.getElementById('inp').value = '';
+  onText(v);
+};
+start('fresh');
+</script>
+</body>
+</html>

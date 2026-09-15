@@ -83,6 +83,35 @@ describe('ruleClassify via classifyTurnIntent', () => {
     expect(applied.state.focus?.projectId).toBe('clarks');
   });
 
+  it('tell me more about the project confirms the offered closest', async () => {
+    let state = initState('c1', 'naya-advisor');
+    state = {
+      ...state,
+      discover: {
+        ...state.discover,
+        lastOffered: [{ projectId: 'eternia', name: 'Brigade Eternia' }],
+      },
+      rti: {
+        pendingPrompt: {
+          kind: 'offer_project',
+          project_id: 'eternia',
+          project_name: 'Brigade Eternia',
+          asked_at_turn: 2,
+        },
+        lastUiMode: 'search_recovery',
+      },
+    };
+    const input = buildTurnIntentInput(
+      state,
+      'tell me more about the project',
+      'whatsapp',
+      'search_recovery',
+    );
+    const intent = await classifyTurnIntent(noopEnv, input);
+    expect(intent.kind).toBe('confirm_suggestion');
+    expect(intent.focus_project_id).toBe('eternia');
+  });
+
   it('yes after chip_menu probes instead of guessing', async () => {
     let state = initState('c1', 'naya-advisor');
     state = {

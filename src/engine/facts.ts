@@ -1218,7 +1218,10 @@ export function wantsImplicitProjectPick(
   const refersToThisProject =
     /\b(?:details?|info|more)\s+(?:on\s+)?(?:the|this)\s+project\b/.test(s) ||
     /\b(?:give me|want|need)\b.*\bdetails?\b.*\b(?:the|this)\s+project\b/.test(s) ||
-    /\b(?:the|this)\s+project(?:'s)?\s+details?\b/.test(s);
+    /\b(?:the|this)\s+project(?:'s)?\s+details?\b/.test(s) ||
+    /\btell me more about (?:the|this) project\b/.test(s) ||
+    /\bmore about (?:the|this) project\b/.test(s) ||
+    /\bopen (?:the|this) project\b/.test(s);
   if (!refersToThisProject) return false;
   return offered.length >= 1 || Boolean(focus);
 }

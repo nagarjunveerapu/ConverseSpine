@@ -45,12 +45,18 @@ describe('overviewCard', () => {
 
   it('ends with the single probing question and stays compact', () => {
     expect(card).toMatch(/\?$/);
-    expect(card).toMatch(
-      /Want pricing details|Curious about loan eligibility|Want a cost breakdown next/,
-    );
+    expect(card).toMatch(/Want pricing details, unit configurations, or the legal & RERA picture\?$/);
     expect(card.length).toBeLessThan(320); // a card, not an essay
     expect(card).not.toContain('25-50L'); // the contradicting band never renders when configs price
     expect(card).not.toMatch(/\.\./); // no double periods
+  });
+
+  it('asks all-in when BHK is known, and compare nearby only with a peer on the board', () => {
+    expect(overviewCard(DETAIL, { bhk: '3 BHK' })).toMatch(/Want the all-in cost for this size next\?$/);
+    expect(overviewCard(DETAIL, { bhk: '3 BHK' })).not.toMatch(/compares nearby/);
+    expect(overviewCard(DETAIL, { bhk: '3 BHK', comparePeer: 'Brigade Orchards' })).toMatch(
+      /Want a cost breakdown next, or how this compares nearby\?$/,
+    );
   });
 
   it('the overview template path returns the card, never FAQ text', () => {
@@ -139,9 +145,7 @@ describe('overviewCard — catalog summary enrichment (catalog-first)', () => {
     const card = overviewCard({ ...DETAIL, summary: SUMMARY });
     expect(card).toContain('Luxury villa community on 18 acres');
     expect(card).toMatch(/\?$/);
-    expect(card).toMatch(
-      /Want pricing details|Curious about loan eligibility|Want a cost breakdown next/,
-    );
+    expect(card).toMatch(/Want pricing details, unit configurations, or the legal & RERA picture\?$/);
     // Facts stay intact — the blurb enriches, never replaces.
     expect(card).toContain('₹31 L – ₹1.66 Cr');
   });

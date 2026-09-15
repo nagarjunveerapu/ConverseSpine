@@ -12,6 +12,7 @@ import { nextProbeChipLabels } from '../engine/answer-homes.js';
 import { rankChips } from '../chips/rank.js';
 import { goalState } from '../chips/shadow.js';
 import { chipActionId, type ChipEvidence } from '../chips/catalogue.js';
+import { WA_PICK_PREFIX } from '../channel/wa-pack.js';
 
 export type AdvisorNbaBoard = 'none' | 'matches' | 'project' | 'compare' | 'visit';
 export type AdvisorNbaBoardTab = 'legal' | 'units' | 'price' | 'emi' | 'overview';
@@ -103,6 +104,19 @@ function railsFor(board: AdvisorNbaBoard, goal: TurnGoal): string[] {
   }
 }
 
+/** Real upcoming days — not canned Saturday/Sunday, which lied when today was Tuesday. */
+function upcomingVisitDayChips(count = 3, now = new Date()): string[] {
+  const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const out: string[] = [];
+  for (let i = 0; i < 10 && out.length < count; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    const label = names[d.getDay()]!;
+    out.push(i === 0 ? `${label} morning` : label);
+  }
+  return out;
+}
+
 function dimensionAndJourney(
   state: ThreadState,
   goal: TurnGoal,
@@ -125,9 +139,11 @@ function dimensionAndJourney(
       chips.push('Show me more projects', 'Plan a visit day');
       break;
 
-    case 'no_fit':
-      // Rails are the product here — no extra dimension dump.
+    case 'no_fit': {
+      const closest = offered[0];
+      if (closest) chips.push(`Open ${closest.name}`);
       break;
+    }
 
     case 'answer': {
       const topic = goal.topic;
@@ -180,7 +196,7 @@ function dimensionAndJourney(
     case 'visit_ask':
     case 'visit_propose':
     case 'propose_visit':
-      chips.push('Saturday morning', 'Sunday');
+      chips.push(...upcomingVisitDayChips());
       break;
 
     case 'visit_booked':
@@ -196,7 +212,7 @@ function dimensionAndJourney(
       break;
 
     default:
-      if (board === 'visit') chips.push('Saturday morning');
+      if (board === 'visit') chips.push(...upcomingVisitDayChips(1));
       else if (board === 'compare') {
         chips.push('Budget fit', 'Possession timeline', 'Plan a visit day');
         if (offered[0]) chips.push(`Focus on ${offered[0].name}`);
@@ -318,6 +334,10 @@ function chipsForGoal(
     }
   } else {
     primary = dimensionAndJourney(state, goal, board);
+  }
+  if (goal.kind === 'no_fit') {
+    const closest = currentShortlist(state)[0];
+    if (closest) actionByLabel.set(`Open ${closest.name}`, `${WA_PICK_PREFIX}${closest.projectId}`);
   }
   const chips = mergeChipsWithRails(primary, rails);
   const actions = chips.map((c) => actionByLabel.get(c) ?? '');

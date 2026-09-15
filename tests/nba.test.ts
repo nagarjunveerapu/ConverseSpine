@@ -102,6 +102,25 @@ describe('buildAdvisorNba chip taxonomy', () => {
     expect(nba.chips.length).toBeLessThanOrEqual(6);
   });
 
+  it('no_fit names Open {closest} when the closest was offered', () => {
+    const state = initState('advisor:nba-nf-open', 'naya-advisor');
+    state.discover.lastOffered = [
+      { projectId: 'brigade-eternia', name: 'Brigade Eternia', microMarket: 'Yelahanka', startingPriceDisplay: '₹2.47 Cr' },
+    ];
+    const debug: TurnDebug = {
+      phase: 'discover',
+      goal: { kind: 'no_fit' },
+      tools: [],
+      grounding: 'pass',
+    };
+    const nba = buildAdvisorNba(state, debug);
+    expect(nba.chips[0]).toBe('Open Brigade Eternia');
+    expect(nba.chip_actions?.[0]).toBe('wa.pick.brigade-eternia');
+    expect(nba.chips).toEqual(
+      expect.arrayContaining(['Widen my search', 'Change area', 'Adjust budget', 'Start over']),
+    );
+  });
+
   it('location topic maps board_tab to overview (no location tab yet)', () => {
     const state = initState('advisor:nba-loc', 'naya-advisor');
     state.phase = 'focused';
