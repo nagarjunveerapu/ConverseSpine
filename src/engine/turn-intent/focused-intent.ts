@@ -7,6 +7,7 @@ import {
   isLocationCorrectionTurn,
   locationCategoriesAsked,
   parseBudgetToInr,
+  isOpenBudgetPhrase,
 } from '../facts.js';
 import { classifySpeechAct, isNonSearchSpeechAct } from '../speech-act/index.js';
 import { DECLINE } from './dialogue-acts.js';
@@ -160,8 +161,10 @@ function constraintPatchFromPivot(text: string): {
 
   const budget = parseBudgetToInr(text);
   if (budget) {
-    patch.budgetMaxInr = budget.max;
+    if (budget.max !== undefined) patch.budgetMaxInr = budget.max;
     if (budget.min !== undefined) patch.budgetMinInr = budget.min;
+  } else if (isOpenBudgetPhrase(text)) {
+    patch.budgetOpen = true;
   }
 
   const loc = extractLocation(text);

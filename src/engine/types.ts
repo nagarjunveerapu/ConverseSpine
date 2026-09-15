@@ -9,6 +9,8 @@ export type Phase = 'discover' | 'focused' | 'visit' | 'handoff';
 export interface Constraints {
   budgetMaxInr?: number;
   budgetMinInr?: number;
+  /** Buyer waived a ceiling ("any budget") — search unconstrained on price. */
+  budgetOpen?: boolean;
   bhk?: string;
   location?: string;
   propertyType?: string;

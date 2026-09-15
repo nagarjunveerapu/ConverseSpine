@@ -16,7 +16,8 @@ export function hasBuyerBrief(c: Constraints | undefined): boolean {
       c.location?.trim() ||
       c.propertyType?.trim() ||
       c.budgetMaxInr != null ||
-      c.budgetMinInr != null,
+      c.budgetMinInr != null ||
+      c.budgetOpen === true,
   );
 }
 

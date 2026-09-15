@@ -38,6 +38,7 @@ import {
   WA_HOLD_DROP,
   isWaSeeAction,
   isWaOtherAction,
+  hasWaBriefCut,
   waLifeOf,
   WA_MENU_CHOOSE,
   WA_MENU_TYPES,
@@ -3384,7 +3385,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     if (authoredNode) reply = authoredNode;
     // The book screen — "See everything" / "Back to projects" opens the list,
     // and the words describe the book, not whatever goal the engine landed on.
-    if (!state.focus && isWaSeeAction(input.action_id, state)) {
+    if (!state.focus && isWaSeeAction(input.action_id, state) && !hasWaBriefCut(state)) {
       reply = `These are the projects. Tap one to open it.`;
     }
     if (!state.focus && isWaOtherAction(input.action_id, state)) {
@@ -3918,7 +3919,8 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       state.constraints?.bhk?.trim() ||
       state.constraints?.propertyType?.trim() ||
       state.constraints?.budgetMinInr !== undefined ||
-      state.constraints?.budgetMaxInr !== undefined
+      state.constraints?.budgetMaxInr !== undefined ||
+      state.constraints?.budgetOpen
     );
     const seeOpen = isWaSeeAction(input.action_id, state);
     const otherOpen = isWaOtherAction(input.action_id, state);
@@ -3985,8 +3987,18 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       ...(input.action_id ? { actionId: input.action_id } : {}),
       ...(() => {
         const g = evidence.budgetGap ?? evidence.propertyTypeGap;
-        if (!g?.closestProjectId || !g.closestName.trim()) return {};
-        return { closest: { projectId: g.closestProjectId, name: g.closestName } };
+        if (g?.closestProjectId && g.closestName.trim()) {
+          return { closest: { projectId: g.closestProjectId, name: g.closestName } };
+        }
+        const alt = evidence.constraintGap;
+        if (alt?.alternateProjectId && alt.alternateProject?.trim()) {
+          return { closest: { projectId: alt.alternateProjectId, name: alt.alternateProject } };
+        }
+        const n = evidence.failure?.nearest;
+        if (n?.projectId && n.name.trim()) {
+          return { closest: { projectId: n.projectId, name: n.name } };
+        }
+        return {};
       })(),
       ...(deps.waVisitFlowId ? { visitFlowId: deps.waVisitFlowId } : {}),
       flowIds: {
@@ -4469,6 +4481,19 @@ async function fetchRecommend(
             closestName: failure.nearest.name,
             closestDisplay: failure.nearest.display,
             closestProjectId: failure.nearest.projectId,
+          },
+        },
+      };
+    }
+    if (failure.nearest) {
+      return {
+        goal: { kind: 'no_fit' },
+        evidence: {
+          tools: ['search'],
+          failure,
+          noMatch: {
+            reasoning: `Nothing matches ${failure.subject} — closest is *${failure.nearest.name}*`,
+            nearby: [],
           },
         },
       };

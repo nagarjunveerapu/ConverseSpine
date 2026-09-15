@@ -103,13 +103,14 @@ export const WA_COMPARE = 'compare_projects';
 
 export type WaLifeKind = 'exploring' | 'visit_planned' | 'on_hold' | 'unit_booked';
 
-export function hasWaBriefCut(state: { constraints?: { bhk?: string; propertyType?: string; budgetMinInr?: number; budgetMaxInr?: number } }): boolean {
+export function hasWaBriefCut(state: { constraints?: { bhk?: string; propertyType?: string; budgetMinInr?: number; budgetMaxInr?: number; budgetOpen?: boolean } }): boolean {
   const c = state.constraints;
   return !!(
     c?.bhk?.trim() ||
     c?.propertyType?.trim() ||
     c?.budgetMinInr !== undefined ||
-    c?.budgetMaxInr !== undefined
+    c?.budgetMaxInr !== undefined ||
+    c?.budgetOpen
   );
 }
 
@@ -473,7 +474,7 @@ export interface WaPackInput {
   actionId?: string;
   /**
    * Named closest on an empty brief cut — chrome must open that file first.
-   * Copy already named it; buttons that only offer "Change bedrooms" after
+   * Copy already named it; buttons that only offer "Change size" after
    * "Closest is Brigade Eternia" are the wrong doors.
    */
   closest?: { projectId: string; name: string };
@@ -1302,7 +1303,7 @@ function waEmptyCutButtons(
     ];
   }
   return [
-    { id: WA_MENU_CHOOSE, title: 'Change bedrooms' },
+    { id: WA_MENU_CHOOSE, title: 'Change size' },
     { id: WA_MENU_BUDGET, title: 'Change budget' },
     { id: WA_MENU_SEE, title: 'See the projects' },
   ];
@@ -2048,12 +2049,28 @@ export function applyWaInteractiveExtract(
   // Brief navigation / "any" rows — benign answers; the step machine routes them.
   // The id is authoritative: topics the intent layer read off the LABEL text
   // ("Help me choose" ≈ an ask) are noise and would dodge the brief trap.
+  if (aid === WA_BUDGET_ANY) {
+    const next = { ...extracted.constraints };
+    delete next.budgetMaxInr;
+    delete next.budgetMinInr;
+    return {
+      ...extracted,
+      speechAct: 'answer',
+      namedProjects: undefined,
+      pickName: undefined,
+      implicitProjectPick: false,
+      transition: undefined,
+      askTopic: undefined,
+      askTopics: undefined,
+      isQuestion: false,
+      constraints: { ...next, budgetOpen: true },
+    };
+  }
   if (
     aid === WA_MENU_CHOOSE ||
     aid === WA_MENU_BUDGET ||
     aid === WA_MENU_TYPES ||
     aid === WA_SIZE_ANY ||
-    aid === WA_BUDGET_ANY ||
     aid === WA_BACK_SIZE ||
     aid === WA_BACK_AREA
   ) {
@@ -2127,6 +2144,12 @@ export function applyWaInteractiveExtract(
           : undefined;
     if (!patch) return extracted;
     // Band labels read like price asks ("Under ₹85L") — the tap is an answer.
+    // Replace the bound: the title also parses as a ceiling ("Above ₹1 Cr" → max
+    // 1 Cr) if we spread on top of extractFacts.
+    const next = { ...extracted.constraints };
+    delete next.budgetMaxInr;
+    delete next.budgetMinInr;
+    delete next.budgetOpen;
     return {
       ...extracted,
       speechAct: 'answer',
@@ -2134,7 +2157,7 @@ export function applyWaInteractiveExtract(
       askTopic: undefined,
       askTopics: undefined,
       isQuestion: false,
-      constraints: { ...extracted.constraints, ...patch },
+      constraints: { ...next, ...patch },
     };
   }
   const pickId = parseWaPickId(aid);
@@ -2429,6 +2452,7 @@ export function advanceWaBriefState(
       propertyType?: string;
       budgetMinInr?: number;
       budgetMaxInr?: number;
+      budgetOpen?: boolean;
       location?: string;
     };
   },
@@ -2437,7 +2461,8 @@ export function advanceWaBriefState(
   const aid = actionId?.trim() ?? '';
   const c = { ...state.constraints, ...extracted.constraints };
   const sizeKnown = !!c.bhk?.trim() || !!c.propertyType?.trim();
-  const budgetKnown = c.budgetMaxInr !== undefined || c.budgetMinInr !== undefined;
+  const budgetKnown =
+    c.budgetMaxInr !== undefined || c.budgetMinInr !== undefined || c.budgetOpen === true;
   const askArea = shouldAskWaArea(areas);
   const areaKnown = !!c.location?.trim() || aid === WA_AREA_ANY;
 
@@ -2461,7 +2486,8 @@ export function advanceWaBriefState(
   const budgetAnswered =
     aid === WA_BUDGET_ANY ||
     extracted.constraints.budgetMaxInr !== undefined ||
-    extracted.constraints.budgetMinInr !== undefined;
+    extracted.constraints.budgetMinInr !== undefined ||
+    extracted.constraints.budgetOpen === true;
 
   const afterSize = (): 'area' | 'budget' | undefined => {
     if (askArea && !areaKnown) return 'area';

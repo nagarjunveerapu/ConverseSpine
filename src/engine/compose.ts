@@ -180,6 +180,8 @@ export function waBriefReceipt(c: Constraints | undefined): string {
     bits.push(`under ${formatInr(c.budgetMaxInr)}`);
   } else if (c.budgetMinInr !== undefined) {
     bits.push(`above ${formatInr(c.budgetMinInr)}`);
+  } else if (c.budgetOpen) {
+    bits.push('any budget');
   }
   if (!bits.length) return '';
   return bits.join(' · ');
@@ -203,6 +205,7 @@ export function waBriefHuman(c: Constraints | undefined): string {
   } else if (c.budgetMinInr !== undefined) {
     band = `above ${formatInr(c.budgetMinInr)}`;
   }
+  // "any budget" is the absence of a cut — don't say it in the noun phrase.
   const ranged = c.budgetMinInr !== undefined && c.budgetMaxInr !== undefined;
   if (size && loc && band) return ranged ? `a ${size} in ${loc}, ${band}` : `a ${size} in ${loc} ${band}`;
   if (size && loc) return `a ${size} in ${loc}`;
@@ -277,7 +280,7 @@ function waTypeMissCopy(human: string): string {
 function waNoFitCopy(human: string): string {
   return waParas(
     `I don't have ${human}.`,
-    `You can change bedrooms, change budget, or see all the projects.`,
+    `You can change size, change budget, or see all the projects.`,
   );
 }
 
@@ -1303,7 +1306,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
         body = ev.relaxed?.length
           ? waParas(
               human ? `I don't have an exact match for ${human}.` : lead,
-              `Tap a name below, or change bedrooms or budget.`,
+              `Tap a name below, or change size or budget.`,
             )
           : waParas(
               human ? `For ${human}, ${fit}.` : `${n === 1 ? 'One home fits.' : `${n} homes fit.`}`,
@@ -2957,7 +2960,7 @@ export function briefAckPrefix(c: Constraints | undefined): string {
  */
 export function firstMissingProbeSlot(c: Constraints | undefined): ProbeKind | undefined {
   if (!c?.location?.trim()) return 'location';
-  if (c.budgetMaxInr === undefined) return 'budget';
+  if (c.budgetMaxInr === undefined && c.budgetMinInr === undefined && !c.budgetOpen) return 'budget';
   // Align with discover: skip BHK for investment + non-apartment property types.
   const needsBhk =
     c.purpose !== 'investment' &&
