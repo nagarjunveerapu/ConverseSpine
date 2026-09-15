@@ -117,6 +117,18 @@ function resolveProjectId(
   return offered.find((o) => o.name.toLowerCase().includes(n) || n.includes(o.name.toLowerCase()))?.project_id;
 }
 
+/** Anaphora to the named closest / last offered — not a new project name. */
+function refersToOfferedProject(t: string): boolean {
+  return (
+    /^(?:tell me more(?: about(?: the| this)? project)?|more about(?: the| this)? project|open(?: the| this)? project|(?:the|this) project)$/i.test(
+      t,
+    ) ||
+    /\btell me more about (?:the|this) project\b/i.test(t) ||
+    /\bmore about (?:the|this) project\b/i.test(t) ||
+    /\bopen (?:the|this) project\b/i.test(t)
+  );
+}
+
 function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
   const pending = input.pending_prompt;
   const t = input.text.trim();
@@ -167,6 +179,21 @@ function ruleClassify(input: TurnIntentInput): TurnIntentResult | null {
 
   if (REFINE_CONTINUE.test(t)) {
     return { kind: 'continue_search', confidence: 'rule' };
+  }
+
+  if (refersToOfferedProject(t)) {
+    const pid =
+      (pending?.kind === 'offer_project'
+        ? pending.project_id ??
+          (pending.project_name ? resolveProjectId(pending.project_name, input.last_offered) : undefined)
+        : undefined) ?? input.last_offered[0]?.project_id;
+    if (pid) {
+      return {
+        kind: pending?.kind === 'offer_project' ? 'confirm_suggestion' : 'ask_named_project',
+        confidence: 'rule',
+        focus_project_id: pid,
+      };
+    }
   }
 
   if (shouldPassthroughRecoverySearch(t)) {

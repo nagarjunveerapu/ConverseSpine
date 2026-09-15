@@ -324,13 +324,13 @@ function withWayBack(rows: WaListRow[]): WaListRow[] {
  */
 export function waVisitDayRows(hoursLabel: string | undefined, nowMs: number, openDays: ReadonlySet<number>): WaListRow[] {
   const rows: WaListRow[] = [];
-  for (let i = 1; i <= 9 && rows.length < 7; i++) {
+  for (let i = 0; i <= 9 && rows.length < 7; i++) {
     const d = new Date(nowMs + i * 24 * 60 * 60 * 1000);
     const dow = d.getUTCDay();
     if (!openDays.has(dow)) continue;
     const title = `${WEEKDAY_SHORT[dow]} ${d.getUTCDate()} ${MONTH_SHORT[d.getUTCMonth()]}`;
     const desc =
-      i === 1 ? 'tomorrow' : dow === 0 || dow === 6 ? 'weekend' : undefined;
+      i === 0 ? 'today' : i === 1 ? 'tomorrow' : dow === 0 || dow === 6 ? 'weekend' : undefined;
     rows.push({
       id: `${WA_DAY_PREFIX}${WEEKDAY_NAMES[dow]}`,
       title: clip(title, 24),
@@ -441,6 +441,12 @@ export interface WaPackInput {
    * the screen it was drawn under even after a restart.
    */
   actionId?: string;
+  /**
+   * Named closest on an empty brief cut — chrome must open that file first.
+   * Copy already named it; buttons that only offer "Change bedrooms" after
+   * "Closest is Brigade Eternia" are the wrong doors.
+   */
+  closest?: { projectId: string; name: string };
 }
 
 /**
@@ -1215,6 +1221,7 @@ function waMoreTypeRows(catalog: WaPackInput['catalog'], bagSize: number): WaLis
 function waEmptyCutButtons(
   state: ThreadState,
   catalog: WaPackInput['catalog'],
+  closest?: { projectId: string; name: string },
 ): Array<{ id: string; title: string }> {
   const asked = state.constraints.propertyType?.trim();
   const sells = catalogSellsPropertyType(catalog?.projectTypes, asked);
@@ -1225,6 +1232,13 @@ function waEmptyCutButtons(
     return [
       { id: WA_MENU_SEE, title: 'See the projects' },
       { id: 'talk_to_human', title: 'Ask the team' },
+    ];
+  }
+  if (closest?.projectId && closest.name.trim()) {
+    return [
+      { id: `${WA_PICK_PREFIX}${closest.projectId}`, title: clip(closest.name, 20) },
+      { id: WA_MENU_BUDGET, title: 'Change budget' },
+      { id: WA_MENU_SEE, title: 'See the projects' },
     ];
   }
   return [
@@ -1578,7 +1592,7 @@ export function packWhatsAppInteractive(input: WaPackInput): WaPacked {
       goal.kind === 'no_fit' ||
       input.otherOpen)
   ) {
-    return { kind: 'buttons', buttons: waEmptyCutButtons(state, input.catalog) };
+    return { kind: 'buttons', buttons: waEmptyCutButtons(state, input.catalog, input.closest) };
   }
 
   // The mock's welcome: three quiet doors, not nine rows. The book list is one

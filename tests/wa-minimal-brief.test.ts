@@ -540,6 +540,28 @@ describe('clarify packs the three doors', () => {
     }
   });
 
+  it('empty cut with a named closest opens that file first', () => {
+    const packed = packWhatsAppInteractive({
+      goal: { kind: 'no_fit' },
+      state: state({ constraints: { bhk: '3 BHK', budgetMaxInr: 1_00_00_000 } }),
+      catalogNames: [],
+      singleProject: false,
+      catalog: CATALOG,
+      briefCut: true,
+      closest: { projectId: 'brigade-eternia', name: 'Brigade Eternia' },
+    });
+    expect(packed.kind).toBe('buttons');
+    if (packed.kind === 'buttons') {
+      expect(packed.buttons.map((b) => b.id)).toEqual([
+        'wa.pick.brigade-eternia',
+        WA_MENU_BUDGET,
+        WA_MENU_SEE,
+      ]);
+      expect(packed.buttons[0]!.title).toBe('Brigade Eternia');
+      expect(packed.buttons.every((b) => b.title.length <= 20)).toBe(true);
+    }
+  });
+
   it('one to three matches pack as named reply buttons, not See matches', () => {
     const packed = packWhatsAppInteractive({
       goal: { kind: 'recommend' },

@@ -512,6 +512,12 @@ const CLOSERS = {
     options: ['price', 'compare'],
     binds: true,
   },
+  overview_allin: {
+    text: ' Want the all-in cost for this size next?',
+    topic: 'price',
+    options: ['price'],
+    binds: true,
+  },
   generic_deeper: {
     text: ' I can go deeper on pricing, legal, or a visit whenever you are ready.',
     topic: 'price',
@@ -1627,12 +1633,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
         !isPossessionAsk(context.buyerText) &&
         !isLoanEligibilityAsk(context.buyerText)
       ) {
-        return overviewCard(ev.detail, {
-          ...(context.priorReplyExcerpt ? { priorReply: context.priorReplyExcerpt } : {}),
-          // Same base as the default seed, plus the turn's own text — so the
-          // card is stable for a given turn and moves between turns.
-          seed: `${ev.detail.name}${ev.detail.microMarket ?? ''}${context.buyerText ?? ''}`,
-        });
+        return overviewCard(ev.detail, overviewCardOpts(ev.detail, context));
       }
 
       const chunks: string[] = [];
@@ -2008,12 +2009,7 @@ function fallbackReplyBody(req: ComposeRequest): string {
         }
         // Overview fallthrough — the founder-spec card: sizes, one price
         // band (from configs), location, possession, one probing question.
-        return overviewCard(ev.detail, {
-          ...(context.priorReplyExcerpt ? { priorReply: context.priorReplyExcerpt } : {}),
-          // Same base as the default seed, plus the turn's own text — so the
-          // card is stable for a given turn and moves between turns.
-          seed: `${ev.detail.name}${ev.detail.microMarket ?? ''}${context.buyerText ?? ''}`,
-        });
+        return overviewCard(ev.detail, overviewCardOpts(ev.detail, context));
       }
       return `Let me get that confirmed and follow up shortly.`;
     }
@@ -3170,9 +3166,22 @@ export function summaryBlurb(summary: string | undefined): string {
   return ` ${out}`;
 }
 
+function overviewCardOpts(
+  d: NonNullable<EvidenceSet['detail']>,
+  context: ComposeContext,
+): { priorReply?: string; seed?: string; bhk?: string; comparePeer?: string } {
+  const peer = (context.shortlistNames ?? []).find((n) => n.trim() && n !== d.name);
+  return {
+    ...(context.priorReplyExcerpt ? { priorReply: context.priorReplyExcerpt } : {}),
+    seed: `${d.name}${d.microMarket ?? ''}${context.buyerText ?? ''}`,
+    ...(context.constraints?.bhk?.trim() ? { bhk: context.constraints.bhk } : {}),
+    ...(peer ? { comparePeer: peer } : {}),
+  };
+}
+
 export function overviewCard(
   d: NonNullable<EvidenceSet['detail']>,
-  opts?: { priorReply?: string; seed?: string },
+  opts?: { priorReply?: string; seed?: string; bhk?: string; comparePeer?: string },
 ): string {
   const cfgs = d.configurations ?? [];
   const types = cfgs.map((c) => c.unitType).filter(Boolean);
@@ -3187,19 +3196,16 @@ export function overviewCard(
   const facts = bits.length ? ` ${bits.join(' · ')}.` : '';
   const phase = d.phaseNote ? ` ${d.phaseNote}.` : '';
   const blurb = summaryBlurb(d.summary);
-  // Overview keeps a short probing question (founder-spec card), but rotates
-  // the ask so every project card does not end on the same visit prompt.
-  //
-  // The seed used to be the project name alone, which is CONSTANT for a given
-  // project — so the rotation never rotated: one project got one sentence for
-  // the life of the conversation, and "Curious about loan eligibility?" landed
-  // 102 times in 970 turns. The seed now moves with the turn, and whatever the
-  // last reply closed with is struck from the pool outright.
-  const pool = [
-    CLOSERS.overview_three.text,
-    CLOSERS.overview_loan.text,
-    CLOSERS.overview_cost.text,
-  ];
+  // Closer from facts on this turn — BHK known → all-in; a second project on
+  // the board → compare nearby. Never rotate in "compares nearby" when there
+  // is no peer to compare, and never offer loan eligibility as filler.
+  const bhk = opts?.bhk?.trim();
+  const peer = opts?.comparePeer?.trim();
+  const pool = bhk && peer
+    ? [CLOSERS.overview_cost.text]
+    : bhk
+      ? [CLOSERS.overview_allin.text]
+      : [CLOSERS.overview_three.text];
   const priorText = opts?.priorReply ? composedOfferIn(opts.priorReply)?.text.trim() : undefined;
   const fresh = pool.filter((text) => text.trim() !== priorText);
   const closer = rotate(fresh.length ? fresh : pool, opts?.seed ?? d.name + (d.microMarket ?? ''));

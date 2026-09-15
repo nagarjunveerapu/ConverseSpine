@@ -298,6 +298,7 @@ describe('ConverseEngine facts', () => {
   it('implicit pick on "details on the project" when one offered', () => {
     const offered = [{ projectId: 'ayana', name: 'Ayana' }];
     expect(wantsImplicitProjectPick('give me details on the project', offered)).toBe(true);
+    expect(wantsImplicitProjectPick('tell me more about the project', offered)).toBe(true);
     const s = {
       ...initState('c1', 'lokations'),
       discover: { ...initState('c1', 'lokations').discover, lastOffered: offered },

@@ -3975,6 +3975,11 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       // Which level of the file this turn is on — the tapped id is the whole
       // navigation state, so nothing has to be remembered between turns.
       ...(input.action_id ? { actionId: input.action_id } : {}),
+      ...(() => {
+        const g = evidence.budgetGap ?? evidence.propertyTypeGap;
+        if (!g?.closestProjectId || !g.closestName.trim()) return {};
+        return { closest: { projectId: g.closestProjectId, name: g.closestName } };
+      })(),
     });
   }
   const packedActions = packed ? packedToSuggestedActions(packed) : undefined;
@@ -6416,9 +6421,24 @@ function applyGoalToState(s: ThreadState, goal: TurnGoal, ev: EvidenceSet): Thre
       return { ...r, discover: { ...r.discover, advancedOnce: true } };
     }
     case 'no_fit': {
-      const stamp = ev.unsupportedProduct;
-      if (!stamp) return s;
-      return { ...s, discover: { ...s.discover, unsupportedProduct: stamp } };
+      let next = s;
+      if (ev.unsupportedProduct) {
+        next = { ...next, discover: { ...next.discover, unsupportedProduct: ev.unsupportedProduct } };
+      }
+      const g = ev.budgetGap ?? ev.propertyTypeGap;
+      if (g?.closestProjectId && g.closestName.trim()) {
+        next = recordOffered(next, [
+          {
+            projectId: g.closestProjectId,
+            name: g.closestName,
+            microMarket: '',
+            startingPriceInr: 0,
+            startingPriceDisplay: g.closestDisplay,
+            matchReasons: ['closest'],
+          },
+        ]);
+      }
+      return next;
     }
     case 'objection':
       return incObjection(s);
