@@ -159,6 +159,7 @@ export function applyExtracted(
   if (skipKeys?.has('budget')) {
     delete incoming.budgetMaxInr;
     delete incoming.budgetMinInr;
+    delete incoming.budgetOpen;
   }
   if (incoming.location && !options?.locationValidated && !isPlausibleLocation(incoming.location)) {
     delete incoming.location;
@@ -183,6 +184,14 @@ export function applyExtracted(
   if (skipKeys?.has('budget')) {
     delete constraints.budgetMaxInr;
     delete constraints.budgetMinInr;
+    delete constraints.budgetOpen;
+  }
+  if (incoming.budgetOpen) {
+    delete constraints.budgetMaxInr;
+    delete constraints.budgetMinInr;
+  }
+  if (incoming.budgetMaxInr !== undefined || incoming.budgetMinInr !== undefined) {
+    delete constraints.budgetOpen;
   }
   const buyerName = ex.nameIntro ?? s.buyerName;
   const constraintAuthority = { ...(s.constraintAuthority ?? {}) };
@@ -196,7 +205,9 @@ export function applyExtracted(
     constraintAuthority.bhk = options.authority.bhk;
   }
   if (
-    (incoming.budgetMaxInr !== undefined || incoming.budgetMinInr !== undefined) &&
+    (incoming.budgetMaxInr !== undefined ||
+      incoming.budgetMinInr !== undefined ||
+      incoming.budgetOpen) &&
     options?.authority?.budget
   ) {
     constraintAuthority.budget = options.authority.budget;
@@ -335,6 +346,7 @@ export function constraintsMateriallyChanged(prev: Constraints, next: Constraint
     prev.bhk !== next.bhk ||
     prev.budgetMaxInr !== next.budgetMaxInr ||
     prev.budgetMinInr !== next.budgetMinInr ||
+    prev.budgetOpen !== next.budgetOpen ||
     norm(prev.propertyType) !== norm(next.propertyType)
   );
 }
@@ -422,6 +434,7 @@ export function clearWaBriefConstraints(s: ThreadState): ThreadState {
     bhk: _bhk,
     budgetMinInr: _min,
     budgetMaxInr: _max,
+    budgetOpen: _open,
     propertyType: _type,
     location: _loc,
     ...rest
@@ -442,6 +455,7 @@ function pruneUndefined(c: Partial<Constraints>): Partial<Constraints> {
   const out: Partial<Constraints> = {};
   if (c.budgetMaxInr !== undefined) out.budgetMaxInr = c.budgetMaxInr;
   if (c.budgetMinInr !== undefined) out.budgetMinInr = c.budgetMinInr;
+  if (c.budgetOpen !== undefined) out.budgetOpen = c.budgetOpen;
   if (c.bhk !== undefined) out.bhk = c.bhk;
   if (c.location !== undefined) out.location = c.location;
   if (c.propertyType !== undefined) out.propertyType = c.propertyType;

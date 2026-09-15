@@ -146,7 +146,7 @@ export function nextWaBriefStep(
   asked: readonly ProbeKind[] = [],
 ): WaBriefStep | undefined {
   if (!c.purpose && !askedHas(asked, 'purpose')) return 'purpose';
-  if (c.budgetMaxInr === undefined && !askedHas(asked, 'budget')) return 'budget';
+  if (c.budgetMaxInr === undefined && c.budgetMinInr === undefined && !c.budgetOpen && !askedHas(asked, 'budget')) return 'budget';
   if (!c.propertyType?.trim() && !askedHas(asked, 'propertyType')) return 'propertyType';
   // Stay on BHK until Done (multi-select 2 + 3), even after the first size lands.
   if (needsBhk(c) && !askedHas(asked, 'bhk')) return 'bhk';
@@ -293,7 +293,7 @@ export function patchFromWaBriefAction(
     if (!parsed) return { markAsked: ['budget'] };
     return {
       constraints: {
-        budgetMaxInr: parsed.max,
+        ...(parsed.max !== undefined ? { budgetMaxInr: parsed.max } : {}),
         ...(parsed.min !== undefined ? { budgetMinInr: parsed.min } : {}),
       },
       markAsked: ['budget'],

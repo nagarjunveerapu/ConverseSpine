@@ -177,8 +177,10 @@ export async function extractFacts(
     constraints.location = hinglishBudget[1].trim();
     constraints.budgetMaxInr = toInr(parseFloat(hinglishBudget[2]), hinglishBudget[3] ?? '') ?? undefined;
   } else if (budget) {
-    constraints.budgetMaxInr = budget.max;
+    if (budget.max !== undefined) constraints.budgetMaxInr = budget.max;
     if (budget.min !== undefined) constraints.budgetMinInr = budget.min;
+  } else if (isSlotWritable('budget', filled, text) && isOpenBudgetPhrase(text)) {
+    constraints.budgetOpen = true;
   } else if (isSlotWritable('budget', filled, text)) {
     // A monthly instalment IS a budget — the buyer just gave it in the unit
     // they think in. Convert it so the search cuts; the reply shows the working
@@ -350,7 +352,10 @@ export function extractFactsSync(
   const afford = affordabilityFromMonthlyText(text);
   const constraints: Extracted['constraints'] = {};
   if (budget) {
-    constraints.budgetMaxInr = budget.max;
+    if (budget.max !== undefined) constraints.budgetMaxInr = budget.max;
+    if (budget.min !== undefined) constraints.budgetMinInr = budget.min;
+  } else if (isSlotWritable('budget', filled, text) && isOpenBudgetPhrase(text)) {
+    constraints.budgetOpen = true;
   } else if (isSlotWritable('budget', filled, text)) {
     // See the async path — a monthly instalment is a budget in the buyer's own
     // unit, and the reply shows the arithmetic it used to convert it.
@@ -404,7 +409,7 @@ export function extractFactsSync(
 }
 
 /** Buyer asking whether shown options fit a budget — not a single-project price ask. */
-export function isBudgetFitQuestion(text: string, parsedBudget?: { max: number; min?: number } | null): boolean {
+export function isBudgetFitQuestion(text: string, parsedBudget?: ParsedBudget | null): boolean {
   if (isBudgetPickQuestion(text)) return false;
   const t = text.trim();
   const budget = parsedBudget ?? parseBudgetToInr(text);
@@ -644,7 +649,20 @@ export function isMinimumBudgetForTypeQuestion(text: string): boolean {
   );
 }
 
-export function parseBudgetToInr(raw: string): { max: number; min?: number } | null {
+/** Closed phrase — the buyer waived a price ceiling. Not an amount. */
+export function isOpenBudgetPhrase(raw: string): boolean {
+  const t = raw.toLowerCase();
+  return (
+    /\bany\s+budget\b/.test(t) ||
+    /\bno\s+budget\s+(?:limit|bar|cap)\b/.test(t) ||
+    /\bbudget\s+(?:no\s+bar|is\s+open)\b/.test(t) ||
+    /\bno\s+bar\s+on\s+(?:the\s+)?budget\b/.test(t)
+  );
+}
+
+export type ParsedBudget = { max?: number; min?: number };
+
+export function parseBudgetToInr(raw: string): ParsedBudget | null {
   const s = raw
     .toLowerCase()
     .replace(/₹|\brs\.?|\binr\b/g, ' ')
@@ -680,6 +698,16 @@ export function parseBudgetToInr(raw: string): { max: number; min?: number } | n
     }
   }
   // Prefer unit-bearing / budget-anchored amounts over bare digits.
+  const floorAnchored = [
+    ...s.matchAll(
+      /(?:above|over|from|starting(?:\s+at)?|min(?:imum)?(?:\s+(?:of|is))?)\s+(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?/g,
+    ),
+  ];
+  if (floorAnchored.length) {
+    const last = floorAnchored[floorAnchored.length - 1]!;
+    const v = toInr(parseFloat(last[1]!), last[2] ?? '');
+    if (v !== null && v > 0) return { min: v };
+  }
   const anchored = [
     ...s.matchAll(
       /(?:under|within|upto|up\s+to|below|budget(?:\s+is|\s+of)?|max(?:imum)?)\s+(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|l|cr|crores?)?/g,

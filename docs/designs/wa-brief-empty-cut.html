@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brief + empty cut — the four turns</title>
+  <style>
+    :root { font-family: ui-sans-serif, system-ui, sans-serif; background: #0f1419; color: #e7ecf1; }
+    body { max-width: 720px; margin: 24px auto; padding: 0 16px 48px; }
+    h1 { font-size: 1.25rem; font-weight: 650; }
+    p.lead { color: #9aa8b4; line-height: 1.45; }
+    .phone { background: #1a222b; border-radius: 16px; padding: 16px; margin: 16px 0 28px; }
+    .bot, .me { padding: 10px 12px; border-radius: 12px; margin: 8px 0; max-width: 92%; line-height: 1.4; }
+    .bot { background: #24303c; }
+    .me { background: #0d7377; margin-left: auto; }
+    .doors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    button { background: #2c3a48; color: #e7ecf1; border: 1px solid #3d4f60; border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+    button:hover { background: #354656; }
+    button.good { border-color: #2a9d8f; }
+    .note { font-size: 0.85rem; color: #8b9bab; margin-top: 8px; }
+    .wrong { outline: 1px dashed #c45c5c; }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp brief — what those four turns should do</h1>
+  <p class="lead">Tap through. The broken walk re-asks budget, then blames money for a floor Eternia already clears, then offers Change bedrooms instead of the project it named.</p>
+
+  <div class="phone" id="screen"></div>
+
+  <script>
+    const walks = {
+      start: {
+        bot: "Size, area and budget — I'll cut the book from that.",
+        doors: [{ t: "3 BHK in Yelahanka, Any budget", next: "listed" }],
+        note: "Typed any budget fills the slot. Do not ask budget again."
+      },
+      listed: {
+        bot: "A 3 BHK in Yelahanka. These are the ones that fit — tap one to open it.",
+        doors: [
+          { t: "Brigade Eldorado", next: "card" },
+          { t: "Above ₹1 Cr (empty cut demo)", next: "empty" }
+        ],
+        note: "If the cut is empty, name the closest and put it on the first button."
+      },
+      empty: {
+        bot: "I don't have a 3 BHK in Yelahanka above ₹1 Cr. Closest that clears the floor is Brigade Eternia — ₹2.47 Cr – ₹4.79 Cr.",
+        doors: [
+          { t: "Brigade Eternia", next: "card", good: true },
+          { t: "Change size", next: "start" },
+          { t: "Change budget", next: "start" }
+        ],
+        note: "Never Change bedrooms. Never dump the whole book as the first door."
+      },
+      card: {
+        bot: "Brigade Eternia — open the file. Price, visit, or back.",
+        doors: [{ t: "Start over", next: "start" }]
+      }
+    };
+    function draw(id) {
+      const s = walks[id];
+      const el = document.getElementById("screen");
+      el.innerHTML = "";
+      const bot = document.createElement("div");
+      bot.className = "bot";
+      bot.textContent = s.bot;
+      el.appendChild(bot);
+      const row = document.createElement("div");
+      row.className = "doors";
+      for (const d of s.doors) {
+        const b = document.createElement("button");
+        b.textContent = d.t;
+        if (d.good) b.className = "good";
+        b.onclick = () => draw(d.next);
+        row.appendChild(b);
+      }
+      el.appendChild(row);
+      if (s.note) {
+        const n = document.createElement("p");
+        n.className = "note";
+        n.textContent = s.note;
+        el.appendChild(n);
+      }
+    }
+    draw("start");
+  </script>
+</body>
+</html>

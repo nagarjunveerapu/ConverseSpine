@@ -76,6 +76,14 @@ function withoutBudget(filters: SearchFilters): SearchFilters {
   return next;
 }
 
+function matchSatisfiesBudget(m: Match, c: Constraints): boolean {
+  const p = m.startingPriceInr;
+  if (!(p > 0)) return false;
+  if (c.budgetMaxInr !== undefined && p > c.budgetMaxInr) return false;
+  if (c.budgetMinInr !== undefined && p < c.budgetMinInr) return false;
+  return c.budgetMaxInr !== undefined || c.budgetMinInr !== undefined;
+}
+
 /**
  * Phase 3 zero-match ladder. It mutates only a local filter copy; the durable
  * buyer brief is read-only. Declared property type is never released.
@@ -134,7 +142,11 @@ export async function searchWithAuthorityRelaxation(
       const localityHits = await attempt(['budget']);
       filters = saved;
       if (localityHits.length) {
-        return { ok: false, failure: noMatchFailure('budget', localityHits[0]) };
+        const nearest = localityHits[0]!;
+        if (matchSatisfiesBudget(nearest, input.constraints)) {
+          return { ok: false, failure: noMatchFailure('area', nearest) };
+        }
+        return { ok: false, failure: noMatchFailure('budget', nearest) };
       }
     } else {
       // No budget on brief — confirm locality is empty at remaining filters.

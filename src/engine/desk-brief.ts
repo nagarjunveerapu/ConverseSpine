@@ -76,8 +76,8 @@ export function seedFromDeskBrief(
     // One parser decides, and it is the same one that reads a buyer's message,
     // so a number can never come to mean two things.
     const parsed = parseBudgetToInr(brief.budget);
-    if (parsed?.max) {
-      c.budgetMaxInr = parsed.max;
+    if (parsed?.max !== undefined || parsed?.min !== undefined) {
+      if (parsed.max !== undefined) c.budgetMaxInr = parsed.max;
       if (parsed.min !== undefined && c.budgetMinInr === undefined) c.budgetMinInr = parsed.min;
       seeded.push('budget');
     }

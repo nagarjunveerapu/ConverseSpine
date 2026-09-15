@@ -18,7 +18,7 @@ export function constraintsFromAdvisorPreferences(
   if (budgetRaw) {
     const b = parseBudgetToInr(budgetRaw);
     if (b) {
-      out.budgetMaxInr = b.max;
+      if (b.max !== undefined) out.budgetMaxInr = b.max;
       if (b.min !== undefined) out.budgetMinInr = b.min;
     }
   }

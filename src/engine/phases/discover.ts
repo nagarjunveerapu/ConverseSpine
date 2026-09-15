@@ -259,7 +259,7 @@ export function decide(
     // when the catalog has two or more micro-markets — decide() has no catalog.
     if (opts?.skipBrief) {
       if (!mergedC.bhk?.trim() && !mergedC.propertyType?.trim()) return { kind: 'probe', slot: 'bhk' };
-      if (mergedC.budgetMaxInr === undefined) return { kind: 'probe', slot: 'budget' };
+      if (!budgetIsKnown(mergedC)) return { kind: 'probe', slot: 'budget' };
       return { kind: 'recommend' };
     }
     if (!d.oriented) return { kind: 'orient' };
@@ -402,6 +402,7 @@ export function decide(
     !mergedC.bhk &&
     mergedC.budgetMaxInr === undefined &&
     mergedC.budgetMinInr === undefined &&
+    !mergedC.budgetOpen &&
     !mergedC.propertyType;
   if (areaIsTheWholeBrief) return { kind: 'recommend' };
   if (!d.oriented) {
@@ -451,8 +452,8 @@ export function isFirstHomeHelpAsk(ex: Extracted): boolean {
 export function searchFilters(c: Constraints): SearchFilters {
   const config = configurationFilter(c);
   return {
-    ...(c.budgetMaxInr !== undefined ? { budgetMaxInr: c.budgetMaxInr } : {}),
-    ...(c.budgetMinInr !== undefined ? { budgetMinInr: c.budgetMinInr } : {}),
+    ...(!c.budgetOpen && c.budgetMaxInr !== undefined ? { budgetMaxInr: c.budgetMaxInr } : {}),
+    ...(!c.budgetOpen && c.budgetMinInr !== undefined ? { budgetMinInr: c.budgetMinInr } : {}),
     ...(config ? { bhks: config } : {}),
     ...(c.location?.trim() ? { locations: c.location.trim() } : {}),
     ...(c.propertyType ? { projectTypes: mapProjectTypesForSearch(c.propertyType) } : {}),
@@ -534,15 +535,20 @@ export function resolveRecommend(
   };
 }
 
+export function budgetIsKnown(c: Constraints | undefined): boolean {
+  if (!c) return false;
+  return c.budgetMaxInr !== undefined || c.budgetMinInr !== undefined || c.budgetOpen === true;
+}
+
 export function firstMissingSlot(s: ThreadState): ProbeKind | undefined {
   const c = s.constraints;
   const asked = new Set(s.discover.asked);
   if (!c.location && !asked.has('location')) return 'location';
-  if (!c.budgetMaxInr && !asked.has('budget')) return 'budget';
+  if (!budgetIsKnown(c) && !asked.has('budget')) return 'budget';
   // Adaptive: purpose decides whether bedrooms are even the right question —
   // an investor gets purpose first and no bhk probe (mirror of the advisor
   // brief's rule table; same branch axis, coherent ladders).
-  if (!c.purpose && !c.budgetMaxInr && !asked.has('purpose')) return 'purpose';
+  if (!c.purpose && !budgetIsKnown(c) && !asked.has('purpose')) return 'purpose';
   // BHK only for apartment / unspecified end-use — not plantation/plot/villa/investment.
   if (
     c.purpose !== 'investment' &&
@@ -561,7 +567,7 @@ function nextSlot(s: ThreadState): ProbeKind {
 
 /** Any constraint signal (preview, routable turn-0, reject filters). Not enough to list. */
 export function hasNarrowingConstraint(c: Constraints): boolean {
-  return Boolean(c.budgetMaxInr || c.budgetMinInr || c.bhk || c.location || c.propertyType);
+  return Boolean(c.budgetMaxInr || c.budgetMinInr || c.budgetOpen || c.bhk || c.location || c.propertyType);
 }
 
 /**
@@ -599,13 +605,13 @@ export function isBriefReady(
   opts?: { asked?: readonly string[] },
 ): boolean {
   if (c.purpose === 'investment') {
-    return Boolean(c.location?.trim() && c.budgetMaxInr !== undefined);
+    return Boolean(c.location?.trim() && budgetIsKnown(c));
   }
   if (!propertyTypeNeedsBhk(c.propertyType)) {
     if (c.propertyType?.trim()) return true;
-    return Boolean(c.location?.trim() && c.budgetMaxInr !== undefined);
+    return Boolean(c.location?.trim() && budgetIsKnown(c));
   }
-  if (!c.location?.trim() || c.budgetMaxInr === undefined) return false;
+  if (!c.location?.trim() || !budgetIsKnown(c)) return false;
   if (c.bhk) return true;
   if (opts?.asked?.includes('bhk')) return true;
   return false;

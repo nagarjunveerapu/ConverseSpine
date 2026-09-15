@@ -367,6 +367,7 @@ export function applyTurnIntentResult(
     if (key === 'budget') {
       delete next.constraints.budgetMaxInr;
       delete next.constraints.budgetMinInr;
+      delete next.constraints.budgetOpen;
     }
   }
 

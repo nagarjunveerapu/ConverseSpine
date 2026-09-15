@@ -64,7 +64,7 @@ export function extractRecoveryPatchFromText(
 
   const budget = parseBudgetToInr(text);
   if (budget) {
-    patch.budgetMaxInr = budget.max;
+    if (budget.max !== undefined) patch.budgetMaxInr = budget.max;
     if (budget.min !== undefined) patch.budgetMinInr = budget.min;
     hasPatch = true;
   }
