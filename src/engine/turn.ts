@@ -53,7 +53,13 @@ import {
 import { waConsoleCardReply, waConsoleNodeReply } from '../channel/wa-console.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
-import { buildLedgerWritePayload, type ComposeTelemetry } from './ledger-write.js';
+import {
+  buildLedgerWritePayload,
+  classifyPriorResponse,
+  toolRunRecords,
+  type ComposeTelemetry,
+  type StampPrior,
+} from './ledger-write.js';
 import { costTermsFromCostSheet } from './cost-terms.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
@@ -90,6 +96,7 @@ import type { Failure } from './outcome.js';
 import {
   contactScopeFailure,
   isExplicitDeleteIntent,
+  isOptOutAsk,
   isStandaloneStop,
   isStandaloneDelete,
   keepsOneChannel,
@@ -125,7 +132,7 @@ import { resolveShortlistNames, seedFromDeskBrief } from './desk-brief.js';
 import { cacheToStored, mergeBookedVisitRows, mergeStoredVisits } from './visit-file.js';
 import { buildJourneySignalPost, deskFactProvenance } from './journey-signals.js';
 import { excludeParkedFaqKeys, isFaqShapedAsk, resolveFaqQuestionKeys, taughtFaqKey } from './faq-keys.js';
-import { buyerCuedOtherProject } from './project_switch.js';
+import { buyerCuedOtherProject, partitionNamedByPolarity } from './project_switch.js';
 import { resolveCompareProjectIds } from './compare_resolve.js';
 import {
   isCompareAmongOfferedTurn,
@@ -334,10 +341,52 @@ function erasedState(prev: ThreadState): ThreadState {
  * line on its next turn. That is correct, not a migration gap: those buyers
  * were never told how to leave.
  */
+/**
+ * ONE door for the turn's own account of itself.
+ *
+ * Sixteen branches in this file append to the transcript, and every one of them
+ * already names its own reply key — `welcome`, `type_floor`, `stop_confirm`,
+ * `stop_contact_only`, and on down. That key IS what the bot decided to do,
+ * which is exactly the question Desk's `classifier_intent` column asks, so the
+ * mapping is made once, here, rather than at sixteen call sites that would
+ * drift apart the way the opt-out vocabulary already had.
+ *
+ * The inbound half comes from `signal.inboundIntent`, which is empty until the
+ * extractor has run. The handful of branches that fire before that have
+ * genuinely classified nothing, and NULL is the honest record for them —
+ * "not classified" and "classified as nothing" are different facts, and a
+ * COUNT can tell them apart.
+ */
+function withTurnSignal(
+  deps: EngineDeps,
+  signal: { inboundIntent?: string },
+): EngineDeps {
+  const inner = deps.crm;
+  return {
+    ...deps,
+    crm: {
+      ...inner,
+      appendMessage(threadId, direction, content, meta) {
+        const intent =
+          meta?.intent ??
+          (direction === 'outbound' ? meta?.replyKey : signal.inboundIntent);
+        return inner.appendMessage(threadId, direction, content, {
+          ...meta,
+          ...(intent ? { intent } : {}),
+        });
+      },
+    },
+  };
+}
+
 export async function runEngineTurn(
   input: EngineTurnInput,
   deps: EngineDeps,
 ): Promise<EngineTurnOutput> {
+  // The welcome and the consent notice are outbound-only, so an empty signal
+  // is all they need: their reply keys become their intent. The core wraps
+  // again with its own signal for the inbound half.
+  deps = withTurnSignal(deps, {});
   let out = await runEngineTurnCore(input, deps);
   const channel = input.channel ?? 'whatsapp';
 
@@ -400,6 +449,10 @@ export async function runEngineTurn(
 }
 
 async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Promise<EngineTurnOutput> {
+  // Every `deps.crm.appendMessage` in this function — all sixteen of them —
+  // goes through the one door.
+  const turnSignal: { inboundIntent?: string } = {};
+  deps = withTurnSignal(deps, turnSignal);
   const turnStartedMs = deps.clock.nowMs();
   if (input.waitUntil && !deps.waitUntil) {
     deps = { ...deps, waitUntil: input.waitUntil };
@@ -426,6 +479,12 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // pendingPrompt on their way through, so reading it at write time cannot tell
   // "there was no question" from "the question was just answered".
   const promptAtTurnStart = state.rti?.pendingPrompt;
+  // Same reason, same trap. The ledger stamps the DIFFERENCE in this list
+  // across the turn, and the polarity partition a thousand lines below records
+  // a refusal into it long before the old capture point ran — so every live
+  // rejection came back `rejected_ids: []`, the id having already been in
+  // "before" by the time "before" was read.
+  const rejectedAtTurnStart = state.discover.rejectedProjectIds;
   // L2 → conversation cache when focus is cold (survives KV lag / thin saves).
   state = await seedProjectCacheFromL2(deps, state);
   if (!deps.projectCardMemo) deps.projectCardMemo = new Map();
@@ -1164,6 +1223,100 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     (discover.hasNarrowingConstraint(state.constraints) ||
       discover.hasNarrowingConstraint(ex.constraints) ||
       Boolean(ex.speechAct === 'search'));
+  // Before anything counts how many projects were named: WHICH of them is she
+  // actually asking for? "No, forget Avalon completely. I only want Brigade
+  // Meadows." names two, so the rule below read it as a compare, the compare
+  // found the focused project among the two and held it, and the bot answered
+  // about the project she had just rejected. Verbatim from dev's ledger, and
+  // the same defect on "I am not interested in Brigade Avalon, show me Brigade
+  // Meadows."
+  //
+  // This is the one place the count is taken, so it is the one place the
+  // question belongs — every consumer downstream (the compare trigger below,
+  // detectFocusedSwitchIntent, the cold-name bind) reads `ex.namedProjects`
+  // and inherits the answer. A rejected project is also recorded, so the board
+  // stops re-offering what she just pushed away.
+  //
+  // One name is enough to ask it. The first version of this gate required two,
+  // because a sole rejection was believed to be carried already by `ex.rejected`.
+  // On dev it is not: "not interested in Brigade Avalon" arrived with
+  // `ex.rejected` FALSE and was bound as focus, so the bot pitched the project
+  // she had just refused, and "no, Brigade Avalon is not for me" set the flag but
+  // bound no id, because `resolveRejected` reads only `ex.rejectedName`. Both
+  // observed live with Avalon the only project on the board.
+  // Asked here of the name the extractor bound, and asked AGAIN after the cold
+  // catalog resolve further down — that resolve reads the same raw sentence and
+  // finds "Brigade Avalon" in "not interested in Brigade Avalon" exactly as
+  // readily as in "tell me about Brigade Avalon", so without a second pass it
+  // hands the refused name straight back and the bot pitches it.
+  // A project name reaches the turn in more than one field. Clearing
+  // `namedProjects` alone left dev pitching the refused project anyway: the
+  // extractor had ALSO written `pickName: "Brigade Avalon"`, and `resolvePick`
+  // reads that as an explicit choice.
+  const nameIsRefused = (
+    candidate: string | undefined,
+    rejected: ReadonlyArray<{ name: string }>,
+  ): boolean => {
+    if (!candidate) return false;
+    const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const c = norm(candidate);
+    if (!c) return false;
+    return rejected.some((p) => {
+      const n = norm(p.name);
+      return n === c || n.includes(c) || c.includes(n);
+    });
+  };
+  const partitionNamedPolarity = (): void => {
+    if (!(ex.namedProjects?.length)) return;
+    const polarity = partitionNamedByPolarity(
+      trimmedText,
+      ex.namedProjects,
+      [...ex.namedProjects, ...currentShortlist(state)],
+    );
+    if (!polarity.rejected.length) return;
+    // Does a want survive the rejection? "forget Avalon, show me Meadows"
+    // leaves one standing and the turn is about Meadows. "not interested in
+    // Avalon" leaves nothing, and THAT turn is a rejection — it has to route
+    // to "something else?" rather than bind the name it just pushed away.
+    const standing = polarity.wanted.length > 0;
+    const pickRefused = nameIsRefused(ex.pickName, polarity.rejected);
+    ex = {
+      ...ex,
+      namedProjects: polarity.wanted,
+      // The same sentence cannot both push a name away and choose it.
+      ...(pickRefused ? { pickName: undefined, implicitProjectPick: false } : {}),
+      // Nothing left standing: she turned down what was in front of her and
+      // asked for nothing in its place. That is "show me something else".
+      // No fake reaches this — the live differential is on dev: WITHOUT this
+      // line "not interested in Brigade Avalon" arrived at the goal decide
+      // carrying no signal at all and answered "I couldn't make sense of
+      // that"; with it, `recommend` and the nearby corridors.
+      ...(!standing && (!ex.transition || ex.transition === 'none')
+        ? { transition: 'see_others' as const }
+        : {}),
+      // She rejected a project, not the conversation -- but only while a
+      // standing ask is left in the same sentence.
+      rejected: standing ? false : true,
+      // Left blank deliberately. `resolveRejected` is the OLDER route into
+      // `discover.rejectedProjectIds` and this block already writes the ids
+      // directly below, so filling this changes nothing any test can tell
+      // apart — and a line nothing can distinguish is a line that rots.
+      rejectedName: undefined,
+    };
+    const rejectedIds = polarity.rejected.map((p) => p.projectId).filter(Boolean);
+    if (rejectedIds.length) {
+      state = {
+        ...state,
+        discover: {
+          ...state.discover,
+          rejectedProjectIds: [
+            ...new Set([...state.discover.rejectedProjectIds, ...rejectedIds]),
+          ],
+        },
+      };
+    }
+  };
+  partitionNamedPolarity();
   if (
     !freshSearchBoard &&
     !(ex.compareProjectIds && ex.compareProjectIds.length >= 2) &&
@@ -1354,6 +1507,9 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
           ...ex,
           namedProjects: [prevalidatedCatalogHit],
         };
+        // The cold-name door near the goal decide keeps its own copy of this
+        // hit; `!ex.rejected` on `coldNameEligible` is what closes that one.
+        partitionNamedPolarity();
       }
     }
     midCatalogMs = deps.clock.nowMs() - catalogT0;
@@ -1423,6 +1579,13 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       ex = { ...ex, constraints };
     }
   }
+
+  // What the buyer just did, for the inbound row. `isOptOutAsk` is asked
+  // directly rather than read off `ex.speechAct`, because it is the same
+  // question Desk's DPDP posture counts and it must be the same answer: a
+  // buyer who asks to be removed in her own words is an opt-out whether or not
+  // the speech-act layer had a chip for her sentence.
+  turnSignal.inboundIntent = isOptOutAsk(input.text) ? 'opt_out' : ex.speechAct;
 
   let locationValidated = false;
   {
@@ -1502,7 +1665,20 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
                 location: keepDeclaredLabel ? 'declared' : served.authority,
               },
             };
-          } else if (!looksLikePlaceFramedAsk(input.text)) {
+          } else if (
+            !looksLikePlaceFramedAsk(input.text) ||
+            // Place-FRAMED is not the same as a place. "3 BHK in Samajh gaya"
+            // frames beautifully and names nothing, and this branch read the
+            // framing as proof, then answered "I don't have apartments in
+            // *Samajh gaya* — I have apartments in Bengaluru, Hassan, and
+            // Kodagu": a town invented out of the buyer's own sentence, and
+            // scored as a catalog miss. Ask the registry the prior question —
+            // the same authority the phantom drop and the widen path already
+            // consult — and let a phantom take the drop path beside this one.
+            !deskKnowsAsPlace(
+              await deps.data.resolveGeo(locationCandidate.trim()).catch(() => null),
+            )
+          ) {
             // Unresolved + not place-framed ("Buy, 70 lakh") — drop locality,
             // continue with the rest of the brief. Outside-served is for
             // explicit in/near asks, not a denylist of transaction verbs.
@@ -1717,11 +1893,84 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       }
     }
     }
+
+    // ── The one door: is there a place here at all? ──────────────────────────
+    // Everything above this line sits inside `if (deps.failureSearch)`, and
+    // prod runs with that flag unset — wrangler.toml says so in as many words:
+    // "FAILURE_TOOLS/ROUTING/SEARCH/ANSWER … stay unset (= off)". So on the one
+    // build with a paying tenant, none of the validation above runs at all, and
+    // an unchecked label went straight into constraints and out to the buyer.
+    //
+    // Both of these are verbatim from dev's ledger, on the same sentence:
+    //   "got it — 3 BHK, Samajh gaya."
+    //   "I don't have a 2 BHK in *Samajh gaya*, ₹50 L – ₹70 L."
+    // The second was scored as a catalog miss. It was not one: the search had
+    // been filtered by a locality that is not a place. A census of dev's
+    // turn_ledger found 30 distinct localities, 21 of them sentence residue,
+    // reaching buyers through THREE different composers — which is what tells
+    // you the guard does not belong on a composer.
+    //
+    // This is the single place a NEW locality becomes a durable constraint, it
+    // runs on every build, and `deskKnowsAsPlace` is the same authority the
+    // widen path and fetchRecommend's phantom drop already ask. It is a
+    // question, not a deny-list: no lexical rule separates "Sarjapur Road" from
+    // "brocure plz", which is why the deny-lists already here reject 0 of the 21.
+    //
+    // Serviceability is a different question and keeps its answer — Pune
+    // resolves at city scale, is a place, and "I don't have homes in *Pune*" is
+    // still said.
+    const introducedLocality =
+      ex.constraints.location ??
+      (state.constraints.location !== durableConstraintsBeforeTurn.location
+        ? state.constraints.location
+        : undefined);
+    if (introducedLocality?.trim()) {
+      const introducedGeo = await deps.data
+        .resolveGeo(introducedLocality.trim())
+        .catch(() => null);
+      if (!deskKnowsAsPlace(introducedGeo)) {
+        locationValidated = false;
+        if (ex.constraints.location) {
+          const { location: _notAPlace, ...constraintsSansPhantom } = ex.constraints;
+          ex = { ...ex, constraints: constraintsSansPhantom };
+        }
+        // Put back whatever area the buyer really did give on an earlier turn,
+        // and let the rest of the brief answer on its own.
+        state = {
+          ...state,
+          constraints: {
+            ...state.constraints,
+            ...(durableConstraintsBeforeTurn.location
+              ? { location: durableConstraintsBeforeTurn.location }
+              : {}),
+          },
+        };
+        if (!durableConstraintsBeforeTurn.location) delete state.constraints.location;
+      }
+    }
     midLocationMs = deps.clock.nowMs() - locationT0;
   }
 
   const prevConstraints = state.constraints;
   const prevLoc = state.constraints.location;
+  // THE OTHER HALF OF THE LEDGER. Read the board the buyer is answering BEFORE
+  // this turn searches again and replaces it.
+  //
+  // `state.feedForward` cannot do this job even though it looks like it was
+  // built for it: it is filled only inside the bootstrap branch above (turn 0,
+  // or a cold start), so by turn 2 it still describes turn 0. The live session
+  // is the authority here, as it is everywhere else in this file.
+  //
+  // `state.turnCount` has not been incremented yet -- that happens after the
+  // reply is composed -- so it IS the index of the last completed turn, which
+  // is precisely the row Desk must stamp.
+  const priorTurnIndexForStamp = state.turnCount;
+  const priorOfferedIds = currentShortlist(state).map((o) => o.projectId);
+  // `promptAtTurnStart`, NOT `state.rti.pendingPrompt`: several lanes between
+  // the load and here clear the prompt on their way through, so reading it at
+  // this point cannot tell "there was no question" from "the question was just
+  // answered" -- and the second one is exactly the case worth stamping.
+  const priorPendingPrompt = Boolean(promptAtTurnStart);
   state = applyExtracted(state, ex, clearedKeys, {
     locationValidated,
     authority: {
@@ -2640,6 +2889,9 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     !input.action_id?.startsWith('wa.pick.');
   const coldNameEligible =
     state.phase === 'discover' &&
+    // A sentence read as a refusal names the project it is pushing away.
+    // Re-resolving that name here opens it.
+    !ex.rejected &&
     !state.focus &&
     currentShortlist(state).length === 0 &&
     (ex.namedProjects?.length ?? 0) < 2 &&
@@ -3747,8 +3999,26 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // the buyer saw a reply. Telemetry / catalog watching stay deferred (~1s).
   const threadIdForCrm = nd || input.threadId;
   await (async () => {
-    await deps.crm.appendMessage(threadIdForCrm, 'inbound', input.text).catch(() => {});
-    await deps.crm.appendMessage(threadIdForCrm, 'outbound', reply, { replyKey: goal.kind }).catch(() => {});
+    // Both rows carry what the layer decided, not just what was said. The
+    // columns have always been there; the write never was, so Desk's opt-out
+    // count, the handoff brief's tool history and the SPA's thread context
+    // have all been reading NULL. `stop` is spelled `opt_out` on the way out
+    // because that is the word Desk's DPDP posture counts — erasure is the
+    // other value it counts, and it is deliberately not produced here: an
+    // erasure writes no message rows at all.
+    await deps.crm
+      .appendMessage(threadIdForCrm, 'inbound', input.text, {
+        ...(ex.askTopic ? { topic: ex.askTopic } : {}),
+      })
+      .catch(() => {});
+    await deps.crm
+      .appendMessage(threadIdForCrm, 'outbound', reply, {
+        replyKey: goal.kind,
+        // TurnGoal is a union; only the answering variants carry a topic.
+        ...('topic' in goal && goal.topic ? { topic: goal.topic } : {}),
+        toolsInvoked: toolRunRecords(evidence),
+      })
+      .catch(() => {});
     await syncFacts(deps, nd, ex, goal, state, evidence, input.text).catch(() => {});
     await syncProfileObservations(deps, threadIdForCrm, input, goal, state).catch(() => {});
   })();
@@ -3765,6 +4035,17 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         grounding,
       })
       .catch(() => {});
+    // `applyExtracted` has run, so `state.discover.rejectedProjectIds` now
+    // carries whatever the engine bound this turn; the difference against the
+    // snapshot taken before it is exactly what she rejected just now.
+    const stampPrior: StampPrior | undefined = classifyPriorResponse({
+      priorTurnIndex: priorTurnIndexForStamp,
+      priorOfferedIds,
+      priorPendingPrompt,
+      rejectedBefore: rejectedAtTurnStart,
+      rejectedAfter: state.discover.rejectedProjectIds,
+      ex,
+    });
     await syncTelemetry(deps, nd, input, goal, evidence, state, reply, {
       ex,
       extractProvenance,
@@ -3772,6 +4053,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       grounding,
       routing,
       failures,
+      ...(stampPrior ? { stampPrior } : {}),
       // The same values `debug.timings` reports, but written where they
       // survive the response. Without this the compose lane has no history
       // and "retire the paid composer?" stays an opinion.
@@ -4856,7 +5138,17 @@ async function fetchRecommend(
       },
     });
     if (offer?.previewMatches.length) {
-      const exactFitName = currentShortlist(s)[0]?.name ?? s.focus?.projectName;
+      // The board's exact fit is not worth naming back to her when it is the
+      // project she just refused: dev answered "not interested in Brigade
+      // Avalon" with "I've only got *Brigade Avalon* in *Bengaluru Urban*".
+      // Without a name, compose says what it does have nearby instead.
+      const exactFit =
+        currentShortlist(s)[0] ??
+        (s.focus ? { projectId: s.focus.projectId, name: s.focus.projectName } : undefined);
+      const exactFitName =
+        exactFit && !s.discover.rejectedProjectIds.includes(exactFit.projectId)
+          ? exactFit.name
+          : undefined;
       return {
         goal: { kind: 'recommend' },
         evidence: {
@@ -5001,6 +5293,22 @@ async function fetchRecommend(
   // AB-3 — never interpolate a polluted/noise locality into the honest miss ("No
   // exact match for the"). The constraint gate rejects most upstream; this is the
   // final guard before the raw string reaches the buyer.
+  //
+  // It used to ask `locationLooksPolluted` alone, and that is a DENY-LIST: it
+  // rejects what has been caught before and admits everything else. Measured
+  // against the 30 distinct localities NayaDesk dev actually stored between 30
+  // Aug and 15 Sep 2026, it admitted all 21 of the non-places — so the guard
+  // that exists to stop exactly this shipped "I don't have a 2 BHK in *Samajh
+  // gaya*, ₹50 L – ₹70 L" and "I don't have a 2 BHK in *range was 58*" to
+  // buyers, each reading as an honest catalog miss and each scored as one.
+  //
+  // `deskKnowsAsPlace` is the authority this file already consults twice before
+  // naming a place (the phantom drop in fetchRecommend, and the widen path). It
+  // asks the prior question — is there a place here at all — and the Desk area
+  // registry answers it. Serviceability is separate and unchanged: "I don't
+  // have homes in *Pune*" is honest and still said. When Desk cannot be reached
+  // the name is simply left out, and the line falls back to "those filters",
+  // which is honest in every case.
   const reasonLoc = locationLooksPolluted(s.constraints.location) ? undefined : s.constraints.location;
   const reasoning = `No exact match for ${[reasonLoc, s.constraints.propertyType].filter(Boolean).join(' ') || 'those filters'}`;
   const resolved = discover.resolveRecommend(
@@ -6864,6 +7172,8 @@ async function syncTelemetry(
     routing?: TurnRoutingResult;
     failures?: readonly Failure[];
     compose?: ComposeTelemetry;
+    /** How the buyer answered the PREVIOUS turn — stamped onto that row. */
+    stampPrior?: StampPrior;
   },
 ): Promise<void> {
   if (!nd) return;
@@ -6897,6 +7207,10 @@ async function syncTelemetry(
       tools: evidence.tools,
       offeredProjectIds: ledger?.offered_project_ids ?? evidence.matches?.map((m) => m.projectId),
       phase: state.phase,
+      // Rides the append it belongs to: Desk applies stamp + append in ONE
+      // db.batch, so the prior turn's outcome and this turn's row land
+      // together or not at all.
+      ...(opts?.stampPrior ? { stampPrior: opts.stampPrior } : {}),
       ...(ledger
         ? {
             snapshotIn: ledger.snapshot_in,

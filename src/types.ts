@@ -163,6 +163,13 @@ export interface TurnResult {
    */
   nd_thread_id?: string;
   turn_index: number;
+  /**
+   * A human took this buyer over on Desk, so the bot said nothing. `reply_text`
+   * is empty BECAUSE of this, not because composing failed -- every delivery
+   * path must check this before treating an empty reply as a bug, and must not
+   * send anything when it is true.
+   */
+  bot_paused?: true;
   whatsapp_actions?: Array<{ id: string; label: string; patch: Record<string, string | undefined>; user_line: string; expected_matches: number }>;
   /** Native Cloud API interactive (list XOR buttons). Saarathi / webhook send this. */
   whatsapp_interactive?:
