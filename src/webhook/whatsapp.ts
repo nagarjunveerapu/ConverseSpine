@@ -184,7 +184,10 @@ export async function handleWhatsAppWebhook(
             channel: 'whatsapp',
           });
 
-          if (creds.access_token) {
+          // A human took this buyer over: the turn deliberately produced no
+          // reply, and delivering an empty one would put the bot back on top
+          // of the agent this hold exists to protect.
+          if (creds.access_token && !result.bot_paused) {
             const report = await deliverWhatsAppTurn(phoneNumberId, buyerPhone, result, creds.access_token);
             await fileTurnReceipts(rt.crm, builderId, result.nd_thread_id, report);
           }
