@@ -13,6 +13,12 @@ export interface ChatRequest {
   action_id?: string;
   /** W6 — ingress door; webhook/debouncer send 'whatsapp', bare /chat defaults to 'api'. */
   channel?: 'whatsapp' | 'advisor_web' | 'api';
+  /**
+   * The project the inbound LINE sells, when the message arrived on a project
+   * line rather than the front desk (Desk 0244). A pursuit this turn opens is
+   * born on that project. The front desk sends none, and the ladder decides.
+   */
+  line_project_id?: string;
 }
 
 export interface ChatResponse extends TurnResult {
@@ -94,6 +100,10 @@ export async function handleChat(
     builder_id: body.builder_id,
     buyer_phone: body.buyer_phone,
     ...(body.channel ? { channel: body.channel } : {}),
+    // A message on a project line is about that project: the pursuit is born
+    // there, and every later turn on the line names it again. The front desk
+    // names none and Desk's ladder decides.
+    ...(body.line_project_id ? { project_id: body.line_project_id } : {}),
   });
   const threadId = body.thread_id ?? upsert.thread_id;
 
