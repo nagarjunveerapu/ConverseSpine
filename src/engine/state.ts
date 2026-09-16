@@ -241,11 +241,32 @@ function resolveRejected(ex: Extracted, offered: readonly OfferedProject[]): str
   return null;
 }
 
+/**
+ * A project the buyer has pushed away is never picked FOR her.
+ *
+ * The branches below split cleanly in two. When she says which one -- by
+ * ordinal, by name, by pick -- we do as told, including when she changes her
+ * mind about something she refused earlier; that is her call to make. The rest
+ * are inferences we draw on her behalf, and an inference must not land on a
+ * project she has already refused.
+ *
+ * Dev, verbatim: the board held exactly one apartment, she answered "not
+ * interested in Brigade Avalon", and the turn came back "*Brigade Avalon* --
+ * 2 BHK Test, from Rs 95 L. Want pricing details?". Clearing the name off the
+ * turn was not enough, because `offered.length === 1` will hand back the only
+ * project on the board to any implicit signal at all.
+ */
+function refused(s: ThreadState | undefined, projectId: string | undefined): boolean {
+  if (!s || !projectId) return false;
+  return s.discover.rejectedProjectIds.includes(projectId);
+}
+
 export function resolvePick(
   ex: Extracted,
   offered: readonly OfferedProject[],
   s?: ThreadState,
 ): OfferedProject | null {
+  // --- she said which one -------------------------------------------------
   if (typeof ex.pickOrdinal === 'number' && ex.pickOrdinal >= 1 && ex.pickOrdinal <= offered.length) {
     return offered[ex.pickOrdinal - 1] ?? null;
   }
@@ -259,17 +280,25 @@ export function resolvePick(
     const n = ex.pickName.toLowerCase();
     return offered.find((o) => o.name.toLowerCase().includes(n)) ?? null;
   }
-  if ((ex.implicitProjectPick || ex.transition === 'want_details') && offered.length === 1) {
-    return offered[0] ?? null;
+  // --- we inferred it: never onto a project she refused --------------------
+  const sole = offered.length === 1 ? (offered[0] ?? null) : null;
+  if ((ex.implicitProjectPick || ex.transition === 'want_details') && sole) {
+    return refused(s, sole.projectId) ? null : sole;
   }
   if (ex.implicitProjectPick && s?.focus) {
-    return { projectId: s.focus.projectId, name: s.focus.projectName };
+    return refused(s, s.focus.projectId)
+      ? null
+      : { projectId: s.focus.projectId, name: s.focus.projectName };
   }
   if (ex.transition === 'want_details' && s?.focus) {
-    return { projectId: s.focus.projectId, name: s.focus.projectName };
+    return refused(s, s.focus.projectId)
+      ? null
+      : { projectId: s.focus.projectId, name: s.focus.projectName };
   }
-  if (ex.affirm && offered.length === 1) {
-    if (s?.rti?.pendingPrompt?.kind === 'offer_project') return offered[0] ?? null;
+  if (ex.affirm && sole) {
+    if (s?.rti?.pendingPrompt?.kind === 'offer_project') {
+      return refused(s, sole.projectId) ? null : sole;
+    }
     return null;
   }
   return null;

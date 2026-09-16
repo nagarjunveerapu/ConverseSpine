@@ -36,6 +36,12 @@ export interface DeskChatResponse {
   thread_id: string;
   composer: string;
   turn_index: number;
+  /**
+   * A human has taken this buyer over, so `reply` is empty on purpose. The
+   * playground and any other Desk caller must show the hold rather than an
+   * unexplained blank -- and must not read the silence as a failed turn.
+   */
+  bot_paused?: true;
   debug: {
     classifier: { intent: string };
     brain: {
@@ -83,17 +89,43 @@ export async function handleChat(
   body: ChatRequest,
   ctx?: ExecutionContext,
 ): Promise<ChatResponse> {
-  let threadId = body.thread_id;
-  if (!threadId) {
-    const upsert = await rt.crm.upsertLead({
-      builder_id: body.builder_id,
-      buyer_phone: body.buyer_phone,
-      ...(body.channel ? { channel: body.channel } : {}),
-      // A message on a project line is about that project: the pursuit is
-      // born there. The front desk names none and Desk's ladder decides.
-      ...(body.line_project_id ? { project_id: body.line_project_id } : {}),
-    });
-    threadId = upsert.thread_id;
+  // Upsert on EVERY turn, not only when the caller brought no thread id.
+  //
+  // It is idempotent -- Desk keys the thread on (builder, buyer, channel) and
+  // hands back the same id -- and it is the only question this turn asks Desk
+  // before deciding to speak. That makes it the one place the HUMAN HOLD can
+  // be read fresh. A caller that named a thread keeps its own id; all we take
+  // from the call is the hold.
+  const upsert = await rt.crm.upsertLead({
+    builder_id: body.builder_id,
+    buyer_phone: body.buyer_phone,
+    ...(body.channel ? { channel: body.channel } : {}),
+    // A message on a project line is about that project: the pursuit is born
+    // there, and every later turn on the line names it again. The front desk
+    // names none and Desk's ladder decides.
+    ...(body.line_project_id ? { project_id: body.line_project_id } : {}),
+  });
+  const threadId = body.thread_id ?? upsert.thread_id;
+
+  // A human on Desk has taken this buyer over. Record what she said -- the
+  // person who took over needs to see it -- and say nothing.
+  //
+  // Desk has stamped this hold, shown "bot paused" on the lead and sent the
+  // number on every turn since the column existed. Nothing on this side read
+  // it, and Meta's webhook points here, so the bot has been answering over
+  // the top of every agent who ever pressed "take over".
+  if ((upsert.bot_paused_at ?? 0) > 0) {
+    await rt.crm
+      .appendMessage(threadId, { direction: 'inbound', content: body.text })
+      .catch(() => {});
+    return {
+      reply_text: '',
+      composer: 'human_hold',
+      turn_index: 0,
+      thread_id: threadId,
+      nd_thread_id: threadId,
+      bot_paused: true,
+    };
   }
 
   const input: TurnInput = {
@@ -119,6 +151,7 @@ export function toDeskChatResponse(result: ChatResponse): DeskChatResponse {
     thread_id: result.thread_id,
     composer: result.composer,
     turn_index: result.turn_index,
+    ...(result.bot_paused ? { bot_paused: true as const } : {}),
     debug: {
       classifier: { intent: result.composer },
       brain: {

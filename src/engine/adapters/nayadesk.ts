@@ -1353,8 +1353,15 @@ export function nayadeskCrm(
       return resp.thread_id ? { threadId: resp.thread_id } : null;
     },
     async appendMessage(threadId, direction, content, meta) {
-      await crm.appendMessage(threadId, { direction, content });
-      void meta;
+      // `void meta;` stood here, so not even `replyKey` ever left Spine.
+      await crm.appendMessage(threadId, {
+        direction,
+        content,
+        ...(meta?.replyKey ? { reply_key: meta.replyKey } : {}),
+        ...(meta?.intent ? { classifier_intent: meta.intent } : {}),
+        ...(meta?.topic ? { classifier_topic: meta.topic } : {}),
+        ...(meta?.toolsInvoked?.length ? { tools_invoked: [...meta.toolsInvoked] } : {}),
+      });
     },
     async updateFacts(threadId, facts) {
       const patch: Record<string, string> = {};
@@ -1423,6 +1430,10 @@ export function nayadeskCrm(
         offered_project_ids: entry.offeredProjectIds ?? [],
         disclosed_facts: entry.disclosedFacts ?? [],
         verify: entry.verify ?? { grounding: 'pass' },
+        // Omitted, never sent empty: Desk's stamp is idempotent but it still
+        // writes, and a stamp for "she answered nothing" would retire a
+        // question that is still open.
+        ...(entry.stampPrior ? { stamp_prior: entry.stampPrior } : {}),
         // Desk's schema field is `success`; we populate it from the OBSERVED
         // produced_evidence rather than a hardcoded true. Until Phase 0b gives
         // the ports discriminated results, a legitimate absence and a

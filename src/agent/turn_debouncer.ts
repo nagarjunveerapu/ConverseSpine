@@ -160,7 +160,10 @@ export class TurnDebouncer implements DurableObject {
       ...(line_project_id ? { line_project_id } : {}),
     });
 
-    if (token) {
+    // A human took this buyer over, so the turn produced no reply on purpose.
+    // The drain below still runs: her messages were handled, they are on the
+    // transcript, and leaving them queued would replay them at hand-back.
+    if (token && !result.bot_paused) {
       const report = await deliverWhatsAppTurn(phone_number_id, buyer_phone, result, token);
       // Before the drain below, deliberately. A receipt is part of answering
       // the buyer, not bookkeeping done afterwards — and if the alarm retries,

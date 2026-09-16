@@ -103,6 +103,22 @@ export interface NdLead {
   source_detail?: string;
   /** 0 until the number is proven. Never treat 0 as "verified long ago". */
   contact_verified_at?: number;
+  /**
+   * THE HUMAN HOLD. A person on Desk pressed "take over", and until they hand
+   * it back the bot must not answer this buyer.
+   *
+   * That is the fifth field to cross this wire into a type that did not
+   * declare it -- and the costliest, because the other four only made the bot
+   * forgetful. Desk has stamped `bot_paused_at`, shown "bot paused" on the
+   * lead, and sent the number on every single turn; nothing on this side ever
+   * read it, so the agent typed their reply while the bot went on answering
+   * over the top of them. Meta's webhook points HERE, so Spine is the only
+   * thing that can stand the bot down.
+   *
+   * Desk sends `max(thread hold, pursuit hold)`: the channel silenced, or a
+   * human who took over THIS pursuit. 0 / absent means nobody has taken over.
+   */
+  bot_paused_at?: number;
   /** Optional — older Desk omits these; absent means unknown, not false. */
   has_hold?: boolean | number;
   has_booking?: boolean | number;
@@ -478,6 +494,16 @@ export class NayaDeskClient {
      */
     lead_id?: string;
     created: boolean;
+    /**
+     * A human on Desk has taken this buyer over -- `max(thread hold, pursuit
+     * hold)`, or the hold of ANY pursuit when this turn named no project and
+     * the buyer is chasing several. 0 / absent means nobody has taken over.
+     *
+     * This door is the only question the turn asks Desk on EVERY turn, which
+     * is why the hold is answered here. `/thread-context` carries it too, but
+     * that is read at session start and a takeover happens mid-conversation.
+     */
+    bot_paused_at?: number;
   }> {
     return this.call('PUT', '/api/v1/leads', req);
   }
@@ -963,7 +989,19 @@ export class NayaDeskClient {
 
   appendMessage(
     thread_id: string,
-    msg: { direction: 'inbound' | 'outbound'; content: string },
+    msg: {
+      direction: 'inbound' | 'outbound';
+      content: string;
+      /**
+       * The turn half of the body. Desk's transcript door accepts these and
+       * writes them onto the message row; omitted fields stay NULL, which is
+       * the honest record for a turn nothing classified.
+       */
+      reply_key?: string;
+      classifier_intent?: string;
+      classifier_topic?: string;
+      tools_invoked?: unknown[];
+    },
   ): Promise<{ ok: true; message_id: string }> {
     return this.call<{ message_id: string }>(
       'POST',
@@ -1035,6 +1073,19 @@ export class NayaDeskClient {
     offered_project_ids?: string[];
     disclosed_facts?: unknown[];
     verify?: Record<string, unknown>;
+    /**
+     * THE OTHER HALF OF THE LEDGER. Desk has accepted this field since 0092 --
+     * it stamps `buyer_response_intent` + `buyer_rejected_ids_json` onto the
+     * PRIOR turn's row in the same batch -- and nothing on this side has ever
+     * sent it. That is why `/context` answers `rejected_project_ids: []` on
+     * every bootstrap: the bot re-offers projects the buyer already refused,
+     * because the only record of the refusal lived in a KV session that rolled.
+     */
+    stamp_prior?: {
+      turn_index: number;
+      response: 'accepted' | 'rejected' | 'ignored' | 'refined';
+      rejected_ids: string[];
+    };
   }): Promise<{ ok: boolean }> {
     return this.call('POST', '/api/v1/turn-ledger/append', req);
   }

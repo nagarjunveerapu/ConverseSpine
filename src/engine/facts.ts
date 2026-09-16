@@ -14,6 +14,7 @@ import { affordabilityFromEmi, INCOME_SERVICING_RATIO } from './emi.js';
 import { looksLikeAQuestion, resolveFaqQuestionKeys } from './faq-keys.js';
 import { discourseOffered, currentShortlist, discussedList } from './entity-store.js';
 import { isPlausiblePlaceLabel } from './placeability.js';
+import { isOptOutAsk } from './optout-confirm.js';
 import {
   hasCostStanceAct,
   hasPriceObjectionCue,
@@ -49,8 +50,10 @@ const COMPARE_ADVICE_RE =
 // search: the buyer typed the most serious word they had and got a shortlist.
 // Standalone only, for the same reason `stop` is — "delete the 2bhk from my
 // shortlist" is an ordinary sentence about a list, not about a life.
-const STOP_RE =
-  /^(?:stop|unsubscribe|delete|erase)[.!]?\s*$|\b(?:unsubscribe|opt\s*out|delete my (?:data|details|number|info(?:rmation)?)|forget me|remove (?:me|my (?:number|details|data))|(?:stop|don'?t|do not)\s+(?:messag\w*|text\w*|calls?|calling|contact\w*|whatsapp\w*|sms)(?:\s+me)?)\b/i;
+// One vocabulary, in ./optout-confirm.ts. This regex, `chip.stop` in
+// speech-act/resolve.ts and the two standalone helpers were four spellings of
+// the same question, and they had already drifted apart from each other.
+const STOP_RE = { test: (text: string) => isOptOutAsk(text) };
 const SMALLTALK_RE = /\b(?:how are you|how'?s it going|how do you do|what'?s up)\b/i;
 const POST_VISIT_ACK_RE =
   /^(?:ok(?:ay)?|thanks?(?: you)?|thank you|cool|great|got it|noted|perfect|sounds good|cheers)\.?!?\s*$/i;
@@ -1509,6 +1512,15 @@ const LOCALITY_STOP = new Set([
   // Anaphora / budget glue — "apartments in same budget in Sarjapur" must not
   // become locality=*same* (outside-served: "I don't have apartments in *same*").
   'same', 'similar',
+  // Adverbial idioms that open with "in". The `in …` branch is evidence-bearing
+  // and stays that way — but "guarantee me in WRITING that possession will be on
+  // time" is not a buyer naming an area, and it reached dev's ledger as the
+  // locality `writing`. These are English function phrases, a closed set, not a
+  // list of places: a real multi-word locality always carries a word that is not
+  // on this list, so "Hand Post" and the like are untouched.
+  'writing', 'person', 'advance', 'principle', 'future', 'general', 'cash',
+  'full', 'short', 'return', 'touch', 'fact', 'addition', 'comparison',
+  'particular', 'total', 'exchange', 'charge',
   // Function words and fillers. An utterance made only of these named nowhere:
   // "actually can you change something" reduces to "can you something".
   'i', 'we', 'you', 'can', 'could', 'would', 'want', 'need', 'get', 'give', 'find',
@@ -1634,6 +1646,13 @@ export function extractLocation(text: string, ctx?: ExtractLocationContext): str
 
   const acceptLocality = (raw: string | undefined): string | undefined => {
     if (!raw) return undefined;
+    // A clause about the BUYER is never a clause about a place. `trimLocalityStops`
+    // strips the pronoun and the copula, so "I am a broker" arrived as the locality
+    // `broker`, "im Priya" as `im Priya`, and "in your CRM" as `your CRM` — the
+    // stripping is what hid the grammar. Test the raw fragment, before it is
+    // stripped. Grammar of a label, like the `^(to|for|as)` rule below, not a list
+    // of non-places.
+    if (/^\s*(?:i|i'?m|im|we|we'?re|my|our|you|you'?re|your)\b/i.test(raw)) return undefined;
     const cleaned = trimLocalityStops(cleanLocalityFragment(raw));
     if (!cleaned || GENERIC.test(cleaned)) return undefined;
     // AB-3 — a dialogue capture that is nothing but stopwords/noise is NOT a place.
