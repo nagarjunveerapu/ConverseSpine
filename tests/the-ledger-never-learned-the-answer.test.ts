@@ -247,6 +247,27 @@ describe('a refusal survives all the way to the stamp', () => {
     expect(last?.response).toBe('rejected');
   });
 
+  it('the id she refused reaches the stamp, not an empty list', async () => {
+    // Live dev stamped `rejected` with `rejected_ids: []` on every run. The
+    // classifier reports the DIFFERENCE in `discover.rejectedProjectIds`
+    // across the turn, and `rejectedBefore` was being read a thousand lines
+    // after the polarity partition had already written the id into that list —
+    // so the id was in "before" and the difference was empty. Devanahalli
+    // holds exactly one apartment in the fake: the board is the refused
+    // project, which is the shape dev was in.
+    const { deps, stamps } = depsWithLedgerSpy();
+    const t = (text: string) =>
+      runEngineTurn(
+        { threadId: 'stamp-rejected-ids', builderId: 'lokations', text, buyerPhone: '+919999991177', channel: 'whatsapp' },
+        { ...deps, failureSearch: true },
+      );
+    await t('show me 2 BHK apartments in Devanahalli under 1 crore');
+    await t('not interested in Brigade Cornerstone');
+    const last = stamps.filter(Boolean).at(-1);
+    expect(last?.response).toBe('rejected');
+    expect(last?.rejected_ids).toEqual(['cornerstone']);
+  });
+
   it('and an ordinary question is not', async () => {
     const { deps, stamps } = depsWithLedgerSpy();
     const t = (text: string) =>

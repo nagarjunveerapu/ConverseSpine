@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { runEngineTurn } from '../src/engine/turn.js';
 import { partitionNamedByPolarity } from '../src/engine/project_switch.js';
+import { initState, resolvePick } from '../src/engine/state.js';
 import { fakeDeps } from './fakes.js';
+import type { ThreadState } from '../src/engine/types.js';
 
 /**
  * "No, forget Avalon completely. I only want Brigade Meadows."
@@ -213,5 +215,211 @@ describe('the project she rejected does not win the bind', () => {
     const r = await turn('tell me about Brigade Sanctuary');
     expect(r.state.focus?.projectId).toBe('sanctuary');
     expect(r.state.discover.rejectedProjectIds).toEqual([]);
+  });
+});
+
+/**
+ * Clearing the name off the turn was not enough.
+ *
+ * On dev the board held exactly one apartment. She said "not interested in
+ * Brigade Avalon" and the reply was "*Brigade Avalon* — 2 BHK Test, from ₹95 L.
+ * Want pricing details?" — because `offered.length === 1` hands the only project
+ * on the board back to ANY implicit signal, with nothing consulted about whether
+ * she had just refused it.
+ */
+describe('a refused project is never picked for her', () => {
+  const AVALON = { projectId: 'avalon', name: 'Brigade Avalon' };
+  const board = [AVALON];
+  const withRefusal = (ids: string[]): ThreadState => {
+    const s = initState('pick-guard', 'brigade-group');
+    return { ...s, discover: { ...s.discover, rejectedProjectIds: ids } };
+  };
+
+  it('the only project on the board is not handed back after a refusal', () => {
+    expect(resolvePick({ constraints: {}, implicitProjectPick: true }, board, withRefusal(['avalon']))).toBeNull();
+  });
+
+  it('control — with no refusal on file, the sole board project is still picked', () => {
+    expect(resolvePick({ constraints: {}, implicitProjectPick: true }, board, withRefusal([]))?.projectId).toBe('avalon');
+  });
+
+  it('"tell me more" does not reopen a refused project either', () => {
+    expect(resolvePick({ constraints: {}, transition: 'want_details' }, board, withRefusal(['avalon']))).toBeNull();
+  });
+
+  it('nor does a bare yes to an offer prompt', () => {
+    const s = withRefusal(['avalon']);
+    const armed = { ...s, rti: { pendingPrompt: { kind: 'offer_project' as const } } } as ThreadState;
+    expect(resolvePick({ constraints: {}, affirm: true }, board, armed)).toBeNull();
+  });
+
+  it('but naming it again DOES reopen it — she is allowed to change her mind', () => {
+    const picked = resolvePick(
+      { constraints: {}, namedProjects: [AVALON] },
+      board,
+      withRefusal(['avalon']),
+    );
+    expect(picked?.projectId).toBe('avalon');
+  });
+
+  it('and so does picking it by position', () => {
+    const picked = resolvePick({ constraints: {}, pickOrdinal: 1 }, board, withRefusal(['avalon']));
+    expect(picked?.projectId).toBe('avalon');
+  });
+});
+
+/**
+ * And clearing it off the turn was STILL not enough.
+ *
+ * `[POL2] {"standing":false,"wanted":[],"rej":["brigade-avalon"]}` — the
+ * partition ran on dev and did exactly what it was asked. Twelve hundred lines
+ * later the same turn reported
+ * `[GOALPROBE] {"goal":{"kind":"answer","projectId":"brigade-avalon"},
+ * "named":["brigade-avalon"],"focus":"brigade-avalon"}`.
+ *
+ * Between the two sits the cold catalog resolve, which fires precisely WHEN
+ * `ex.namedProjects` is empty and matches catalog names against the raw
+ * sentence. Emptying the field is the condition that wakes it, and the sentence
+ * it re-reads still holds the name. The fix could not be a better partition; it
+ * had to be asking the same polarity question of the name the cold resolve
+ * hands back — and of the copy it keeps for the cold-name door near the goal.
+ */
+describe('the cold catalog resolve cannot hand a refused name back', () => {
+  // `failureSearch` is the flag dev runs with, and the cold catalog resolve
+  // sits behind it — with the plain fake the block never executes at all and
+  // the assertions below pass without testing anything.
+  const cold = (id: string) => {
+    const deps = { ...fakeDeps(), failureSearch: true };
+    return (text: string) =>
+      runEngineTurn(
+        { threadId: id, builderId: 'lokations', text, buyerPhone: '+919999991174', channel: 'whatsapp' },
+        deps,
+      );
+  };
+
+  it('a refusal that is the FIRST thing she says opens nothing', async () => {
+    // No prior turn, so no board and no focus: the only thing that can bind
+    // this name is the cold resolve reading the sentence itself.
+    const r = await cold('cold-refusal')('not interested in Brigade Sanctuary');
+    expect(r.state.focus?.projectId).not.toBe('sanctuary');
+    expect(r.reply).not.toMatch(/Brigade Sanctuary/);
+  });
+
+  it('and it is recorded, so later search will not offer it', async () => {
+    const r = await cold('cold-refusal-recorded')('not interested in Brigade Sanctuary');
+    expect(r.state.discover.rejectedProjectIds).toContain('sanctuary');
+  });
+
+  it('a refusal that is also a question opens nothing either', async () => {
+    // "what else" makes this a question, which is the shape the cold-name door
+    // near the goal decide waits for: no focus, an empty board, a catalog name
+    // in the text. It reads a hit of its OWN, so clearing `ex.namedProjects`
+    // above does not reach it.
+    const r = await cold('cold-refusal-question')(
+      'not interested in Brigade Sanctuary, what else do you have?',
+    );
+    expect(r.state.focus?.projectId).not.toBe('sanctuary');
+    expect(r.state.discover.rejectedProjectIds).toContain('sanctuary');
+  });
+
+  it('the control: the same cold name WITHOUT a refusal still opens it', async () => {
+    // Proves the cold resolve is intact — only the refusal is being declined.
+    const r = await cold('cold-control')('tell me about Brigade Sanctuary');
+    expect(r.state.focus?.projectId).toBe('sanctuary');
+  });
+});
+
+/**
+ * A negation with no verb behind it.
+ *
+ * "not Brigade Avalon, show me Brigade Eldorado" was answered on dev with a
+ * side-by-side of Avalon and Eldorado. `REJECTING_CLAUSE` requires a verb of
+ * preference — deliberately, because "is there no clubhouse at Sanctuary" must
+ * not bury Sanctuary — and this sentence has none. What it has is adjacency:
+ * the "not" sits directly on the name.
+ */
+describe('a negation directly on the name is a rejection', () => {
+  it('"not X, show me Y" wants Y and rejects X', () => {
+    const r = partitionNamedByPolarity('not Brigade Sanctuary, show me Brigade Orchards', BOTH);
+    expect(r.wanted.map((p) => p.projectId)).toEqual(['orchards']);
+    expect(r.rejected.map((p) => p.projectId)).toEqual(['sanctuary']);
+  });
+
+  it('a brand word may stand between the negation and the name', () => {
+    const r = partitionNamedByPolarity('no Brigade Sanctuary please, Brigade Orchards instead', BOTH);
+    expect(r.rejected.map((p) => p.projectId)).toEqual(['sanctuary']);
+  });
+
+  it('but a negation governing something ELSE in the clause is not a rejection', () => {
+    // The floor this rule must not break: "no" lands on the amenity, not on
+    // the project, and the buyer is asking a question about it.
+    const r = partitionNamedByPolarity(
+      'is there no clubhouse at Brigade Orchards, and what about Brigade Sanctuary?',
+      BOTH,
+    );
+    expect(r.rejected).toEqual([]);
+  });
+
+  it('and a bare mention with no negation at all is untouched', () => {
+    const r = partitionNamedByPolarity('Brigade Sanctuary and Brigade Orchards', BOTH);
+    expect(r.rejected).toEqual([]);
+    expect(r.wanted).toHaveLength(2);
+  });
+
+  it('the switch does not come back as a comparison', async () => {
+    const deps = { ...fakeDeps(), failureSearch: true };
+    const turn = (text: string) =>
+      runEngineTurn(
+        { threadId: 'bare-negation-switch', builderId: 'lokations', text, buyerPhone: '+919999991175', channel: 'whatsapp' },
+        deps,
+      );
+    await turn('show me homes');
+    const r = await turn('not Brigade Sanctuary, show me Brigade Orchards');
+    expect(r.state.discover.rejectedProjectIds).toContain('sanctuary');
+    expect(r.reply).not.toMatch(/Side-by-side|vs Brigade/i);
+  });
+});
+
+/**
+ * And the reply must not name it back to her.
+ *
+ * Dev, after the binds above were all closed:
+ *
+ *   > not interested in Brigade Avalon
+ *   "I've only got *Brigade Avalon* in *Bengaluru Urban* for apartments.
+ *    Nearby: Brigade Eldorado ...; Brigade Cornerstone ...; Brigade Orchards ..."
+ *
+ * The goal was right — `recommend`, with the alternatives — but the locality
+ * widen still led on `currentShortlist(s)[0]`, which is the board from the
+ * previous turn, which is the project she had just refused. Sarjapur holds
+ * exactly one apartment in the fake, which is the same shape.
+ */
+describe('a refused project is not the exact fit we lead with', () => {
+  const turn = (id: string) => {
+    const deps = { ...fakeDeps(), failureSearch: true };
+    return (text: string) =>
+      runEngineTurn(
+        { threadId: id, builderId: 'lokations', text, buyerPhone: '+919999991176', channel: 'whatsapp' },
+        deps,
+      );
+  };
+
+  it('the widen does not lead with the project she just turned down', async () => {
+    // Devanahalli holds exactly one apartment in the fake, which is the shape
+    // dev was in: the board's head IS the refused project.
+    const t = turn('widen-after-refusal');
+    const first = await t('show me 2 BHK apartments in Devanahalli under 1 crore');
+    expect(first.reply).toMatch(/only match I have in \*Devanahalli\*/);
+    const r = await t('not interested in Brigade Cornerstone');
+    expect(r.state.discover.rejectedProjectIds).toContain('cornerstone');
+    expect(r.reply).not.toMatch(/Brigade Cornerstone/);
+    // And it still answers: what it DOES have, where.
+    expect(r.reply).toMatch(/North Bangalore|Sarjapur/);
+  });
+
+  it('the control: with no refusal, the widen still names the one exact fit', async () => {
+    const t = turn('widen-control');
+    const r = await t('show me 2 BHK apartments in Devanahalli under 1 crore');
+    expect(r.reply).toMatch(/\*Brigade Cornerstone\* is the only match I have/);
   });
 });

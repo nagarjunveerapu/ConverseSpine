@@ -479,6 +479,12 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // pendingPrompt on their way through, so reading it at write time cannot tell
   // "there was no question" from "the question was just answered".
   const promptAtTurnStart = state.rti?.pendingPrompt;
+  // Same reason, same trap. The ledger stamps the DIFFERENCE in this list
+  // across the turn, and the polarity partition a thousand lines below records
+  // a refusal into it long before the old capture point ran — so every live
+  // rejection came back `rejected_ids: []`, the id having already been in
+  // "before" by the time "before" was read.
+  const rejectedAtTurnStart = state.discover.rejectedProjectIds;
   // L2 → conversation cache when focus is cold (survives KV lag / thin saves).
   state = await seedProjectCacheFromL2(deps, state);
   if (!deps.projectCardMemo) deps.projectCardMemo = new Map();
@@ -1238,44 +1244,79 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // she had just refused, and "no, Brigade Avalon is not for me" set the flag but
   // bound no id, because `resolveRejected` reads only `ex.rejectedName`. Both
   // observed live with Avalon the only project on the board.
-  if ((ex.namedProjects?.length ?? 0) >= 1) {
+  // Asked here of the name the extractor bound, and asked AGAIN after the cold
+  // catalog resolve further down — that resolve reads the same raw sentence and
+  // finds "Brigade Avalon" in "not interested in Brigade Avalon" exactly as
+  // readily as in "tell me about Brigade Avalon", so without a second pass it
+  // hands the refused name straight back and the bot pitches it.
+  // A project name reaches the turn in more than one field. Clearing
+  // `namedProjects` alone left dev pitching the refused project anyway: the
+  // extractor had ALSO written `pickName: "Brigade Avalon"`, and `resolvePick`
+  // reads that as an explicit choice.
+  const nameIsRefused = (
+    candidate: string | undefined,
+    rejected: ReadonlyArray<{ name: string }>,
+  ): boolean => {
+    if (!candidate) return false;
+    const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const c = norm(candidate);
+    if (!c) return false;
+    return rejected.some((p) => {
+      const n = norm(p.name);
+      return n === c || n.includes(c) || c.includes(n);
+    });
+  };
+  const partitionNamedPolarity = (): void => {
+    if (!(ex.namedProjects?.length)) return;
     const polarity = partitionNamedByPolarity(
       trimmedText,
-      ex.namedProjects!,
-      [...(ex.namedProjects ?? []), ...currentShortlist(state)],
+      ex.namedProjects,
+      [...ex.namedProjects, ...currentShortlist(state)],
     );
-    if (polarity.rejected.length) {
-      // Does a want survive the rejection? "forget Avalon, show me Meadows"
-      // leaves one standing and the turn is about Meadows. "not interested in
-      // Avalon" leaves nothing, and THAT turn is a rejection — it has to route
-      // to "something else?" rather than bind the name it just pushed away.
-      const standing = polarity.wanted.length > 0;
-      ex = {
-        ...ex,
-        namedProjects: polarity.wanted,
-        // She rejected a project, not the conversation -- but only while a
-        // standing ask is left in the same sentence.
-        rejected: standing ? false : true,
-        // Left blank deliberately. `resolveRejected` is the OLDER route into
-        // `discover.rejectedProjectIds` and this block already writes the ids
-        // directly below, so filling this changes nothing any test can tell
-        // apart — and a line nothing can distinguish is a line that rots.
-        rejectedName: undefined,
+    if (!polarity.rejected.length) return;
+    // Does a want survive the rejection? "forget Avalon, show me Meadows"
+    // leaves one standing and the turn is about Meadows. "not interested in
+    // Avalon" leaves nothing, and THAT turn is a rejection — it has to route
+    // to "something else?" rather than bind the name it just pushed away.
+    const standing = polarity.wanted.length > 0;
+    const pickRefused = nameIsRefused(ex.pickName, polarity.rejected);
+    ex = {
+      ...ex,
+      namedProjects: polarity.wanted,
+      // The same sentence cannot both push a name away and choose it.
+      ...(pickRefused ? { pickName: undefined, implicitProjectPick: false } : {}),
+      // Nothing left standing: she turned down what was in front of her and
+      // asked for nothing in its place. That is "show me something else".
+      // No fake reaches this — the live differential is on dev: WITHOUT this
+      // line "not interested in Brigade Avalon" arrived at the goal decide
+      // carrying no signal at all and answered "I couldn't make sense of
+      // that"; with it, `recommend` and the nearby corridors.
+      ...(!standing && (!ex.transition || ex.transition === 'none')
+        ? { transition: 'see_others' as const }
+        : {}),
+      // She rejected a project, not the conversation -- but only while a
+      // standing ask is left in the same sentence.
+      rejected: standing ? false : true,
+      // Left blank deliberately. `resolveRejected` is the OLDER route into
+      // `discover.rejectedProjectIds` and this block already writes the ids
+      // directly below, so filling this changes nothing any test can tell
+      // apart — and a line nothing can distinguish is a line that rots.
+      rejectedName: undefined,
+    };
+    const rejectedIds = polarity.rejected.map((p) => p.projectId).filter(Boolean);
+    if (rejectedIds.length) {
+      state = {
+        ...state,
+        discover: {
+          ...state.discover,
+          rejectedProjectIds: [
+            ...new Set([...state.discover.rejectedProjectIds, ...rejectedIds]),
+          ],
+        },
       };
-      const rejectedIds = polarity.rejected.map((p) => p.projectId).filter(Boolean);
-      if (rejectedIds.length) {
-        state = {
-          ...state,
-          discover: {
-            ...state.discover,
-            rejectedProjectIds: [
-              ...new Set([...state.discover.rejectedProjectIds, ...rejectedIds]),
-            ],
-          },
-        };
-      }
     }
-  }
+  };
+  partitionNamedPolarity();
   if (
     !freshSearchBoard &&
     !(ex.compareProjectIds && ex.compareProjectIds.length >= 2) &&
@@ -1466,6 +1507,9 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
           ...ex,
           namedProjects: [prevalidatedCatalogHit],
         };
+        // The cold-name door near the goal decide keeps its own copy of this
+        // hit; `!ex.rejected` on `coldNameEligible` is what closes that one.
+        partitionNamedPolarity();
       }
     }
     midCatalogMs = deps.clock.nowMs() - catalogT0;
@@ -1927,7 +1971,6 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // this point cannot tell "there was no question" from "the question was just
   // answered" -- and the second one is exactly the case worth stamping.
   const priorPendingPrompt = Boolean(promptAtTurnStart);
-  const rejectedBeforeTurn = state.discover.rejectedProjectIds;
   state = applyExtracted(state, ex, clearedKeys, {
     locationValidated,
     authority: {
@@ -2846,6 +2889,9 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
     !input.action_id?.startsWith('wa.pick.');
   const coldNameEligible =
     state.phase === 'discover' &&
+    // A sentence read as a refusal names the project it is pushing away.
+    // Re-resolving that name here opens it.
+    !ex.rejected &&
     !state.focus &&
     currentShortlist(state).length === 0 &&
     (ex.namedProjects?.length ?? 0) < 2 &&
@@ -3996,7 +4042,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       priorTurnIndex: priorTurnIndexForStamp,
       priorOfferedIds,
       priorPendingPrompt,
-      rejectedBefore: rejectedBeforeTurn,
+      rejectedBefore: rejectedAtTurnStart,
       rejectedAfter: state.discover.rejectedProjectIds,
       ex,
     });
@@ -5092,7 +5138,17 @@ async function fetchRecommend(
       },
     });
     if (offer?.previewMatches.length) {
-      const exactFitName = currentShortlist(s)[0]?.name ?? s.focus?.projectName;
+      // The board's exact fit is not worth naming back to her when it is the
+      // project she just refused: dev answered "not interested in Brigade
+      // Avalon" with "I've only got *Brigade Avalon* in *Bengaluru Urban*".
+      // Without a name, compose says what it does have nearby instead.
+      const exactFit =
+        currentShortlist(s)[0] ??
+        (s.focus ? { projectId: s.focus.projectId, name: s.focus.projectName } : undefined);
+      const exactFitName =
+        exactFit && !s.discover.rejectedProjectIds.includes(exactFit.projectId)
+          ? exactFit.name
+          : undefined;
       return {
         goal: { kind: 'recommend' },
         evidence: {

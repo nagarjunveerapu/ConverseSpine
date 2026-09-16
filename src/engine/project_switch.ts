@@ -207,6 +207,44 @@ const CLAUSE_SPLIT = /[,;.!?\n]+|\s+(?:but|however|instead|rather|though|althoug
  * about amenities, and a sentence with no rejecting clause at all returns
  * untouched.
  */
+/**
+ * "not Brigade Avalon, show me Brigade Eldorado" carries no verb of preference,
+ * so `REJECTING_CLAUSE` never sees it — and that regex must keep its verb, or
+ * "is there no clubhouse at Sanctuary" becomes a rejection of Sanctuary.
+ *
+ * What makes this sentence a refusal is adjacency: the negation sits directly on
+ * the name, with nothing between the two but the project's own brand words. Dev
+ * answered it with a side-by-side of the project she had just pushed away.
+ */
+function negationGovernsName(
+  clause: string,
+  name: string,
+  siblings: ReadonlyArray<{ name: string }>,
+): boolean {
+  const distinctive = evidenceTokens(name, siblings);
+  if (!distinctive.length) return false;
+  const own = new Set(
+    name
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean),
+  );
+  const words = facetNameResidue(clause).split(' ').filter(Boolean);
+  for (let i = 0; i < words.length; i += 1) {
+    if (!/^(?:not|no|nope|never)$/i.test(words[i]!)) continue;
+    for (let j = i + 1; j < words.length; j += 1) {
+      const w = words[j]!;
+      if (distinctive.some((t) => tokenMatchesWord(w, t))) return true;
+      // Only a bare article or the project's own brand word may stand between
+      // the negation and the name. Anything else and the "no" is governing
+      // something other than this project.
+      if (/^(?:the|a|an)$/i.test(w) || own.has(w.toLowerCase())) continue;
+      break;
+    }
+  }
+  return false;
+}
+
 export function partitionNamedByPolarity(
   text: string,
   named: ReadonlyArray<OfferedProject>,
@@ -220,8 +258,10 @@ export function partitionNamedByPolarity(
     .map((c) => c.trim())
     .filter(Boolean);
   if (!clauses.length) return keep;
+  const pushesAway = (clause: string, name: string): boolean =>
+    REJECTING_CLAUSE.test(clause) || negationGovernsName(clause, name, siblings);
   // No clause pushes anything away — nothing here to arbitrate.
-  if (!clauses.some((c) => REJECTING_CLAUSE.test(c))) return keep;
+  if (!clauses.some((c) => named.some((p) => pushesAway(c, p.name)))) return keep;
 
   const wanted: OfferedProject[] = [];
   const rejected: OfferedProject[] = [];
@@ -233,7 +273,7 @@ export function partitionNamedByPolarity(
       wanted.push(p);
       continue;
     }
-    if (hits.every((c) => REJECTING_CLAUSE.test(c))) rejected.push(p);
+    if (hits.every((c) => pushesAway(c, p.name))) rejected.push(p);
     else wanted.push(p);
   }
   // A rejection has to land on something. When no clause pushed a named project
