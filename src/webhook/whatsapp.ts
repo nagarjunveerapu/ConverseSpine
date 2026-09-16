@@ -1,5 +1,5 @@
 import type { Env } from '../env.js';
-import { resolveBuilderByPhoneNumberId } from '../channel/phone-resolve.js';
+import { resolveBuilderByPhoneNumberId, resolveLineByPhoneNumberId } from '../channel/phone-resolve.js';
 import { getMetaAppSecret, verifyMetaWebhookSignature } from '../channel/meta-secrets.js';
 import { deliverWhatsAppTurn } from '../channel/wa-deliver.js';
 import { fileStatusReceipts, fileTurnReceipts, type MetaStatus } from '../channel/delivery-receipt.js';
@@ -102,8 +102,12 @@ export async function handleWhatsAppWebhook(
       const phoneNumberId = value?.metadata?.phone_number_id;
       if (!phoneNumberId) continue;
 
-      const builderId = await resolveBuilderByPhoneNumberId(rt.crm, phoneNumberId);
-      if (!builderId) continue;
+      // Which LINE this arrived on: the builder, and — for a project line —
+      // the project the number sells. The front desk resolves with no project.
+      const line = await resolveLineByPhoneNumberId(rt.crm, phoneNumberId);
+      if (!line) continue;
+      const builderId = line.builder_id;
+      const lineProjectId = line.project_id ?? undefined;
 
       // A status-only change carries no `messages` at all, which is how the
       // old guard on this line discarded every one of them.
@@ -164,6 +168,7 @@ export async function handleWhatsAppWebhook(
                 builder_id: builderId,
                 buyer_phone: `+${msg.from.replace(/\D/g, '')}`,
                 phone_number_id: phoneNumberId,
+                ...(lineProjectId ? { line_project_id: lineProjectId } : {}),
                 text: buyerText,
                 action_id: actionId,
                 meta_message_id: msg.id,
@@ -173,7 +178,9 @@ export async function handleWhatsAppWebhook(
           }
 
           const buyerPhone = `+${msg.from.replace(/\D/g, '')}`;
-          const creds = await rt.crm.getWhatsAppCreds(builderId);
+          // The reply goes out on the number the buyer wrote to. A project
+          // line has its own token; the front desk's does not send from a line.
+          const creds = await rt.crm.getWhatsAppCreds(builderId, phoneNumberId);
           if (creds.access_token) await sendTyping(phoneNumberId, msg.id, creds.access_token);
 
           const result = await handleChat(rt, {
@@ -182,6 +189,7 @@ export async function handleWhatsAppWebhook(
             text: buyerText,
             action_id: actionId,
             channel: 'whatsapp',
+            ...(lineProjectId ? { line_project_id: lineProjectId } : {}),
           });
 
           if (creds.access_token) {

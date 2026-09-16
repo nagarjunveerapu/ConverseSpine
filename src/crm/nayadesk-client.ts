@@ -1039,7 +1039,21 @@ export class NayaDeskClient {
     return this.call('POST', '/api/v1/turn-ledger/append', req);
   }
 
-  listBuilders(): Promise<{ builders: Array<{ builder_id: string; meta_phone_number_id: string; name: string }> }> {
+  listBuilders(): Promise<{
+    builders: Array<{ builder_id: string; meta_phone_number_id: string; name: string }>;
+    /**
+     * Every active PROJECT LINE beside the builders (Desk 0244): a second
+     * WhatsApp number a builder owns, scoped to one project. Absent on a Desk
+     * that predates lines — the resolver treats that as "front desks only".
+     */
+    lines?: Array<{
+      phone_number_id: string;
+      builder_id: string;
+      project_id: string | null;
+      display_name: string;
+      status: string;
+    }>;
+  }> {
     return this.call('GET', '/api/v1/builders');
   }
 
@@ -1074,12 +1088,18 @@ export class NayaDeskClient {
     return this.call('PATCH', `/api/v1/plans/${encodeURIComponent(plan_id)}`, body);
   }
 
-  getWhatsAppCreds(builder_id: string): Promise<{
+  /**
+   * @param phone_number_id which number the bot is about to send FROM. A
+   * project line has credentials of its own; absent, the front desk answers,
+   * exactly as before lines existed.
+   */
+  getWhatsAppCreds(builder_id: string, phone_number_id?: string): Promise<{
     connected: boolean;
     phone_number_id: string;
     access_token: string;
   }> {
-    return this.call('GET', `/api/v1/whatsapp/${encodeURIComponent(builder_id)}/creds`);
+    const line = phone_number_id ? `?phone_number_id=${encodeURIComponent(phone_number_id)}` : '';
+    return this.call('GET', `/api/v1/whatsapp/${encodeURIComponent(builder_id)}/creds${line}`);
   }
 
   postProfileObservations(req: {

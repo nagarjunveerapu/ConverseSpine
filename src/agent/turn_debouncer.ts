@@ -82,6 +82,8 @@ export class TurnDebouncer implements DurableObject {
       builder_id: string;
       buyer_phone: string;
       phone_number_id: string;
+      /** The project the inbound line sells; absent on the front desk. */
+      line_project_id?: string;
       text: string;
       action_id?: string;
       meta_message_id: string;
@@ -102,6 +104,7 @@ export class TurnDebouncer implements DurableObject {
     await this.state.storage.put('builder_id', body.builder_id);
     await this.state.storage.put('buyer_phone', body.buyer_phone);
     await this.state.storage.put('phone_number_id', body.phone_number_id);
+    await this.state.storage.put('line_project_id', body.line_project_id ?? '');
 
     const inbox = (await this.state.storage.get<InboxEntry[]>('inbox')) ?? [];
     inbox.push({
@@ -130,6 +133,7 @@ export class TurnDebouncer implements DurableObject {
     const builder_id = (await this.state.storage.get<string>('builder_id'))!;
     const buyer_phone = (await this.state.storage.get<string>('buyer_phone'))!;
     const phone_number_id = (await this.state.storage.get<string>('phone_number_id'))!;
+    const line_project_id = (await this.state.storage.get<string>('line_project_id')) || undefined;
 
     const last = inbox[inbox.length - 1];
     const action_id = [...inbox].reverse().find((e) => e.action_id)?.action_id;
@@ -140,7 +144,9 @@ export class TurnDebouncer implements DurableObject {
     const lastWamid = last?.meta_message_id;
 
     const rt = createWorkerRuntime(this.env);
-    const creds = await rt.crm.getWhatsAppCreds(builder_id);
+    // The reply goes out on the number the buyer wrote to. A project line
+    // has its own token; the front desk's does not send from a line.
+    const creds = await rt.crm.getWhatsAppCreds(builder_id, phone_number_id);
     const token = creds.access_token;
     if (lastWamid && token) await sendTyping(phone_number_id, lastWamid, token);
 
@@ -151,6 +157,7 @@ export class TurnDebouncer implements DurableObject {
       text,
       ...(action_id ? { action_id } : {}),
       channel: 'whatsapp',
+      ...(line_project_id ? { line_project_id } : {}),
     });
 
     if (token) {
