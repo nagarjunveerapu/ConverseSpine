@@ -65,21 +65,48 @@ describe('a rejection lands on a clause, not on the turn', () => {
     expect(r.wanted).toHaveLength(2);
   });
 
-  it('a bare rejection with nothing left standing keeps its existing path', () => {
-    // Everything rejected and nothing wanted is just "no" — `ex.rejected` already
-    // answers that, and this must not quietly empty namedProjects underneath it.
+  // ---------------------------------------------------------------------
+  // These two assertions used to read the other way, on the stated premise
+  // that `ex.rejected` already carried a sole rejection. Driven against the
+  // real catalog on dev, it does not — see the header of
+  // `partitionNamedByPolarity`. The premise was wrong, so the assertions are
+  // now what the buyer actually needs.
+  // ---------------------------------------------------------------------
+
+  it('rejecting every project named leaves nothing wanted', () => {
     const r = partitionNamedByPolarity(
       'not interested in Brigade Sanctuary, not interested in Brigade Orchards',
       BOTH,
     );
-    expect(r.rejected).toEqual([]);
-    expect(r.wanted).toHaveLength(2);
+    expect(r.rejected).toHaveLength(2);
+    expect(r.wanted).toEqual([]);
   });
 
-  it('one name is never a choice between two', () => {
+  it('one name pushed away is a rejection, not a mention', () => {
     const r = partitionNamedByPolarity('forget Brigade Sanctuary', [SANCTUARY]);
-    expect(r.rejected).toEqual([]);
-    expect(r.wanted).toHaveLength(1);
+    expect(r.rejected).toEqual([SANCTUARY]);
+    expect(r.wanted).toEqual([]);
+  });
+
+  it('the two sentences dev answered backwards, with one project on the board', () => {
+    // Both observed live on 16 Sep 2026 against brigade-group, Avalon the only
+    // project offered. The first arrived with `ex.rejected` FALSE and was bound
+    // as focus — the bot pitched the project she had just refused.
+    for (const text of ['not interested in Brigade Sanctuary', 'no, Brigade Sanctuary is not for me']) {
+      const r = partitionNamedByPolarity(text, [SANCTUARY]);
+      expect(r.rejected, text).toEqual([SANCTUARY]);
+      expect(r.wanted, text).toEqual([]);
+    }
+  });
+
+  it('a lone name with no rejecting verb is left completely alone', () => {
+    // The control that keeps the widening honest: same single-name shape, no
+    // rejection in it. Nothing may be pushed away here.
+    for (const text of ['tell me about Brigade Sanctuary', 'is there no clubhouse at Brigade Sanctuary']) {
+      const r = partitionNamedByPolarity(text, [SANCTUARY]);
+      expect(r.rejected, text).toEqual([]);
+      expect(r.wanted, text).toHaveLength(1);
+    }
   });
 });
 
@@ -144,6 +171,47 @@ describe('the project she rejected does not win the bind', () => {
     const r = await turn(
       'is there no clubhouse at Brigade Orchards, and what about Brigade Sanctuary?',
     );
+    expect(r.state.discover.rejectedProjectIds).toEqual([]);
+  });
+
+  // -----------------------------------------------------------------------
+  // One project on the board, and she refuses it. Observed on dev 16 Sep 2026
+  // against brigade-group with Avalon the only project offered: the bot read
+  // the refusal as interest and pitched the project straight back at her.
+  // -----------------------------------------------------------------------
+
+  it('"not interested in Brigade Sanctuary" does not pitch Brigade Sanctuary', async () => {
+    const turn = thread('sole-not-interested');
+    await turn('tell me about Brigade Sanctuary');
+    const r = await turn('not interested in Brigade Sanctuary');
+    // The live bot answered: "*Brigade Avalon* — Bengaluru Urban. 2 BHK Test ·
+    // from ₹95 L ... Want pricing details?" — the project she had just refused.
+    // It now asks which area she wants instead of pitching the refused project.
+    expect(r.reply).not.toMatch(/Brigade Sanctuary/);
+    expect(r.state.discover.rejectedProjectIds).toContain('sanctuary');
+  });
+
+  it('"no, Brigade Sanctuary is not for me" records the refusal', async () => {
+    // This one DID set decline, and still bound no id: `resolveRejected` reads
+    // only `ex.rejectedName`, which nothing had filled. The board kept offering it.
+    const turn = thread('sole-not-for-me');
+    await turn('tell me about Brigade Sanctuary');
+    const r = await turn('no, Brigade Sanctuary is not for me');
+    expect(r.state.discover.rejectedProjectIds).toContain('sanctuary');
+  });
+
+  it('a sole refusal does not silently become a different project', async () => {
+    const turn = thread('sole-no-substitute');
+    await turn('tell me about Brigade Sanctuary');
+    const r = await turn('not interested in Brigade Sanctuary');
+    expect(r.state.focus?.projectId).not.toBe('sanctuary');
+  });
+
+  it('the control: naming it WITHOUT a refusal still binds it', async () => {
+    // Proves the single-name path was widened for rejections only.
+    const turn = thread('sole-control');
+    const r = await turn('tell me about Brigade Sanctuary');
+    expect(r.state.focus?.projectId).toBe('sanctuary');
     expect(r.state.discover.rejectedProjectIds).toEqual([]);
   });
 });

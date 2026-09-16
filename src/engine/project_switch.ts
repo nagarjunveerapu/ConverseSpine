@@ -154,9 +154,14 @@ function tokenMatchesWord(word: string, token: string): boolean {
  * question. So this tests a rejection VERB, an exclusion PREPOSITION, or a
  * negated verb of WANTING — never a bare "no"/"not" anywhere in the sentence,
  * which is the test that produced the defect in the first place.
+ *
+ * "X is not for me" and "that is not what I want" are here because dev produced
+ * them: `"no, Brigade Avalon is not for me"` set `decline` and still bound no
+ * project, because no clause in it read as a rejection. The negation governs a
+ * prepositional phrase rather than a verb, but it is doing the same work.
  */
 const REJECTING_CLAUSE =
-  /\b(?:forget|skip|drop|remove|exclude|cancel|scratch)\b|\b(?:except|other than|apart from|instead of|rather than|besides)\b|\b(?:not|never|no longer)\s+(?:really\s+|very\s+|too\s+|that\s+)?(?:interested|keen|looking|want(?:ing)?|need(?:ing)?|consider(?:ing)?|into|fussed)\b|\b(?:do\s?n[o']?t|dont|don't|doesn'?t|didn'?t)\s+(?:want|like|need|care\s+for)\b|\bnahi(?:n)?\s+chahiye\b/i;
+  /\b(?:forget|skip|drop|remove|exclude|cancel|scratch)\b|\b(?:except|other than|apart from|instead of|rather than|besides)\b|\b(?:not|never|no longer)\s+(?:really\s+|very\s+|too\s+|that\s+)?(?:interested|keen|looking|want(?:ing)?|need(?:ing)?|consider(?:ing)?|into|fussed)\b|\b(?:do\s?n[o']?t|dont|don't|doesn'?t|didn'?t)\s+(?:want|like|need|care\s+for)\b|\b(?:not|n[o']?t)\s+(?:right\s+)?for\s+(?:me|us)\b|\bnot\s+what\s+(?:i|we)\s+(?:want|need|had\s+in\s+mind)\b|\bnahi(?:n)?\s+chahiye\b/i;
 
 /** Clause boundaries: punctuation, and the conjunctions that pivot a sentence. */
 const CLAUSE_SPLIT = /[,;.!?\n]+|\s+(?:but|however|instead|rather|though|although)\s+/i;
@@ -180,10 +185,27 @@ const CLAUSE_SPLIT = /[,;.!?\n]+|\s+(?:but|however|instead|rather|though|althoug
  * A rejection lands on a clause, so read clauses. A project named only inside
  * rejecting clauses is rejected; a project named in any other clause is wanted.
  *
- * Deliberately conservative: this returns the input untouched unless a rejection
- * leaves at least one WANTED project standing. A bare "forget Sanctuary" keeps
- * its existing path through `ex.rejected` — this answers "which of these two",
- * which is a question that only arises when there are two.
+ * It also answers the one-name case, and that is not a widening for its own
+ * sake. The first version of this left a sole rejection alone on the stated
+ * grounds that `ex.rejected` already carried it. Driven on dev, it does not:
+ *
+ *   "not interested in Brigade Avalon"  -> ex.rejected FALSE. Read as a plain
+ *                                          mention, bound as focus, and the bot
+ *                                          pitched the project she just refused.
+ *   "no, Brigade Avalon is not for me"  -> ex.rejected true, but `resolveRejected`
+ *                                          binds only via `ex.rejectedName`, which
+ *                                          was absent, so nothing was recorded and
+ *                                          the board re-offered it.
+ *
+ * Both were observed live against the real catalog, with Avalon the only project
+ * on the board. So a sole rejection gets the same clause reading as a contested
+ * one: named only inside rejecting clauses means rejected, whether or not
+ * anything else is still standing.
+ *
+ * Still conservative where it counts. A clause must carry a rejection VERB to
+ * push anything away, so "is there no clubhouse at Sanctuary" remains a question
+ * about amenities, and a sentence with no rejecting clause at all returns
+ * untouched.
  */
 export function partitionNamedByPolarity(
   text: string,
@@ -191,13 +213,14 @@ export function partitionNamedByPolarity(
   siblings: ReadonlyArray<{ name: string }> = named,
 ): { wanted: OfferedProject[]; rejected: OfferedProject[] } {
   const keep = { wanted: [...named], rejected: [] as OfferedProject[] };
-  if (named.length < 2) return keep;
+  if (!named.length) return keep;
 
   const clauses = text
     .split(CLAUSE_SPLIT)
     .map((c) => c.trim())
     .filter(Boolean);
-  if (clauses.length < 2) return keep;
+  if (!clauses.length) return keep;
+  // No clause pushes anything away — nothing here to arbitrate.
   if (!clauses.some((c) => REJECTING_CLAUSE.test(c))) return keep;
 
   const wanted: OfferedProject[] = [];
@@ -213,9 +236,9 @@ export function partitionNamedByPolarity(
     if (hits.every((c) => REJECTING_CLAUSE.test(c))) rejected.push(p);
     else wanted.push(p);
   }
-  // Nothing survives the rejection — that is a bare "no", and it already has a
-  // path. Only a rejection that leaves a standing ask is ours to answer.
-  if (!rejected.length || !wanted.length) return keep;
+  // A rejection has to land on something. When no clause pushed a named project
+  // away the sentence is not a rejection of any project, whatever else it says.
+  if (!rejected.length) return keep;
   return { wanted, rejected };
 }
 

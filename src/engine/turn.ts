@@ -1230,19 +1230,36 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
   // detectFocusedSwitchIntent, the cold-name bind) reads `ex.namedProjects`
   // and inherits the answer. A rejected project is also recorded, so the board
   // stops re-offering what she just pushed away.
-  if ((ex.namedProjects?.length ?? 0) >= 2) {
+  //
+  // One name is enough to ask it. The first version of this gate required two,
+  // because a sole rejection was believed to be carried already by `ex.rejected`.
+  // On dev it is not: "not interested in Brigade Avalon" arrived with
+  // `ex.rejected` FALSE and was bound as focus, so the bot pitched the project
+  // she had just refused, and "no, Brigade Avalon is not for me" set the flag but
+  // bound no id, because `resolveRejected` reads only `ex.rejectedName`. Both
+  // observed live with Avalon the only project on the board.
+  if ((ex.namedProjects?.length ?? 0) >= 1) {
     const polarity = partitionNamedByPolarity(
       trimmedText,
       ex.namedProjects!,
       [...(ex.namedProjects ?? []), ...currentShortlist(state)],
     );
     if (polarity.rejected.length) {
+      // Does a want survive the rejection? "forget Avalon, show me Meadows"
+      // leaves one standing and the turn is about Meadows. "not interested in
+      // Avalon" leaves nothing, and THAT turn is a rejection — it has to route
+      // to "something else?" rather than bind the name it just pushed away.
+      const standing = polarity.wanted.length > 0;
       ex = {
         ...ex,
         namedProjects: polarity.wanted,
-        // She rejected a project, not the conversation: there is a standing ask
-        // in the same sentence, and `rejected` routes to "something else?".
-        rejected: false,
+        // She rejected a project, not the conversation -- but only while a
+        // standing ask is left in the same sentence.
+        rejected: standing ? false : true,
+        // Left blank deliberately. `resolveRejected` is the OLDER route into
+        // `discover.rejectedProjectIds` and this block already writes the ids
+        // directly below, so filling this changes nothing any test can tell
+        // apart — and a line nothing can distinguish is a line that rots.
         rejectedName: undefined,
       };
       const rejectedIds = polarity.rejected.map((p) => p.projectId).filter(Boolean);

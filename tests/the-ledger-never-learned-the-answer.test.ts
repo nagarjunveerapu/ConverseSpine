@@ -20,6 +20,8 @@
 import { describe, expect, it } from 'vitest';
 import { classifyPriorResponse } from '../src/engine/ledger-write.js';
 import { nayadeskCrm } from '../src/engine/adapters/nayadesk.js';
+import { runEngineTurn } from '../src/engine/turn.js';
+import { fakeDeps } from './fakes.js';
 import type { NayaDeskClient } from '../src/crm/nayadesk-client.js';
 import type { Extracted } from '../src/engine/types.js';
 
@@ -208,5 +210,53 @@ describe('the stamp reaches Desk', () => {
     const { client, appends } = fakeClient();
     await nayadeskCrm(client).appendTurnLedger(entry);
     expect('stamp_prior' in appends[0]!).toBe(false);
+  });
+});
+
+/**
+ * Where the two halves meet.
+ *
+ * `classifyPriorResponse` reports `ex.rejected`, so anything that clears that
+ * flag on the way past silently turns a refusal into "she ignored us" in the
+ * durable record. The sole-rejection path in turn.ts rewrites `ex` — it must
+ * not clear the one flag the ledger is reading.
+ */
+describe('a refusal survives all the way to the stamp', () => {
+  function depsWithLedgerSpy() {
+    const stamps: Array<Record<string, unknown> | undefined> = [];
+    const deps = fakeDeps();
+    deps.crm = {
+      ...deps.crm,
+      appendTurnLedger: async (entry: { stampPrior?: Record<string, unknown> }) => {
+        stamps.push(entry.stampPrior);
+      },
+    } as typeof deps.crm;
+    return { deps, stamps };
+  }
+
+  it('a sole rejection is stamped "rejected", not "ignored"', async () => {
+    const { deps, stamps } = depsWithLedgerSpy();
+    const t = (text: string) =>
+      runEngineTurn(
+        { threadId: 'stamp-sole-reject', builderId: 'lokations', text, buyerPhone: '+919999991172', channel: 'whatsapp' },
+        deps,
+      );
+    await t('tell me about Brigade Sanctuary');
+    await t('not interested in Brigade Sanctuary');
+    const last = stamps.filter(Boolean).at(-1);
+    expect(last?.response).toBe('rejected');
+  });
+
+  it('and an ordinary question is not', async () => {
+    const { deps, stamps } = depsWithLedgerSpy();
+    const t = (text: string) =>
+      runEngineTurn(
+        { threadId: 'stamp-sole-control', builderId: 'lokations', text, buyerPhone: '+919999991173', channel: 'whatsapp' },
+        deps,
+      );
+    await t('tell me about Brigade Sanctuary');
+    await t('what is the price');
+    const last = stamps.filter(Boolean).at(-1);
+    expect(last?.response).not.toBe('rejected');
   });
 });
