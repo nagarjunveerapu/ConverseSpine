@@ -460,6 +460,16 @@ export interface EngineCrm {
       latency_ms: number;
       failure_reason?: 'absent' | 'transport';
     }>;
+    /**
+     * How the buyer answered the PREVIOUS turn. Desk stamps it onto that row
+     * in the SAME db.batch as this append -- atomic, so the feed-forward can
+     * never read a half-written outcome.
+     */
+    stampPrior?: {
+      turn_index: number;
+      response: 'accepted' | 'rejected' | 'ignored' | 'refined';
+      rejected_ids: string[];
+    };
     /** P2c — claims made this turn (Desk DisclosedFactSchema). */
     disclosedFacts?: Array<{
       kind: string;

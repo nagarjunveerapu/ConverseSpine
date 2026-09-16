@@ -53,7 +53,13 @@ import {
 import { waConsoleCardReply, waConsoleNodeReply } from '../channel/wa-console.js';
 import { hydrateStateFromFeedForward, mapLedgerPrior } from './ledger-read.js';
 import { extractDisclosedFacts, hasDisclosedRera, mergeDisclosedFacts } from './disclosed-facts.js';
-import { buildLedgerWritePayload, toolRunRecords, type ComposeTelemetry } from './ledger-write.js';
+import {
+  buildLedgerWritePayload,
+  classifyPriorResponse,
+  toolRunRecords,
+  type ComposeTelemetry,
+  type StampPrior,
+} from './ledger-write.js';
 import { costTermsFromCostSheet } from './cost-terms.js';
 import { deriveShadowFailures } from './failure-shadow.js';
 import { resolveDurableLocation } from './geography-authority.js';
@@ -1886,6 +1892,25 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
 
   const prevConstraints = state.constraints;
   const prevLoc = state.constraints.location;
+  // THE OTHER HALF OF THE LEDGER. Read the board the buyer is answering BEFORE
+  // this turn searches again and replaces it.
+  //
+  // `state.feedForward` cannot do this job even though it looks like it was
+  // built for it: it is filled only inside the bootstrap branch above (turn 0,
+  // or a cold start), so by turn 2 it still describes turn 0. The live session
+  // is the authority here, as it is everywhere else in this file.
+  //
+  // `state.turnCount` has not been incremented yet -- that happens after the
+  // reply is composed -- so it IS the index of the last completed turn, which
+  // is precisely the row Desk must stamp.
+  const priorTurnIndexForStamp = state.turnCount;
+  const priorOfferedIds = currentShortlist(state).map((o) => o.projectId);
+  // `promptAtTurnStart`, NOT `state.rti.pendingPrompt`: several lanes between
+  // the load and here clear the prompt on their way through, so reading it at
+  // this point cannot tell "there was no question" from "the question was just
+  // answered" -- and the second one is exactly the case worth stamping.
+  const priorPendingPrompt = Boolean(promptAtTurnStart);
+  const rejectedBeforeTurn = state.discover.rejectedProjectIds;
   state = applyExtracted(state, ex, clearedKeys, {
     locationValidated,
     authority: {
@@ -3947,6 +3972,17 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
         grounding,
       })
       .catch(() => {});
+    // `applyExtracted` has run, so `state.discover.rejectedProjectIds` now
+    // carries whatever the engine bound this turn; the difference against the
+    // snapshot taken before it is exactly what she rejected just now.
+    const stampPrior: StampPrior | undefined = classifyPriorResponse({
+      priorTurnIndex: priorTurnIndexForStamp,
+      priorOfferedIds,
+      priorPendingPrompt,
+      rejectedBefore: rejectedBeforeTurn,
+      rejectedAfter: state.discover.rejectedProjectIds,
+      ex,
+    });
     await syncTelemetry(deps, nd, input, goal, evidence, state, reply, {
       ex,
       extractProvenance,
@@ -3954,6 +3990,7 @@ async function runEngineTurnCore(input: EngineTurnInput, deps: EngineDeps): Prom
       grounding,
       routing,
       failures,
+      ...(stampPrior ? { stampPrior } : {}),
       // The same values `debug.timings` reports, but written where they
       // survive the response. Without this the compose lane has no history
       // and "retire the paid composer?" stays an opinion.
@@ -7062,6 +7099,8 @@ async function syncTelemetry(
     routing?: TurnRoutingResult;
     failures?: readonly Failure[];
     compose?: ComposeTelemetry;
+    /** How the buyer answered the PREVIOUS turn — stamped onto that row. */
+    stampPrior?: StampPrior;
   },
 ): Promise<void> {
   if (!nd) return;
@@ -7095,6 +7134,10 @@ async function syncTelemetry(
       tools: evidence.tools,
       offeredProjectIds: ledger?.offered_project_ids ?? evidence.matches?.map((m) => m.projectId),
       phase: state.phase,
+      // Rides the append it belongs to: Desk applies stamp + append in ONE
+      // db.batch, so the prior turn's outcome and this turn's row land
+      // together or not at all.
+      ...(opts?.stampPrior ? { stampPrior: opts.stampPrior } : {}),
       ...(ledger
         ? {
             snapshotIn: ledger.snapshot_in,

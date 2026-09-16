@@ -1430,6 +1430,10 @@ export function nayadeskCrm(
         offered_project_ids: entry.offeredProjectIds ?? [],
         disclosed_facts: entry.disclosedFacts ?? [],
         verify: entry.verify ?? { grounding: 'pass' },
+        // Omitted, never sent empty: Desk's stamp is idempotent but it still
+        // writes, and a stamp for "she answered nothing" would retire a
+        // question that is still open.
+        ...(entry.stampPrior ? { stamp_prior: entry.stampPrior } : {}),
         // Desk's schema field is `success`; we populate it from the OBSERVED
         // produced_evidence rather than a hardcoded true. Until Phase 0b gives
         // the ports discriminated results, a legitimate absence and a

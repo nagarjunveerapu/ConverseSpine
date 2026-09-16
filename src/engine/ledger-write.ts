@@ -320,3 +320,103 @@ export function buildLedgerWritePayload(input: {
     composer: 'converse_engine',
   };
 }
+
+/**
+ * How the buyer answered the PREVIOUS turn — the other half of the ledger.
+ *
+ * Desk has had the whole receiving end since 0092: `stamp_prior` on the append
+ * door, `buyer_response_intent` / `buyer_rejected_ids_json` / `responded_at`
+ * columns, an idempotent stamp that only touches unstamped rows, and a
+ * `/context` reply that unions every rejected id it has ever been told about.
+ * Spine has never sent one. So `rejected_project_ids` comes back EMPTY on
+ * every bootstrap, and `awaiting_response` is true forever.
+ *
+ * What that costs: this engine already knows when a buyer turns a project
+ * down — `ex.rejected` is extracted, `resolveRejected` binds it to the board
+ * she was looking at, and `state.discover.rejectedProjectIds` filters it out
+ * of search at some twenty sites in turn.ts. But that list lives in the KV
+ * session. When the session rolls, it is gone, and the bot cheerfully offers
+ * her the project she already said no to. Desk is the durable store and it was
+ * never told.
+ *
+ * So this function REPORTS decisions the engine has already made; it does not
+ * make new ones. The rejected ids are the difference across `applyExtracted`,
+ * which is the engine's own binding, intersected with what the stamped turn
+ * actually put in front of her. A second reading of the sentence here would be
+ * a second opinion about which project a buyer refused — and since the answer
+ * permanently buries that project in every later search, a wrong one is
+ * expensive and silent.
+ */
+export interface StampPrior {
+  /** The turn that made the offer — NOT the turn being appended. */
+  turn_index: number;
+  response: 'accepted' | 'rejected' | 'ignored' | 'refined';
+  rejected_ids: string[];
+}
+
+export function classifyPriorResponse(input: {
+  /** `state.turnCount` read BEFORE the turn increments it: the last completed turn. */
+  priorTurnIndex: number;
+  /** What that turn had on the board, captured BEFORE this turn re-searched. */
+  priorOfferedIds: readonly string[];
+  /** …and whether it also left a question open. */
+  priorPendingPrompt: boolean;
+  /** `state.discover.rejectedProjectIds` either side of `applyExtracted`. */
+  rejectedBefore: readonly string[];
+  rejectedAfter: readonly string[];
+  ex: Extracted;
+}): StampPrior | undefined {
+  const { priorTurnIndex, priorOfferedIds, priorPendingPrompt, ex } = input;
+
+  // Nothing behind this turn to stamp.
+  if (priorTurnIndex < 0) return undefined;
+
+  // The prior turn asked nothing, so "how did she respond to it" has no
+  // answer. Silence beats a guess here for a concrete reason: the stamp is
+  // what flips `awaiting_response` to false, and Desk hands that flag back so
+  // a cold-started session knows whether its pending prompt is still live.
+  // Stamping an unanswerable turn would retire a question she never got.
+  if (priorOfferedIds.length === 0 && !priorPendingPrompt) return undefined;
+
+  const offered = new Set(priorOfferedIds);
+  const stamp = (
+    response: StampPrior['response'],
+    rejected_ids: string[] = [],
+  ): StampPrior => ({ turn_index: priorTurnIndex, response, rejected_ids });
+
+  // 1. REJECTED. `applyExtracted` already ran `resolveRejected` against the
+  //    board she was looking at, so the difference across it is exactly what
+  //    THIS turn turned down. Intersecting with the offer stops us stamping a
+  //    turn with a rejection of something that turn never showed her.
+  //    An empty list is a real answer: she declined, and nothing she said
+  //    named which one.
+  if (ex.rejected || ex.decline) {
+    const before = new Set(input.rejectedBefore);
+    const fresh = input.rejectedAfter.filter((id) => !before.has(id) && offered.has(id));
+    return stamp('rejected', fresh.slice(0, 20));
+  }
+
+  // 2. ACCEPTED — she took something off the board, by name or by position.
+  const named = ex.namedProjects?.map((p) => p.projectId) ?? [];
+  if (named.some((id) => offered.has(id))) return stamp('accepted');
+  if (
+    typeof ex.pickOrdinal === 'number' &&
+    ex.pickOrdinal >= 1 &&
+    ex.pickOrdinal <= priorOfferedIds.length
+  ) {
+    return stamp('accepted');
+  }
+  if (ex.affirm || ex.transition === 'want_details' || ex.transition === 'want_visit') {
+    return stamp('accepted');
+  }
+
+  // 3. REFINED — she did not answer the offer, she changed the question.
+  //    "see_others" is the explicit spelling; a new constraint is the implicit
+  //    one. Neither is a rejection of any particular project, which is why
+  //    `rejected_ids` stays empty: burying one here would be a guess.
+  if (ex.transition === 'see_others') return stamp('refined');
+  if (Object.keys(ex.constraints).length > 0) return stamp('refined');
+
+  // 4. IGNORED — she went somewhere else entirely.
+  return stamp('ignored');
+}
